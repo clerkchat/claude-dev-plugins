@@ -633,7 +633,15 @@ where `<label>` is `<yyyymmdd-hhmm>-<target slug>` (`branch`, a path slug, a PR
 number, or a range slug). If the directory exists, append `-2`, `-3`, and so on.
 Never overwrite or delete an earlier run. After creating it, point the symlink
 `<repo>/.review/latest` at it, except for a `--standalone` narrow run (see
-Narrow review), which leaves it where it is.
+Narrow review), which leaves it where it is, and for the coordinating session
+of feature mode, which points `<repo>/.review/latest-feature` at its run
+instead. `latest` always means this branch's own review: fixes, triage, status,
+resuming, and incremental review read it, and in feature mode the review of
+this repository runs in the same worktree at the same time.
+
+A directory whose label ends in `-feature` is a feature run, not a review of
+this branch. Wherever this skill or another looks for the most recent or newest
+run under `.review/`, it skips those directories and both links.
 
 Keep `.review/` out of version control without touching tracked files: if
 `git check-ignore -q .review` fails, append `.review/` to `.git/info/exclude`.
@@ -1302,7 +1310,22 @@ skills, and review context, and writes its run and report under that worktree's
    findings are fixed and tracked in that repository's report.
 
 The run directory of the coordinating session is
-`<repo>/.review/<label>-feature/`.
+`<repo>/.review/<label>-feature/`, linked from `<repo>/.review/latest-feature`
+(see Step 0).
+
+End the final message with every report's absolute path, one per line, the
+feature report first and then each repository's in the order of the workspace
+rows:
+
+```
+Reports:
+  feature  /Users/me/code/api/feat/x/.review/20261015-1235-branch-feature/report.md
+  api      /Users/me/code/api/feat/x/.review/20261015-1238-branch/report.md
+  clerkai  /Users/me/code/clerkai/feat/x/.review/20261015-1236-branch/report.md
+```
+
+A repository whose session failed, or that was not reviewed at its current
+commit, gets its row with the reason in place of the path.
 
 ### Consolidating separate reviews
 
@@ -1329,7 +1352,7 @@ the `rendered-*.tsv` snapshots, `report.md`, `report.prev.md`, `stale.tsv`
 later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the
 final pass's verdict) next to `report.md`. Next to the run directories,
-`.review/latest`, `.review/branch-notes.md`, `.review/followups.md`,
+`.review/latest`, `.review/latest-feature`, `.review/branch-notes.md`, `.review/followups.md`,
 `.review/review-workspace.md` (or a link to it), and `.review/status-seen`
 belong to the worktree. Raw and verify files are written
 only on completion, which is what makes `--resume` safe. A run stopped after

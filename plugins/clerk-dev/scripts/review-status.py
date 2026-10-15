@@ -4,7 +4,8 @@
 Usage: review-status.py [WORKTREE] [--run LABEL] [--no-mark]
 
 Prints a short Markdown summary:
-  - the review run (label, target, reviewed commit, date);
+  - the review run (label, target, reviewed commit, date), and the feature
+    run's report when .review/latest-feature points at one;
   - commits since the review that no review has read: not a follow-up's
     commit, not the fix of a finding (status.tsv, commits.tsv, or a
     resolution note names it), not covered by a narrow review, not
@@ -105,6 +106,9 @@ def main():
     else:
         out.append("**Review:** none yet in this worktree.")
         steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
+    feature = os.path.realpath(os.path.join(wt, ".review", "latest-feature"))
+    if os.path.exists(os.path.join(feature, "report.md")):
+        out.append(f"**Feature review:** `.review/{os.path.basename(feature)}/report.md` (the cross-repository check; `.review/latest-feature`).")
 
     unreviewed, counts_fix = [], 0
     if reviewed and subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", reviewed, head]).returncode == 0:
