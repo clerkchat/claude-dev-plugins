@@ -157,7 +157,7 @@ def scope_line(e):
     return code_spans(" · ".join(parts)) if parts else ""
 
 def size_cell(e):
-    return ", ".join(x for x in (e.get("_size", ""), "follow-up" if e.get("_follow") else "") if x)
+    return ", ".join(x for x in (e.get("_size", ""), "cross-repo" if e.get("_follow") else "") if x)
 
 def read_labels(run):
     labels, cur = {}, None
