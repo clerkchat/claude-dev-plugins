@@ -241,10 +241,10 @@ Waves take minutes, so say something while one runs:
   first wave launches:
   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/progress.py --run <run>
   --heartbeat-only`,
-  with `timeout_ms` 1800000 and the description "review progress for
-  <target>". It reads only files, checks every 30 seconds, and prints a line
-  only after two minutes without a reviewer or verifier finishing. For each
-  line, tell the user in one line what is still running and for how long:
+  with `timeout_ms` 1800000 and the description "Review progress". It reads
+  only files, checks every 30 seconds, and prints a line every two minutes
+  while the run stays in one step ("7 min in · reviewing 5/9 (3 min)"). For
+  each line, tell the user in one line what is still running and for how long:
   "Still reviewing background job processing (concurrency, resource limits),
   7 min in." When it expires while the run continues, start it again. It
   exits on its own when `report.md` is written; stop it with TaskStop if the
@@ -1249,13 +1249,26 @@ skills, and review context, and writes its run and report under that worktree's
    Monitor with
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/progress.py --since <that time>
    --worktree <repo>=<worktree> ...`
-   (one `--worktree` per child, `timeout_ms` 1800000, description "feature
-   review progress"). It checks the children's run directories every 30
-   seconds and prints a line when one moves on (planning, reviewers done out of
-   planned, verifying, done), or every two minutes when none has. Relay each
-   line as one line ("api: 7 of 12 reviewers done · web: verifying · worker:
-   planning"), and start it again when it expires before the children finish.
-   Report each child as it finishes ("api done: 2 new, 1 reopened"), reading
+   (one `--worktree` per child, `timeout_ms` 1800000, description "Review
+   progress"). It checks the children's run directories every 30 seconds and
+   prints a compact line when one moves to its next step (planning, reviewing,
+   merging, verifying, done), or every two minutes when none has; a reviewer
+   finishing does not print on its own. A line reads
+   `6 min in · api: reviewing 18/21 (3 min) · clerkai: merging (4 min)`, the
+   parenthesized time being how long that child has been in its step. Relay
+   each line in this layout, with the repository names exactly as given, the
+   same wording every time, and nothing else:
+
+   ```
+   Review progress · running in the background, 6 min in
+     api      reviewing: 18 of 21 reviewers done
+     clerkai  merging findings (for 4 min)
+   Next update when a repo moves to its next step, or in 2 min if nothing changes. You can keep working.
+   ```
+
+   Start the monitor again when it expires before the children finish.
+   Report each child as it finishes, on its own line after the block
+   ("api done: 2 new findings, 1 reopened"), reading
    its `RUN_DIR:` line and its run's `numbers.tsv` and `status.tsv`. A child that fails is named with the last lines of its log; the
    others continue.
 5. Cross-repository lens: build each repository's whole-branch patch from its
