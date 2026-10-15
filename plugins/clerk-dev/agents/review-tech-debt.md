@@ -93,13 +93,30 @@ Every finding carries `debt`, one of:
   helper across files, introduce or remove an abstraction, change a data
   shape.
 
-Set `fix_size` as the protocol describes, and `origin` as usual: most debt is
-`existing`, which is expected here. Start `fix` with where to do it: "In this
-pull request:" when it is `trivial` or `small` and sits in code the diff
-already changes, otherwise "In a separate pull request:". Then say what to
-change, and in `impact` what it buys: lines removed (an estimate is fine),
-branches or parameters gone, places that would no longer need to change
-together.
+Set `fix_size` as the protocol describes, and `origin` by where the code the
+proposal changes lives, which says how invasive it is:
+
+- `new`: the code is new on this branch. Nothing deployed depends on it yet,
+  so refactoring it now is cheap and has no compatibility concerns.
+- `worsened`: the code is on main, and this branch extended it (added a
+  branch, a parameter, a third copy).
+- `existing`: the code is on main and the branch only sits next to it.
+  Changing it touches deployed behavior and its other callers.
+
+When a proposal changes both, use the one with more of the change.
+
+Start `fix` with where to do it. "In this pull request:" when the code is
+`new`, up to `medium`; or when it is `trivial` or `small` in code the diff
+already changes. Otherwise "In a separate pull request:". Then say what to
+change, and in `impact` what it buys: branches or parameters gone, places that
+would no longer need to change together.
+
+Set `saves` to the net lines the proposal removes, as `~<n>`: count the lines
+it deletes from the ranges you name in `evidence`, estimate the lines the
+replacement adds, and give the difference. Leave it out when the value is
+structural and the line count does not move much (splitting a long function
+into named steps, say); that is still worth reporting. Never inflate it: the
+verifier reads the same ranges.
 
 ## Scoring
 
@@ -110,5 +127,6 @@ edit, logic duplicated in places that have already drifted apart). Never
 and is a clear improvement a reviewer would accept; drop anything that is only
 a matter of taste.
 
-Report the findings with the largest payoff first, and at most twelve per
+Report the findings with the largest payoff first (lines saved, and how much
+easier the next change in the area gets), and at most twelve per
 instance. A long tail of small cleanups goes into one finding that lists them.

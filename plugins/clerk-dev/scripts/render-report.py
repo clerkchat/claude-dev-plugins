@@ -123,6 +123,7 @@ def parse_verdict(t):
 
 ORIGIN_WORDS = {"new": "New on this branch", "worsened": "Made worse by this branch", "existing": "Already on main: fix in a separate pull request"}
 SIZES = ("trivial", "small", "medium", "large")
+DEBT_ORIGIN_WORDS = {"new": "In code new on this branch", "worsened": "In code on main this branch extended", "existing": "In code already on main"}
 DEBT_WORDS = {"cleanup": "Cleanup", "simplify": "Simplify", "refactor": "Refactor"}
 
 def scope_of(e, v):
@@ -138,11 +139,14 @@ def scope_of(e, v):
     e["_follow"] = "" if f.lower() in ("", "none", "n/a") else f
     d = str(e.get("debt", "")).lower().strip()
     e["_debt"] = d if d in DEBT_WORDS else ""
+    sv = re.search(r"\d+", str(e.get("saves", "")))
+    e["_saves"] = int(sv.group()) if sv and e["_debt"] else 0
 
 def scope_line(e):
     parts = [DEBT_WORDS[e["_debt"]]] if e.get("_debt") else []
+    if e.get("_saves"): parts.append(f"saves ~{e['_saves']} lines")
     if e.get("_size"): parts.append(f"Fix size: {e['_size']}")
-    if e.get("_origin") and not e.get("_debt"): parts.append(ORIGIN_WORDS[e["_origin"]])
+    if e.get("_origin"): parts.append((DEBT_ORIGIN_WORDS if e.get("_debt") else ORIGIN_WORDS)[e["_origin"]])
     if e.get("_follow"): parts.append(f"Follow-up in {e['_follow']}")
     return code_spans(" · ".join(parts)) if parts else ""
 
@@ -968,7 +972,8 @@ def main():
     below_open = sum(1 for e in numbered if e["_sec"] == "below" and not INSTR.get(e["id"], {}).get("choice"))
     triage = f"Triage: {tri['fix']} fix, {tri['noted']} fix as noted, {tri['discuss']} discuss, {tri['defer']} defer, {tri['ignore']} ignore, {undecided} not decided" + (f", {below_open} below the bar left as is." if below_open else ".")
     out += ["## Findings at a glance", "", prog, "", triage, ""] + md_table(rows) + [""]
-    intros = {"debt": "Ways to make the code this change touches smaller and easier to change: cleanups within a function, simplifications that keep the behavior in fewer lines, and refactors that change the structure. None of them holds the merge. Each recommendation says whether it fits in this pull request or belongs in its own.",
+    saved = sum(e.get("_saves", 0) for e in debt)
+    intros = {"debt": "Ways to make the code this change touches smaller and easier to change: cleanups within a function, simplifications that keep the behavior in fewer lines, and refactors that change the structure. None of them holds the merge. Each recommendation says whether it fits in this pull request or belongs in its own." + (f" Together they would remove about {saved} lines." if saved else ""),
               "existing": "Defects that are already on the remote main branch: this branch did not introduce them or make them worse, so they do not hold the merge. Each recommendation is a fix in its own pull request. Fix as recommended records the finding as deferred to that pull request; to fix one on this branch anyway, choose Fix as noted.",
               "below": "Major findings the bar left out: the reviewers or the verifier were not sure enough that they exist as described, or no verifier checked them. Each may still be real. Nothing here is acted on unless you tick an instruction."}
     for sec, heading in (("reopen", "Reopened"), ("pr", "Pull request comments"), ("fix", "Fix before merging"), ("look", "Worth a look"), ("confirm", "Needs confirmation"), ("existing", "Already on main"), ("debt", "Cleanup and refactoring"), ("declined", "Previously declined"), ("below", "Below the bar")):

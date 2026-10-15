@@ -281,6 +281,8 @@ per finding, fields in this order:
     you cannot name them.>
   debt: <tech-debt lens only: cleanup | simplify | refactor. Other lenses
     leave it out.>
+  saves: <tech-debt lens only, optional: net lines the proposal removes, as
+    "~36". Other lenses leave it out.>
   evidence: <what you read to conclude this: file:line references, a blame result,
     a caller you traced. The verifier starts here.>
 ```

@@ -17,7 +17,8 @@ sit within 3 lines of each other. The merged entry keeps the highest severity
 and confidence, the union of lenses, slices, and evidence, and the claim of the
 highest-confidence source. Of the scope labels it keeps the origin closest to
 the branch (new, then worsened, then existing), the largest fix size, and every
-distinct follow-up. A tech-debt finding (one with a `debt` label) never merges
+distinct follow-up. Merged tech-debt findings keep the larger `saves`
+estimate. A tech-debt finding (one with a `debt` label) never merges
 with a finding about a defect, so a cleanup proposal cannot hide a bug on the
 same lines or take over its text. Output is Markdown in the same entry format plus a
 per-lens merge count, so a verifier or a human can read it unchanged.
@@ -26,7 +27,7 @@ import argparse, json, os, re, sys
 from collections import defaultdict
 
 SEVERITY_RANK = {"blocker": 3, "major": 2, "minor": 1}
-FIELDS = ["id","sources","source","author","url","github_id","replies","github_state","duplicate_of","related_to","lens","slice","severity","confidence","file","line","end_line","title","surfaced_by","origin","fix_size","follow_up","debt","claim","context","what_changed","scenario","steps","impact","uncertainty","snippet","fix","evidence","caveat"]
+FIELDS = ["id","sources","source","author","url","github_id","replies","github_state","duplicate_of","related_to","lens","slice","severity","confidence","file","line","end_line","title","surfaced_by","origin","fix_size","follow_up","debt","saves","claim","context","what_changed","scenario","steps","impact","uncertainty","snippet","fix","evidence","caveat"]
 LIST_FIELDS = {"steps"}
 ORIGIN_RANK = {"new": 3, "worsened": 2, "existing": 1}
 SIZE_RANK = {"trivial": 1, "small": 2, "medium": 3, "large": 4}
@@ -101,6 +102,8 @@ def norm(e):
     e["follow_up"] = "" if f.lower() in ("", "none", "n/a") else f
     d = str(e.get("debt", "")).lower().strip()
     e["debt"] = d if d in DEBT_KINDS else ""
+    sv = re.search(r"\d+", str(e.get("saves", "")))
+    e["saves"] = int(sv.group()) if sv and e["debt"] else 0
     return e
 
 def overlaps(a, b, slack=3):
@@ -119,6 +122,7 @@ def merge(into, e):
     into["line"] = min(into["line"], e["line"]); into["end_line"] = max(into["end_line"], e["end_line"])
     if ORIGIN_RANK.get(e["origin"], 0) > ORIGIN_RANK.get(into["origin"], 0): into["origin"] = e["origin"]
     if SIZE_RANK.get(e["fix_size"], 0) > SIZE_RANK.get(into["fix_size"], 0): into["fix_size"] = e["fix_size"]
+    into["saves"] = max(into["saves"], e["saves"])
     if e["follow_up"] and e["follow_up"] not in into["follow_up"]:
         into["follow_up"] = "; ".join(x for x in (into["follow_up"], e["follow_up"]) if x)
 
@@ -171,7 +175,7 @@ def main():
     out.append("```findings")
     for i, m in enumerate(merged, 1):
         rng = f"{m['line']}" + (f"\n  end_line: {m['end_line']}" if m["end_line"] and m["end_line"] != m["line"] else "")
-        debt = f"\n  debt: {m['debt']}" if m["debt"] else ""
+        debt = (f"\n  debt: {m['debt']}" if m["debt"] else "") + (f"\n  saves: ~{m['saves']}" if m["saves"] else "")
         out.append(f"- id: {i}\n  lens: {', '.join(sorted(m['lenses']))}\n  slice: {', '.join(sorted(m['slices']))}\n  severity: {m['severity']}\n  confidence: {m['confidence']}\n  file: {m['file']}\n  line: {rng}\n  title: {m.get('title','')}\n  origin: {m['origin']}\n  fix_size: {m['fix_size']}\n  follow_up: {m['follow_up'] or 'none'}{debt}\n  claim: {m.get('claim','')}\n  context: {m.get('context','') or m.get('what_changed','')}\n  scenario: {m.get('scenario','')}\n  steps: {m.get('steps','').replace(chr(10), chr(10)+'    ')}\n  impact: {m.get('impact','')}\n  uncertainty: {m.get('uncertainty','')}\n  snippet: {m.get('snippet','')}\n  fix: {m.get('fix','')}\n  evidence: {' | '.join(m['evidence_all'])}\n  sources: {', '.join(m['sources'])}\n")
     out.append("```")
     text = "\n".join(out)
