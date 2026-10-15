@@ -47,7 +47,9 @@ Drafting Purpose when the file or section is missing:
    (`git log --format='%h %s%n%b' <base>..HEAD`; the newest fifty are enough),
    `git diff --stat <base>...HEAD`, and `git status --short` for uncommitted
    work. Skim the messages and the names of new files; do not read whole diffs
-   to draft this.
+   to draft this. `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py
+   [WORKTREE]` prints steps 1 and 2 in one call; use it rather than running
+   them one by one.
 3. Read the pull request, when the branch has one: `gh pr view --json
    title,body`. A description the author wrote is the best statement of
    purpose there is; when it exists, start from it. Skip this without a word

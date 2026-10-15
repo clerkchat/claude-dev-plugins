@@ -60,6 +60,22 @@ Then:
   user to say go, then continue with `--resume`. A typed command needs no such
   confirmation.
 
+## Preflight
+
+Start every run with one call:
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...]`, giving this
+worktree and, when the request names them or `.review/review-workspace.md`
+lists them, the other worktrees of the job. For each one it prints the
+repository's `review-setup` lines, the remote main or that `origin/HEAD` is
+missing, when the last fetch was, the merge base, the branch's commit messages,
+`diff --stat` and `git status --short`, whether the branch notes have a Purpose,
+the review workspace rows, open follow-ups, and the latest run and whether it is
+unfinished and still at `HEAD`. It never fails the call; a missing piece is
+printed as missing. Use its output for Branch notes first, First runs in a
+repository, and Resuming, rather than gathering the same facts with your own
+shell commands (chained `cat`s of files that may be absent fail the call, and
+zsh expands a word starting with `=`).
+
 ## Branch notes first
 
 Read `.review/branch-notes.md` before scoping. When it or its Purpose is
@@ -274,6 +290,8 @@ Scripts shipped with the plugin, run with `python3`; use them rather than
 writing ad hoc parsers (`reconcile.py` matches findings against an earlier run;
 see Step 6b):
 
+- `${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...] [--log N]`: the
+  state a run starts from, per worktree (see Preflight).
 - `${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py PATCH [--exclude GLOB ...]
   --tsv files.tsv --md scope-table.md`:
   per-file bytes, lines, token estimate, and exclusion reasons.
