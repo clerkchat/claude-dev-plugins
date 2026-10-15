@@ -1,0 +1,15 @@
+{
+  "name": "clerk-dev",
+  "displayName": "Code reviewer",
+  "description": "Multi-focus code review of a branch, or of a feature across repositories: every finding checked twice, fixed one commit at a time, and tracked to the merge.",
+  "author": {
+    "name": "Matthias Margush"
+  },
+  "keywords": [
+    "code-review",
+    "pull-request",
+    "refactoring",
+    "multi-repo"
+  ],
+  "version": "1.0.0"
+}
