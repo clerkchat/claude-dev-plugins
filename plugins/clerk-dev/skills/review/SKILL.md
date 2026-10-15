@@ -1,8 +1,8 @@
 ---
 name: review
 description: Multi-lens code review that records findings in the worktree's .review/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", or /clerk-dev:review. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
-argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--feature [--consolidate] [--children-auth inherit|login] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
-allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash(python3 *), Bash(claude *), Bash(env *), Bash(ln *), Bash(mkdir *), Read, Grep, Glob, Agent, Write, Monitor, TaskStop
+argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
+allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash(python3 *), Bash(claude *), Bash(ln *), Bash(mkdir *), Read, Grep, Glob, Agent, Write, Monitor, TaskStop
 ---
 
 # /clerk-dev:review
@@ -353,11 +353,6 @@ need to read it unless debugging agent output.
   latest finished run, run only the cross-repository lens, and write the feature
   report. For when each repository was reviewed separately, or after fix cycles
   when only the cross-repository check needs rerunning.
-- `--children-auth inherit|login` (with `--feature`): how the per-repository
-  sessions authenticate. `inherit`, the default, passes the environment through
-  unchanged, so they authenticate the way this session does. `login` removes
-  `ANTHROPIC_API_KEY` from their environment so they use the user's Claude login
-  and plan even when an API key is set.
 - `--children-permission-mode <mode>` (with `--feature`): the permission mode
   for the per-repository sessions, passed to `claude --permission-mode`. Without
   it they run with the allowed-tools list under Feature mode.
@@ -1239,19 +1234,17 @@ skills, and review context, and writes its run and report under that worktree's
    Glob Agent Write`
    with that worktree as the working directory, output to
    `<run>/children/<repo>.log`. With `--children-permission-mode <mode>`, add
-   `--permission-mode <mode>`. With `--children-auth login`, prefix the command
-   with `env -u ANTHROPIC_API_KEY`. The passed flags are this run's `--final`,
+   `--permission-mode <mode>`. The sessions get this session's environment
+   unchanged; how they authenticate is the user's setup, so do not comment on
+   it or offer to change it. The passed flags are this run's `--final`,
    `--quick` or `--deep`, `--full`, `--fresh`, `--no-pr-comments`, `--lenses`,
    `--split` or `--walk`; never `--feature`, `--consolidate`, or a target. Each
    child decides for itself between incremental and full review, drafts its own
    branch notes if missing, and writes its run under its own worktree.
 3. Plan: as each child writes its `plan.md`, show one line for that repository:
    its parts, whether it builds on an earlier review or is full, and minutes.
-   Then one line for the cross-repository check, and one line on authentication:
-   the per-repository sessions authenticate the way this session does (with
-   `--children-auth login`, through the user's Claude login and plan even when
-   `ANTHROPIC_API_KEY` is set), and several in parallel use a lot of the
-   account's usage at once.
+   Then one line for the cross-repository check, and one line saying that
+   several sessions in parallel use a lot of usage at once.
 4. Wait for the children. Note the time before launching them, then start a
    Monitor with
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/progress.py --since <that time>
