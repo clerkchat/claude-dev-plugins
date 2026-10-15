@@ -1091,8 +1091,9 @@ What the document contains, so you can check it:
   (the part labels), with page breaks; then "Below the bar", full cards for the
   majors the bar left out, each saying why, with unticked checklists that
   nothing acts on until the user ticks one. Empty sections are omitted.
-- Each card: numbered title; a hidden anchor comment; the focus in bold and the
-  area; a scope line (fix size, origin, and any follow-up in another
+- Each card: numbered title; a hidden anchor comment; the action in bold (as
+  the glance table's Action column words it) and the area; a focus line; a
+  scope line (fix size, origin, and any follow-up in another
   repository, such as "Fix size: trivial · New on this branch"); a status
   checkbox line; the bare `path:line`; the one-sentence claim;
   then subheadings: Why it matters, Context, How it goes wrong (a numbered list

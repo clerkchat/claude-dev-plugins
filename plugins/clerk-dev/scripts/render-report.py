@@ -125,6 +125,12 @@ ORIGIN_WORDS = {"new": "New on this branch", "worsened": "Made worse by this bra
 SIZES = ("trivial", "small", "medium", "large")
 DEBT_ORIGIN_WORDS = {"new": "In code new on this branch", "worsened": "In code on main this branch extended", "existing": "In code already on main"}
 DEBT_WORDS = {"cleanup": "Cleanup", "simplify": "Simplify", "refactor": "Refactor"}
+ACTIONS = {"pr": "pull request comment", "reopen": "reopened", "fix": "fix before merging", "look": "worth a look", "confirm": "needs confirmation", "existing": "separate pull request", "debt": "cleanup", "declined": "previously declined", "below": "below the bar"}
+
+def action_of(e, section):
+    """The action for a finding in a section, as the glance table words it; a
+    tech-debt finding's is its label."""
+    return e["_debt"] if section == "debt" and e.get("_debt") else ACTIONS[section]
 
 def scope_of(e, v):
     """Origin and fix size, the verifier's when it gave them, else the
@@ -143,8 +149,8 @@ def scope_of(e, v):
     e["_saves"] = int(sv.group()) if sv and e["_debt"] else 0
 
 def scope_line(e):
-    parts = [DEBT_WORDS[e["_debt"]]] if e.get("_debt") else []
-    if e.get("_saves"): parts.append(f"saves ~{e['_saves']} lines")
+    parts = []
+    if e.get("_saves"): parts.append(f"Saves ~{e['_saves']} lines")
     if e.get("_size"): parts.append(f"Fix size: {e['_size']}")
     if e.get("_origin"): parts.append((DEBT_ORIGIN_WORDS if e.get("_debt") else ORIGIN_WORDS)[e["_origin"]])
     if e.get("_follow"): parts.append(f"Follow-up in {e['_follow']}")
@@ -290,13 +296,15 @@ def is_new(mid):
     return mid in _APPENDED and not decided(mid)
 
 def card(n, e, v, labels, names, repo, head, section):
-    focus = ", ".join(names.get(l, l) for l in sorted(e["lenses"]))
-    focus = focus[:1].upper() + focus[1:]
-    if is_pr(e):
-        focus = f"Pull request review by @{e.get('author', 'someone')}"
+    action = action_of(e, section)
+    action = action[:1].upper() + action[1:]
     raw = "pull request" if is_pr(e) else ", ".join(sorted(set(e.get("sources", []))))
-    area = "Pull request" if is_pr(e) else area_of(e, labels)
-    out = [f"#### {n}. {title_of(e, TITLES)}" + (" [new]" if is_new(e["id"]) else ""), "", f"<!-- finding {n}, merged {e['id']}, verify/{e['id']}.md, raw: {raw} -->", "", f"**{focus}** · {area}", "", status_line(STATUS.get(e["id"], {"status": "open"})), ""]
+    if is_pr(e):
+        head_lines = [f"**{action}** · by @{e.get('author', 'someone')}", ""]
+    else:
+        focus = ", ".join(names.get(l, l) for l in sorted(e["lenses"]))
+        head_lines = [f"**{action}** · {area_of(e, labels)}", "", f"Focus: {focus}", ""]
+    out = [f"#### {n}. {title_of(e, TITLES)}" + (" [new]" if is_new(e["id"]) else ""), "", f"<!-- finding {n}, merged {e['id']}, verify/{e['id']}.md, raw: {raw} -->", ""] + head_lines + [status_line(STATUS.get(e["id"], {"status": "open"})), ""]
     sl = "" if is_pr(e) else scope_line(e)
     if sl: out += [sl, ""]
     loc = f"{e['file']}:{e['line']}" if e["line"] else e["file"]
@@ -928,12 +936,11 @@ def main():
     fm = [l.rstrip() for l in fm]
     out = fm + [f"# {title}", "", "## Summary", ""]
     out += [open(a.summary, encoding="utf-8").read().strip() if a.summary and os.path.exists(a.summary) else "(summary pending)", ""]
-    act = {"pr": "pull request comment", "reopen": "reopened", "fix": "fix before merging", "look": "worth a look", "confirm": "needs confirmation", "existing": "separate pull request", "debt": "cleanup", "declined": "previously declined", "below": "below the bar"}
     def glance_title(e):
         t = title_of(e, TITLES)
         return t + " (also on the PR)" if e["id"] in PR_LINKS else t
     word = {"fix": "fix", "noted": "fix as noted", "discuss": "discuss", "defer": "defer", "ignore": "ignore", "": ""}
-    rows = [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(names.get(l, l) for l in sorted(e["lenses"])), size_cell(e), (e["_debt"] if e["_sec"] == "debt" else act[e["_sec"]]), word.get(INSTR.get(e["id"], {}).get("choice", ""), ""), status_cell(STATUS.get(e["id"], {"status": "open"}))] for e in numbered]
+    rows = [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(names.get(l, l) for l in sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), word.get(INSTR.get(e["id"], {}).get("choice", ""), ""), status_cell(STATUS.get(e["id"], {"status": "open"}))] for e in numbered]
     done = {k: sum(1 for e in numbered if e["_sec"] == k and STATUS.get(e["id"], {}).get("status") in DONE) for k in ("reopen", "pr", "fix", "look", "confirm")}
     tot = {k: sum(1 for e in numbered if e["_sec"] == k) for k in ("reopen", "pr", "fix", "look", "confirm")}
     prog = f"Progress: {done['fix']} of {tot['fix']} to fix before merging resolved, {done['look']} of {tot['look']} worth a look resolved."
