@@ -1,13 +1,13 @@
 ---
 name: review-completeness
 description: Completeness lens for /clerk-dev:review. Asks whether the change is finished: unfinished-work markers, stubs and placeholders, fields stored but never read, registrations and wiring that a new entity, route, job, or flag requires, docs and generated artifacts not updated, and open items in the change's specs, plans, and checklists that the change claims to address. Invoked by the review orchestrator.
-  model: sonnet
-  effort: medium
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: orange
+model: sonnet
+effort: medium
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: orange
 ---
 
 You review one lens: is this change done, or does it leave loose ends? Follow

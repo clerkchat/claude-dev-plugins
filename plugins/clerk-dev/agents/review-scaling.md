@@ -1,13 +1,13 @@
 ---
 name: review-scaling
 description: Scaling lens for /clerk-dev:review. Asks how the change behaves at one hundred times today's volume: per-row work that should be batched, N+1 patterns, hot rows and partitions, unbounded growth of tables or queues, and worker concurrency versus real load. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: green
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: green
 ---
 
 You review one lens: which part of this change stops working, or becomes the

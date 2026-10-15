@@ -1,13 +1,13 @@
 ---
 name: review-llm-agent
 description: LLM and agent lens for /clerk-dev:review. Reviews prompts, tool schemas, model client calls, and agent loops: schema correctness and strictness, handling of nondeterministic and malformed output, token and cost growth, prompt-cache invalidators, evals kept in step with prompt changes, model API drift, and loop termination. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash, Skill
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: purple
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash, Skill
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: purple
 ---
 
 You review one lens: will this model-facing code behave correctly, affordably,

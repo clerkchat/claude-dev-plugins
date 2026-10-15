@@ -1,13 +1,13 @@
 ---
 name: review-edge-cases
 description: Edge-case lens for /clerk-dev:review. Hunts for inputs and states the change does not handle: nulls and empties, boundaries, time and zone arithmetic, unicode and encoding, legacy data missing new fields, partial failure mid-loop, and ordering assumptions. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: yellow
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: yellow
 ---
 
 You review one lens: which concrete input or state makes this code do the wrong

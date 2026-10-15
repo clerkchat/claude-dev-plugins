@@ -1,13 +1,13 @@
 ---
 name: review-user-facing-text
 description: User-facing text lens for /clerk-dev:review. Reviews the strings people will read: labels, buttons, empty states, validation and error messages, notifications, message and email templates, prompts that produce customer-visible replies, and API error bodies. Checks clarity, consistency with existing product vocabulary, tone, and whether errors tell the reader what to do. Invoked by the review orchestrator.
-  model: sonnet
-  effort: medium
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: pink
+model: sonnet
+effort: medium
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: pink
 ---
 
 You review one lens: will the people who read these strings understand them, and

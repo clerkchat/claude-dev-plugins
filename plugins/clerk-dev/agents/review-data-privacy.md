@@ -1,13 +1,13 @@
 ---
 name: review-data-privacy
 description: Data-privacy lens for /clerk-dev:review. Finds personal or customer content flowing where it should not: logs, traces, analytics, error messages, third-party providers, prompts, caches, and exports; checks retention and deletion paths, consent and opt-out handling, and regulated messaging paths. Invoked by the review orchestrator.
-  model: sonnet
-  effort: medium
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: purple
+model: sonnet
+effort: medium
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: purple
 ---
 
 You review one lens: does this change move personal or customer data somewhere

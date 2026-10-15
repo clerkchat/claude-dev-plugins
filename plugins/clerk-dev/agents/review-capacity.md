@@ -1,13 +1,13 @@
 ---
 name: review-capacity
 description: Capacity lens for /clerk-dev:review. Checks that the change bounds its own resource use: memory held per request or job, timeouts on every outbound call, provider rate limits respected, connection pools not exhausted, fan-out and retries bounded, and backpressure present where producers outrun consumers. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: cyan
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: cyan
 ---
 
 You review one lens: can this code consume an unbounded amount of memory, time,

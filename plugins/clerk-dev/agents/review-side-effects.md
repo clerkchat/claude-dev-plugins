@@ -1,13 +1,13 @@
 ---
 name: review-side-effects
 description: Real-world side effects lens for /clerk-dev:review. Finds changes that can send messages, place calls, charge money, notify people, or write to customer systems by accident: from paths users perceive as safe (test, replay, preview, retry, seed, backfill), with weak confirmation or UI that looks harmless, with missing dry-run or sandbox guards, or by replaying real customer data. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: red
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: red
 ---
 
 You review one lens: can a legitimate user, operator, or automated process cause

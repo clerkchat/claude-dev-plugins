@@ -1,13 +1,13 @@
 ---
 name: review-rollout
 description: Rollout lens for /clerk-dev:review. Checks whether the change can deploy and roll back safely: old and new code coexisting, migration ordering and locks, in-flight job and event payloads, replicated tables, feature gates, and the revert path. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: orange
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: orange
 ---
 
 You review one lens: what breaks between the moment this starts deploying and

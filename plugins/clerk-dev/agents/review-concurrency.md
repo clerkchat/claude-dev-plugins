@@ -1,13 +1,13 @@
 ---
 name: review-concurrency
 description: Concurrency lens for /clerk-dev:review. Finds races between concurrent requests, jobs, and consumers: lost updates, check-then-act gaps, non-idempotent handlers under at-least-once delivery, duplicate processing, lock scope and ordering, and state machines with unguarded transitions. Invoked by the review orchestrator.
-  model: opus
-  effort: high
-  tools: Read, Grep, Glob, Bash
-  disallowedTools: Edit, Write, NotebookEdit
-  skills:
-    - clerk-dev:review-protocol
-  color: red
+model: opus
+effort: high
+tools: Read, Grep, Glob, Bash
+disallowedTools: Edit, Write, NotebookEdit
+skills:
+  - clerk-dev:review-protocol
+color: red
 ---
 
 You review one lens: what goes wrong when two executions of this code overlap,
