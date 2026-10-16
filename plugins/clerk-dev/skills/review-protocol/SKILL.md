@@ -11,7 +11,7 @@ Your job is depth on your lens, not breadth. The orchestrator merges, dedupes,
 and verifies everything afterward, so report what you actually found and let the
 pipeline do the filtering.
 
-When the prompt says `TASK: design`, you are checking a feature record (a
+When the prompt says `TASK: design-check`, you are checking a feature record (a
 design, plan, capabilities, or spec record), not a diff: follow Design mode at
 the end of this protocol and your agent's `## Design mode` section. Of the
 sections between here and there, Reading budget, Discovery fallback, Paths, and
@@ -343,7 +343,7 @@ Every path you write, in findings and in prose, is repo-relative with no leading
 
 ## Design mode
 
-With `TASK: design` you check a feature record (a design, plan, capabilities, or
+With `TASK: design-check` you check a feature record (a design, plan, capabilities, or
 spec record; see `skills/feature/records.md`) before the code exists. Your
 agent's `## Design mode` section lists what your lens asks of a design; apply
 it, with the same depth you bring to a diff.

@@ -29,7 +29,7 @@ user through them and records each answer.
    message so they run in parallel, each with this prompt:
 
    ```
-   TASK: design
+   TASK: design-check
    RECORDS: <absolute paths>
    SUPPORTING: <absolute paths, or none>
    REPO: <absolute path of the repository the records are about>
@@ -68,10 +68,20 @@ user through them and records each answer.
    dropped question in the check file's Dropped section with the decision that
    answered it, so the user can contest the drop. Sort by weight (settle-first,
    worth-settling, note), then by record and section.
+   Then read the earlier check files of the same records (the index lists them)
+   and compare each new question with their closed ones by meaning, not
+   wording. A match is not a new item: list it under the check file's "Seen
+   before" section with the earlier id and outcome ("Do exports expire?
+   R9-1.Q4: no change, deleted with the report"), unless the record has
+   changed in a way that reopens it; then keep it, and cite the earlier one in
+   its Why.
 6. **Write** `<hub>/.clerk-dev/feature/checks/R<n>-<k>.md`, where `R<n>` is the
    first checked record and `<k>` is one more than the highest existing check of
    it. Its `Checked <date>: R13, R10.` line names every checked record, so the
-   feature index lists the check under each. Format below. Then run `records.py index <worktree>`.
+   feature index lists the check under each. A `Usage:` line under it gives each
+   lens's tokens and duration from the completion notices ("Usage:
+   completeness 24k 25s, llm-agent 79k 177s"), so the cost of checks is
+   visible per lens. Format below. Then run `records.py index <worktree>`.
 7. **Report** in a few lines: the path, the counts by weight, any lens with no
    usable output, and the settle-first questions, one line each. Offer to walk
    them. Do not start answering them yourself.
@@ -86,6 +96,8 @@ question is cited as `R13-1.Q3`, or `Q3` when the check in hand is clear.
 
 Checked 2026-10-16: R13. Supporting: R11, R2, R3. Lenses: completeness,
 spec-conformance, design, naming-concepts.
+Usage: completeness 24k 25s, spec-conformance 27k 28s, design 26k 30s,
+naming-concepts 22k 25s.
 
 - [ ] Q1. Should check files appear in the feature index?
   - Lens: completeness
@@ -97,6 +109,10 @@ spec-conformance, design, naming-concepts.
   - Evidence: /Users/me/src/plugins/scripts/records.py:92
   - Instruction:
   - Status: open
+
+## Seen before
+
+- Do exports expire? R9-1.Q4: no change, deleted with the report (edge-cases).
 
 ## Dropped
 
