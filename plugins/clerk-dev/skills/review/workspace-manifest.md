@@ -24,6 +24,8 @@ part of a review job across repositories.
 
 Set up 2026-10-14 from /Users/me/src/api-exports. Edit freely.
 
+Hub: api
+
 | Repo   | Worktree                     | Main        |
 | ------ | ---------------------------- | ----------- |
 | api    | /Users/me/src/api-exports    | origin/main |
@@ -37,6 +39,10 @@ Set up 2026-10-14 from /Users/me/src/api-exports. Edit freely.
 - `Main`: optional, the remote main branch to compare against. Empty means
   that repository's `origin/HEAD`; when that is missing, run
   `git remote set-head origin --auto` there or fill in this column.
+
+- `Hub:`: optional, the repository whose worktree holds the feature's records
+  (see `skills/feature/records.md`), usually the one the engineer started in.
+  Without it, each worktree keeps its own.
 
 Reading it: the row whose `Worktree` is the current worktree (compare real
 paths) is this repository, and the other rows are the related worktrees. A row
@@ -61,7 +67,9 @@ in an interactive session first.
    `git -C <path> worktree list --porcelain` and ask which holds this job,
    listing worktrees on the same branch name as this one first. The user can
    also name a path or leave that repository out.
-4. Ask for a short name for the job, proposing the branch name.
+4. Ask for a short name for the job, proposing the branch name. When a
+   worktree in the table already has `.clerk-dev/feature/feature.md`, add
+   `Hub:` naming its repository; when several do, ask which is the hub.
 5. Show the table, and on confirmation write the file here. Then, for every
    other worktree in it, create `.clerk-dev/` (and its `.git/info/exclude` entry
    when needed) and link the file:

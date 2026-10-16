@@ -702,7 +702,12 @@ it with the shipped script. Give it the target and the script path and have it:
    the branch name; order by modification time; keep at most eight and report
    how many were dropped. Also include the plugin's own `.clerk-dev/followups.md`
    when it has open items (see `tracking.md`); it does not count against the
-   eight.
+   eight. And include the feature's active records
+   (`records.py list <worktree> --active`, which reads the hub; see
+   `skills/feature/records.md`): every active spec, decision, and plan whose
+   `repo` is this repository, and the active design and capabilities records.
+   They do not count against the eight either; brainstorms and superseded or
+   discarded records are never included.
 7. Write `<run>/target.txt`: three lines, the target as given (`branch` for the
    whole branch, else the path, range, or PR), `BASE`, and `HEAD`. Incremental
    review reads it. Then write `<run>/scope.md`: the summary (files, included

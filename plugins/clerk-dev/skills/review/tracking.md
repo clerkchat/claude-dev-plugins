@@ -13,6 +13,7 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `review-status` skill                                                                                                                                                                                                                     | the `review-status` skill (marks newer items as new)                                                                                                                  |
 | `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
 | `.clerk-dev/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `review-status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
+| `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, capabilities, plans, specs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
 
 ## Branch notes
 
@@ -147,6 +148,7 @@ Readers:
 
 Untracked files in the worktree, such as personal notes, drafts, and scratch
 specs, are the user's own. Reviews do not read them, and fixes never stage or
-commit them. The plugin's own files are only those under `.clerk-dev/`. Documents
+commit them. The plugin's own files are only those under `.clerk-dev/`,
+including feature records, which the user writes too. Documents
 committed to the repository are read through the review-context
 `## Work tracking` section and never written to.
