@@ -33,8 +33,21 @@ report is the only thing an item should add here.
 ## Before the first item
 
 1. List the open items: `followups.py list <worktree> --open`. With item ids as
-   the argument, take only those; otherwise all open items, in id order. Fix the
-   list now; its length is the total.
+   the argument, take only those; otherwise all open items, in id order. Sort
+   them by instruction (the vocabulary is "Items" in `skills/review/tracking.md`):
+   - none, `Fix as recommended`, or `Fix as noted`: the work list, done in id
+     order; a note replaces the item's text where they differ;
+   - `Refine`: before the work list, investigate each (read the source change
+     with `git -C <source worktree> show <sha>`, and the local code it touches),
+     propose a concrete fix or a reason not to, and ask the user to pick an
+     instruction; record it with `followups.py set`, and add the item to the
+     work list when it becomes a fix;
+   - `Discuss`: after the work list, walk them with the user one at a time and
+     record what they decide with `followups.py set`;
+   - `Defer` or `Ignore` still open: close them now, `followups.py close
+     <worktree> F3 --status deferred|wont-fix --ref "<the note, or why>"`, in
+     one line each.
+   Fix the work list now; its length is the total.
 2. Read `.clerk-dev/branch-notes.md` (Purpose and Fixes) of this worktree, as the
    `review-fix` skill describes. Draft Purpose first if it is missing.
 3. Check the working tree with `git status --short`. Each commit must hold only

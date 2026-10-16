@@ -99,7 +99,7 @@ def followup_labels(repo):
     fu = importlib.util.module_from_spec(spec); spec.loader.exec_module(fu)
     labels = {}
     for it in fu.read(os.path.join(repo, ".clerk-dev", "followups.md")):
-        m = re.search(r"\bin ([0-9a-f]{7,40})\b", it["fields"].get("Done", ""))
+        m = re.search(r"\bin ([0-9a-f]{7,40})\b", it["fields"].get("Outcome", "") or it["fields"].get("Done", ""))
         if not m: continue
         full = git(repo, "rev-parse", "--verify", "-q", m.group(1) + "^{commit}", check=False)
         if full: labels[full] = it["id"]

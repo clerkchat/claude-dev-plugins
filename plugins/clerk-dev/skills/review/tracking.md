@@ -122,10 +122,17 @@ Find the consuming worktree in `.clerk-dev/review-workspace.md` (see
 consuming repository, add the item to the current worktree's file with the text
 starting `[<repo>]`, and say so.
 
-The item's id (`F3`) is the handle in conversation. The `review-followups` skill
-works the open items, one fixer and one commit each, and closes each with
-`followups.py close <worktree> F3 --ref <sha>`. Close one by hand the same way
-when the user says it is done. Hand-ticked boxes are honored as they are.
+The item's id (`F3`) is the handle in conversation. Each item has an
+Instruction and a Status (see Items below); the author of a follow-up was in
+another repository, so its recommendation is a hypothesis, and Refine is the
+usual instruction when it may not fit here. The user sets one by saying so
+("refine F3", "ignore F2, the web app dropped that screen"), which is recorded
+with `followups.py set <worktree> F3 "Refine" [--note "..."]`. The
+`review-followups` skill works the open items by their instructions, one fixer
+and one commit each, and closes each with `followups.py close <worktree> F3
+--ref <sha>` (or `--status wont-fix|deferred --ref "<reason>"`). Close one by
+hand the same way when the user says it is done. Hand-ticked boxes are honored
+as fixed.
 
 Readers:
 
@@ -144,6 +151,32 @@ Readers:
 - The `review-followups` skill gives each fixer the open findings in the files
   it will change, as context, and notes on a finding when the follow-up's
   contract overrides its recommendation.
+
+## Items
+
+Review findings, follow-ups, and design-check questions are all items, and use
+one vocabulary in two layers. Findings keep their cards and `status.tsv`;
+follow-ups (`F3`) and design questions (`Q3`) are checkbox lists read and
+written by `scripts/items.py` (`followups.py` builds on it).
+
+Instruction, what to do; blank means not decided yet (a follow-up with none is
+done as written):
+
+- `Fix as recommended`: do what the item recommends.
+- `Fix as noted`: do it as the note after the colon says ("Fix as noted: use
+  the banner, not a toast").
+- `Discuss`: talk it through with the user before anything else happens.
+- `Defer`: not now; the status becomes `deferred`, with where it went.
+- `Ignore`: not at all; the status becomes `wont-fix`, with why.
+- `Refine`: investigate first (read the source change and the local code),
+  propose a concrete fix or a reason not to, then set one of the others.
+  Follow-ups and design questions only; a finding's author is a lens in this
+  repository, and Discuss covers it.
+
+Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
+`deferred`. The box is ticked exactly when the status is one of the last three.
+`Outcome` holds what closed it: a commit (`in 1a2b3c4`), a decision record
+(`R18`), or a reason. A design question is `fixed` when its answer is recorded.
 
 ## What stays the user's
 

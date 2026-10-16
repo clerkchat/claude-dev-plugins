@@ -95,8 +95,8 @@ spec-conformance, design, naming-concepts.
     listing the checks folder.
   - Suggestion: (a) List them under Records; (b) a separate Checks section.
   - Evidence: /Users/me/src/plugins/scripts/records.py:92
-  - Disposition:
-  - Outcome:
+  - Instruction:
+  - Status: open
 
 ## Dropped
 
@@ -104,8 +104,9 @@ spec-conformance, design, naming-concepts.
 ```
 
 Fields are a nested list so a Markdown formatter keeps the layout, as in
-follow-ups. `Disposition` is empty until the user decides; `Outcome` says what
-came of it. A ticked box means the question is closed.
+follow-ups. `Instruction` is empty until the user decides; `Status` and
+`Outcome` follow "Items" in `skills/review/tracking.md`. After writing, run
+`${CLAUDE_PLUGIN_ROOT}/scripts/items.py validate <check file>`.
 
 ## Walking the questions
 
@@ -115,19 +116,20 @@ time:
 
 1. Show the question with its why and suggestion, briefly, and the code or
    record it points at when that helps.
-2. Discuss until the user decides. The dispositions are those of review
-   findings, plus one: Fix as recommended (adopt the suggestion), Fix as noted
-   (adopt it as the user adjusts it), Discuss (later), Defer, Ignore (won't
-   address), and Refine (investigate first, then decide).
-3. Record the outcome where it belongs:
+2. Discuss until the user decides, and record the instruction with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/items.py set <check file> Q3
+   "<instruction>" [--note "..."]`, in the words of "Items" in
+   `skills/review/tracking.md` (Fix as recommended adopts the suggestion;
+   Refine means investigate the code first and come back with a proposal).
+3. Record the answer where it belongs:
    - a choice: a decision record (`records.py new <worktree> decision "..."
      --from R<n>`, with `--supersedes` when it changes an active decision);
    - a gap in a spec: an open item added to the spec (allowed at any time),
      or, when the gap changes the requirements or approach, a new spec that
      supersedes it;
    - nothing to change: the reason, in one line.
-4. Fill in `Disposition` and `Outcome` (with the record id when there is one),
-   tick the box when closed, and move on. Defer and discuss-later leave the box
-   open.
+4. Close it: `items.py status <check file> Q3 fixed --ref "<record id or
+   reason>"` (`deferred` or `wont-fix` for Defer and Ignore), and move on.
+   Discuss and Refine leave it open until decided.
 
 Records written while walking follow the `feature` skill's rules.
