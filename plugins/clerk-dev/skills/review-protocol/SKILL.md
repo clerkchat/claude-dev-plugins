@@ -11,6 +11,10 @@ Your job is depth on your lens, not breadth. The orchestrator merges, dedupes,
 and verifies everything afterward, so report what you actually found and let the
 pipeline do the filtering.
 
+When the prompt says `TASK: design`, you are checking a design record, not a
+diff: follow Design mode at the end of this protocol and your agent's
+`## Design mode` section, and skip everything between here and there.
+
 ## Inputs you receive
 
 The orchestrator's prompt gives you:
@@ -324,3 +328,60 @@ Every path you write, in findings and in prose, is repo-relative with no leading
 - Never edit files. Never run anything that changes state (migrations, installs,
   network writes). Read-only git commands and the test runner are fine when the
   orchestrator says so.
+
+## Design mode
+
+With `TASK: design` you check a feature record (a design, plan, capabilities, or
+spec record; see `skills/feature/records.md`) before the code exists. Your
+agent's `## Design mode` section lists what your lens asks of a design; apply
+it, with the same depth you bring to a diff.
+
+Inputs:
+
+- `RECORDS`: paths of the records to check.
+- `SUPPORTING`: paths of records they build on or cite (decisions, the design a
+  spec details), or `none`. Read them to know what is already settled; do not
+  check them.
+- `REPO`: absolute path of the repository the records are mostly about. Other
+  repositories of the feature are in `WORKSPACE`.
+- `CONTEXT`, `GUIDANCE`, `WORKSPACE`: as in review.
+
+Method:
+
+1. Read the records and the supporting records.
+2. Ground the questions in the code. When a record says it will add a route,
+   reuse a helper, or change an entity, find the existing code and read enough
+   of it to know whether the plan fits: how tenants are scoped there, what the
+   current contract is, what a migration on that table would lock. A question
+   backed by code you read beats a generic one.
+3. Ask only what the records leave open or get wrong for your lens. Do not ask
+   what an active decision already settles, unless the code shows the decision
+   cannot hold; then say so and cite it.
+4. Prefer questions that change the design or the plan over ones that only
+   change a line of code; leave line-level concerns to the review of the diff.
+
+Weight each question:
+
+- `settle-first`: building before it is answered risks rework, a breaking
+  contract, data loss, or a security, tenancy, or side-effect problem.
+- `worth-settling`: the answer shapes the implementation; it can be settled
+  during the spec or the first pass.
+- `note`: a consideration to keep in mind; no decision is needed now.
+
+Output one fenced block, then a `Coverage` section of one or two sentences:
+
+```questions
+- lens: <your lens name>
+  record: <R<n> of the record the question is about>
+  where: <the record's section heading, or "whole">
+  weight: settle-first | worth-settling | note
+  question: <one question, answerable by a decision>
+  why: <one or two sentences: the concrete case that goes wrong if it is left
+    open, naming the code, data, or caller involved>
+  suggestion: <the answer you would propose, or alternatives labeled (a), (b);
+    "none obvious" when you have none>
+  evidence: <file:line references and record ids you read>
+```
+
+At most eight questions; fewer is fine and none is a valid answer. Paths follow
+Paths above. Never edit files.

@@ -1,6 +1,6 @@
 ---
 name: review-user-facing-text
-description: User-facing text lens for /clerk-dev:review. Reviews the strings people will read: labels, buttons, empty states, validation and error messages, notifications, message and email templates, prompts that produce customer-visible replies, and API error bodies. Checks clarity, consistency with existing product vocabulary, tone, and whether errors tell the reader what to do. Invoked by the review orchestrator.
+description: User-facing text lens for /clerk-dev:review. Reviews the strings people will read: labels, buttons, empty states, validation and error messages, notifications, message and email templates, prompts that produce customer-visible replies, and API error bodies. Checks clarity, consistency with existing product vocabulary, tone, and whether errors tell the reader what to do. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -67,3 +67,15 @@ the existing string you matched it to.
 
 Developer-facing text, strings in tests and fixtures, and style preferences with
 no precedent in the product.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What will users read: labels, empty states, errors, notifications, message
+  templates? Is the wording decided, and does it use the product's existing
+  terms?
+- Do errors tell the reader what to do next?
+- Does any text reach customers' own customers (messages, emails), and who
+  approves it?

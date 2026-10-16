@@ -1,6 +1,6 @@
 ---
 name: review-tech-debt
-description: Tech debt lens for /clerk-dev:review. Looks past the changed lines into the functions, classes, and modules the change touches, and proposes cleanups, simplifications, and refactors that cut lines and make the code easier to change next time: long functions, deep nesting, duplication, dead code, hand-rolled logic the codebase or a library already provides. Labels each finding cleanup, simplify, or refactor. Invoked by the review orchestrator.
+description: Tech debt lens for /clerk-dev:review. Looks past the changed lines into the functions, classes, and modules the change touches, and proposes cleanups, simplifications, and refactors that cut lines and make the code easier to change next time: long functions, deep nesting, duplication, dead code, hand-rolled logic the codebase or a library already provides. Labels each finding cleanup, simplify, or refactor. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -130,3 +130,15 @@ a matter of taste.
 Report the findings with the largest payoff first (lines saved, and how much
 easier the next change in the area gets), and at most twelve per
 instance. A long tail of small cleanups goes into one finding that lists them.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What existing code will the design build on or change, and would a
+  refactor before building make the change smaller or safer?
+- Is there duplication, dead code, or a tangled module in that area that the
+  feature would make worse?
+- Which cleanup should be its own commit before the feature, and which can
+  wait?

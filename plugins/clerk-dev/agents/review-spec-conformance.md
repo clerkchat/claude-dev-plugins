@@ -1,6 +1,6 @@
 ---
 name: review-spec-conformance
-description: Spec-conformance lens for /clerk-dev:review. Compares the change against what it was supposed to do, from the PR description, linked issue, or spec document: missing requirements, extra unrequested behavior, deviations from the stated design, and claims in the description that the diff does not support. Invoked by the review orchestrator when a description or spec exists.
+description: Spec-conformance lens for /clerk-dev:review. Compares the change against what it was supposed to do, from the PR description, linked issue, or spec document: missing requirements, extra unrequested behavior, deviations from the stated design, and claims in the description that the diff does not support. Invoked by the review orchestrator when a description or spec exists, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -54,3 +54,15 @@ what is there instead. Use the spec's own words.
 
 Do not re-review correctness, style, or security; other lenses own those. Do not
 treat the absence of a spec section as a missing requirement.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Does the record agree with the records it builds on: the design it details,
+  the decisions it cites, the capability it implements?
+- Does it contradict an active decision without superseding it?
+- Is each requirement checkable: could a reviewer tell from a diff whether it
+  is met?
+- Does it add behavior no earlier record asked for?

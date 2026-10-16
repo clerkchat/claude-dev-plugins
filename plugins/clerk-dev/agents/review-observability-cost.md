@@ -1,6 +1,6 @@
 ---
 name: review-observability-cost
-description: Observability lens for /clerk-dev:review. Checks that new failure paths are visible (logs with context on early exits and catches, metrics on new operations) and that telemetry does not become a cost or noise problem (unbounded metric tags, log volume per row, oversized traces). Invoked by the review orchestrator.
+description: Observability lens for /clerk-dev:review. Checks that new failure paths are visible (logs with context on early exits and catches, metrics on new operations) and that telemetry does not become a cost or noise problem (unbounded metric tags, log volume per row, oversized traces). Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -60,3 +60,14 @@ aggregation, not as style.
 For visibility findings: "job X exits at line N when Y; the operator sees a
 successful job and no record of the skip". For cost findings: estimate the
 cardinality or volume from the data model.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- How will someone know the new flow is working, or failing, in production?
+  Which logs and metrics does the design add, with what context?
+- Are new metric tags bounded, and is log volume per item reasonable at scale?
+- Can a failed run be traced from the user's report to the cause?
+- Does the rollout plan say what to watch?

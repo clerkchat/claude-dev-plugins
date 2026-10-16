@@ -103,6 +103,24 @@ skipped. `--lenses +a` adds to the routed set instead of replacing it, and
 the tech debt focus, and `--lenses tech-debt` runs it on its own. A final pass
 never runs the tech debt focus.
 
+## Design checks
+
+The `design-check` skill picks lenses for feature records, not diffs. It
+classifies what the records describe building into the categories above (a
+record that adds an endpoint is `interface`; one that adds a table is `schema`;
+a worker is `async`; prompts or tools are `llm`; screens are `ui`; copy is
+`text`; access rules are `auth`) and takes the lenses those categories trigger,
+ignoring the "always" column. It then adds:
+
+- `completeness` and `spec-conformance` for a spec record;
+- `contracts` and `cross-repo` for a plan or design that spans repositories;
+- `tech-debt` when the record changes existing code rather than adding new
+  modules.
+
+It caps the set at six, in the quick-mode priority order, and with
+`--lenses` the explicit rules above apply instead. Small records get small
+sets; that is the point of the cap.
+
 ## Triage questions
 
 Asked per slice by a haiku agent that reads the slice patch once. Each answer is

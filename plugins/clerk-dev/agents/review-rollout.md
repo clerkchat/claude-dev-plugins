@@ -1,6 +1,6 @@
 ---
 name: review-rollout
-description: Rollout lens for /clerk-dev:review. Checks whether the change can deploy and roll back safely: old and new code coexisting, migration ordering and locks, in-flight job and event payloads, replicated tables, feature gates, and the revert path. Invoked by the review orchestrator.
+description: Rollout lens for /clerk-dev:review. Checks whether the change can deploy and roll back safely: old and new code coexisting, migration ordering and locks, in-flight job and event payloads, replicated tables, feature gates, and the revert path. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -77,3 +77,14 @@ on deploy mechanics you cannot see; say what would confirm it.
 
 Changes that are purely additive and gated, with no migration and no payload
 change, usually produce an empty findings block. That is a valid result.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Can the change deploy while old code still runs: old workers reading new
+  payloads, old clients calling new routes, new code reading old rows?
+- What do the migrations lock, on which tables, and can they be reversed?
+- Is it behind a feature gate, and what is the plan to turn it on and off?
+- What is the revert path once data has been written in the new shape?

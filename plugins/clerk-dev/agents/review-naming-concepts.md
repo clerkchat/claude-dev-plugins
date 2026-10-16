@@ -1,6 +1,6 @@
 ---
 name: review-naming-concepts
-description: Naming and concepts lens for /clerk-dev:review. Checks that new names fit the domain vocabulary already in the codebase, that one concept has one name, that abstractions do not leak implementation, and that files live where the feature lives. Invoked by the review orchestrator.
+description: Naming and concepts lens for /clerk-dev:review. Checks that new names fit the domain vocabulary already in the codebase, that one concept has one name, that abstractions do not leak implementation, and that files live where the feature lives. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -56,3 +56,14 @@ generated code. Do not propose renames for identifiers the diff does not touch.
 For each finding, give the existing name or pattern the new one should match,
 with a file reference. Rename suggestions are the fix; keep them to one or two
 candidates.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Does each new concept have one name, and does it match the vocabulary the
+  codebase and product already use for the same thing?
+- Is any existing name being reused for a different meaning?
+- Do the names describe the domain, or leak the implementation?
+- Where will the code live, and does that match where the feature lives?

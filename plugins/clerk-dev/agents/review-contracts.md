@@ -1,6 +1,6 @@
 ---
 name: review-contracts
-description: Contracts lens for /clerk-dev:review. Checks the agreements the change makes with its callers and its own parts: public API and DTO shapes, event and job payloads, persisted schemas, generated docs, and the seams between slices where a field is added in one layer and never arrives in another. Invoked by the review orchestrator.
+description: Contracts lens for /clerk-dev:review. Checks the agreements the change makes with its callers and its own parts: public API and DTO shapes, event and job payloads, persisted schemas, generated docs, and the seams between slices where a field is added in one layer and never arrives in another. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -69,3 +69,16 @@ consumer.
 
 Additive optional fields on responses are not breaks. Internal types renamed
 consistently across both sides are not findings.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Which contracts does the design add or change: routes, DTOs, events, job
+  payloads, schemas, tool schemas? Are their shapes written down?
+- Who consumes each, in this repository and others, and does the plan update
+  them in a workable order?
+- Are optional and required fields, error shapes, and versioning decided?
+- Do the names in the contract match the domain names the rest of the design
+  uses?

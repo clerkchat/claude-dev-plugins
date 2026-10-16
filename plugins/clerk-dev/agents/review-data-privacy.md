@@ -1,6 +1,6 @@
 ---
 name: review-data-privacy
-description: Data-privacy lens for /clerk-dev:review. Finds personal or customer content flowing where it should not: logs, traces, analytics, error messages, third-party providers, prompts, caches, and exports; checks retention and deletion paths, consent and opt-out handling, and regulated messaging paths. Invoked by the review orchestrator.
+description: Data-privacy lens for /clerk-dev:review. Finds personal or customer content flowing where it should not: logs, traces, analytics, error messages, third-party providers, prompts, caches, and exports; checks retention and deletion paths, consent and opt-out handling, and regulated messaging paths. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -64,3 +64,15 @@ Name the data item, its class, where it flows now that it did not before, and
 who can see it there. Score by breadth and sensitivity: content and financial
 data exposed in telemetry is major or blocker; an identifier in a log line is
 minor unless the volume is large.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What personal or customer data does the design read, store, or send
+  somewhere new (providers, prompts, logs, analytics, exports)?
+- Is retention and deletion decided for new stores, and does tenant deletion
+  reach them?
+- Do consent, opt-out, or regulated-messaging rules apply to a new path?
+- Does anything get sent to a third party that was not sent before?

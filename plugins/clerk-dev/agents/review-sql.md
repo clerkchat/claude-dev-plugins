@@ -1,6 +1,6 @@
 ---
 name: review-sql
-description: SQL and schema lens for /clerk-dev:review. Checks new queries for index coverage and scan behavior, multi-row reads for ordering, migrations for lock behavior and reversibility, and engine-specific pitfalls in relational, time-series, and OLAP stores. Invoked by the review orchestrator.
+description: SQL and schema lens for /clerk-dev:review. Checks new queries for index coverage and scan behavior, multi-row reads for ordering, migrations for lock behavior and reversibility, and engine-specific pitfalls in relational, time-series, and OLAP stores. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -67,3 +67,15 @@ columns, then check:
 Name the table, its realistic size, the query, and what the planner will do.
 "Might be slow" is not a scenario. When you cannot judge table size, say so and
 score 40 or below.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What new queries does the design imply, and which indexes serve them?
+- Do multi-row reads have a defined order, and paginated reads a stable key?
+- What do the schema changes lock, and are they safe on a production-sized
+  table?
+- Do engine specifics matter (replicated tables, OLAP engines, eventual
+  consistency between stores)?

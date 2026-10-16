@@ -1,6 +1,6 @@
 ---
 name: review-frontend
-description: Frontend lens for /clerk-dev:review. Reviews UI code for server-state cache correctness (query keys, invalidation, optimistic updates), render performance, effect and subscription hygiene, accessibility, theming and dark-mode parity, real-time event handling, and constraints of embedded host environments. Invoked by the review orchestrator.
+description: Frontend lens for /clerk-dev:review. Reviews UI code for server-state cache correctness (query keys, invalidation, optimistic updates), render performance, effect and subscription hygiene, accessibility, theming and dark-mode parity, real-time event handling, and constraints of embedded host environments. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -75,3 +75,15 @@ and component to learn the conventions.
 
 Name the user action sequence and what the screen shows versus what the server
 holds. For performance, name the list size or interaction at which it degrades.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What server state does the UI hold, which queries own it, and what
+  invalidates it after each mutation?
+- How do real-time events update the screen, and what happens when one is
+  missed or arrives twice?
+- Are loading, empty, error, and permission-denied states designed?
+- Does it work in the embedded host environments the app runs in?

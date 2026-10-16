@@ -1,6 +1,6 @@
 ---
 name: review-error-handling
-description: Error-handling lens for /clerk-dev:review. Hunts silent failures: swallowed exceptions, broad catches, fallbacks that hide problems, default values masking missing data, errors logged without action, and failure paths that leave partial state. Invoked by the review orchestrator.
+description: Error-handling lens for /clerk-dev:review. Hunts silent failures: swallowed exceptions, broad catches, fallbacks that hide problems, default values masking missing data, errors logged without action, and failure paths that leave partial state. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -65,3 +65,14 @@ downstream system observes instead of the truth.
 
 A catch that logs with context and rethrows, or converts to the repo's standard
 error type, is correct. Do not report catches in test code.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- For each outbound call and each step that can fail, does the design say what
+  happens on failure: retry, surface to the user, compensate, or give up?
+- Where could a failure be swallowed or replaced by a default that hides it?
+- What does the user or operator see when it fails?
+- Is a failed job or request recoverable, and by whom?

@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: Security lens for /clerk-dev:review. Finds injection, unsafe deserialization, SSRF, secret exposure, missing webhook signature checks, sandbox escapes, and prompt injection paths that reach tools. Invoked by the review orchestrator; can also be asked directly to security-review a diff.
+description: Security lens for /clerk-dev:review. Finds injection, unsafe deserialization, SSRF, secret exposure, missing webhook signature checks, sandbox escapes, and prompt injection paths that reach tools. Invoked by the review orchestrator, and by the design-check skill on feature records; can also be asked directly to security-review a diff.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash, Skill
@@ -67,3 +67,14 @@ request, score the finding at or below 40 and say what you could not confirm.
 Theoretical issues behind an authenticated admin boundary with no new exposure,
 and generic hardening suggestions that the diff does not make worse, go under
 "Noticed, out of scope" at most.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Where does untrusted input enter (users, webhooks, model output, files), and
+  what validates it before it reaches queries, shells, URLs, or tools?
+- Does the design add outbound requests to URLs that input can influence?
+- Which secrets does it need, where are they stored, and who can see them?
+- Can model output or retrieved content reach a tool with side effects?

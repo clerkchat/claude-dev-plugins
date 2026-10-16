@@ -1,6 +1,6 @@
 ---
 name: review-edge-cases
-description: Edge-case lens for /clerk-dev:review. Hunts for inputs and states the change does not handle: nulls and empties, boundaries, time and zone arithmetic, unicode and encoding, legacy data missing new fields, partial failure mid-loop, and ordering assumptions. Invoked by the review orchestrator.
+description: Edge-case lens for /clerk-dev:review. Hunts for inputs and states the change does not handle: nulls and empties, boundaries, time and zone arithmetic, unicode and encoding, legacy data missing new fields, partial failure mid-loop, and ordering assumptions. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -64,3 +64,16 @@ scenario as a value and a result, specific enough to paste into a test.
 Prefer five findings with precise values over twenty speculative ones. When the
 diff handles a case correctly in a way that is easy to miss, do not praise it;
 say nothing.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What are the empty, missing, and boundary cases of the inputs the design
+  handles, and does it say what happens for each?
+- What about existing data that predates the feature: rows missing the new
+  fields, old statuses, legacy formats?
+- Time, time zones, and ordering: does the design assume events arrive in
+  order, or that clocks agree?
+- Partial failure: what state is left when step three of five fails?

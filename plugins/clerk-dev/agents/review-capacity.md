@@ -1,6 +1,6 @@
 ---
 name: review-capacity
-description: Capacity lens for /clerk-dev:review. Checks that the change bounds its own resource use: memory held per request or job, timeouts on every outbound call, provider rate limits respected, connection pools not exhausted, fan-out and retries bounded, and backpressure present where producers outrun consumers. Invoked by the review orchestrator.
+description: Capacity lens for /clerk-dev:review. Checks that the change bounds its own resource use: memory held per request or job, timeouts on every outbound call, provider rate limits respected, connection pools not exhausted, fan-out and retries bounded, and backpressure present where producers outrun consumers. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -63,3 +63,17 @@ accordingly.
 Code whose input is structurally small (a fixed enum, a single entity) needs no
 bound. Do not report missing timeouts where the shared client already sets one;
 check the client configuration before reporting.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What does each new request, job, or call hold in memory, and what bounds it
+  (page size, file size limit, batch size)?
+- Which outbound calls does the design add, and what are their timeouts, rate
+  limits, and quotas? Does the plan stay inside the provider's limits at peak?
+- Where can work fan out (one event to many jobs, one job to many calls), and
+  what caps it?
+- Where can a producer outrun its consumer, and what happens then: a growing
+  queue, dropped work, or backpressure?

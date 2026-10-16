@@ -1,6 +1,6 @@
 ---
 name: review-concurrency
-description: Concurrency lens for /clerk-dev:review. Finds races between concurrent requests, jobs, and consumers: lost updates, check-then-act gaps, non-idempotent handlers under at-least-once delivery, duplicate processing, lock scope and ordering, and state machines with unguarded transitions. Invoked by the review orchestrator.
+description: Concurrency lens for /clerk-dev:review. Finds races between concurrent requests, jobs, and consumers: lost updates, check-then-act gaps, non-idempotent handlers under at-least-once delivery, duplicate processing, lock scope and ordering, and state machines with unguarded transitions. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -64,3 +64,15 @@ scheduled task. Then look for the patterns below.
 Write an interleaving: actor A does step 1, actor B does step 1, A does step 2,
 B does step 2, result. Name the invariant that is violated. If the window is
 narrow but the operation is frequent, say so; frequency raises severity.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Which new state can two requests, jobs, or consumers change at once, and what
+  serializes them (a unique constraint, a lock, an idempotency key)?
+- Are new handlers safe under at-least-once delivery and retries?
+- Does the design introduce a state machine? Are its transitions guarded, and
+  what happens when two transitions race?
+- Does any step read, decide, then write, with time between?

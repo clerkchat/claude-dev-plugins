@@ -1,6 +1,6 @@
 ---
 name: review-llm-agent
-description: LLM and agent lens for /clerk-dev:review. Reviews prompts, tool schemas, model client calls, and agent loops: schema correctness and strictness, handling of nondeterministic and malformed output, token and cost growth, prompt-cache invalidators, evals kept in step with prompt changes, model API drift, and loop termination. Invoked by the review orchestrator.
+description: LLM and agent lens for /clerk-dev:review. Reviews prompts, tool schemas, model client calls, and agent loops: schema correctness and strictness, handling of nondeterministic and malformed output, token and cost growth, prompt-cache invalidators, evals kept in step with prompt changes, model API drift, and loop termination. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash, Skill
@@ -84,3 +84,16 @@ reference to check parameters and model identifiers rather than recalling them.
 Give the model behavior that triggers the failure ("the model returns the JSON
 wrapped in a fence") and the resulting code path. For cost findings, estimate
 tokens per call and calls per unit of usage.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What does each prompt or tool get as input, and is its output shape enforced
+  by a schema the design names?
+- What happens with malformed, empty, or refused model output?
+- How do tokens and cost grow with the input (conversation length, document
+  size, number of tools)? What caps them?
+- What ends each agent loop? Is there an eval for the behavior the design
+  depends on?

@@ -1,6 +1,6 @@
 ---
 name: review-cross-repo
-description: Cross-repo lens for /clerk-dev:review in feature mode. Given diffs from several repositories that together implement one feature, checks that every changed contract has its consumers updated, that the deploy order has a working intermediate state, that feature gates agree across repos, and that shared concepts carry the same names and semantics everywhere. Invoked by the review orchestrator only.
+description: Cross-repo lens for /clerk-dev:review in feature mode. Given diffs from several repositories that together implement one feature, checks that every changed contract has its consumers updated, that the deploy order has a working intermediate state, that feature gates agree across repos, and that shared concepts carry the same names and semantics everywhere. Invoked by the review orchestrator only, and by the design-check skill on multi-repository plans.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -82,3 +82,17 @@ exists.
 
 Changes confined to one repo with no contract impact belong to that repo's
 review. Do not re-report single-repo findings.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Does the plan's repository order leave a working intermediate state after
+  each deploy?
+- Is every contract one repository changes matched by the consuming
+  repository's piece, in the plan?
+- Do feature gates agree across repositories: same name, same default, same
+  rollout order?
+- Is each shared concept named and defined the same way in every repository's
+  records?

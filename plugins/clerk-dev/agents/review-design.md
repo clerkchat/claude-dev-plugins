@@ -1,6 +1,6 @@
 ---
 name: review-design
-description: Design lens for /clerk-dev:review. Finds duplication of helpers or patterns the codebase already has, new patterns introduced where an established one exists, wrong abstraction level, unnecessary coupling, dead code, and comments that have rotted or narrate instead of explain. Invoked by the review orchestrator.
+description: Design lens for /clerk-dev:review. Finds duplication of helpers or patterns the codebase already has, new patterns introduced where an established one exists, wrong abstraction level, unnecessary coupling, dead code, and comments that have rotted or narrate instead of explain. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -58,3 +58,14 @@ The fix for a reuse finding is the path of the thing to reuse. The fix for a
 pattern finding is the path of an example that follows the established pattern.
 Do not propose large restructures; note them under "Noticed, out of scope" as
 follow-up work.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Does the codebase already have a pattern, helper, or module for what the
+  design builds? Name it and say whether the design reuses it.
+- Is each new abstraction at the right level, or does it wrap one caller?
+- Does the design couple modules that are separate today?
+- Is any part speculative: built for a future case no record asks for?

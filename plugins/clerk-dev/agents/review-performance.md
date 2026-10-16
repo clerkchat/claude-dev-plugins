@@ -1,6 +1,6 @@
 ---
 name: review-performance
-description: Runtime performance lens for /clerk-dev:review. Finds work that is slower than it needs to be inside a single execution: algorithmic cost, repeated computation, redundant I/O, serialization and copying in hot paths, blocking calls on async paths, and rendering work in UI loops. Invoked by the review orchestrator.
+description: Runtime performance lens for /clerk-dev:review. Finds work that is slower than it needs to be inside a single execution: algorithmic cost, repeated computation, redundant I/O, serialization and copying in hot paths, blocking calls on async paths, and rendering work in UI loops. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -56,3 +56,13 @@ no measurable effect at realistic sizes is not a finding.
 
 Code on cold paths (admin actions, one-off scripts, startup of a rare worker)
 and readability trade-offs that cost microseconds.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Which paths in the design are hot, and what work does each do per call?
+- Does the design repeat work that could be computed once, cached, or batched?
+- Are there blocking calls on async or request paths?
+- For UI, does any design choice imply heavy re-rendering or large payloads?

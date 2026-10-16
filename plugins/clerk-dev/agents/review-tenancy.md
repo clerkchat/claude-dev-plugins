@@ -1,6 +1,6 @@
 ---
 name: review-tenancy
-description: Tenancy lens for /clerk-dev:review. Checks that every lookup, mutation, listing, and background job in the change is scoped to the calling tenant or sits behind an access guard, and that nothing leaks across tenants through caches, search, or events. Invoked by the review orchestrator.
+description: Tenancy lens for /clerk-dev:review. Checks that every lookup, mutation, listing, and background job in the change is scoped to the calling tenant or sits behind an access guard, and that nothing leaks across tenants through caches, search, or events. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -67,3 +67,16 @@ is.
 
 Name two tenants, the request tenant B sends with tenant A's identifier, and
 what tenant B receives or changes.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- What is the tenant for each new entity, route, job, and store, and where is
+  it enforced?
+- Do jobs and events carry the tenant, and do their processors re-scope by it?
+- Do caches, search indexes, and analytics queries the design adds include the
+  tenant in their keys and filters?
+- Is any new path an admin or internal one that reaches tenant data with a
+  weaker check?

@@ -25,6 +25,8 @@ file.
   is not rewritten: a revision is a new record with `--supersedes`. The only
   later changes are its status (`discard`, `reactivate`, or superseded by a new
   record), which the script makes.
+  One exception: a spec's Open items checklist tracks progress, so ticking an
+  item or adding one is fine at any time.
 - **Ids.** One sequence per feature: R1, R2, ... The id is the handle in
   conversation ("R7"), in other records (`from:`), and in items that link to a
   decision.

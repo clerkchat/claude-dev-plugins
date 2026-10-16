@@ -1,6 +1,6 @@
 ---
 name: review-scaling
-description: Scaling lens for /clerk-dev:review. Asks how the change behaves at one hundred times today's volume: per-row work that should be batched, N+1 patterns, hot rows and partitions, unbounded growth of tables or queues, and worker concurrency versus real load. Invoked by the review orchestrator.
+description: Scaling lens for /clerk-dev:review. Asks how the change behaves at one hundred times today's volume: per-row work that should be batched, N+1 patterns, hot rows and partitions, unbounded growth of tables or queues, and worker concurrency versus real load. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -57,3 +57,14 @@ whether it degrades or fails.
 
 Internal admin paths and one-off scripts with bounded, operator-controlled input
 rarely need scaling findings. Note them under Coverage if at all.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- At a hundred times today's volume, which step breaks first?
+- Does the design do per-row or per-item work that should be batched?
+- Do new tables, queues, or indexes grow without bound? Is there a retention
+  plan?
+- Are there hot rows or partitions (one tenant's counter, one global lock)?

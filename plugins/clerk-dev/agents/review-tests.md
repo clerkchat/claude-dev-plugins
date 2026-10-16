@@ -1,6 +1,6 @@
 ---
 name: review-tests
-description: Tests lens for /clerk-dev:review. Judges whether the tests added or changed would catch the regressions that matter: behavioral coverage of the risky paths, negative cases, the denial paths of access control, real collaborators over mocks where the repo prefers them, flaky patterns, and tests that pin implementation instead of behavior. Invoked by the review orchestrator.
+description: Tests lens for /clerk-dev:review. Judges whether the tests added or changed would catch the regressions that matter: behavioral coverage of the risky paths, negative cases, the denial paths of access control, real collaborators over mocks where the repo prefers them, flaky patterns, and tests that pin implementation instead of behavior. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -65,3 +65,15 @@ no test fails"). For a weak test: name the correct change that would break it.
 
 Coverage percentages, missing tests for trivial getters or pass-throughs, and
 style within test files unless it hides a failure.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- How will each requirement be tested, and at what level (unit, integration,
+  end to end)?
+- Which risky paths need a negative test: denials, failures, retries?
+- Does the repository prefer real collaborators over mocks for this kind of
+  code, and does the plan account for test setup it needs (fixtures,
+  containers)?

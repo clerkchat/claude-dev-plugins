@@ -1,6 +1,6 @@
 ---
 name: review-side-effects
-description: Real-world side effects lens for /clerk-dev:review. Finds changes that can send messages, place calls, charge money, notify people, or write to customer systems by accident: from paths users perceive as safe (test, replay, preview, retry, seed, backfill), with weak confirmation or UI that looks harmless, with missing dry-run or sandbox guards, or by replaying real customer data. Invoked by the review orchestrator.
+description: Real-world side effects lens for /clerk-dev:review. Finds changes that can send messages, place calls, charge money, notify people, or write to customer systems by accident: from paths users perceive as safe (test, replay, preview, retry, seed, backfill), with weak confirmation or UI that looks harmless, with missing dry-run or sandbox guards, or by replaying real customer data. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -76,3 +76,15 @@ test is a blocker.
 Paths whose purpose is to act, with the confirmation the product already uses
 elsewhere, are not findings. Do not report effects that are already behind a
 fail-closed sandbox you verified.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Which steps send messages, place calls, charge money, notify people, or
+  write to customer systems?
+- Can any path users perceive as safe (test, preview, replay, retry, seed,
+  backfill) reach them?
+- Is there a dry-run or sandbox mode, and does the design say when it is on?
+- Is the confirmation for a real-world action proportionate to its impact?

@@ -1,6 +1,6 @@
 ---
 name: review-completeness
-description: Completeness lens for /clerk-dev:review. Asks whether the change is finished: unfinished-work markers, stubs and placeholders, fields stored but never read, registrations and wiring that a new entity, route, job, or flag requires, docs and generated artifacts not updated, and open items in the change's specs, plans, and checklists that the change claims to address. Invoked by the review orchestrator.
+description: Completeness lens for /clerk-dev:review. Asks whether the change is finished: unfinished-work markers, stubs and placeholders, fields stored but never read, registrations and wiring that a new entity, route, job, or flag requires, docs and generated artifacts not updated, and open items in the change's specs, plans, and checklists that the change claims to address. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash
@@ -104,3 +104,16 @@ through to the default, which marks the job failed").
 Deliberately deferred work that is tracked and stated in the PR description or a
 listed document is not a finding. Say so once under Coverage rather than per
 item.
+
+## Design mode
+
+Asked of a design, plan, capabilities, or spec record (see Design mode in
+the review protocol):
+
+- Does every requirement have somewhere it gets built, and every capability a
+  spec or a place in the plan?
+- What wiring does the design imply but not list: registrations, migrations,
+  feature gates, permissions, admin screens, docs, generated clients?
+- Are the open items and open questions of the records tracked, or silently
+  dropped between brainstorm, design, and spec?
+- Is the piece's end defined: what must be true for it to be done?
