@@ -914,6 +914,14 @@ usage: <tokens> tokens, <duration>
 used, from the token count and duration Claude Code reports when the subagent
 finishes. Write `usage: unknown` when no count was reported.
 
+Do not copy a reply into the file by hand. When the Agent tool returned an
+`output_file` for the instance (a background agent), write the raw file with
+`${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out
+<run>/raw/<lens>[-<slice>].md --header "<line>" ...`, one `--header` per header
+line above; it extracts the agent's final reply from its transcript without
+reading the transcript into this session. Only when there is no output file,
+write the reply as it was returned.
+
 Agents are read-only by design; the orchestrator is the only writer. Then run
 `merge-findings.py <run>/raw -o <run>/merged.md`. It parses every `findings`
 block, merges entries on the same file with overlapping or adjacent line ranges,
