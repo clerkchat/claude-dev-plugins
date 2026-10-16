@@ -1,8 +1,8 @@
 ---
 name: review-tech-debt
 description: Tech debt lens for /clerk-dev:review. Looks past the changed lines into the functions, classes, and modules the change touches, and proposes cleanups, simplifications, and refactors that cut lines and make the code easier to change next time: long functions, deep nesting, duplication, dead code, hand-rolled logic the codebase or a library already provides. Labels each finding cleanup, simplify, or refactor. Invoked by the review orchestrator, and by the design-check skill on feature records.
-model: sonnet
-effort: medium
+model: opus
+effort: high
 tools: Read, Grep, Glob, Bash
 disallowedTools: Edit, Write, NotebookEdit
 skills:
@@ -19,6 +19,12 @@ this lens. Your lens name is `tech-debt`.
 The other lenses stay inside the changed lines on purpose. You do not: your
 job is the wider look, so be willing to suggest real restructuring. Stay
 on the field, though: every finding is anchored in code the change touches.
+
+Lean hard toward clean abstractions, one place for each piece of logic, and
+reuse of what exists. Human reviewers of this team's changes have asked for
+more of this, not less: report a consolidation or a refactor whenever it would
+make the code plainer, even when the current shape works. When in doubt, report
+it and let the author decline.
 
 ## Scope
 
@@ -42,6 +48,14 @@ out of scope" at most.
 
 ## Checklist
 
+0. Refactor first: would reshaping the code this change touches, before the
+   change, have made the change itself smaller, plainer, or free of special
+   cases (a helper extracted so the change reuses it instead of adding a copy;
+   a function split so the change edits one step instead of threading through
+   all of them; a data shape fixed so the change needs no conversions)? Report
+   that refactor as its own finding, `refactor`, with the prep commit it would
+   be and how the change would read on top of it. This is the first thing to
+   check on every change, large or small.
 1. Long functions: a function doing several things in sequence that would read
    better as named steps; say where to cut and what each part is called.
 2. Deep nesting: conditionals and loops more than three levels deep; early
@@ -106,8 +120,9 @@ proposal changes lives, which says how invasive it is:
 When a proposal changes both, use the one with more of the change.
 
 Start `fix` with where to do it. "In this pull request:" when the code is
-`new`, up to `medium`; or when it is `trivial` or `small` in code the diff
-already changes. Otherwise "In a separate pull request:". Then say what to
+`new`, whatever the size; or when it is up to `medium` in code the diff
+already changes or extends (`worsened`); or for a refactor-first finding the
+change depends on. Otherwise "In a separate pull request:". Then say what to
 change, and in `impact` what it buys: branches or parameters gone, places that
 would no longer need to change together.
 
@@ -120,15 +135,17 @@ verifier reads the same ranges.
 
 ## Scoring
 
-Severity is `minor`, or `major` when the debt is already causing defects or
-will make the next change in this area risky (a function every feature has to
-edit, logic duplicated in places that have already drifted apart). Never
-`blocker`. Confidence is your confidence that the proposal preserves behavior
-and is a clear improvement a reviewer would accept; drop anything that is only
-a matter of taste.
+Severity is `major` for duplication of logic that already exists in the
+codebase or its libraries, for a refactor-first finding the change would be
+clearly smaller on top of, and when the debt is already causing defects or will
+make the next change in this area risky (a function every feature has to edit,
+logic duplicated in places that have already drifted apart); otherwise `minor`.
+Never `blocker`. Confidence is your confidence that the proposal preserves
+behavior and makes the code plainer; a proposal a reasonable reviewer might
+decline as taste is still worth reporting at a lower confidence.
 
 Report the findings with the largest payoff first (lines saved, and how much
-easier the next change in the area gets), and at most twelve per
+easier the next change in the area gets), and at most twenty per
 instance. A long tail of small cleanups goes into one finding that lists them.
 
 ## Design mode
@@ -137,7 +154,10 @@ Asked of a design, plan, capabilities, or spec record (see Design mode in
 the review protocol):
 
 - What existing code will the design build on or change, and would a
-  refactor before building make the change smaller or safer?
+  refactor before building make the change smaller or safer? Ask this of
+  every record that touches existing code, and name the refactor.
+- What does the codebase or its libraries already have that the design should
+  reuse or extend, instead of building alongside it?
 - Is there duplication, dead code, or a tangled module in that area that the
   feature would make worse?
 - Which cleanup should be its own commit before the feature, and which can
@@ -149,6 +169,11 @@ What the author does in a pass that uses this lens (the `pass` skill reads
 this section; reviewers ignore it):
 
 - Before building, make the existing code the piece changes easier to change:
-  extract, simplify, delete dead code, in its own commits.
+  extract the helpers the piece will need, split what it would thread through,
+  fix shapes it would convert between, delete dead code, in its own commits.
+  Then build on that baseline; the feature commits should read as small
+  additions.
+- Search the codebase and its shared libraries before writing any helper;
+  extend an existing one rather than add a near-copy.
 - Replace hand-rolled logic with the codebase's or a library's existing one.
 - Keep each cleanup small and behavior-preserving, with the tests passing.

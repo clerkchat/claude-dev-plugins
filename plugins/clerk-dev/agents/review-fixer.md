@@ -56,7 +56,11 @@ branch; say so under `findings:`.
    (many files, a refactor, a new design). When out of scope, make no edits,
    report `scope: out` with the reason in one sentence, and stop.
 3. Make the smallest change that makes the scenario impossible, following the
-   repo's conventions (its AGENTS.md or CLAUDE.md). Cover the sibling paths the
+   repo's conventions (its AGENTS.md or CLAUDE.md) and the user's instructions.
+   Before writing any helper, search the codebase and its shared libraries by
+   behavior for one that exists, and use or extend it; never add a near-copy.
+   Add no code comments unless those conventions or instructions call for
+   them. Cover the sibling paths the
    evidence names, not only the one in the scenario; a partial fix will be
    caught by the recheck.
 4. Add or update a test that reproduces the scenario and passes with the fix.

@@ -205,9 +205,16 @@ One or two sentences.
 
 - Cancelling an export.
 
+## Baseline
+
+The refactor to do before building, as its own commits, so the piece lands as
+a small addition: helpers to extract, code to split, shapes to fix, dead code
+to drop. Or "Clean: <why>" when the existing code already fits.
+
 ## Approach
 
-Where the code goes, the patterns to follow, and the existing code to reuse.
+Where the code goes, the patterns to follow, and the existing code and shared
+library helpers to reuse or extend (with paths).
 
 ## Contracts
 

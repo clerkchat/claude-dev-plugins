@@ -114,13 +114,13 @@ six, of which at most three come from the record's type and the rest from its
 risks.
 
 1. By record type, at most three, in this order of preference:
+   - a record that touches existing code: `tech-debt` (refactor first, and
+     what to reuse);
    - a spec: `completeness`, `spec-conformance`;
    - records spanning repositories (see the `design-check` skill): `contracts`,
      `cross-repo`;
-   - a record that introduces new concepts or modules: `naming-concepts`,
-     `design`;
-   - a record that changes existing code rather than adding modules:
-     `tech-debt`.
+   - a record that introduces new concepts or modules: `design`,
+     `naming-concepts`.
 2. By risk, the rest: classify what the records describe building into the
    categories above (an endpoint is `interface`, a table `schema`, a worker
    `async`, prompts or tools `llm`, screens `ui`, copy `text`, access rules

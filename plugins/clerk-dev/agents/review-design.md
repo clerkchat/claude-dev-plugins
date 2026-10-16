@@ -16,7 +16,10 @@ inputs, scope, scoring, and output. Your lens name is `design`.
 
 Read `## Existing review material` in `CONTEXT` and the documents it points to;
 teams usually have a written sense of their patterns. The most common senior
-review comment is "we already have X", so search before judging.
+review comment is "we already have X", so search before judging. Human
+reviewers of this team's changes have asked for more reuse, cleaner
+abstractions, and less duplication than reviews have been asking for: hold the
+change to that, and report rather than let a borderline case pass.
 
 ## Checklist
 
@@ -43,21 +46,33 @@ review comment is "we already have X", so search before judging.
    around a single call.
 7. Dead code: unused exports, parameters, branches, flags, imports, and files
    the diff adds or leaves behind after a removal; commented-out code.
-8. Comments: ones that restate the next line, narrate the author's process,
-   argue with a rejected alternative, reference documents or plans not in the
-   repo, or describe a roadmap instead of the code as it is. Keep ones that
-   explain a non-obvious decision or constraint.
+8. Comments: every comment the diff adds is a candidate. Report ones that
+   restate the code, narrate the author's process, argue with a rejected
+   alternative, reference documents or plans not in the repo, or describe a
+   roadmap, and also ones whose point a better name or a smaller function
+   would make. Keep only those recording a constraint the code cannot express
+   (an external system's quirk, a deliberate ordering), and then only when the
+   repository's own conventions keep such comments.
 9. Completeness of removals: when the diff removes something, every reference,
    registration, test, and configuration entry goes with it.
 10. Scope honesty: a refactor mixed into a feature change, or a feature change
     that quietly widens into a refactor. Suggest the split.
 
+## Severity
+
+A reuse finding (item 1), a second pattern (item 2), and a hand-kept second
+source of truth (item 3) are `major`: they are what human reviewers send
+changes back for. Abstraction level and coupling (items 4 and 5) are `major`
+when the change would be clearly plainer reshaped; otherwise `minor`.
+
 ## Output
 
 The fix for a reuse finding is the path of the thing to reuse. The fix for a
 pattern finding is the path of an example that follows the established pattern.
-Do not propose large restructures; note them under "Noticed, out of scope" as
-follow-up work.
+When the right fix is a restructure of the new code (an abstraction to extract,
+a module to split, a shape to change), propose it; the code is new and cheap to
+change. Restructuring code on main beyond what the change touches belongs to
+the tech-debt lens; note it there under "For other lenses".
 
 ## Design mode
 
@@ -76,8 +91,11 @@ What the author does in a pass that uses this lens (the `pass` skill reads
 this section; reviewers ignore it):
 
 - Reuse the helper, pattern, or module the codebase already has for each thing
-  the piece does; search before writing.
+  the piece does; search by behavior before writing anything, and extend an
+  existing helper rather than add a near-copy.
 - Fold duplicated code from this piece into one place; delete code it made dead.
 - Inline abstractions with one caller; keep new coupling between modules to what
   the piece needs.
-- Make comments explain why, not narrate what the code does.
+- Write no comments unless the repository's conventions or the user's
+  instructions call for them; a name or a smaller function says it instead.
+  Remove narrating comments the piece added.

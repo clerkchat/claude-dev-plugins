@@ -9,7 +9,7 @@ designs only.
 
 | Pass          | Lenses                                       | When it is due                                                          |
 | ------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
-| prep          | tech-debt, design, naming-concepts           | before building on existing code the piece changes                      |
+| prep          | tech-debt, design, naming-concepts           | always considered first, for any piece that touches existing code       |
 | happy-path    | spec-conformance, completeness               | first, for a piece with a spec; builds the main flow                    |
 | dry           | design, tech-debt                            | after the happy path, when it added more than a few functions           |
 | edge-cases    | edge-cases, error-handling                   | after the happy path, for any piece with inputs or external calls       |
@@ -45,14 +45,18 @@ into the `routing.md` categories:
 | `text`      | text                                  |
 | `config`    | rollout                               |
 
-Always suggest happy-path first for a piece with a spec, and prep when the piece
-changes existing code rather than adding modules. Then scale by size, counting
+Always start with prep for a piece that touches existing code, however small:
+a refactor that makes the change smaller is checked for before any writing, at
+the scale of a feature and of a one-function fix alike. When prep's item list
+comes out empty (the baseline is already clean), the pass ends with a line
+saying so and no commits. Then happy-path for a piece with a spec. Then scale by size, counting
 the piece's changed lines, or the spec's requirements before code exists:
 
-- Small (under about 150 lines, or one or two requirements): happy-path plus the
-  one pass its riskiest category suggests.
-- Medium (up to about 800 lines, or a handful of requirements): three or four
-  passes, by the table's order of appearance, ending with tests.
+- Small (under about 150 lines, or one or two requirements): prep, happy-path,
+  and the one pass its riskiest category suggests.
+- Medium (up to about 800 lines, or a handful of requirements): prep,
+  happy-path, dry, and one or two more by the table's order, ending with
+  tests.
 - Large, or touching `schema`, `async`, or another repository: every suggested
   pass, with rollout and tests last.
 

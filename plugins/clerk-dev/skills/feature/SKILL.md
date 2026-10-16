@@ -82,7 +82,9 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   `--supersedes`.
 - **spec**: one per piece, `--repo` the repository it is built in, `--from` the
   capabilities or design record. Before writing Approach, read the code the
-  piece will touch: the patterns to follow, the helpers to reuse. Keep
+  piece will touch: the patterns to follow, the helpers to reuse or extend,
+  and what to refactor first (the Baseline section; always filled, "Clean"
+  with a reason when nothing needs it). Keep
   Requirements numbered and checkable, and Open items as checkboxes; reviews
   read both.
 
