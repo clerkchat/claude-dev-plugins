@@ -1,7 +1,7 @@
 {
   "name": "clerk-dev",
-  "displayName": "Code reviewer",
-  "description": "Multi-focus code review of a branch, or of a feature across repositories: every finding checked twice, fixed one commit at a time, and tracked to the merge.",
+  "displayName": "Clerk dev",
+  "description": "A feature's design records, design checks before code, focused writing passes, and multi-focus code review of a branch or a feature across repositories: every finding checked twice, fixed one commit at a time, and tracked to the merge.",
   "author": {
     "name": "Matthias Margush"
   },
@@ -9,7 +9,10 @@
     "code-review",
     "pull-request",
     "refactoring",
-    "multi-repo"
+    "multi-repo",
+    "design",
+    "specs",
+    "decisions"
   ],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

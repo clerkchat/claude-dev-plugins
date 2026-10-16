@@ -5,7 +5,7 @@
     {
       "name": "clerk-dev",
       "source": "./plugins/clerk-dev",
-      "description": "Multi-focus code review of a branch, or of a feature across repositories: every finding checked twice, fixed one commit at a time, and tracked to the merge."
+      "description": "A feature's design records, design checks before code, focused writing passes, and multi-focus code review of a branch or a feature across repositories: every finding checked twice, fixed one commit at a time, and tracked to the merge."
     }
   ]
 }

@@ -2,9 +2,9 @@
 
 A Claude Code plugin marketplace with Clerk AI's development plugins.
 
-| Plugin                          | What it does                                                             |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| [Code reviewer](#code-reviewer) | Multi-focus code review of a branch, or of a feature across repositories |
+| Plugin                  | What it does                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [Clerk dev](#clerk-dev) | A feature's design records, design checks, focused writing passes, and multi-focus code review, across repositories |
 
 ## Getting started
 
@@ -30,7 +30,16 @@ claude plugin install <plugin>@clerk-dev
 
 ## Plugins
 
-### Code reviewer
+### Clerk dev
+
+Help through the whole life of a feature: keeping its design thinking as
+records, checking a design before the code exists, writing the code in focused
+passes, and reviewing it. The same set of focuses (security, tenant isolation,
+rollout, edge cases, and the rest) drives all four: as questions about a
+design, as what to do while writing, and as what to check in a review.
+
+The review is the most mature part; the design records, design checks, and
+passes are a first draft, being refined on real features.
 
 A multi-focus code review for Claude Code. It reviews your branch the way a
 senior reviewer would, looking at multiple concerns (security, tenant isolation,
@@ -46,6 +55,59 @@ repositories at once, and keeps track of the work one repository owes another.
 It needs `git` and `python3`. The GitHub CLI (`gh`) is optional: when it is
 installed and signed in, reviews also read the pull request's description and
 its review comments.
+
+#### Before the code: feature records and design checks
+
+> Start a feature for report exports.
+>
+> Let's brainstorm how the export status gets to the browser.
+>
+> Capture this.
+
+A feature keeps its thinking as numbered records (R1, R2, ...): brainstorms,
+designs, decisions, capabilities, plans, and specs. Records are history: each
+says what was true on its date, and a change of mind is a new record that
+supersedes the old one, so "what did we decide about polling?" always has an
+answer and a reason. They live in `.clerk-dev/feature/` in the worktree you
+started in (the hub), and other repositories of the feature find them there.
+Reviews read the active ones, so the spec-conformance and completeness focuses
+check the code against your specs. An existing `Notes-*.md` or `Spec-*.md` can
+be imported.
+
+> Check the design.
+>
+> Run the lenses on R9.
+
+Runs a few focuses against a design, plan, or spec, chosen by what it describes
+(a tenant-facing endpoint gets tenant isolation; a prompt gets the LLM focus),
+and writes the questions worth settling before building, marked settle-first,
+worth settling, or note. "Walk the design questions" goes through them with
+you, recording each answer as a decision.
+
+#### While writing: passes
+
+> What passes does this need?
+>
+> Do an edge-cases pass on R9.
+>
+> Guide me through a security pass.
+
+A pass is one focus at a time, as a careful engineer works: the happy path
+first, then edge cases, error handling, observability, security, and so on, only
+the ones the piece needs. Each pass lists what it will do in this code, does it
+(or, in guide mode, leaves the writing to you), commits, and ends with a review
+by only that pass's focuses over only that pass's commits. Its findings are
+fixed the usual way ("fix 3 <run label>"). The full review later still reads
+everything.
+
+#### Where the feature stands
+
+"What's next?" covers the feature as well as the review: a pass in progress,
+design questions to settle first, open items in specs, passes in progress in
+other repositories, and the follow-ups each repository owes the others.
+Follow-ups take the same instructions as findings, plus Refine, for when the
+other repository's suggestion needs a look at this code first: "refine F3",
+"ignore F2, that screen is gone".
 
 #### How it works
 
