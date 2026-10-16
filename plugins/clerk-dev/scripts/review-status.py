@@ -16,6 +16,11 @@ Prints a short Markdown summary:
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
     in-progress fixes, and open findings whose code moved since the review;
+  - this worktree's passes (.clerk-dev/passes.md): open, ended but unchecked,
+    and checked ones whose check run still has open findings;
+  - the feature, when the hub (records.py hub) holds one: records by type,
+    open design questions (settle-first ones named), open items in active
+    specs, and passes in progress in the other worktrees, by repository;
   - a numbered list of next steps, most pressing first; once triage is done
     and fixes have landed, the last step is the final pass.
 
@@ -73,6 +78,80 @@ def repo_name(wt, rows):
     if url: return re.sub(r"\.git$", "", url.rstrip("/")).rsplit("/", 1)[-1].rsplit(":", 1)[-1]
     common = git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
     return os.path.basename(os.path.dirname(common)) if common else os.path.basename(real)
+
+def load(name):
+    s = importlib.util.spec_from_file_location(name.replace("-", "_").replace(".py", ""), os.path.join(HERE, name))
+    assert s and s.loader
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+    return m
+
+def read_passes(wt):
+    """The pass log's entries, or None with the reason when it cannot be read."""
+    p = os.path.join(wt, ".clerk-dev", "passes.md")
+    if not os.path.exists(p): return [], None
+    try: return load("passes.py").read(p), None
+    except SystemExit as e: return [], str(e)
+
+def pass_word(e):
+    """A pass's state in a few words: open, ended, or its check's result."""
+    f = e["f"]; st = f.get("Status", "")
+    if st == "ended": return "ended, not checked" + (" (no commits)" if f.get("Note") == "no commits" else "")
+    if st != "checked": return st
+    check = f.get("Check") or ""
+    cs = load("passes.py").counts(check)
+    if cs is None: return "checked, " + check.split(";")[-1].strip()
+    n = sum(cs.values())
+    return "checked, clean" if n == 0 else f"checked, {n} finding{plural(n)} in `{check.split(';')[0].strip()}`"
+
+def pass_line(e):
+    return f"{e['id']} {e['title']} {pass_word(e)}"
+
+def feature_block(wt, rows, out):
+    """Feature records, open design questions, spec open items, and passes in
+    the other worktrees, when the hub holds a feature. Returns the steps that
+    come before anything else (settle-first questions) and those that come
+    last."""
+    first, later = [], []
+    rc = load("records.py"); it = load("items.py")
+    try: d = rc.fdir(wt)
+    except SystemExit as e:
+        out.append(f"**Feature:** {e}"); return first, later
+    fp = os.path.join(d, "feature.md")
+    if not os.path.exists(fp): return first, later
+    name = (open(fp, encoding="utf-8").readline().strip().split(":", 1) + [""])[1].strip() or "feature"
+    recs = rc.records(d)
+    active = {}
+    for r in recs:
+        if r.get("type") != "brainstorm" and r.get("status") == "active": active[r["type"]] = active.get(r["type"], 0) + 1
+    order = ("design", "decision", "capabilities", "plan", "spec")
+    hub = rc.hub(wt)
+    where = "" if os.path.realpath(hub) == os.path.realpath(wt) else f", records in {hub}"
+    out.append("")
+    out.append(f"**Feature:** {name}: {len(recs)} record{plural(recs)} ({', '.join(f'{active[k]} active {k}' + ('s' if active[k] != 1 and k != 'capabilities' else '') for k in order if k in active) or 'none active'}){where}.")
+    settle, open_q = [], 0
+    for c in rc.checks(d):
+        if not c["open"]: continue
+        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        sf_ = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        open_q += len(qs)
+        out.append(f"- design questions open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
+        if sf_: settle.append(f"{c['name']} ({', '.join(sf_)})")
+    for r in recs:
+        if r.get("type") == "spec" and r.get("status") == "active":
+            body = open(r["path"], encoding="utf-8").read()
+            m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+            n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
+            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}: {n} open item{plural(n)}")
+    if settle: first.append(f"Settle the design questions marked settle-first before building on them: {'; '.join(settle)} (\"walk the design questions\").")
+    elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural(open_q)} when convenient (\"walk the design questions\").")
+    others = []
+    for rname, other in related_worktrees(wt, rows):
+        ps, err = read_passes(other)
+        if err: others.append(f"{rname}: pass log unreadable"); continue
+        live = [e for e in ps if e["f"].get("Status") in ("open", "ended")]
+        if live: others.append(", ".join(f"{rname} {e['id']} {e['title']} ({pass_word(e)})" for e in live))
+    if others: out.append(f"- passes in progress elsewhere: {'; '.join(others)}")
+    return first, later
 
 def related_worktrees(wt, rows):
     real = os.path.realpath(wt)
@@ -160,6 +239,30 @@ def main():
         mine = [i for i in its if re.split(r"[ @]", i["from"])[0] == me]
         rel.append(f"{name} {len(its)} open" + (f" ({len(mine)} from {me})" if its else ""))
     if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")
+
+    # Passes here
+    passes, perr = read_passes(wt)
+    pass_steps = []
+    if perr:
+        out.append(f"**Passes:** the log could not be read: {perr}")
+    elif passes:
+        recent = passes[-5:]
+        more = "; earlier ones in `.clerk-dev/passes.md`" if len(passes) > 5 else ""
+        out.append(f"**Passes:** {len(passes)} ({'; '.join(pass_line(e) for e in passes[-5:])}{more}).")
+        for e in passes:
+            st = e["f"].get("Status")
+            if st == "open": pass_steps.append(f"Finish pass {e['id']} ({e['title']}), then \"end the pass\".")
+            elif st == "ended" and e["f"].get("Note") != "no commits": pass_steps.append(f"Check pass {e['id']}: \"check the pass\".")
+            elif st == "checked":
+                label = (e["f"].get("Check") or "").split(";")[0].strip()
+                prun = os.path.join(wt, ".clerk-dev", label)
+                if label and os.path.exists(os.path.join(prun, "merged.md")):
+                    pst, pin, pnum = sf.state(prun)
+                    left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
+                    if left: pass_steps.append(f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`.")
+    first, later = feature_block(wt, rows, out)
+    steps[0:0] = pass_steps + first
+    steps.extend(later)
 
     # Findings
     if have_run:
