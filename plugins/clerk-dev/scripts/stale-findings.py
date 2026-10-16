@@ -98,7 +98,7 @@ def followup_labels(repo):
     assert spec and spec.loader
     fu = importlib.util.module_from_spec(spec); spec.loader.exec_module(fu)
     labels = {}
-    for it in fu.read(os.path.join(repo, ".review", "followups.md")):
+    for it in fu.read(os.path.join(repo, ".clerk-dev", "followups.md")):
         m = re.search(r"\bin ([0-9a-f]{7,40})\b", it["fields"].get("Done", ""))
         if not m: continue
         full = git(repo, "rev-parse", "--verify", "-q", m.group(1) + "^{commit}", check=False)
@@ -108,7 +108,7 @@ def followup_labels(repo):
 def narrow_covered(repo):
     """Commits read by narrow reviews of this branch."""
     covered = set()
-    root = os.path.join(repo, ".review")
+    root = os.path.join(repo, ".clerk-dev")
     for d in sorted(os.listdir(root)) if os.path.isdir(root) else []:
         p = os.path.join(root, d, "narrow.txt")
         if d in ("latest", "latest-feature") or d.endswith("-feature") or not os.path.exists(p): continue

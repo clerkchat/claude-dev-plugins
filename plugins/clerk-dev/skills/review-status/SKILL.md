@@ -12,9 +12,9 @@ Run, from the worktree:
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/review-status.py <worktree>
 ```
 
-It reads only files and git: the latest review run, `.review/followups.md` here
-and in the other worktrees of `.review/review-workspace.md`, and the commits since
-the review. It starts no agent and changes nothing except `.review/status-seen`,
+It reads only files and git: the latest review run, `.clerk-dev/followups.md` here
+and in the other worktrees of `.clerk-dev/review-workspace.md`, and the commits since
+the review. It starts no agent and changes nothing except `.clerk-dev/status-seen`,
 which remembers the follow-ups already shown so the next status can mark new
 ones. Pass `--run <label>` when the user names a run.
 

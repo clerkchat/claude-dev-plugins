@@ -1,22 +1,22 @@
 # Tracking files
 
 What the plugin keeps between runs, beyond each run's own directory. All of it
-lives under `.review/` in a worktree, which is excluded from git through
+lives under `.clerk-dev/` in a worktree, which is excluded from git through
 `.git/info/exclude` and never committed.
 
 | File                      | Scope                                                                                                                                                     | Written by                                                                                                                                                                                                                                    | Read by                                                                                                                                                               |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.review/<label>/`        | one review run                                                                                                                                            | the review orchestrator                                                                                                                                                                                                                       | everything below; see "Run directory contents" in `SKILL.md`                                                                                                          |
-| `.review/latest`          | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
-| `.review/latest-feature`  | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `review-status.py`                                                                                                                                          |
-| `.review/branch-notes.md` | what this worktree's branch is for (Purpose) and the user's standing notes for reviews (Review) and fixes (Fixes); may be written before the first review | the review orchestrator, the `review-fix` and `review-followups` skills (draft Purpose when missing), the `review-fix` skill (standing instructions), the `review-triage` skill (rules decided in discussion), the user | the review orchestrator (passes it to lenses and verifiers), the `review-fix`, `review-followups`, and `review-triage` skills, the fixer (Branch scope below)                        |
-| `.review/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `review-status` skill                                                                                                                                                                                                                     | the `review-status` skill (marks newer items as new)                                                                                                                  |
-| `.review/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
-| `.review/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `review-status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
+| `.clerk-dev/<label>/`        | one review run                                                                                                                                            | the review orchestrator                                                                                                                                                                                                                       | everything below; see "Run directory contents" in `SKILL.md`                                                                                                          |
+| `.clerk-dev/latest`          | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
+| `.clerk-dev/latest-feature`  | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `review-status.py`                                                                                                                                          |
+| `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the user's standing notes for reviews (Review) and fixes (Fixes); may be written before the first review | the review orchestrator, the `review-fix` and `review-followups` skills (draft Purpose when missing), the `review-fix` skill (standing instructions), the `review-triage` skill (rules decided in discussion), the user | the review orchestrator (passes it to lenses and verifiers), the `review-fix`, `review-followups`, and `review-triage` skills, the fixer (Branch scope below)                        |
+| `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `review-status` skill                                                                                                                                                                                                                     | the `review-status` skill (marks newer items as new)                                                                                                                  |
+| `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
+| `.clerk-dev/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `review-status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
 
 ## Branch notes
 
-`<worktree>/.review/branch-notes.md` says what the branch is for and holds the
+`<worktree>/.clerk-dev/branch-notes.md` says what the branch is for and holds the
 user's standing notes. Format:
 
 ```
@@ -62,7 +62,7 @@ Drafting Purpose when the file or section is missing:
 5. For a fresh branch with no changes yet, draft from the request alone, and
    keep it short.
 6. Write the file with all three headings (empty Review and Fixes when there is
-   nothing for them), create `.review/` and its `.git/info/exclude` entry if
+   nothing for them), create `.clerk-dev/` and its `.git/info/exclude` entry if
    needed, and say in one line that it was drafted and where. Do not wait for
    approval; the user edits it when it is wrong. The one exception is an
    interactive review: it shows the draft and asks the user to check it before
@@ -107,7 +107,7 @@ if still unsure.
 
 A follow-up is created where the work has to happen, not where it was caused.
 When a fix in the api changes a contract the frontend consumes, the item goes
-into the frontend worktree's `.review/followups.md`:
+into the frontend worktree's `.clerk-dev/followups.md`:
 
 ```
 followups.py add <consuming worktree> "Send exportId back when polling report downloads" \
@@ -115,7 +115,7 @@ followups.py add <consuming worktree> "Send exportId back when polling report do
   --finding "api 8"
 ```
 
-Find the consuming worktree in `.review/review-workspace.md` (see
+Find the consuming worktree in `.clerk-dev/review-workspace.md` (see
 `workspace-manifest.md`). When the file is missing or does not list the
 consuming repository, add the item to the current worktree's file with the text
 starting `[<repo>]`, and say so.
@@ -127,7 +127,7 @@ when the user says it is done. Hand-ticked boxes are honored as they are.
 
 Readers:
 
-- Every review run adds its worktree's `.review/followups.md` to `DOCS` when it
+- Every review run adds its worktree's `.clerk-dev/followups.md` to `DOCS` when it
   has open items. The completeness lens reports open items the diff should have
   addressed and items the diff addressed without closing.
 - Feature mode passes every repository's file to the cross-repo lens, which
@@ -147,6 +147,6 @@ Readers:
 
 Untracked files in the worktree, such as personal notes, drafts, and scratch
 specs, are the user's own. Reviews do not read them, and fixes never stage or
-commit them. The plugin's own files are only those under `.review/`. Documents
+commit them. The plugin's own files are only those under `.clerk-dev/`. Documents
 committed to the repository are read through the review-context
 `## Work tracking` section and never written to.

@@ -1,6 +1,6 @@
 ---
 name: review-fix
-description: Fix, address, or recheck a finding from a /clerk-dev:review report. Use whenever the user says "fix finding N", "fix 3 and 5 as recommended", "fix 4 but ...", "address finding N", "recheck N", or refers to a finding in a .review/ report and asks for a change. Coordinates a fixer subagent, commits, rechecks with the original lens, and updates the report's tracking.
+description: Fix, address, or recheck a finding from a /clerk-dev:review report. Use whenever the user says "fix finding N", "fix 3 and 5 as recommended", "fix 4 but ...", "address finding N", "recheck N", or refers to a finding in a .clerk-dev/ report and asks for a change. Coordinates a fixer subagent, commits, rechecks with the original lens, and updates the report's tracking.
 argument-hint: "N[,M...] [as recommended | but <adjustment>] [run label]"
 allowed-tools: Bash(git *), Bash(python3 *), Bash(gh *), Read, Grep, Glob, Agent, Write
 ---
@@ -12,7 +12,7 @@ through the `clerk-dev:review-fixer` agent. The review run's files are the
 source of truth; see the `review` skill in this plugin for the run directory
 layout, the finding anchors, and `numbers.tsv`.
 
-Run directory: `.review/latest` unless the user names a label. Scripts:
+Run directory: `.clerk-dev/latest` unless the user names a label. Scripts:
 `${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py` (re-render;
 `--set
 N=STATUS[:REF]` records a status) and
@@ -37,7 +37,7 @@ items separate and commits clean.
 
 ## The user's standing notes
 
-`<worktree>/.review/branch-notes.md` says what the branch is for and holds the
+`<worktree>/.clerk-dev/branch-notes.md` says what the branch is for and holds the
 user's standing instructions for this worktree's reviews and fixes. It belongs
 to the worktree, not to a review run: it may exist before the first review, and
 it applies to every run until changed. Read it at the start of every fix
@@ -74,7 +74,7 @@ adjustments ("fix 4 but use X") stay in that finding's brief and resolution
 only. Each entry is one line, dated, in the user's terms, with its scope, under
 "Fixes" unless it is about what a review should look for or report. Create the
 file with its three headings when it does not exist, drafting Purpose as
-`tracking.md` describes, (and `.review/` with its `.git/info/exclude` entry, if
+`tracking.md` describes, (and `.clerk-dev/` with its `.git/info/exclude` entry, if
 needed).
 
 A standing note belongs in this file; a decision about one finding belongs in
@@ -109,7 +109,7 @@ for nothing wider.
    picked alternatives), which are short and must not be paraphrased. Point it
    at: the merged entry `- id: <merged id>` in `<run>/merged.md`,
    `<run>/verify/<merged id>.md`, `<run>/notes/<merged id>.md` when it exists,
-   `.review/branch-notes.md`, and `.claude/skills/review-context/SKILL.md` when
+   `.clerk-dev/branch-notes.md`, and `.claude/skills/review-context/SKILL.md` when
    it exists. What the fixer must take from them: the card text; the merged
    entry's `claim`, `scenario`, `evidence`, and `fix` (for a pull request
    comment, its text, replies, and the verifier's note stand in for these; when
@@ -117,7 +117,7 @@ for nothing wider.
    reviewer's point may add to the finding's); the verifier's note from
    `verify/<id>.md`; the `snippet` range; the repo review-context sections the
    finding's lens would have read; the Purpose section and the "Fixes" entries
-   in `.review/branch-notes.md` whose scope covers this finding; the finding's
+   in `.clerk-dev/branch-notes.md` whose scope covers this finding; the finding's
    instruction note and its free-text notes (`notes/<merged id>.md`), which are
    the user's words about this finding; and any adjustment the user asked for.
    When the instruction picks labeled alternatives ("Fix as recommended (a)",
@@ -149,9 +149,9 @@ for nothing wider.
    stop: record `in-progress` with the files touched, show the failure, and ask
    how to proceed. Nothing is committed. (Queue mode differs; see below.)
 6. Commit, one commit per finding: `git add` only the files the fix changed
-   or created (never `.review/` or other untracked files), then commit. The message must
+   or created (never `.clerk-dev/` or other untracked files), then commit. The message must
    stand alone, because the review files are local and never committed: no
-   finding numbers, run labels, `.review/` paths, or mention of the review.
+   finding numbers, run labels, `.clerk-dev/` paths, or mention of the review.
    Subject `fix(<area>): <what the fix does>` in the repo's usual style; a body
    of two or three sentences saying what was wrong, what can go wrong because of
    it, and what the change does, written for a reader of `git
@@ -200,7 +200,7 @@ The fixer sees only this repository, so its `follow-ups:` covers the clients it
 happens to know about. When its `contract:` line is not "none", check every
 related worktree yourself, without a model:
 
-1. The worktrees: every other row of `.review/review-workspace.md`
+1. The worktrees: every other row of `.clerk-dev/review-workspace.md`
    (`skills/review/workspace-manifest.md`). When the file is missing, check
    nothing elsewhere: say in one line that no other repositories are known for
    this branch, so their clients were not checked, and that a feature review

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manage a worktree's follow-ups file, <worktree>/.review/followups.md.
+"""Manage a worktree's follow-ups file, <worktree>/.clerk-dev/followups.md.
 
 Follow-ups are work this repository owes because of a change somewhere else,
 usually a contract change made while fixing a review finding in another
@@ -31,14 +31,14 @@ from and which contract it touches.
 """
 
 def path(wt):
-    d = os.path.join(wt, ".review"); os.makedirs(d, exist_ok=True)
-    ex = subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".review"])
+    d = os.path.join(wt, ".clerk-dev"); os.makedirs(d, exist_ok=True)
+    ex = subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"])
     if ex.returncode != 0:
         common = subprocess.run(["git", "-C", wt, "rev-parse", "--git-common-dir"], capture_output=True, text=True).stdout.strip()
         if common:
             exf = os.path.join(common if os.path.isabs(common) else os.path.join(wt, common), "info", "exclude")
             os.makedirs(os.path.dirname(exf), exist_ok=True)
-            with open(exf, "a") as fh: fh.write(".review/\n")
+            with open(exf, "a") as fh: fh.write(".clerk-dev/\n")
     return os.path.join(d, "followups.md")
 
 FIELDS = ("From", "Contract", "Finding", "Added", "Done")

@@ -1,6 +1,6 @@
 ---
 name: review-fixer
-description: Implements the fix for one finding from a /clerk-dev:review report, or one follow-up item, from a brief prepared by the review-fix or review-followups skill. Edits code, adds or updates the test the finding implies, runs the touched tests, and reports. Does not commit and does not touch the .review/ directory.
+description: Implements the fix for one finding from a /clerk-dev:review report, or one follow-up item, from a brief prepared by the review-fix or review-followups skill. Edits code, adds or updates the test the finding implies, runs the touched tests, and reports. Does not commit and does not touch the .clerk-dev/ directory.
 model: sonnet
 effort: medium
 tools: Read, Edit, Write, Grep, Glob, Bash
@@ -29,7 +29,7 @@ contract against it rather than against the item's wording alone. When the brief
 names this worktree's review run, list the open findings in the files you plan
 to change before editing, with the `stale-findings.py
 <run> --open-in <files>`
-command the brief gives (reading `.review/` is fine; writing it is not). Treat
+command the brief gives (reading `.clerk-dev/` is fine; writing it is not). Treat
 them as context: do not fix them in this change, and do not make them worse.
 Where a finding's recommendation conflicts with the follow-up's contract, the
 contract wins, because the other repository has already shipped it on this
@@ -38,7 +38,7 @@ branch; say so under `findings:`.
 1. Read the code named in the evidence at its current state before changing
    anything. The line numbers in the brief may be off; the function names are
    reliable.
-2. Decide scope before editing, using the Purpose of `.review/branch-notes.md`
+2. Decide scope before editing, using the Purpose of `.clerk-dev/branch-notes.md`
    included in the brief. Code the fix touches is on one of three sides; when
    unsure which, check whether it exists on the remote main with `git log` or
    `git diff` against the merge base.
@@ -64,7 +64,7 @@ branch; say so under `findings:`.
 5. Run the tests for the files you touched using the repo's documented test
    command. If they fail and the failure is yours, fix it; if it is unrelated or
    you cannot fix it, stop.
-6. Do not commit, push, or stage. Do not touch anything under `.review/` or any
+6. Do not commit, push, or stage. Do not touch anything under `.clerk-dev/` or any
    untracked file you did not create. Do not reformat unrelated code.
 
 Report, in this order and nothing else:

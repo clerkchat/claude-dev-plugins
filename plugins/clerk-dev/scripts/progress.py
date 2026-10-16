@@ -18,7 +18,7 @@ times, so it survives a restart of this script; it is left out under a minute.
 
 --run watches one run directory (this session's run). --worktree watches the
 run each per-repository session writes in its worktree (feature mode): the
-target of <path>/.review/latest once it was created after --since (default:
+target of <path>/.clerk-dev/latest once it was created after --since (default:
 when this script started). Progress per run is read from what the run writes:
 plan.md's instance list against raw/, merged.md, the verify/ files, and
 report.md. The "min in" total counts from --since, else from the run's plan.md,
@@ -54,7 +54,7 @@ def state(run):
     return ("reviewing", f"{len(raws)}/{len(inst)}", mtime(os.path.join(run, "plan.md")))
 
 def child_run(path, since):
-    link = os.path.join(path, ".review", "latest")
+    link = os.path.join(path, ".clerk-dev", "latest")
     if not os.path.exists(link): return None
     run = os.path.realpath(link)
     return run if os.stat(run).st_mtime >= since or os.lstat(link).st_mtime >= since else None

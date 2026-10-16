@@ -23,7 +23,7 @@ If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that keep
 items separate and commits clean.
 
-Run directory: `.review/latest` unless the user names a label. The instructions
+Run directory: `.clerk-dev/latest` unless the user names a label. The instructions
 live in `<run>/instructions.tsv` (`merged_id`, choice, note, date, also,
 option), statuses in `<run>/status.tsv`, numbers in `<run>/numbers.tsv`. Read
 them; do not parse the report. Render through
@@ -151,7 +151,7 @@ skipped without deciding counts as left and stays marked.
    resolution text if any, the instruction's note (which may say why it moved
    here from the fix queue), and the user's free-text notes in
    `notes/<merged id>.md`, which often hold the question they want answered, and
-   the Purpose and "Fixes" sections of `.review/branch-notes.md`.
+   the Purpose and "Fixes" sections of `.clerk-dev/branch-notes.md`.
 2. Present it in a few short paragraphs: what the finding says, what is
    uncertain or contested, and the realistic options (fix as recommended, fix
    differently, defer, ignore), with your recommendation and why. Quote the code
@@ -220,7 +220,7 @@ before writing it when the discussion was long.
 
 Some decisions reach past their finding: a rule that would settle similar
 findings the same way, or a change to what the branch is for. Write those into
-`.review/branch-notes.md` as well, without being asked, as soon as the decision
+`.clerk-dev/branch-notes.md` as well, without being asked, as soon as the decision
 is recorded. Reviews pass the file to every reviewer and verifier, and fixes
 follow it, so a rule written there keeps the next run from raising the same
 question.

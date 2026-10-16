@@ -84,7 +84,7 @@ checklists, and notes for this work. For each:
 16. Stale documents: a document that describes a design the diff clearly
     superseded, with no note saying so.
 
-When `DOCS` includes `.review/followups.md`, treat its open items as work this
+When `DOCS` includes `.clerk-dev/followups.md`, treat its open items as work this
 repository owes: report an open item the diff should have addressed and did not,
 and an item the diff visibly addressed without its box being closed (a minor
 finding; the fix is to close it with the commit).

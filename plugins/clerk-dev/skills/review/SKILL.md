@@ -1,6 +1,6 @@
 ---
 name: review
-description: Multi-lens code review that records findings in the worktree's .review/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", or /clerk-dev:review. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
+description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", or /clerk-dev:review. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
 argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
 allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash(python3 *), Bash(claude *), Bash(ln *), Bash(mkdir *), Read, Grep, Glob, Agent, Write, Monitor, TaskStop
 ---
@@ -9,7 +9,7 @@ allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash
 
 Orchestrate a lens-based review. You coordinate; the lens agents review. Do not
 review the code yourself, and never edit the project's code. The files you write
-are under the worktree's `.review/` directory: the run directory, and the branch
+are under the worktree's `.clerk-dev/` directory: the run directory, and the branch
 notes and follow-ups described in `tracking.md`.
 
 Running the command is the user's go-ahead; there is no approval step. Cost
@@ -44,7 +44,7 @@ question rather than guess.
 When the target is the whole branch and the words neither ask for the feature
 nor rule it out, ask one question before anything else: review the whole
 feature across repositories, or just this worktree? When
-`.review/review-workspace.md` exists, name its other repositories in the
+`.clerk-dev/review-workspace.md` exists, name its other repositories in the
 feature option ("the whole feature: this worktree plus web and worker"). When it
 does not, say that the feature option first asks which repositories take part.
 The answer adds `--feature` or not; other flags from the words are kept. A
@@ -64,7 +64,7 @@ Then:
 
 Start every run with one call:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...]`, giving this
-worktree and, when the request names them or `.review/review-workspace.md`
+worktree and, when the request names them or `.clerk-dev/review-workspace.md`
 lists them, the other worktrees of the job. For each one it prints the
 repository's `review-setup` lines, the remote main or that `origin/HEAD` is
 missing, when the last fetch was, the merge base, the branch's commit messages,
@@ -78,7 +78,7 @@ zsh expands a word starting with `=`).
 
 ## Branch notes first
 
-Read `.review/branch-notes.md` before scoping. When it or its Purpose is
+Read `.clerk-dev/branch-notes.md` before scoping. When it or its Purpose is
 missing, draft Purpose as `tracking.md` describes, from the pull request's
 description when there is one, the branch's commit messages, and its new
 files. It decides what the reviewers
@@ -222,7 +222,7 @@ focuses on one line beneath it, and one line pointing at the interim view:
 - [ ] HTTP endpoints
 - [ ] Whole change
 - [ ] Merge, verify, report
-Findings so far (unverified): .review/<label>/so-far.md
+Findings so far (unverified): .clerk-dev/<label>/so-far.md
 ```
 
 The reviewers running inside a wave appear in the terminal's own task panel, so
@@ -340,14 +340,14 @@ need to read it unless debugging agent output.
   the whole branch fresh but reports only what would hold the merge. See Final
   pass.
 - `--standalone` (with a narrow target): a separate run, not added to the
-  branch's review, and `.review/latest` is left where it is.
+  branch's review, and `.clerk-dev/latest` is left where it is.
 - `--lenses a,b,c` to replace routing, `--lenses +a,+b` to add to it, or
   `--lenses -a` to remove one from it.
 - `--quick` or `--deep` (default standard). Quick: triggered lenses only, capped
   at four, sonnet, a higher bar for minor findings. Deep: all routed lenses,
   deep tracing, fable verifier.
 - `--feature`: review the whole feature across the worktrees named in
-  `.review/review-workspace.md`, each in its own headless session. See Feature
+  `.clerk-dev/review-workspace.md`, each in its own headless session. See Feature
   mode.
 - `--consolidate` (with `--feature`): start no reviews; use each worktree's
   latest finished run, run only the cross-repository lens, and write the feature
@@ -362,10 +362,10 @@ need to read it unless debugging agent output.
   reviewer; `--resume <label>` runs it later.
 - `--split` or `--walk`: force per-slice agent instances or single-walk agents.
 - `--fresh`: do not compare with an earlier review. By default a run is
-  reconciled with the most recent finished run under `.review/` for the same
+  reconciled with the most recent finished run under `.clerk-dev/` for the same
   target; `--previous <label>` names a different one.
 - `--resume [label]`: continue an unfinished run, by default the one
-  `.review/latest` points at. See Resuming below.
+  `.clerk-dev/latest` points at. See Resuming below.
 - `--report-only [label]`: re-render the report of a finished run from its
   merged findings and verdicts, without running any reviewer. Use it to iterate
   on the report after changing titles, the summary, or the template.
@@ -376,7 +376,7 @@ need to read it unless debugging agent output.
 - `--no-pr-comments`: skip the pull request's review comments, which are
   otherwise brought in by default (Step 7b).
 - `--pr-comments-only [label]`: bring the pull request's comments into an
-  existing finished run (default `.review/latest`), fill in the sections of
+  existing finished run (default `.clerk-dev/latest`), fill in the sections of
   comment cards that lack them, and re-render, without running any reviewer.
 
 ## Incremental review
@@ -387,7 +387,7 @@ reviewers still read code blind; only the commits since the earlier review are
 new to them.
 
 Use the earlier run when all of these hold, else review in full and say why in
-one line: it is the most recent directory under `.review/` with a `report.md`,
+one line: it is the most recent directory under `.clerk-dev/` with a `report.md`,
 the same branch, and a target that is the same as this run's or narrower (a path
 inside this run's target; the whole branch contains every path); `--full` and
 `--fresh` were not given; and its `HEAD` is an ancestor of the current `HEAD`
@@ -485,7 +485,7 @@ that change, typically one the user made by hand between fix cycles. Its
 findings join the branch's review, so triage, fixes, follow-ups, and the
 cross-check keep working on one run with one set of numbers.
 
-When the branch has a review to join (the most recent directory under `.review/`
+When the branch has a review to join (the most recent directory under `.clerk-dev/`
 with a `report.md`, the same branch, a target that is the whole branch or a
 path, and a `HEAD` that is an ancestor of the current `HEAD`) and `--standalone`
 was not given, run it as an incremental run on that review, with these
@@ -513,11 +513,11 @@ differences:
    `stale-findings.py <run> --record #<id>=still:found in
    a narrow review --through HEAD`.
 
-`.review/latest` moves to the new run as usual: it holds everything the earlier
+`.clerk-dev/latest` moves to the new run as usual: it holds everything the earlier
 run held, plus the new findings.
 
 With no review to join, or with `--standalone`, a narrow target is an ordinary
-run of its own. A standalone run leaves `.review/latest` where it is; say in the
+run of its own. A standalone run leaves `.clerk-dev/latest` where it is; say in the
 final line that triage and fixes on it need its label.
 
 ## Final pass
@@ -593,7 +593,7 @@ each verifier writes `verify/<id>.md` on completion, and `plan.md` lists every
 instance the plan committed to. A missing file means not done; a present file
 means done. Nothing is half-written.
 
-With `--resume`, or when a bare invocation finds that `.review/latest` points at
+With `--resume`, or when a bare invocation finds that `.clerk-dev/latest` points at
 a run whose `progress.md` has unchecked items, whose target matches, and whose
 `HEAD` still equals the current `HEAD` (for a narrow run, the `HEAD` line of its
 `narrow.txt`, and for `staged` also the staged patch's sha1):
@@ -628,23 +628,23 @@ reviewers left. Resume it, or start over?" Headless runs start over unless
 
 ## Step 0: run directory
 
-Create the run directory inside the repository, at `<repo>/.review/<label>/`,
+Create the run directory inside the repository, at `<repo>/.clerk-dev/<label>/`,
 where `<label>` is `<yyyymmdd-hhmm>-<target slug>` (`branch`, a path slug, a PR
 number, or a range slug). If the directory exists, append `-2`, `-3`, and so on.
 Never overwrite or delete an earlier run. After creating it, point the symlink
-`<repo>/.review/latest` at it, except for a `--standalone` narrow run (see
+`<repo>/.clerk-dev/latest` at it, except for a `--standalone` narrow run (see
 Narrow review), which leaves it where it is, and for the coordinating session
-of feature mode, which points `<repo>/.review/latest-feature` at its run
+of feature mode, which points `<repo>/.clerk-dev/latest-feature` at its run
 instead. `latest` always means this branch's own review: fixes, triage, status,
 resuming, and incremental review read it, and in feature mode the review of
 this repository runs in the same worktree at the same time.
 
 A directory whose label ends in `-feature` is a feature run, not a review of
 this branch. Wherever this skill or another looks for the most recent or newest
-run under `.review/`, it skips those directories and both links.
+run under `.clerk-dev/`, it skips those directories and both links.
 
-Keep `.review/` out of version control without touching tracked files: if
-`git check-ignore -q .review` fails, append `.review/` to `.git/info/exclude`.
+Keep `.clerk-dev/` out of version control without touching tracked files: if
+`git check-ignore -q .clerk-dev` fails, append `.clerk-dev/` to `.git/info/exclude`.
 Say that you did so the first time.
 
 `<run>` below means this directory. In feature mode it lives in the repo the
@@ -700,7 +700,7 @@ it with the shipped script. Give it the target and the script path and have it:
    `tracking.md`) and the review does not read them. Select only documents that
    are new or modified on the branch, or whose text mentions a changed path or
    the branch name; order by modification time; keep at most eight and report
-   how many were dropped. Also include the plugin's own `.review/followups.md`
+   how many were dropped. Also include the plugin's own `.clerk-dev/followups.md`
    when it has open items (see `tracking.md`); it does not count against the
    eight.
 7. Write `<run>/target.txt`: three lines, the target as given (`branch` for the
@@ -867,13 +867,13 @@ MODE: <quick | standard | deep>
 REPO: <absolute repo root>
 PR: <title and body, or none>
 DOCS: <paths of selected work-tracking documents, or none>
-GUIDANCE: <path of .review/branch-notes.md, or none>
-WORKSPACE: <path of .review/review-workspace.md, or none>
+GUIDANCE: <path of .clerk-dev/branch-notes.md, or none>
+WORKSPACE: <path of .clerk-dev/review-workspace.md, or none>
 ```
 
 plus `BAR: final` on a final pass.
 
-`<worktree>/.review/branch-notes.md` says what the branch is for (Purpose) and
+`<worktree>/.clerk-dev/branch-notes.md` says what the branch is for (Purpose) and
 holds the user's standing review guidance (Review); its format is in
 `tracking.md`. It was read, or drafted, at the start of the run (see Branch
 notes first). Pass its path as `GUIDANCE` to every lens and verifier. When the Review section has
@@ -1131,7 +1131,7 @@ with the current number, so cross-references never go stale. After the report,
 refer to findings only by number ("finding 2").
 
 When the user refers to a finding, by number or by a location in the report such
-as `.review/<label>/report.md:92`:
+as `.clerk-dev/<label>/report.md:92`:
 
 1. For a location, read the report upward from that line to the nearest card
    heading (`#### N.`). The HTML comment right under it names the number, the
@@ -1229,9 +1229,9 @@ With `--comment` and a PR target, post the report as one PR comment via
 With `--feature`, each repository is reviewed in its own worktree by its own
 headless Claude Code session, so it loads that repository's CLAUDE.md, settings,
 skills, and review context, and writes its run and report under that worktree's
-`.review/`. This session coordinates and runs only the cross-repository lens.
+`.clerk-dev/`. This session coordinates and runs only the cross-repository lens.
 
-1. Discover: read `.review/review-workspace.md` in this worktree. When it is
+1. Discover: read `.clerk-dev/review-workspace.md` in this worktree. When it is
    missing, set it up with the user as `workspace-manifest.md` describes (a
    headless session stops instead). Its rows are the repositories and
    worktrees of this job; nothing else is searched. Say in one line which
@@ -1288,9 +1288,9 @@ skills, and review context, and writes its run and report under that worktree's
    `clerk-dev:review-cross-repo` with `model: fable` (see Model fallback) and
    repeated `REPO`, `DIFF`, `BASE`, `HEAD`,
    `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's
-   `.review/branch-notes.md`, whose Purpose says what that side meant to
+   `.clerk-dev/branch-notes.md`, whose Purpose says what that side meant to
    change), plus `MODE`, `PR`, and `DOCS`; `DOCS` includes each repository's
-   `.review/followups.md` (see `tracking.md`). Merge, verify,
+   `.clerk-dev/followups.md` (see `tracking.md`). Merge, verify,
    and number its findings in this session's run directory as usual.
    With `--final`, the lens and its verifiers also get `BAR: final`, and
    its findings are split by the bar as in Final pass steps 6 and 7 (with
@@ -1310,7 +1310,7 @@ skills, and review context, and writes its run and report under that worktree's
    findings are fixed and tracked in that repository's report.
 
 The run directory of the coordinating session is
-`<repo>/.review/<label>-feature/`, linked from `<repo>/.review/latest-feature`
+`<repo>/.clerk-dev/<label>-feature/`, linked from `<repo>/.clerk-dev/latest-feature`
 (see Step 0).
 
 End the final message with every report's absolute path, one per line, the
@@ -1319,9 +1319,9 @@ rows:
 
 ```
 Reports:
-  feature  /Users/me/code/api/feat/x/.review/20261015-1235-branch-feature/report.md
-  api      /Users/me/code/api/feat/x/.review/20261015-1238-branch/report.md
-  clerkai  /Users/me/code/clerkai/feat/x/.review/20261015-1236-branch/report.md
+  feature  /Users/me/code/api/feat/x/.clerk-dev/20261015-1235-branch-feature/report.md
+  api      /Users/me/code/api/feat/x/.clerk-dev/20261015-1238-branch/report.md
+  clerkai  /Users/me/code/clerkai/feat/x/.clerk-dev/20261015-1236-branch/report.md
 ```
 
 A repository whose session failed, or that was not reviewed at its current
@@ -1330,7 +1330,7 @@ commit, gets its row with the reason in place of the path.
 ### Consolidating separate reviews
 
 With `--feature --consolidate`, skip steps 2 to 4. After discovery, take each
-worktree's latest finished run (`.review/latest`, or the newest run directory
+worktree's latest finished run (`.clerk-dev/latest`, or the newest run directory
 with a `report.md`) and check it is current: its `HEAD` equals the worktree's
 `HEAD`. For a stale or missing run, say so in one line per repository ("web:
 last reviewed 3 commits ago" or "worker: no review") and continue with the
@@ -1352,8 +1352,8 @@ the `rendered-*.tsv` snapshots, `report.md`, `report.prev.md`, `stale.tsv`
 later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the
 final pass's verdict) next to `report.md`. Next to the run directories,
-`.review/latest`, `.review/latest-feature`, `.review/branch-notes.md`, `.review/followups.md`,
-`.review/review-workspace.md` (or a link to it), and `.review/status-seen`
+`.clerk-dev/latest`, `.clerk-dev/latest-feature`, `.clerk-dev/branch-notes.md`, `.clerk-dev/followups.md`,
+`.clerk-dev/review-workspace.md` (or a link to it), and `.clerk-dev/status-seen`
 belong to the worktree. Raw and verify files are written
 only on completion, which is what makes `--resume` safe. A run stopped after
 `--plan-only` has no `progress.md` items checked and no raw files;

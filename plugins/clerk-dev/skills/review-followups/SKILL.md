@@ -1,6 +1,6 @@
 ---
 name: review-followups
-description: Work through this worktree's review follow-ups (.review/followups.md), the work it owes because of changes in another repository. Use when the user says "go through the follow-ups", "work the follow-ups", "do the review followups", "do F3", "fix follow-up F2", or similar. Implements one item at a time through a fixer subagent, one commit per item, and closes each item with its commit.
+description: Work through this worktree's review follow-ups (.clerk-dev/followups.md), the work it owes because of changes in another repository. Use when the user says "go through the follow-ups", "work the follow-ups", "do the review followups", "do F3", "fix follow-up F2", or similar. Implements one item at a time through a fixer subagent, one commit per item, and closes each item with its commit.
 argument-hint: "[F3[,F5...]]"
 allowed-tools: Bash(git *), Bash(gh pr view *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 ---
@@ -19,7 +19,7 @@ the next one starts. Never implement several items in one change.
 The request ("go through the follow-ups", "do F3") is the user's go-ahead to
 edit and commit for those items, under the same rules as fixing a review
 finding: one commit per item, only the files its fix touched, only after the
-touched tests pass. Never commit anything under `.review/` or any untracked
+touched tests pass. Never commit anything under `.clerk-dev/` or any untracked
 file the fix did not create, and never push or amend.
 
 If this conversation was compacted, re-read this file before going on: a
@@ -35,7 +35,7 @@ report is the only thing an item should add here.
 1. List the open items: `followups.py list <worktree> --open`. With item ids as
    the argument, take only those; otherwise all open items, in id order. Fix the
    list now; its length is the total.
-2. Read `.review/branch-notes.md` (Purpose and Fixes) of this worktree, as the
+2. Read `.clerk-dev/branch-notes.md` (Purpose and Fixes) of this worktree, as the
    `review-fix` skill describes. Draft Purpose first if it is missing.
 3. Check the working tree with `git status --short`. Each commit must hold only
    its item's change, so uncommitted edits to tracked files get in the way. If
@@ -53,13 +53,13 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 1. Build the brief from the item: its text (what to do), `Contract:` (what the
    other side now sends or accepts, which the change must match), `From:`
    (repository and commit), and `Finding:`. Find the source repository's
-   worktree by its name in `.review/review-workspace.md`, and pass its path
+   worktree by its name in `.clerk-dev/review-workspace.md`, and pass its path
    and the commit so the fixer can read the change with
    `git -C <path> show <sha>`. When the item names a
    finding, add the source run's `resolution/<merged id>.md` if it exists
    (resolve the number through that run's `numbers.tsv`). Add this worktree's
    Purpose and the Fixes entries that cover the item. When this worktree has a
-   review run (`.review/latest` with a `merged.md`), give the fixer the command
+   review run (`.clerk-dev/latest` with a `merged.md`), give the fixer the command
    to list the open findings in the files it will change:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py <run> --repo
    <worktree> --open-in <files>`,
@@ -81,7 +81,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    commit nothing, show the failure, and ask how to proceed.
 5. Commit: `git add` only the files the fixer changed, then commit. The message
    stands alone, since the follow-ups file and review runs are local: no
-   follow-up ids, finding numbers, run labels, or `.review/` paths. The subject
+   follow-up ids, finding numbers, run labels, or `.clerk-dev/` paths. The subject
    follows the repository's usual style and says what the client now does; the
    body, two or three sentences from the fixer's `summary`, says what changed on
    the other side (the contract, in plain words) and what this change does about

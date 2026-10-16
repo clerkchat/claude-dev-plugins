@@ -8,10 +8,10 @@ from directory layout or branch names.
 ## Where it lives
 
 The file is created in the worktree where the job was set up, at
-`<worktree>/.review/review-workspace.md`. Every other worktree in its table gets
+`<worktree>/.clerk-dev/review-workspace.md`. Every other worktree in its table gets
 a symbolic link at the same path pointing at it, so a session in any of those
-worktrees reads the same file at `.review/review-workspace.md`. Like everything
-under `.review/`, it is excluded from git through each repository's
+worktrees reads the same file at `.clerk-dev/review-workspace.md`. Like everything
+under `.clerk-dev/`, it is excluded from git through each repository's
 `.git/info/exclude`.
 
 A worktree belongs to at most one review job. A worktree without the file is not
@@ -63,9 +63,9 @@ in an interactive session first.
    also name a path or leave that repository out.
 4. Ask for a short name for the job, proposing the branch name.
 5. Show the table, and on confirmation write the file here. Then, for every
-   other worktree in it, create `.review/` (and its `.git/info/exclude` entry
+   other worktree in it, create `.clerk-dev/` (and its `.git/info/exclude` entry
    when needed) and link the file:
-   `ln -s <this file> <worktree>/.review/review-workspace.md`. If a worktree
+   `ln -s <this file> <worktree>/.clerk-dev/review-workspace.md`. If a worktree
    already has a `review-workspace.md` for another job, say so and ask whether
    to replace it; never replace it silently. Say in one line where the file is.
 

@@ -5,21 +5,21 @@ Usage: review-status.py [WORKTREE] [--run LABEL] [--no-mark]
 
 Prints a short Markdown summary:
   - the review run (label, target, reviewed commit, date), and the feature
-    run's report when .review/latest-feature points at one;
+    run's report when .clerk-dev/latest-feature points at one;
   - commits since the review that no review has read: not a follow-up's
     commit, not the fix of a finding (status.tsv, commits.tsv, or a
     resolution note names it), not covered by a narrow review, not
     formatting only, not a merge; plus staged and unstaged changes;
   - this worktree's open follow-ups, marking the ones added since the last
-    status (remembered in .review/status-seen);
-  - open follow-ups in the other worktrees of .review/review-workspace.md;
+    status (remembered in .clerk-dev/status-seen);
+  - open follow-ups in the other worktrees of .clerk-dev/review-workspace.md;
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
     in-progress fixes, and open findings whose code moved since the review;
   - a numbered list of next steps, most pressing first; once triage is done
     and fixes have landed, the last step is the final pass.
 
---no-mark leaves .review/status-seen untouched.
+--no-mark leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, importlib.util, os, re, subprocess
 
@@ -48,12 +48,12 @@ def parse_followups(wt):
     fu = importlib.util.module_from_spec(spec); spec.loader.exec_module(fu)
     return [{"id": int(it["id"][1:]), "done": it["done"], "text": it["text"],
              "from": it["fields"].get("From", ""), "added": it["fields"].get("Added", "")}
-            for it in fu.read(os.path.join(wt, ".review", "followups.md"))]
+            for it in fu.read(os.path.join(wt, ".clerk-dev", "followups.md"))]
 
 def workspace_rows(wt):
     """(repo name, real worktree path) for each row of the review workspace
-    table in .review/review-workspace.md; empty when there is no such file."""
-    p = os.path.join(wt, ".review", "review-workspace.md")
+    table in .clerk-dev/review-workspace.md; empty when there is no such file."""
+    p = os.path.join(wt, ".clerk-dev", "review-workspace.md")
     if not os.path.exists(p): return []
     rows = []
     for line in open(p, encoding="utf-8"):
@@ -84,7 +84,7 @@ def main():
     ap.add_argument("--run"); ap.add_argument("--no-mark", action="store_true")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
-    run = os.path.realpath(os.path.join(wt, ".review", a.run or "latest"))
+    run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
     have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")
@@ -102,13 +102,13 @@ def main():
         label = os.path.basename(run)
         when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(run, "report.md"))).strftime("%Y-%m-%d %H:%M") \
             if os.path.exists(os.path.join(run, "report.md")) else "not finished"
-        out.append(f"**Review:** `.review/{label}` of {target[0] if target else '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
+        out.append(f"**Review:** `.clerk-dev/{label}` of {target[0] if target else '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
     else:
         out.append("**Review:** none yet in this worktree.")
         steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
-    feature = os.path.realpath(os.path.join(wt, ".review", "latest-feature"))
+    feature = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest-feature"))
     if os.path.exists(os.path.join(feature, "report.md")):
-        out.append(f"**Feature review:** `.review/{os.path.basename(feature)}/report.md` (the cross-repository check; `.review/latest-feature`).")
+        out.append(f"**Feature review:** `.clerk-dev/{os.path.basename(feature)}/report.md` (the cross-repository check; `.clerk-dev/latest-feature`).")
 
     unreviewed, counts_fix = [], 0
     if reviewed and subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", reviewed, head]).returncode == 0:
@@ -136,7 +136,7 @@ def main():
 
     # Follow-ups here
     items = parse_followups(wt)
-    seen_path = os.path.join(wt, ".review", "status-seen")
+    seen_path = os.path.join(wt, ".clerk-dev", "status-seen")
     seen = int(open(seen_path).read().strip() or 0) if os.path.exists(seen_path) else 0
     open_items = [i for i in items if not i["done"]]
     out.append("")
@@ -207,7 +207,7 @@ def main():
             steps.append(f"Review the {len(unreviewed)} unreviewed commits with an incremental review of the branch: \"re-review the branch\".")
         if moved: steps.append(f"Cross-check the finding{plural(moved)} whose code moved ({len(moved)}): \"cross-check the findings\".")
         n_unmarked = sum(len(v) for v in unmarked.values())
-        if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `.review/{os.path.basename(run)}/report.md`.")
+        if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `.clerk-dev/{os.path.basename(run)}/report.md`.")
         if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
         if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
         if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")

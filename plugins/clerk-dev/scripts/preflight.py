@@ -11,7 +11,7 @@ For each worktree (default: the current directory) prints a Markdown block:
   - the merge base with the remote main and the commit count since it;
   - the branch's commit messages (newest N, default 50), `diff --stat`
     against the merge base, and `status --short`;
-  - the plugin's files under .review/: branch notes and whether they have a
+  - the plugin's files under .clerk-dev/: branch notes and whether they have a
     Purpose, the review workspace and its rows, open follow-ups, and the
     latest run with whether it is unfinished and still at HEAD.
 
@@ -52,10 +52,10 @@ def purpose_state(path):
     return "present, Purpose filled in" if m.group(1).strip() else "present, Purpose empty"
 
 def latest_run(wt, head):
-    run = os.path.realpath(os.path.join(wt, ".review", "latest"))
+    run = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest"))
     if not os.path.isdir(run): return "none"
     label = os.path.basename(run)
-    if not os.path.exists(os.path.join(run, "target.txt")): return f"`.review/{label}`, stopped before scoping finished"
+    if not os.path.exists(os.path.join(run, "target.txt")): return f"`.clerk-dev/{label}`, stopped before scoping finished"
     target = open(os.path.join(run, "target.txt")).read().splitlines()
     what = target[0] if target else "?"
     at = target[2].strip() if len(target) > 2 else ""
@@ -65,7 +65,7 @@ def latest_run(wt, head):
     elif unchecked: state = f"unfinished ({unchecked} unchecked progress items)"
     else: state = "unfinished (no report yet)"
     where = "at current HEAD" if at and at == head else (f"at `{at[:9]}`, HEAD has moved" if at else "HEAD unknown")
-    return f"`.review/{label}` of {what}, {state}, {where}"
+    return f"`.clerk-dev/{label}` of {what}, {state}, {where}"
 
 def block(path, log_n):
     out = []
@@ -100,7 +100,7 @@ def block(path, log_n):
     else:
         out.append("- Merge base: unknown")
 
-    review = os.path.join(wt, ".review")
+    review = os.path.join(wt, ".clerk-dev")
     out.append(f"- Branch notes: {purpose_state(os.path.join(review, 'branch-notes.md'))}")
     if rows:
         out.append("- Review workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows))

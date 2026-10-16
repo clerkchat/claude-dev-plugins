@@ -64,7 +64,7 @@ reader can check your map.
 10. Specification: when `SPEC` is present, check that the feature as a whole,
     across repos, satisfies it; per-repo spec conformance was reviewed
     separately.
-11. Follow-ups: for each repository's `.review/followups.md` in `DOCS`, check
+11. Follow-ups: for each repository's `.clerk-dev/followups.md` in `DOCS`, check
     each open item against that repository's diff. An item whose contract change
     is now matched is resolved work left open; an item with no matching change
     is still owed, and is a finding when the producing side has already shipped

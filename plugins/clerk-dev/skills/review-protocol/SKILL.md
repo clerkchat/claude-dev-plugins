@@ -47,7 +47,7 @@ The orchestrator's prompt gives you:
   how you phrase it. It does not change the confidence rubric. If it tells you
   to skip something you believe is a blocker, report the blocker anyway and say
   that the guidance asked to skip this kind of finding.
-- `WORKSPACE`: path of `.review/review-workspace.md`, or `none`. Its rows name
+- `WORKSPACE`: path of `.clerk-dev/review-workspace.md`, or `none`. Its rows name
   the other repositories and worktrees of this job; use them to say which
   repository a fix needs a follow-up in.
 - `BAR`: `final` on a final pass, else absent. See Final pass bar below.

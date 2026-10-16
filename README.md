@@ -78,7 +78,7 @@ The first time, it gets a few things straight before any reviewer runs:
   repositories. For a feature, it asks which repositories and worktrees take
   part, and remembers the answer.
 - What the branch is for. It drafts a short statement from the pull request
-  description and the commits, saved in `.review/branch-notes.md`, and asks you
+  description and the commits, saved in `.clerk-dev/branch-notes.md`, and asks you
   to correct it. This is what tells the reviewer agents which code is new and
   which is already live, so it is worth a minute.
 
@@ -109,7 +109,7 @@ then one card per finding, grouped by what to do about it:
   to change, labeled cleanup, simplify, or refactor.
 
 Each card says how big the fix is and whether another repository has to change
-too, if the change is made. The report lives at `.review/latest/report.md`.
+too, if the change is made. The report lives at `.clerk-dev/latest/report.md`.
 
 **3. Decide what to do.** Tick an instruction on each card in the report: Fix as
 recommended, Fix as noted (write your notes on the card), Discuss, Defer, or
