@@ -78,3 +78,15 @@ the review protocol):
 - Does the design add outbound requests to URLs that input can influence?
 - Which secrets does it need, where are they stored, and who can see them?
 - Can model output or retrieved content reach a tool with side effects?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Validate untrusted input at the boundary, and parameterize queries, shell
+  arguments, and URLs.
+- Restrict outbound requests that input influences to allowed hosts.
+- Read secrets from the codebase's secret mechanism; never log or return them.
+- Verify webhook signatures; keep model output and retrieved content away from
+  tools with side effects unless checked.

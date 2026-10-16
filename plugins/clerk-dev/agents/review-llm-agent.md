@@ -97,3 +97,15 @@ the review protocol):
   size, number of tools)? What caps them?
 - What ends each agent loop? Is there an eval for the behavior the design
   depends on?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Enforce output shapes with a schema and handle malformed, empty, and refused
+  output.
+- Bound tokens and cost: cap inputs, history, and tool output size.
+- Keep stable prompt prefixes stable so caching holds.
+- Give every agent loop an end condition and a step cap; update evals when a
+  prompt's behavior changes.

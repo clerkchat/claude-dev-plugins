@@ -77,3 +77,16 @@ the review protocol):
   what caps it?
 - Where can a producer outrun its consumer, and what happens then: a growing
   queue, dropped work, or backpressure?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Give every new outbound call a timeout, using the client's existing default
+  helper when the codebase has one.
+- Bound what each request or job holds: page through large reads, stream large
+  files, and cap batch sizes with a named constant.
+- Cap fan-out and retries, and respect provider rate limits with the client or
+  limiter the codebase already uses.
+- Where a producer can outrun a consumer, make the backpressure explicit.

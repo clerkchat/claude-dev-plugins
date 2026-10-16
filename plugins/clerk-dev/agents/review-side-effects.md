@@ -88,3 +88,14 @@ the review protocol):
   backfill) reach them?
 - Is there a dry-run or sandbox mode, and does the design say when it is on?
 - Is the confirmation for a real-world action proportionate to its impact?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Route every real-world action (message, call, charge, notification, external
+  write) through the codebase's guard for test, preview, and sandbox modes.
+- Make paths users perceive as safe (test, replay, retry, seed, backfill) unable
+  to reach real actions, or make them ask.
+- Match confirmation to impact.

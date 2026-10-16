@@ -82,3 +82,16 @@ the review protocol):
 - Are optional and required fields, error shapes, and versioning decided?
 - Do the names in the contract match the domain names the rest of the design
   uses?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Write down each new or changed shape where its consumers read it: DTO, event
+  or job payload type, schema, tool schema.
+- Decide optional and required fields and error shapes explicitly; keep names in
+  the domain's vocabulary.
+- Update every consumer in this repository; add a follow-up for consumers in
+  others.
+- Keep generated docs and clients in step with the shapes.

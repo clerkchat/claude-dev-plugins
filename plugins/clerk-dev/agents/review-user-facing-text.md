@@ -79,3 +79,13 @@ the review protocol):
 - Do errors tell the reader what to do next?
 - Does any text reach customers' own customers (messages, emails), and who
   approves it?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Use the product's existing terms; keep tone consistent with nearby screens
+  and messages.
+- Make errors say what happened and what to do next.
+- Keep text that reaches customers' own customers reviewable before release.

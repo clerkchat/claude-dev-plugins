@@ -1,7 +1,7 @@
 ---
 name: review
 description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", or /clerk-dev:review. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
-argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
+argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass P<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
 allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash(python3 *), Bash(claude *), Bash(ln *), Bash(mkdir *), Read, Grep, Glob, Agent, Write, Monitor, TaskStop
 ---
 
@@ -341,6 +341,12 @@ need to read it unless debugging agent output.
   pass.
 - `--standalone` (with a narrow target): a separate run, not added to the
   branch's review, and `.clerk-dev/latest` is left where it is.
+- `--pass P<n>` (with a range target, `--standalone`, and `--lenses`): this run
+  is the narrow check of pass P<n> from `.clerk-dev/passes.md` (see the `pass`
+  skill). The lenses are exactly those given: no routing, triage, or quick-mode
+  cap adds or drops one. `DOCS` is only the pass's piece (its spec record), not
+  every active record, and every lens prompt gets a `PASS:` line naming the
+  focus and the piece.
 - `--lenses a,b,c` to replace routing, `--lenses +a,+b` to add to it, or
   `--lenses -a` to remove one from it.
 - `--quick` or `--deep` (default standard). Quick: triggered lenses only, capped
@@ -702,7 +708,9 @@ it with the shipped script. Give it the target and the script path and have it:
    the branch name; order by modification time; keep at most eight and report
    how many were dropped. Also include the plugin's own `.clerk-dev/followups.md`
    when it has open items (see `tracking.md`); it does not count against the
-   eight. And include the feature's active records
+   eight. With `--pass`, the only document is the pass's piece record: skip the
+   work-tracking selection above (the PR is still collected). Otherwise include the feature's
+   active records
    (`records.py list <worktree> --active`, which reads the hub; see
    `skills/feature/records.md`): every active spec, decision, and plan whose
    `repo` is this repository, and the active design and capabilities records.
@@ -876,7 +884,8 @@ GUIDANCE: <path of .clerk-dev/branch-notes.md, or none>
 WORKSPACE: <path of .clerk-dev/review-workspace.md, or none>
 ```
 
-plus `BAR: final` on a final pass.
+plus `BAR: final` on a final pass, and `PASS: <focus>; piece <R id or none>`
+with `--pass`.
 
 `<worktree>/.clerk-dev/branch-notes.md` says what the branch is for (Purpose) and
 holds the user's standing review guidance (Review); its format is in

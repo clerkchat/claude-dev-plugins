@@ -53,8 +53,12 @@ user through them and records each answer.
      GUIDANCE: <its branch notes, or none>
    ```
 4. **Keep the raw output.** Write each agent's reply verbatim to
-   `<hub>/.clerk-dev/feature/checks/R<n>-<k>/raw/<lens>.md` (naming below),
-   then count the questions in its `questions` block. When a lens has none but
+   `<hub>/.clerk-dev/feature/checks/R<n>-<k>/raw/<lens>.md` (naming below)
+   with `${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out
+   <path> --header "# <lens> on R<n>" --header "usage: <tokens>, <duration>"`,
+   where `output_file` is the one the Agent tool returned for that agent and
+   the usage comes from its completion notice; do not copy replies by hand.
+   Then count the questions in its `questions` block. When a lens has none but
    its reply has a `findings` block or a broken `questions` block, resume that
    agent once asking for the `questions` block only; if it still has none, say
    so in the report. Zero questions in a well-formed block is a valid answer.
@@ -111,9 +115,10 @@ time:
 
 1. Show the question with its why and suggestion, briefly, and the code or
    record it points at when that helps.
-2. Discuss until the user decides. The dispositions are those of the item shape
-   (R6): answer as suggested, answer as noted, defer, discuss later, won't
-   address, refine (investigate first, then decide).
+2. Discuss until the user decides. The dispositions are those of review
+   findings, plus one: Fix as recommended (adopt the suggestion), Fix as noted
+   (adopt it as the user adjusts it), Discuss (later), Defer, Ignore (won't
+   address), and Refine (investigate first, then decide).
 3. Record the outcome where it belongs:
    - a choice: a decision record (`records.py new <worktree> decision "..."
      --from R<n>`, with `--supersedes` when it changes an active decision);

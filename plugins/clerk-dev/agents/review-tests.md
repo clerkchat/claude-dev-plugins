@@ -77,3 +77,13 @@ the review protocol):
 - Does the repository prefer real collaborators over mocks for this kind of
   code, and does the plan account for test setup it needs (fixtures,
   containers)?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Test each requirement at the level the repository prefers, with real
+  collaborators where it uses them.
+- Add the negative cases: denials, failures, retries, empty inputs.
+- Test behavior, not implementation details; avoid timing-dependent tests.

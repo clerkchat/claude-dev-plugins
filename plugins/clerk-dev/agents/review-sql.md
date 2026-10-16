@@ -79,3 +79,14 @@ the review protocol):
   table?
 - Do engine specifics matter (replicated tables, OLAP engines, eventual
   consistency between stores)?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Back each new query with an index; give multi-row reads a defined order and
+  paginated reads a stable key.
+- Write schema changes that are safe on production-sized tables.
+- Respect engine specifics: replicated tables, OLAP engines, eventual
+  consistency.

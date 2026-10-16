@@ -117,3 +117,15 @@ the review protocol):
 - Are the open items and open questions of the records tracked, or silently
   dropped between brainstorm, design, and spec?
 - Is the piece's end defined: what must be true for it to be done?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Work through the piece's spec: every requirement built, every open item it
+  addresses ticked or still listed.
+- Add the wiring the change needs: registrations, module imports, migrations,
+  permissions, feature gates, docs, generated clients.
+- Remove stubs, placeholders, and TODOs this piece was meant to finish.
+- Read stored fields back where they are used; drop fields nothing reads.

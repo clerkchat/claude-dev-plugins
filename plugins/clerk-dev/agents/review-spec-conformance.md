@@ -66,3 +66,13 @@ the review protocol):
 - Is each requirement checkable: could a reviewer tell from a diff whether it
   is met?
 - Does it add behavior no earlier record asked for?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Build what the piece's spec and cited decisions say, in the shape they say.
+- Leave out behavior no record asked for, or note it as a proposal.
+- When the code has to differ from the spec, keep going and say so, so a
+  superseding spec or decision can be written.

@@ -68,3 +68,12 @@ the review protocol):
 - Do new tables, queues, or indexes grow without bound? Is there a retention
   plan?
 - Are there hot rows or partitions (one tenant's counter, one global lock)?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Batch per-row work; replace N+1 lookups with set-based queries.
+- Give new tables, queues, and caches a bound or retention.
+- Spread hot rows and counters; avoid global locks.

@@ -76,3 +76,15 @@ the review protocol):
 - Where could a failure be swallowed or replaced by a default that hides it?
 - What does the user or operator see when it fails?
 - Is a failed job or request recoverable, and by whom?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- For each call that can fail, decide: retry, surface, compensate, or stop;
+  write that path instead of a broad catch.
+- Never swallow an error or replace it with a default that hides it; log with
+  context or rethrow.
+- Leave no partial state on failure, or make it recoverable and visible.
+- Give users and operators an error that says what happened and what to do.

@@ -87,3 +87,15 @@ the review protocol):
   missed or arrives twice?
 - Are loading, empty, error, and permission-denied states designed?
 - Does it work in the embedded host environments the app runs in?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Key server state by everything it depends on, and invalidate or update it
+  after each mutation.
+- Handle missed, duplicated, and out-of-order real-time events.
+- Build loading, empty, error, and permission-denied states.
+- Clean up effects and subscriptions; keep dark mode and accessibility parity
+  with the surrounding screens.

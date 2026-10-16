@@ -71,3 +71,14 @@ the review protocol):
 - Are new metric tags bounded, and is log volume per item reasonable at scale?
 - Can a failed run be traced from the user's report to the cause?
 - Does the rollout plan say what to watch?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Log early exits and caught errors with the identifiers needed to trace them.
+- Add a metric or structured log for each new operation's outcome, using the
+  codebase's existing helpers.
+- Keep metric tags bounded and log volume proportionate: nothing per row on hot
+  paths.

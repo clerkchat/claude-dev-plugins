@@ -67,3 +67,13 @@ the review protocol):
 - Is any existing name being reused for a different meaning?
 - Do the names describe the domain, or leak the implementation?
 - Where will the code live, and does that match where the feature lives?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Name each new thing with the codebase's existing term for it; one concept,
+  one name across code, API, and UI.
+- Rename names that describe the implementation rather than the domain.
+- Put files where the feature lives, next to their siblings.

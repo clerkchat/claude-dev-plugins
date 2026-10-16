@@ -66,3 +66,15 @@ the review protocol):
 - Does the design repeat work that could be computed once, cached, or batched?
 - Are there blocking calls on async or request paths?
 - For UI, does any design choice imply heavy re-rendering or large payloads?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Move work out of loops and hot paths: compute once, batch I/O, cache what is
+  reread.
+- Use async calls on async paths; no blocking I/O in request handlers.
+- Avoid copying or serializing large objects repeatedly.
+- In UI, keep renders cheap: memoize where props are stable, avoid large
+  payloads.

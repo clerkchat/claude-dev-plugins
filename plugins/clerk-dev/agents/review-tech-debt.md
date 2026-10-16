@@ -142,3 +142,13 @@ the review protocol):
   feature would make worse?
 - Which cleanup should be its own commit before the feature, and which can
   wait?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Before building, make the existing code the piece changes easier to change:
+  extract, simplify, delete dead code, in its own commits.
+- Replace hand-rolled logic with the codebase's or a library's existing one.
+- Keep each cleanup small and behavior-preserving, with the tests passing.

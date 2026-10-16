@@ -76,3 +76,16 @@ the review protocol):
 - Does the design introduce a state machine? Are its transitions guarded, and
   what happens when two transitions race?
 - Does any step read, decide, then write, with time between?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- For each state two requests or jobs can change at once, choose what
+  serializes it (unique constraint, conditional update, lock, idempotency key)
+  and add it.
+- Make handlers idempotent under at-least-once delivery and retry.
+- Replace read-decide-write sequences with a conditional write or a
+  transaction with the right lock.
+- Guard state machine transitions with the expected current state.

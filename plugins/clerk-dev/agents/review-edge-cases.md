@@ -77,3 +77,16 @@ the review protocol):
 - Time, time zones, and ordering: does the design assume events arrive in
   order, or that clocks agree?
 - Partial failure: what state is left when step three of five fails?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- For each input, handle empty, missing, zero, and boundary values, and
+  distinguish "not provided" from "provided empty" where it matters.
+- Handle existing rows that predate the change: missing fields, old statuses,
+  legacy formats.
+- Make time arithmetic zone-aware and ordering explicit.
+- Decide what partial failure leaves behind in loops and multi-step work, and
+  make it consistent.

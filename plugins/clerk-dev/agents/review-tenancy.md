@@ -80,3 +80,14 @@ the review protocol):
   tenant in their keys and filters?
 - Is any new path an admin or internal one that reaches tenant data with a
   weaker check?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Scope every lookup, listing, and mutation by the tenant, with the codebase's
+  scope helper or guard.
+- Carry the tenant in job and event payloads, and re-scope by it in processors.
+- Include the tenant in cache keys, search filters, and analytics queries.
+- Assert identifiers are present before they reach a where clause.

@@ -16,7 +16,9 @@ design, plan, capabilities, or spec record), not a diff: follow Design mode at
 the end of this protocol and your agent's `## Design mode` section. Of the
 sections between here and there, Reading budget, Discovery fallback, Paths, and
 Conduct still apply, and so do the meanings of `CONTEXT`, `GUIDANCE`, and
-`WORKSPACE` under Inputs; skip the rest, which is about diffs and findings.
+`WORKSPACE` under Inputs; skip the rest, which is about diffs and findings. In
+every task, your agent's `## Pass mode` section is for the `pass` skill; ignore
+it.
 
 ## Inputs you receive
 
@@ -61,6 +63,13 @@ The orchestrator's prompt gives you:
 - `DOCS`: paths of work-tracking documents (specs, notes, plans) selected for
   this change, or `none`. Most lenses ignore these; spec-conformance and
   completeness read them.
+- `PASS`: present when this review is the narrow check of one pass (see the
+  `pass` skill): its focus and the piece's spec record. The diff is that pass's
+  commits only. Judge them against your lens as usual, but do not report
+  requirements of other pieces or work that belongs to a different focus; other
+  passes and the full review cover those. Your agent's `## Pass mode` section
+  is for the author, not for you: report defects, never "the checklist was not
+  followed".
 
 ## Final pass bar
 

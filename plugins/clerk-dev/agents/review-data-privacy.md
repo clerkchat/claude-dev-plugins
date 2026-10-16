@@ -76,3 +76,14 @@ the review protocol):
   reach them?
 - Do consent, opt-out, or regulated-messaging rules apply to a new path?
 - Does anything get sent to a third party that was not sent before?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Keep personal and message content out of logs, traces, metrics tags, and
+  error messages; log identifiers instead.
+- Send third parties and prompts only the fields they need.
+- Give new stores a retention rule and make tenant deletion reach them.
+- Apply consent and opt-out checks on new messaging paths.

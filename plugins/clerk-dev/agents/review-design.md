@@ -69,3 +69,15 @@ the review protocol):
 - Is each new abstraction at the right level, or does it wrap one caller?
 - Does the design couple modules that are separate today?
 - Is any part speculative: built for a future case no record asks for?
+
+## Pass mode
+
+What the author does in a pass that uses this lens (the `pass` skill reads
+this section; reviewers ignore it):
+
+- Reuse the helper, pattern, or module the codebase already has for each thing
+  the piece does; search before writing.
+- Fold duplicated code from this piece into one place; delete code it made dead.
+- Inline abstractions with one caller; keep new coupling between modules to what
+  the piece needs.
+- Make comments explain why, not narrate what the code does.
