@@ -1,0 +1,55 @@
+---
+name: writing-code
+description: How to shape code you write or change: refactor first to a clean baseline, reuse and extend what the codebase already has, keep one source of truth, and extract clean abstractions instead of repeating logic. Use before writing or changing code of any size - implementing a feature, a spec, a pass, a fix, a follow-up, or a small edit - and when planning how a change will be built. Preloaded by the review fixer.
+---
+
+# Writing code
+
+Human reviewers of this team's changes keep asking for more reuse, cleaner
+abstractions, and less duplication than agents deliver. Lean hard that way.
+This is deliberately strong; the team tunes it down if it goes too far.
+
+## Refactor first
+
+Before writing any change, large or small, read the code it touches and ask
+whether reshaping that code first would make the change smaller or plainer:
+
+- a helper to extract, so the change reuses it instead of adding a copy;
+- a function to split, so the change edits one step instead of threading
+  through all of them;
+- a data shape to fix, so the change needs no conversions;
+- dead code or a leftover option to drop, so the change has fewer cases.
+
+If so, do that refactor first, in its own commits, with the tests passing and
+behavior unchanged, and build the change on it; the change's own commits should
+read as small additions. If not, say in one line that the baseline is clean.
+
+This holds at every scale: a feature's first piece, a one-function fix, a
+follow-up. Refactoring deployed code still follows the branch's scope (Branch
+scope in `skills/review/tracking.md`): when the branch's Purpose does not cover
+that code, propose the refactor instead of making it.
+
+## Reuse
+
+- Before writing any helper, type, validator, query, or pattern, search the
+  codebase and its shared libraries for one that exists. Search by behavior,
+  not name: the verbs, the types it takes and returns, the distinctive calls
+  inside it. Look first in the shared libraries (`libs/`, `packages/`,
+  `shared/`, `common/`, `core/`, `utils/`, the workspace packages and path
+  aliases in the manifests).
+- Use what exists. When it nearly fits, extend it (the option or case to add)
+  rather than write a near-copy. When your code is the more general of the two,
+  move it into the shared place and have the old one call it.
+- Do things the way the codebase already does them: one way to handle errors,
+  wire dependencies, build queries, lay out modules. A second pattern needs a
+  reason, even when it is nicer.
+
+## One source of truth
+
+- When a change would repeat logic, extract the shared abstraction instead,
+  including logic repeated across files and across the code you are adding.
+- No hand-kept lists, enums, schemas, or constants that must stay in sync with
+  another; derive one from the other.
+- Abstractions at the right level: no framework for one caller, no wrapper
+  around one call, no parameter added to a shared type because one function
+  needs it.

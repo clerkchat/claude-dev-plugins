@@ -42,7 +42,7 @@ commit rules below.
    path:line>"`, one per change, specific enough that someone else could do it.
    Leave out anything another pass in the catalogue owns. Show the items in a
    few lines.
-3. **Write.**
+3. **Write.** Follow the `writing-code` skill throughout.
    - Claude mode: do the items, one coherent change per commit, running the
      tests the change touches before each commit. Mark each item as it lands
      (`passes.py done <worktree> P<n> <k>`, or `--na "<why>"` when it turns out
