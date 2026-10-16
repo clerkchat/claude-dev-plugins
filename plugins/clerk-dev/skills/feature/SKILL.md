@@ -92,6 +92,34 @@ A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
 a brainstorm, a new brainstorm.
 
+## The overview
+
+`overview.md` is the feature in one read, generated, never edited (format and
+rules: "The overview" in `records.md`). Refresh it when the user asks ("refresh
+the overview", "update the overview", "give me the big picture"), and on your
+own when a conversation that wrote, superseded, or retagged records reaches a
+pause: say so in one line and do it.
+
+To refresh: write `records.py digest <worktree>` to a scratch file, and hand it
+to a `general-purpose` subagent with the path of `records.md` (for the format
+and rules) and the output path `<hub>/.clerk-dev/feature/overview.md`, asking it
+to write the overview from the digest alone, citing ids for every statement.
+When it returns, run `records.py stamp-overview <worktree>`, and tell the user
+the path. If the user wants something in it changed, that is a new or
+superseding record, then a refresh; never edit the overview itself.
+
+## Rolling up
+
+Decisions are written one at a time, so the synthesis records (designs, plans,
+capabilities) fall behind unless something prompts them. After writing records,
+run `records.py suggest <worktree>` and mention at most two of its suggestions,
+one line each, as offers: an area with several decisions and no design (roll
+them up into a design that cites them), a design older than several decisions
+(supersede it with one that includes them), a decision that reads like a plan
+or breakdown (file it as one, `--from` that decision), no plan yet on a large
+feature. A roll-up design or plan restates what the decisions settled, citing
+them; it does not decide anything new.
+
 ## Answering from the records
 
 "What did we decide about X", "why did we do Y": `records.py list <worktree>

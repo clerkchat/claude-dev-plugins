@@ -28,6 +28,10 @@ Usage:
   records.py discard WORKTREE R7 [--note "..."]
   records.py reactivate WORKTREE R7
   records.py index WORKTREE
+  records.py digest WORKTREE            what an overview is written from
+  records.py stamp-overview WORKTREE    after writing overview.md
+  records.py overview-status WORKTREE
+  records.py suggest WORKTREE           roll-up designs, plans, stale overview
 
 Record frontmatter:
   ---
@@ -142,38 +146,203 @@ def checks(d):
 
 def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
-def table(rs, d):
-    rows = ["| Id | Type | Title | Repo | Date | Status |", "| --- | --- | --- | --- | --- | --- |"]
-    for r in rs:
-        st = r.get("status", "")
-        if r.get("superseded_by"): st += f" by {r['superseded_by']}"
-        rows.append(f"| {r['id']} | {r.get('type','')} | [{r.get('title','')}]({os.path.relpath(r['path'], d)}) | {r.get('repo','')} | {r.get('date','')} | {st} |")
-    return rows
+GIST_SECTION = {"decision": "Decision", "spec": "Goal", "design": "Shape", "brainstorm": "Leaning"}
+TYPE_ORDER = ("design", "capabilities", "plan", "spec", "decision", "brainstorm")
+
+LIST_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
+
+def first_sentences(para, at_least=40):
+    """Sentences from the start until at least `at_least` characters. Periods
+    inside code spans and in e.g., i.e., etc., and vs. do not end a sentence."""
+    spans = []
+    def hide(m):
+        spans.append(m.group(0)); return f"\x00{len(spans) - 1}\x00"
+    s = re.sub(r"`[^`]*`", hide, para)
+    s = re.sub(r"\b(e\.g|i\.e|etc|vs|cf)\.", lambda m: m.group(0).replace(".", "\x01"), s)
+    parts = re.split(r"(?<=[.!?])\s+", s)
+    out = ""
+    for part in parts:
+        out = (out + " " + part).strip()
+        if len(out) >= at_least: break
+    out = out.replace("\x01", ".")
+    return re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], out)
+
+def gist(r, limit=220):
+    """The record's first sentences of substance: the start of its Decision,
+    Goal, Shape, or Leaning section, else of its body; the first item of a
+    list; when that ends in a colon, the first item of the list it
+    introduces. Tables, headings, and code blocks are skipped."""
+    _, body = parse(r["path"])
+    body = re.sub(r"^# .*\n", "", body.lstrip("\n"), count=1)
+    sec = GIST_SECTION.get(r.get("type", ""))
+    m = re.search(rf"^## {sec}\n(.*?)(?=^## |\Z)", body, re.S | re.M) if sec else None
+    text = m.group(1) if m else re.sub(r"^## .*$", "", body, flags=re.M)
+    text = re.sub(r"```.*?```", "", text, flags=re.S)
+    blocks = []
+    for block in re.split(r"\n\s*\n", text):
+        lines = [l for l in block.strip().splitlines() if l.strip() and not l.lstrip().startswith(("|", "#"))]
+        if not lines: continue
+        if LIST_RE.match(lines[0]):
+            item = [LIST_RE.sub("", lines[0])]
+            for l in lines[1:]:
+                if LIST_RE.match(l): break
+                item.append(l.strip())
+            blocks.append(" ".join(item))
+        else:
+            blocks.append(" ".join(l.strip() for l in lines))
+        if len(blocks) == 2: break
+    if not blocks: return ""
+    para = re.sub(r"\s+", " ", blocks[0]).strip()
+    para = para if para.endswith(":") else first_sentences(para)
+    if para.endswith(":") and len(blocks) > 1:
+        para += " " + first_sentences(re.sub(r"\s+", " ", blocks[1]).strip())
+    if len(para) > limit: para = para[:limit].rsplit(" ", 1)[0].rstrip(",;:") + " …"
+    return para
+
+def ordered(rs):
+    return sorted(rs, key=lambda r: (TYPE_ORDER.index(r.get("type")) if r.get("type") in TYPE_ORDER else 9, int(r["id"][1:])))
+
+def entry(r, d, repos):
+    where = f" ({r.get('repo')})" if repos else ""
+    line = f"- **{r['id']}** {r.get('type', '')}{where}: [{r.get('title', '')}]({os.path.relpath(r['path'], d)})"
+    g = gist(r)
+    return [line] + ([f"  - {g}"] if g else [])
+
+def overview_state(d):
+    """(through id or None, basis in the file or None, current basis, ids added since)."""
+    rs = records(d)
+    basis = basis_of(rs)
+    p = os.path.join(d, "overview.md")
+    if not os.path.exists(p): return None, None, basis, [r["id"] for r in rs]
+    head = open(p, encoding="utf-8").read(600)
+    m = re.search(r"through (R\d+) \(basis ([0-9a-f]+)\)", head)
+    if not m: return None, None, basis, [r["id"] for r in rs]
+    through = int(m.group(1)[1:])
+    return m.group(1), m.group(2), basis, [r["id"] for r in rs if int(r["id"][1:]) > through]
+
+def basis_of(rs):
+    import hashlib
+    key = "|".join(f"{r['id']}:{r.get('status', '')}:{r.get('area', '')}:{r.get('title', '')}" for r in rs)
+    return hashlib.sha1(key.encode()).hexdigest()[:10]
+
+def overview_line(d):
+    through, old, basis, added = overview_state(d)
+    if through is None:
+        missing = not os.path.exists(os.path.join(d, "overview.md"))
+        return ("No overview yet" if missing else "The overview has no stamp") + "; say \"refresh the overview\"."
+    if old == basis: return f"Overview: [overview.md](overview.md), current (through {through})."
+    since = f"; {', '.join(added)} came after" if added else "; statuses or areas changed since"
+    return f"Overview: [overview.md](overview.md), stale (through {through}{since}); say \"refresh the overview\"."
 
 def index(d):
     p = os.path.join(d, "feature.md")
     if not os.path.exists(p): return
     text = open(p, encoding="utf-8").read()
-    rows = ["## Records", "", "Regenerated by records.py; edits here are lost.", ""]
     rs = records(d)
+    repos = len({r.get("repo") for r in rs}) > 1
+    live = [r for r in rs if r.get("status") == "active"]
+    past = [r for r in rs if r.get("status") != "active"]
+    rows = ["## Records", "", "Regenerated by records.py; edits here are lost. Active records, each with its",
+            "first line; brainstorms and superseded or discarded records are under History.", ""]
+    if len(rs) >= 5: rows += [overview_line(d), ""]
     if not rs: rows.append("None yet.")
-    elif not any(r.get("area") for r in rs): rows += table(rs, d)
     else:
         areas = []
-        for r in rs:
+        for r in live:
             if r.get("area") and r["area"] not in areas: areas.append(r["area"])
-        wide = [r for r in rs if not r.get("area")]
-        if wide: rows += ["### Feature-wide", ""] + table(wide, d) + [""]
-        for a in areas:
-            rows += [f"### {a}", ""] + table([r for r in rs if r.get("area") == a], d) + [""]
-        rows = rows[:-1]
+        groups = ([("Feature-wide", [r for r in live if not r.get("area")])] if any(not r.get("area") for r in live) else []) + [(a, [r for r in live if r.get("area") == a]) for a in areas]
+        for name, grp in groups:
+            if len(groups) > 1 or areas: rows += [f"### {name}", ""]
+            for r in ordered(grp): rows += entry(r, d, repos)
+            rows.append("")
+        if not live: rows += ["No active records.", ""]
     cs = checks(d)
     if cs:
-        rows += ["", "## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
-        rows += [f"| [{c['name']}](checks/{c['name']}.md) | {', '.join(c['records'])} | {c['open']} | {c['closed']} |" for c in cs]
-    block = "\n".join(rows) + "\n"
-    text = re.sub(r"^## (Records|Checks)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
+        rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
+        rows += [f"| [{c['name']}](checks/{c['name']}.md) | {', '.join(c['records'])} | {c['open']} | {c['closed']} |" for c in cs] + [""]
+    if past:
+        rows += ["## History", "", "Brainstorms, and records no longer active, oldest first.", ""]
+        for r in past:
+            st = r.get("status", "")
+            note = f", superseded by {r['superseded_by']}" if r.get("superseded_by") else (f", discarded: {r['note']}" if st == "discarded" and r.get("note") else (", discarded" if st == "discarded" else ""))
+            where = r.get("area") or "feature-wide"
+            rows.append(f"- **{r['id']}** {r.get('type', '')} ({where}): [{r.get('title', '')}]({os.path.relpath(r['path'], d)}){note}")
+        rows.append("")
+    block = "\n".join(rows).rstrip("\n") + "\n"
+    text = re.sub(r"^## (Records|Checks|History)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
     open(p, "w", encoding="utf-8").write(text + "\n\n" + block)
+
+def suggestions(d):
+    """Records worth writing: roll-up designs, plans, and a stale overview."""
+    rs = records(d); live = [r for r in rs if r.get("status") == "active"]
+    out = []
+    areas = sorted({r.get("area", "") for r in live}, key=lambda a: (a != "", a))
+    for a in areas:
+        decs = [r for r in live if r.get("area", "") == a and r.get("type") == "decision"]
+        des = [r for r in live if r.get("area", "") == a and r.get("type") == "design"]
+        name = a or "the feature-wide records"
+        if len(decs) >= 3 and not des:
+            out.append(f"{name}: {len(decs)} active decisions and no design; roll them up into a design that cites them.")
+        elif des:
+            newest = max(int(x["id"][1:]) for x in des)
+            later = [x["id"] for x in decs if int(x["id"][1:]) > newest]
+            if len(later) >= 3: out.append(f"{name}: design R{newest} predates {len(later)} active decisions ({', '.join(later)}); supersede it with one that includes them.")
+    plans = [r for r in live if r.get("type") in ("plan", "capabilities")]
+    planlike = [r for r in live if r.get("type") == "decision" and re.search(r"\b(chunks|ordering|order of|sequenc\w*|dependencies|phases|milestones|pieces|plan|roadmap|breakdown)\b", r.get("title", ""), re.I)]
+    if not plans:
+        if planlike:
+            ids = ", ".join(r["id"] for r in planlike)
+            out.append(f"No plan yet, but {ids} set pieces or their order; file a plan (or capabilities) record from {'them' if len(planlike) > 1 else 'it'}, so the order of work has one home.")
+        if not planlike and (len({r.get('area', '') for r in live}) > 2 or len(live) >= 10):
+            out.append("No plan or capabilities record yet; write one for the order of work.")
+    if len(rs) >= 5:
+        through, old, basis, added = overview_state(d)
+        if through is None or old != basis: out.append("The overview is missing or stale; refresh it.")
+    return out
+
+def digest(d):
+    """What the overview writer reads: the summary, every active record in full
+    (brainstorms as one line each), open design questions, and spec open items."""
+    rs = records(d)
+    out = []
+    fp = os.path.join(d, "feature.md")
+    m = re.search(r"^## Summary\n(.*?)(?=^## |\Z)", open(fp, encoding="utf-8").read(), re.S | re.M)
+    out += ["# Summary", "", (m.group(1).strip() if m else "(none)"), ""]
+    live = [r for r in rs if r.get("status") == "active" and r.get("type") != "brainstorm"]
+    for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, int(r["id"][1:]))):
+        _, body = parse(r["path"])
+        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'})", body.strip(), ""]
+    out += ["# Brainstorms (history; one line each)", ""]
+    out += [f"- {r['id']} ({r.get('area') or 'feature-wide'}): {r.get('title', '')}. {gist(r)}" for r in rs if r.get("type") == "brainstorm"] + [""]
+    out += ["# Superseded or discarded (ids only)", "", ", ".join(f"{r['id']} {r.get('status')}" for r in rs if r.get("status") in ("superseded", "discarded")) or "none", ""]
+    out += ["# Open design questions", ""]
+    for c in checks(d):
+        text = open(os.path.join(d, "checks", c["name"] + ".md"), encoding="utf-8").read()
+        for q in re.finditer(r"^- \[ \] (Q\d+)\. (.*)$", text, re.M):
+            w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
+            out.append(f"- {c['name']}.{q.group(1)} ({w.group(1) if w else '?'}): {q.group(2)}")
+    out += ["", "# Open items in active specs", ""]
+    for r in live:
+        if r["type"] != "spec": continue
+        _, body = parse(r["path"])
+        m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+        for item in re.findall(r"^\s*[-*] \[ \] (.*)$", m.group(1) if m else "", re.M): out.append(f"- {r['id']}: {item}")
+    return "\n".join(out) + "\n"
+
+def stamp_overview(d):
+    p = os.path.join(d, "overview.md")
+    if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
+    rs = records(d)
+    last = rs[-1]["id"] if rs else "R0"
+    text = open(p, encoding="utf-8").read()
+    text = re.sub(r"^Generated .* \(basis [0-9a-f]+\)\..*\n+", "", text, flags=re.M)
+    lines = text.split("\n", 1)
+    stamp = (f"Generated {datetime.date.today().isoformat()} through {last} (basis {basis_of(rs)}). Do not edit:"
+             " regenerate it by saying \"refresh the overview\"; a change of substance is a new record.\n\n")
+    text = lines[0] + "\n\n" + stamp + (lines[1].lstrip("\n") if len(lines) > 1 else "")
+    open(p, "w", encoding="utf-8").write(text)
+    index(d)
+    return last
 
 def area_of(d, ids):
     """The area records share, or "" when they have none or differ."""
@@ -195,6 +364,7 @@ def main():
     di = sp.add_parser("discard"); di.add_argument("wt"); di.add_argument("rid"); di.add_argument("--note")
     re_ = sp.add_parser("reactivate"); re_.add_argument("wt"); re_.add_argument("rid")
     sp.add_parser("index").add_argument("wt")
+    for c in ("digest", "stamp-overview", "overview-status", "suggest"): sp.add_parser(c).add_argument("wt")
     a = ap.parse_args()
     today = datetime.date.today().isoformat()
 
@@ -261,5 +431,13 @@ def main():
         index(d); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
         index(d); print(os.path.join(d, "feature.md"))
+    elif a.cmd == "digest":
+        sys.stdout.write(digest(d))
+    elif a.cmd == "stamp-overview":
+        print(f"overview stamped through {stamp_overview(d)}")
+    elif a.cmd == "overview-status":
+        print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
+    elif a.cmd == "suggest":
+        print("\n".join(suggestions(d)) or "nothing to suggest")
 
 if __name__ == "__main__": main()

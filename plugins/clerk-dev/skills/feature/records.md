@@ -14,9 +14,11 @@ how it was broken down and planned. They live in the hub worktree, at
   checks/
     R13-1.md                  a design check of R13 (the design-check skill)
     R13-1/raw/<lens>.md       each lens's reply, verbatim
+  overview.md                 generated from the active records; never edited
 ```
 
-Check files are not records: they have no R id, are never superseded, and are
+`overview.md` is the feature's current state in one read, generated from the
+active records (below). Check files are not records: they have no R id, are never superseded, and are
 listed in the index under every record they checked.
 
 Manage files only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`: it
@@ -224,6 +226,66 @@ Endpoints, payloads, events, and schemas other parts or repositories rely on.
 
 - [ ] Decide the download URL lifetime.
 ```
+
+## The overview
+
+Records are history, split one decision per file, which is right for drilling
+in and wrong for skimming. `overview.md` is the other half: the feature as it
+stands now, in one read, generated from the active records and never edited by
+hand. A change of substance is a new record, after which the overview is
+regenerated. Its stamp line, written by `records.py stamp-overview`, says which
+records it is through; the index and status say when it is stale.
+
+It is written from `records.py digest` alone, and every statement in it cites
+the records it comes from, so it can be checked against them. It adds no claim,
+opinion, or recommendation of its own; where records disagree or leave a gap,
+it says so under Open. Aim for something read in five minutes.
+
+```markdown
+# Overview: report exports
+
+## Goal
+
+One paragraph: what the feature is for and what done looks like (summary,
+designs).
+
+## Shape
+
+How the solution works, in a few paragraphs, from the active designs, citing
+them and the decisions behind each part (R30; R21, R22).
+
+## Plan
+
+The order of work: each piece or chunk in order, with its repository, what it
+depends on, and its spec when it has one (from plans, capabilities, and
+decisions that set order, citing them).
+
+1. Core harness (api; spec R31): depends on nothing (R19, R29).
+2. Bisection (api): depends on 1; adds the `narrowing` column (R13, R22).
+
+## By area
+
+### harness
+
+Two or three sentences on where the area stands. Then each active decision,
+one line:
+
+- R22: `narrowing` is one result field, built by a ranked chain of localizers
+  the core owns.
+
+## Open
+
+Settle-first design questions, other open questions, open items in specs, and
+gaps the records show: an area with decisions but no design, a piece with no
+spec, records that disagree.
+
+## Explored
+
+One line per brainstorm: what it explored (R1: how to split the harness branch
+into chunks).
+```
+
+When there are no areas, By area becomes Decisions, one line each.
 
 ## The hub
 

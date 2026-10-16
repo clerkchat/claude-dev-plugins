@@ -152,6 +152,11 @@ def feature_block(wt, rows, out):
         live = [e for e in ps if e["f"].get("Status") in ("open", "ended")]
         if live: others.append(", ".join(f"{rname} {e['id']} {e['title']} ({pass_word(e)})" for e in live))
     if others: out.append(f"- passes in progress elsewhere: {'; '.join(others)}")
+    if len(recs) >= 5: out.append("- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d)))
+    for s in [s for s in rc.suggestions(d) if not s.startswith("The overview")][:2]:
+        later.append(f"Records: {s}")
+    if any(s.startswith("The overview") for s in rc.suggestions(d)):
+        later.append("Refresh the feature overview: \"refresh the overview\".")
     return first, later
 
 def related_worktrees(wt, rows):
