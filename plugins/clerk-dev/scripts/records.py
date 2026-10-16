@@ -117,7 +117,7 @@ def set_fields(r, **kw):
         else: meta[k] = v
     open(r["path"], "w", encoding="utf-8").write(render(meta, body))
 
-def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:50] or "untitled"
+def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
 def index(d):
     p = os.path.join(d, "feature.md")
