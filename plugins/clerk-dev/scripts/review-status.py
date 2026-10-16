@@ -134,14 +134,15 @@ def feature_block(wt, rows, out):
         qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
         sf_ = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
         open_q += len(qs)
-        out.append(f"- design questions open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
+        ar = next((r.get("area") for r in recs if c["records"] and r["id"] == c["records"][0] and r.get("area")), "")
+        out.append(f"- design questions open in {c['name']}{' (' + ar + ')' if ar else ''}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
         if sf_: settle.append(f"{c['name']} ({', '.join(sf_)})")
     for r in recs:
         if r.get("type") == "spec" and r.get("status") == "active":
             body = open(r["path"], encoding="utf-8").read()
             m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
             n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
-            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}: {n} open item{plural(n)}")
+            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {n} open item{plural(n)}")
     if settle: first.append(f"Settle the design questions marked settle-first before building on them: {'; '.join(settle)} (\"walk the design questions\").")
     elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural(open_q)} when convenient (\"walk the design questions\").")
     others = []

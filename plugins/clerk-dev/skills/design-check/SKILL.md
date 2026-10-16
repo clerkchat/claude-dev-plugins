@@ -18,7 +18,9 @@ user through them and records each answer.
 
 1. **Records.** With ids given, check those. Otherwise take the record the
    conversation is about; failing that, the newest active spec, plan, or design
-   (`records.py list <worktree> --active`). Say in one line which records you
+   in the area the conversation is about (`records.py list <worktree> --active
+   --area <area>`), or feature-wide when it is about the whole feature; ask
+   when that is unclear and several areas have candidates. Say in one line which records you
    are checking. Supporting records are the ones the checked records name in
    `from` or cite by id, plus the active decisions; pass them, but do not
    check them.

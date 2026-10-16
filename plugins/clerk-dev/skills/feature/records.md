@@ -42,6 +42,18 @@ file.
 - **Repo.** The repository the record is about, defaulting to the one it was
   written from. A feature spanning repositories keeps all its records in the
   hub; `repo` says which one each concerns.
+- **Area.** Optional: a short name for the part of the problem the record is
+  about, such as `auth`, `delivery`, or `data-model`. On a complex feature the
+  thinking splits by capability or layer, and each area becomes its own thread
+  of records; the index groups by it. There is no list of areas: they are
+  whatever the records use, coined when the thinking splits. Reuse an existing
+  name (`records.py areas`) rather than coin a near-duplicate. A record with no
+  area is feature-wide, like the broad first brainstorm. A new record inherits
+  the area of the record it supersedes, or of its `from` records when they
+  share one. The area is a label, not content: retag a record (`records.py
+  tag`) or rename an area (`records.py rename-area`) whenever the split turns
+  out different. An area is not a piece: an area is a part of the problem you
+  think about, a piece a unit of work you build and review; a spec has both.
 - **From.** The records this one builds on: the brainstorms a design settles,
   the design a capabilities record breaks down, the capability a spec details.
 - **Short over complete.** Each record holds what a reader needs months later to
@@ -52,9 +64,10 @@ file.
 
 ### brainstorm
 
-Divergent thinking from one session: ideas, alternatives, questions, leanings.
-Append a new one per session; never revise an old one, even when it turned out
-wrong. That is the point of keeping it.
+Divergent thinking from one session about one area (or the whole feature):
+ideas, alternatives, questions, leanings. Append a new one per session and
+area; never revise an old one, even when it turned out wrong. That is the point
+of keeping it.
 
 ```markdown
 # R1. Polling vs push for export status

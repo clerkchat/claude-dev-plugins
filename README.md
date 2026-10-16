@@ -68,7 +68,11 @@ A feature keeps its thinking as numbered records (R1, R2, ...): brainstorms,
 designs, decisions, capabilities, plans, and specs. Records are history: each
 says what was true on its date, and a change of mind is a new record that
 supersedes the old one, so "what did we decide about polling?" always has an
-answer and a reason. They live in `.clerk-dev/feature/` in the worktree you
+answer and a reason. On a bigger feature the thinking splits by capability or
+layer, the way separate notes files would; each record can carry an area
+(`auth`, `delivery`), named as the split happens rather than planned up front,
+and the index reads as one thread per area. They live in `.clerk-dev/feature/`
+in the worktree you
 started in (the hub), and other repositories of the feature find them there.
 Reviews read the active ones, so the spec-conformance and completeness focuses
 check the code against your specs. An existing `Notes-*.md` or `Spec-*.md` can

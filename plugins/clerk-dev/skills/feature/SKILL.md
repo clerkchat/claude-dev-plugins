@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
 argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | spec <piece> | list | import <file>]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 ---
@@ -43,11 +43,32 @@ Once a second repository joins, set up `.clerk-dev/review-workspace.md` as
 `skills/review/workspace-manifest.md` describes, with the `Hub:` line naming
 this repository, so sessions in the other worktrees find the records.
 
+## Areas
+
+A complex feature's thinking splits into areas, one per capability or layer, the
+way separate `Notes-*.md` files would. Areas are not declared up front.
+
+- When writing a record, give it the area the conversation is about. Check
+  existing names first (`records.py areas <worktree>`) and reuse one when it
+  fits; when the subject is new, propose a short name in a line ("filing this
+  under a new area, `delivery`") and go on. When the subject is the whole
+  feature, leave the area off. Inherited areas (from `--supersedes` or
+  `--from`) are usually right; override with `--area` when not.
+- When a conversation moves between areas, write one record per area rather
+  than one mixed record.
+- "Split this out into its own area": write a brainstorm in the new area `from`
+  the record it grew out of; the old record stays as it was. When existing
+  records belong to the new area, retag them with `records.py tag`.
+- When areas turn out to be named or cut wrong, `records.py rename-area` or
+  `tag`; they are labels, not content.
+- Questions like "where are we on delivery?" read that area's records (`list
+  --area delivery`) and the feature-wide ones.
+
 ## Writing each type
 
 - **brainstorm**: during an exploratory conversation, offer to capture it when
   it reaches a pause, or when the user says "capture this". One record per
-  session. Include the alternatives the user turned down and the open
+  session and area. Include the alternatives the user turned down and the open
   questions; they are what later readers need most.
 - **design**: when brainstorming settles. `--from` the brainstorms it settles.
   Write a decision record for each significant choice first, and cite them.
@@ -72,7 +93,8 @@ a brainstorm, a new brainstorm.
 ## Answering from the records
 
 "What did we decide about X", "why did we do Y": `records.py list <worktree>
---active --type decision` (or the type in question), read the matching records,
+--active --type decision` (or the type in question, with `--area` when X is an
+area), read the matching records,
 and answer citing their ids. Superseded records answer "what did we think
 before"; say they are superseded when quoting them.
 
@@ -83,7 +105,14 @@ before"; say they are superseded when quoting them.
 Asked to import a `Notes-*.md`, `Spec-*.md`, or similar file: read it, pick the
 type it mostly is (notes are usually a brainstorm, sometimes a design with
 decisions in it; a spec is a spec), create the record with the file's date
-noted in its Context section, and copy the content into the template's sections
+noted in its Context section and an area from the file's subject (none for the
+broad one), and copy the content into the template's sections
 without rewriting the substance. When a notes file holds several settled
 choices, offer to split them out as decision records. Leave the original file
 where it is; it is the user's.
+
+A set of notes files (`Notes-*.md`, one per capability or layer, plus usually
+a broad one) imports as one record per file: the broad file feature-wide, each
+other file in an area named after its subject, `from` the broad one when it
+grew out of it. Show the proposed areas in one line before writing, since they
+become the index's grouping.
