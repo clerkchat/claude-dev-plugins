@@ -117,6 +117,20 @@ def set_fields(r, **kw):
         else: meta[k] = v
     open(r["path"], "w", encoding="utf-8").write(render(meta, body))
 
+def checks(d):
+    """Design-check files in checks/: name, records covered (from the Checked line), open and closed counts."""
+    cd = os.path.join(d, "checks")
+    if not os.path.isdir(cd): return []
+    out = []
+    for f in sorted(os.listdir(cd), key=lambda f: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f)]):
+        if not f.endswith(".md"): continue
+        text = open(os.path.join(cd, f), encoding="utf-8").read()
+        m = re.search(r"^Checked [^:]*:\s*(.*?)(?:\.\s|\.$|$)", text, re.M)
+        recs = re.findall(r"\bR\d+\b", m.group(1)) if m else []
+        out.append({"name": f[:-3], "records": recs, "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
+                    "closed": len(re.findall(r"^[-*] \[[xX]\]", text, re.M))})
+    return out
+
 def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
 def index(d):
@@ -133,8 +147,12 @@ def index(d):
             if r.get("superseded_by"): st += f" by {r['superseded_by']}"
             rel = os.path.relpath(r["path"], d)
             rows.append(f"| {r['id']} | {r.get('type','')} | [{r.get('title','')}]({rel}) | {r.get('repo','')} | {r.get('date','')} | {st} |")
+    cs = checks(d)
+    if cs:
+        rows += ["", "## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
+        rows += [f"| [{c['name']}](checks/{c['name']}.md) | {', '.join(c['records'])} | {c['open']} | {c['closed']} |" for c in cs]
     block = "\n".join(rows) + "\n"
-    text = re.sub(r"^## Records\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
+    text = re.sub(r"^## (Records|Checks)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
     open(p, "w", encoding="utf-8").write(text + "\n\n" + block)
 
 def main():

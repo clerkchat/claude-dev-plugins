@@ -87,13 +87,17 @@ What the user reads in place of a lens identifier. `Say it as` is the phrase;
 Lenses not yet implemented are skipped silently; the report header lists which
 lenses ran.
 
+## Lens priority order
+
+When a cap leaves room for fewer lenses than were triggered, keep them in this
+order: security, tenancy, side-effects, rollout, edge-cases, concurrency, sql,
+contracts, then the rest in table order.
+
 ## Quick mode
 
 Quick mode keeps only the lenses triggered by categories, drops the "always"
-rule, caps the set at four (priority order: security, tenancy, side-effects,
-rollout, edge-cases, concurrency, sql, contracts, then the rest in table order),
-and runs them all on sonnet with effort medium regardless of the agent's own
-frontmatter.
+rule, caps the set at four by the lens priority order, and runs them all on
+sonnet with effort medium regardless of the agent's own frontmatter.
 
 ## Explicit selection
 
@@ -105,21 +109,30 @@ never runs the tech debt focus.
 
 ## Design checks
 
-The `design-check` skill picks lenses for feature records, not diffs. It
-classifies what the records describe building into the categories above (a
-record that adds an endpoint is `interface`; one that adds a table is `schema`;
-a worker is `async`; prompts or tools are `llm`; screens are `ui`; copy is
-`text`; access rules are `auth`) and takes the lenses those categories trigger,
-ignoring the "always" column. It then adds:
+The `design-check` skill picks lenses for feature records, not diffs: at most
+six, of which at most three come from the record's type and the rest from its
+risks.
 
-- `completeness` and `spec-conformance` for a spec record;
-- `contracts` and `cross-repo` for a plan or design that spans repositories;
-- `tech-debt` when the record changes existing code rather than adding new
-  modules.
+1. By record type, at most three, in this order of preference:
+   - a spec: `completeness`, `spec-conformance`;
+   - records spanning repositories (see the `design-check` skill): `contracts`,
+     `cross-repo`;
+   - a record that introduces new concepts or modules: `naming-concepts`,
+     `design`;
+   - a record that changes existing code rather than adding modules:
+     `tech-debt`.
+2. By risk, the rest: classify what the records describe building into the
+   categories above (an endpoint is `interface`, a table `schema`, a worker
+   `async`, prompts or tools `llm`, screens `ui`, copy `text`, access rules
+   `auth`), take the lenses those categories trigger, ignoring the "always"
+   column, and keep the ones whose questions the records most plausibly leave
+   open: a record about a tenant-facing endpoint keeps `tenancy`, one about
+   plugin prompts keeps `llm-agent` and does not keep `security` just because
+   `llm` triggers it. Break ties by the lens priority order.
 
-It caps the set at six, in the quick-mode priority order, and with
-`--lenses` the explicit rules above apply instead. Small records get small
-sets; that is the point of the cap.
+The skill announces each risk lens with the category behind it, so a missing
+lens is visible and `--lenses +x` adds it. With `--lenses`, the explicit rules
+above apply instead.
 
 ## Triage questions
 

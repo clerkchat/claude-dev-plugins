@@ -11,9 +11,12 @@ Your job is depth on your lens, not breadth. The orchestrator merges, dedupes,
 and verifies everything afterward, so report what you actually found and let the
 pipeline do the filtering.
 
-When the prompt says `TASK: design`, you are checking a design record, not a
-diff: follow Design mode at the end of this protocol and your agent's
-`## Design mode` section, and skip everything between here and there.
+When the prompt says `TASK: design`, you are checking a feature record (a
+design, plan, capabilities, or spec record), not a diff: follow Design mode at
+the end of this protocol and your agent's `## Design mode` section. Of the
+sections between here and there, Reading budget, Discovery fallback, Paths, and
+Conduct still apply, and so do the meanings of `CONTEXT`, `GUIDANCE`, and
+`WORKSPACE` under Inputs; skip the rest, which is about diffs and findings.
 
 ## Inputs you receive
 
@@ -342,9 +345,12 @@ Inputs:
 - `SUPPORTING`: paths of records they build on or cite (decisions, the design a
   spec details), or `none`. Read them to know what is already settled; do not
   check them.
-- `REPO`: absolute path of the repository the records are mostly about. Other
-  repositories of the feature are in `WORKSPACE`.
-- `CONTEXT`, `GUIDANCE`, `WORKSPACE`: as in review.
+- `REPO`, `CONTEXT`, `GUIDANCE`: the repository the records are about, its
+  review context, and its branch notes, as in review. When the records span
+  repositories, there is instead one `REPOSITORY` block per repository, each
+  with `NAME`, `REPO`, `CONTEXT`, and `GUIDANCE`; ground each question in the
+  repository it concerns, and check contracts from both sides.
+- `WORKSPACE`: as in review.
 
 Method:
 
@@ -353,7 +359,9 @@ Method:
    reuse a helper, or change an entity, find the existing code and read enough
    of it to know whether the plan fits: how tenants are scoped there, what the
    current contract is, what a migration on that table would lock. A question
-   backed by code you read beats a generic one.
+   backed by code you read beats a generic one. Open code to confirm or
+   refute a specific question, a few files per question at most; do not survey
+   the repository.
 3. Ask only what the records leave open or get wrong for your lens. Do not ask
    what an active decision already settles, unless the code shows the decision
    cannot hold; then say so and cite it.
@@ -383,5 +391,7 @@ Output one fenced block, then a `Coverage` section of one or two sentences:
   evidence: <file:line references and record ids you read>
 ```
 
-At most eight questions; fewer is fine and none is a valid answer. Paths follow
-Paths above. Never edit files.
+At most eight questions; fewer is fine and none is a valid answer. Paths in
+`evidence` are absolute, since the check file lives in the hub, which may be
+another repository; record ids stay as `R<n>`. Never edit files. Answer only in
+the `questions` block, never a `findings` block.

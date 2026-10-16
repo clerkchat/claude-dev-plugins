@@ -11,7 +11,13 @@ how it was broken down and planned. They live in the hub worktree, at
     001-brainstorm-<slug>.md
     002-decision-<slug>.md
     ...
+  checks/
+    R13-1.md                  a design check of R13 (the design-check skill)
+    R13-1/raw/<lens>.md       each lens's reply, verbatim
 ```
+
+Check files are not records: they have no R id, are never superseded, and are
+listed in the index under every record they checked.
 
 Manage files only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`: it
 assigns ids, writes the frontmatter, marks superseded records, and regenerates

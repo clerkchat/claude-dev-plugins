@@ -34,23 +34,46 @@ user through them and records each answer.
    SUPPORTING: <absolute paths, or none>
    REPO: <absolute path of the repository the records are about>
    CONTEXT: <.claude/skills/review-context/SKILL.md of that repository, or none>
-   GUIDANCE: <.clerk-dev/branch-notes.md of this worktree, or none>
+   GUIDANCE: <.clerk-dev/branch-notes.md of that repository's worktree, or none>
    WORKSPACE: <.clerk-dev/review-workspace.md, or none>
    ```
 
    The repository a record is about is its `repo` field; find its worktree in
-   the workspace file, defaulting to this worktree.
-4. **Merge.** Parse each agent's `questions` block. Merge questions that ask the
-   same thing from different lenses into one, listing both lenses. Drop any an
-   active decision already answers, unless the agent says the code shows the
-   decision cannot hold. Sort by weight (settle-first, worth-settling, note),
-   then by record and section.
-5. **Write** `<hub>/.clerk-dev/feature/checks/R<n>-<k>.md`, where `R<n>` is the
+   the workspace file, defaulting to this worktree. Records **span
+   repositories** when the workspace lists more than one repository and either
+   the checked records have different `repo` values, or a checked plan, design,
+   or capabilities record assigns work to more than one of them. Then replace
+   `REPO`, `CONTEXT`, and `GUIDANCE` with one block per repository involved:
+
+   ```
+   REPOSITORY:
+     NAME: <repo name from the workspace>
+     REPO: <absolute worktree path>
+     CONTEXT: <its review context, or none>
+     GUIDANCE: <its branch notes, or none>
+   ```
+4. **Keep the raw output.** Write each agent's reply verbatim to
+   `<hub>/.clerk-dev/feature/checks/R<n>-<k>/raw/<lens>.md` (naming below),
+   then count the questions in its `questions` block. When a lens has none but
+   its reply has a `findings` block or a broken `questions` block, resume that
+   agent once asking for the `questions` block only; if it still has none, say
+   so in the report. Zero questions in a well-formed block is a valid answer.
+5. **Merge.** Merge questions that ask the same thing from different lenses
+   into one, listing every lens. Drop any an active decision already answers,
+   unless the agent says the code shows the decision cannot hold; list each
+   dropped question in the check file's Dropped section with the decision that
+   answered it, so the user can contest the drop. Sort by weight (settle-first,
+   worth-settling, note), then by record and section.
+6. **Write** `<hub>/.clerk-dev/feature/checks/R<n>-<k>.md`, where `R<n>` is the
    first checked record and `<k>` is one more than the highest existing check of
-   it. Format below.
-6. **Report** in a few lines: the path, the counts by weight, and the
-   settle-first questions, one line each. Offer to walk them. Do not start
-   answering them yourself.
+   it. Its `Checked <date>: R13, R10.` line names every checked record, so the
+   feature index lists the check under each. Format below. Then run `records.py index <worktree>`.
+7. **Report** in a few lines: the path, the counts by weight, any lens with no
+   usable output, and the settle-first questions, one line each. Offer to walk
+   them. Do not start answering them yourself.
+
+Check files are not records: they have no R id and are not superseded. A
+question is cited as `R13-1.Q3`, or `Q3` when the check in hand is clear.
 
 ## Check file
 
@@ -67,9 +90,13 @@ spec-conformance, design, naming-concepts.
   - Why: Without an index entry, a later session finds the check only by
     listing the checks folder.
   - Suggestion: (a) List them under Records; (b) a separate Checks section.
-  - Evidence: plugins/clerk-dev/scripts/records.py:92
+  - Evidence: /Users/me/src/plugins/scripts/records.py:92
   - Disposition:
   - Outcome:
+
+## Dropped
+
+- Should exports poll? Answered by R5 (completeness).
 ```
 
 Fields are a nested list so a Markdown formatter keeps the layout, as in
