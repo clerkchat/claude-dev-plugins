@@ -218,6 +218,11 @@ before writing it when the discussion was long.
 
 ### Standing rules in the branch notes
 
+This is the branch row of "Guidance from answers" in
+`skills/review/tracking.md`; a rule that reaches the whole feature or one of
+its areas becomes a guidance record instead, and an explicit `guidance:` from
+the user is always recorded.
+
 Some decisions reach past their finding: a rule that would settle similar
 findings the same way, or a change to what the branch is for. Write those into
 `.clerk-dev/branch-notes.md` as well, without being asked, as soon as the decision

@@ -123,8 +123,9 @@ Give paths, not contents. Include:
 - the files expected to change, and any it must not touch;
 - the tests to write or port, and the exact command to run them;
 - the rules that apply beyond the repository's conventions: the user's
-  instructions that bear on code (for example a no-comments rule) and the
-  branch's Purpose. Do not assume the agent sees the user's own instructions;
+  instructions that bear on code (for example a no-comments rule), the
+  branch's Purpose, and the feature's active guidance for the piece's area
+  (`records.py rules <worktree> --area <area>`, quoted with their ids). Do not assume the agent sees the user's own instructions;
   restate the ones that apply.
 
 ### Order and parallelism
@@ -170,8 +171,11 @@ status lives only here; the spec is not edited for it.
 ### After each piece
 
 1. Read the report. `stopped` or `questions:` go back to the user (or are
-   settled from the records) before anything else; `deviations:` are judged
-   against the spec and decisions, and either accepted (say so to the user in
+   settled from the records and guidance) before anything else. When the
+   user's answer carries guidance (a rule beyond this case), or says
+   `guidance: ...`, record it as "Guidance from answers" in
+   `skills/review/tracking.md` describes, and say so in one line.
+   `deviations:` are judged against the spec, decisions, and guidance, and either accepted (say so to the user in
    a line, and record it when it changes a decision) or sent back with a
    correction.
 2. Read the diff (`git diff --stat`, then the parts that carry the piece's

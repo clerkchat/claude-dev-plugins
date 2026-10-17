@@ -18,7 +18,8 @@ It gives you:
 - the goal: what the piece does when it is done, in a sentence or two;
 - the requirements it covers, by spec record id and number, with the spec's
   path;
-- the decisions it must follow, by record id and path;
+- the decisions it must follow, by record id and path, and the user's guidance
+  rules that apply;
 - reference code to port or follow, by path (another branch's files through
   `git show <ref>:<path>`, or files in this tree);
 - the files expected to change, and any it must not touch;
@@ -29,8 +30,10 @@ It gives you:
 ## How to work
 
 1. Read the spec requirements, the cited decisions, and the code the piece
-   touches before changing anything. The decisions are settled: follow them as
-   written, even where you would have chosen otherwise.
+   touches before changing anything. The decisions and guidance are settled:
+   follow them as written, even where you would have chosen otherwise. When a
+   guidance rule cannot hold for this piece, stop and say so under
+   `questions`.
 2. Follow the writing-code skill. Its refactor-first step applies within the
    piece: a reshaping of code inside the files you were given is fine; a
    refactor beyond them is reported, not done.

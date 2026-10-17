@@ -37,6 +37,11 @@ items separate and commits clean.
 
 ## The user's standing notes
 
+When the user's answer carries guidance (a rule beyond this case), or says
+`guidance: ...`, record it as "Guidance from answers" in
+`skills/review/tracking.md` describes, and say so in one line. An adjustment ("fix 4, but keep the old name") is guidance when it
+would apply to other findings too.
+
 `<worktree>/.clerk-dev/branch-notes.md` says what the branch is for and holds the
 user's standing instructions for this worktree's reviews and fixes. It belongs
 to the worktree, not to a review run: it may exist before the first review, and

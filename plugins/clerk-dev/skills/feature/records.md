@@ -16,6 +16,7 @@ how it was broken down and planned. They live in the hub worktree, at
     R13-1/raw/<lens>.md       each lens's reply, verbatim
   overview.md                 generated from the active records; never edited
   ideas.md                    parked ideas, I1, I2, ...; kept by records.py
+  guidance.md                 the active guidance rules, generated; never edited
 ```
 
 `overview.md` is the feature's current state in one read, generated from the
@@ -153,6 +154,40 @@ and adding them is a larger change than this feature.
 Polling load is bounded by open export dialogs; revisit if exports grow long.
 ```
 
+### guidance
+
+A rule from the user that settles choices beyond the question that prompted
+it: a principle, a preference, a constraint ("capabilities wire in through
+explicit lists, never a runtime registry"). A decision settles one choice and
+records what it rejected; guidance decides the next ones. Written without
+being asked whenever an answer carries one (see "Guidance from answers" in
+`skills/review/tracking.md`). Refined by superseding, like a decision.
+Implementer briefs, lens prompts, and design checks all read the active
+guidance (`records.py rules`, or the generated `guidance.md`).
+
+```markdown
+# R61. Capabilities wire in through explicit lists
+
+## Rule
+
+Capabilities wire into the core through explicit lists and enums edited in
+code, never a runtime registry.
+
+## Why
+
+Every capability is then visible by grepping one list, and a missing one fails
+to compile instead of failing at run time.
+
+## Applies to
+
+How any capability chunk registers graders, narrowers, validators, and issue
+codes; any new extension point.
+
+## From
+
+R30-1.Q12, answered 2026-10-16.
+```
+
 ### capabilities
 
 The breakdown of a design (`from:`) into pieces that can each be specified,
@@ -271,6 +306,12 @@ it says so under Open. Aim for something read in five minutes.
 One paragraph: what the feature is for and what done looks like (summary,
 designs).
 
+## Guidance
+
+Each active guidance rule, one line, feature-wide first, then by area:
+"R61 (harness): capabilities wire in through explicit lists, never a
+registry." Omitted when there is none.
+
 ## Shape
 
 How the solution works, in a few paragraphs, from the active designs, citing
@@ -325,8 +366,8 @@ spec, no plan.
 
 ### Disagreements
 
-Records that disagree, or that rely on a superseded record, one bullet each
-naming both sides: "R5 relies on R3's frozen-contract rule; R3 is superseded
+Records that disagree, that rely on a superseded record, or that go against
+active guidance, one bullet each naming both sides: "R5 relies on R3's frozen-contract rule; R3 is superseded
 by R28 (R5, R28)."
 
 ## Parked

@@ -32,6 +32,7 @@ Usage:
   records.py stamp-overview WORKTREE    after writing overview.md
   records.py overview-status WORKTREE
   records.py suggest WORKTREE           roll-up designs, plans, stale overview
+  records.py rules WORKTREE [--area A] [--path]   active guidance; --path writes and prints guidance.md
   records.py idea WORKTREE "text" [--area A] [--from R12|"this session"] [--why ...] [--when ...]
   records.py ideas WORKTREE [--all] [--area A | --area -]
   records.py adopt WORKTREE I3 --by R60   the record the idea became
@@ -53,7 +54,7 @@ Record frontmatter:
 """
 import argparse, datetime, importlib.util, os, re, subprocess, sys
 
-TYPES = ("brainstorm", "design", "decision", "capabilities", "plan", "spec")
+TYPES = ("brainstorm", "design", "decision", "guidance", "capabilities", "plan", "spec")
 STATUSES = ("active", "superseded", "discarded")
 FIELDS = ("id", "type", "title", "date", "repo", "area", "status", "from", "supersedes", "superseded_by", "note")
 
@@ -151,8 +152,8 @@ def checks(d):
 
 def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
-GIST_SECTION = {"decision": "Decision", "spec": "Goal", "design": "Shape", "brainstorm": "Leaning"}
-TYPE_ORDER = ("design", "capabilities", "plan", "spec", "decision", "brainstorm")
+GIST_SECTION = {"decision": "Decision", "guidance": "Rule", "spec": "Goal", "design": "Shape", "brainstorm": "Leaning"}
+TYPE_ORDER = ("guidance", "design", "capabilities", "plan", "spec", "decision", "brainstorm")
 
 LIST_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 
@@ -277,9 +278,36 @@ def index(d):
             where = r.get("area") or "feature-wide"
             rows.append(f"- **{r['id']}** {r.get('type', '')} ({where}): [{r.get('title', '')}]({os.path.relpath(r['path'], d)}){note}")
         rows.append("")
+    write_guidance(d)
     block = "\n".join(rows).rstrip("\n") + "\n"
     text = re.sub(r"^## (Records|Ideas|Checks|History)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
     open(p, "w", encoding="utf-8").write(text + "\n\n" + block)
+
+def rules(d, area=None):
+    """Active guidance as (record, rule) pairs, feature-wide first, filtered
+    to an area plus the feature-wide ones when one is given."""
+    rs = [r for r in records(d) if r.get("type") == "guidance" and r.get("status") == "active"]
+    if area is not None: rs = [r for r in rs if not r.get("area") or r.get("area") == area]
+    return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), int(r["id"][1:])))]
+
+def write_guidance(d):
+    """guidance.md: every active guidance rule in one file, for lens prompts
+    and implementer briefs; regenerated with the index, never edited."""
+    p = os.path.join(d, "guidance.md")
+    rs = rules(d)
+    if not rs:
+        if os.path.exists(p): os.remove(p)
+        return
+    out = ["# Guidance", "", "The user's standing guidance for this feature: rules that settle choices",
+           "beyond the question that prompted them. Follow them; when one cannot hold,",
+           "say so rather than work around it. Generated from the guidance records by",
+           "records.py; never edited.", ""]
+    area = None
+    for r, rule in rs:
+        a = r.get("area") or "Feature-wide"
+        if a != area: out += ([""] if area is not None else []) + [f"## {a}", ""]; area = a
+        out.append(f"- {r['id']}: {rule} ({os.path.relpath(r['path'], d)})")
+    open(p, "w", encoding="utf-8").write("\n".join(out).rstrip("\n") + "\n")
 
 def suggestions(d):
     """Records worth writing: roll-up designs, plans, and a stale overview."""
@@ -422,6 +450,7 @@ def main():
     iad = sp.add_parser("adopt"); iad.add_argument("wt"); iad.add_argument("iid"); iad.add_argument("--by", required=True)
     idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
     ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
+    rl = sp.add_parser("rules"); rl.add_argument("wt"); rl.add_argument("--area"); rl.add_argument("--path", action="store_true")
     a = ap.parse_args()
     today = datetime.date.today().isoformat()
 
@@ -496,6 +525,12 @@ def main():
         print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
     elif a.cmd == "suggest":
         print("\n".join(suggestions(d)) or "nothing to suggest")
+    elif a.cmd == "rules":
+        if a.path:
+            write_guidance(d); g = os.path.join(d, "guidance.md")
+            print(g if os.path.exists(g) else "none")
+        else:
+            print("\n".join(f"{r['id']}{' (' + r['area'] + ')' if r.get('area') else ''}: {rule}" for r, rule in rules(d, a.area)) or "no guidance")
     elif a.cmd == "idea":
         its = ideas(d); n = max([int(i["id"][1:]) for i in its] or [0]) + 1
         src = a.src or ""

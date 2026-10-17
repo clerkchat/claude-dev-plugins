@@ -37,6 +37,7 @@ user through them and records each answer.
    REPO: <absolute path of the repository the records are about>
    CONTEXT: <.claude/skills/review-context/SKILL.md of that repository, or none>
    GUIDANCE: <.clerk-dev/branch-notes.md of that repository's worktree, or none>
+   FEATURE_GUIDANCE: <path from `records.py rules <worktree> --path`, or none>
    WORKSPACE: <.clerk-dev/review-workspace.md, or none>
    ```
 
@@ -71,7 +72,7 @@ user through them and records each answer.
    agent once asking for the `questions` block only; if it still has none, say
    so in the report. Zero questions in a well-formed block is a valid answer.
 5. **Merge.** Merge questions that ask the same thing from different lenses
-   into one, listing every lens. Drop any an active decision already answers,
+   into one, listing every lens. Drop any an active decision or active guidance already answers,
    unless the agent says the code shows the decision cannot hold; list each
    dropped question in the check file's Dropped section with the decision that
    answered it, so the user can contest the drop. Sort by weight (settle-first,
@@ -156,4 +157,6 @@ time:
    reason>"` (`deferred` or `wont-fix` for Defer and Ignore), and move on.
    Discuss and Refine leave it open until decided.
 
-Records written while walking follow the `feature` skill's rules.
+Records written while walking follow the `feature` skill's rules. When the user's answer carries guidance (a rule beyond this case), or says
+`guidance: ...`, record it as "Guidance from answers" in
+`skills/review/tracking.md` describes, and say so in one line.

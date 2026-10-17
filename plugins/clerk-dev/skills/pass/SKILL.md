@@ -81,6 +81,12 @@ commit rules below.
    <label>") or `review-triage`; never start fixing them, or a second pass, on
    your own.
 
+## Answers during a pass
+
+When the user's answer carries guidance (a rule beyond this case), or says
+`guidance: ...`, record it as "Guidance from answers" in
+`skills/review/tracking.md` describes, and say so in one line.
+
 ## Commit rules
 
 Follow step 6 of the `review-fix` skill for staging and messages: add only the

@@ -59,6 +59,12 @@ The orchestrator's prompt gives you:
 - `WORKSPACE`: path of `.clerk-dev/review-workspace.md`, or `none`. Its rows name
   the other repositories and worktrees of this job; use them to say which
   repository a fix needs a follow-up in.
+- `FEATURE_GUIDANCE`: path of the feature's `guidance.md`, or `none`: the
+  user's standing rules for the feature, each with its record id. Treat them
+  as the user's direction, like the branch notes: do not recommend against
+  one, and when a defect can only be fixed by going against one, report it and
+  name the rule. Code that breaks a rule is a finding of your lens when the
+  rule is about your lens's concern; cite the rule's id in `evidence`.
 - `BAR`: `final` on a final pass, else absent. See Final pass bar below.
 - `DOCS`: paths of work-tracking documents (specs, notes, plans) selected for
   this change, or `none`. Most lenses ignore these; spec-conformance and
@@ -359,7 +365,9 @@ Inputs:
   repositories, there is instead one `REPOSITORY` block per repository, each
   with `NAME`, `REPO`, `CONTEXT`, and `GUIDANCE`; ground each question in the
   repository it concerns, and check contracts from both sides.
-- `WORKSPACE`: as in review.
+- `WORKSPACE`, `FEATURE_GUIDANCE`: as in review. Do not ask what active
+  guidance already answers, unless the code shows the rule cannot hold; then
+  say so and cite it.
 
 Method:
 

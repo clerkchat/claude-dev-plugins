@@ -881,6 +881,7 @@ REPO: <absolute repo root>
 PR: <title and body, or none>
 DOCS: <paths of selected work-tracking documents, or none>
 GUIDANCE: <path of .clerk-dev/branch-notes.md, or none>
+FEATURE_GUIDANCE: <path from `records.py rules <worktree> --path`, or none>
 WORKSPACE: <path of .clerk-dev/review-workspace.md, or none>
 ```
 

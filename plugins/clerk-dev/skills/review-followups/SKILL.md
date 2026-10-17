@@ -43,7 +43,10 @@ report is the only thing an item should add here.
      instruction; record it with `followups.py set`, and add the item to the
      work list when it becomes a fix;
    - `Discuss`: after the work list, walk them with the user one at a time and
-     record what they decide with `followups.py set`;
+     record what they decide with `followups.py set`; for Refine and Discuss
+     alike, when the user's answer carries guidance (a rule beyond this item)
+     or says `guidance: ...`, record it as "Guidance from answers" in
+     `skills/review/tracking.md` describes;
    - `Defer` or `Ignore` still open: close them now, `followups.py close
      <worktree> F3 --status deferred|wont-fix --ref "<the note, or why>"`, in
      one line each.

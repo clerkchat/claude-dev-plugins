@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
 argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | spec <piece> | list | import <file>]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 ---
@@ -91,6 +91,17 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
 A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
 a brainstorm, a new brainstorm.
+
+## Guidance
+
+Whenever the user answers a question or steers the work, in this skill or any
+other, and the answer carries a rule beyond this case, or the user writes
+`guidance: ...`, record it as "Guidance from answers" in
+`skills/review/tracking.md` describes: a `guidance` record for the feature or
+one of its areas, the branch notes for this branch only, and a proposal first
+for anything wider. Say in one line what was recorded. "What guidance have I
+given", "the rules for the harness": `records.py rules <worktree> [--area
+<area>]`.
 
 ## Parked ideas
 

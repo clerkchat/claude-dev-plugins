@@ -153,6 +153,43 @@ Readers:
   it will change, as context, and notes on a finding when the follow-up's
   contract overrides its recommendation.
 
+## Guidance from answers
+
+When the user answers a question (a design question, an implementer's stopped
+piece, a finding to discuss or a fix to adjust, a follow-up to refine, a pass
+item), the answer often carries guidance: a rule that would settle other
+choices the same way, beyond this one. Record it without being asked, at the
+narrowest scope that covers it, and say in one line what was recorded and
+where, so the user can correct the scope or the wording.
+
+Recognize it two ways:
+
+- **Explicit:** a line or message starting `guidance:` (any case), optionally
+  with a scope, `guidance (branch): ...` or `guidance (harness): ...`. Always
+  record it, as given.
+- **Implicit:** the answer states a rule rather than a one-off: "always",
+  "never", "prefer", "in general", "as a rule", "we don't", "from now on", or
+  reasoning that would decide other cases too ("because the core should not
+  know capability names"). Record it, and phrase the rule so it stands without
+  the question.
+
+Scope, narrowest first:
+
+| Reaches | Goes to |
+| --- | --- |
+| this question only | the question's own outcome or notes, as today |
+| this branch | `.clerk-dev/branch-notes.md`, as in "Standing rules in the branch notes" of the `review-triage` skill |
+| this feature, or one of its areas | a `guidance` record in the hub (`records.py new <worktree> guidance "<rule>" --area <area> --from <the question>`), body as in `skills/feature/records.md` |
+| all the user's work | the user's own CLAUDE.md: propose the line and ask first |
+| the team | the plugin itself, such as the `writing-code` skill: propose it and ask first |
+
+When new guidance refines or contradicts an active one, supersede it rather
+than add a second. When it contradicts an active decision, record the guidance
+and say which decision it bears on; the user decides whether that decision
+changes. The line to the user: "Recorded as guidance R61 (harness):
+capabilities wire in through explicit lists. Say if it is narrower than
+that."
+
 ## Items
 
 Review findings, follow-ups, and design-check questions are all items, and use
