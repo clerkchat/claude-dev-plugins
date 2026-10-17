@@ -473,12 +473,14 @@ def main():
         rs = records(d); num = max([int(r["id"][1:]) for r in rs] or [0]) + 1
         _, repos = workspace(a.wt)
         old = find(d, a.supersedes) if a.supersedes else None
-        src = [x.strip() for x in a.src.split(",")] if a.src else []
+        parts = [x.strip() for x in a.src.split(",") if x.strip()] if a.src else []
+        parts = [x.upper() if re.fullmatch(r"[rR]\d+", x) else x for x in parts]
+        src = [x for x in parts if re.fullmatch(r"R\d+", x) and any(r["id"] == x for r in rs)]
         area = a.area if a.area is not None else (old.get("area", "") if old else area_of(d, src) if src else "")
         meta = {"id": f"R{num}", "type": a.type, "title": a.title.rstrip("."), "date": today,
                 "repo": a.repo or this_repo(a.wt, repos), "area": slug(area) if area else "",
                 "status": "" if a.type == "brainstorm" else "active",
-                "from": ", ".join(x.strip().upper() for x in a.src.split(",")) if a.src else "",
+                "from": ", ".join(parts),
                 "supersedes": old["id"] if old else ""}
         p = os.path.join(d, "records", f"{num:03d}-{a.type}-{slug(a.title)}.md")
         open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
