@@ -260,18 +260,19 @@ The order of work, from plans, capabilities, and decisions that set order,
 citing them. When pieces depend on each other in more than a straight line,
 start with a dependency graph in a code block. Then one row per piece, in
 order, so it can be skimmed: the piece, its repository, its branch or worktree
-when the records name one, what it branches from, what it depends on, and its
-spec. Ordering rules and notes that fit no row follow as a short list.
+when the records name one, what it branches from, what it depends on, its
+spec, and how far it is built (from the digest's Build progress). Ordering
+rules and notes that fit no row follow as a short list.
 
 ```
 main ──► [C] core ──┬──► [A] assertions ──► [CA] capture
                     └──► [B] bisection
 ```
 
-| Piece | Repo | Branch | From | Depends on | Spec |
-|---|---|---|---|---|---|
-| C core harness | api | `feat/core` | main | nothing (R19, R29) | R32 |
-| B bisection | api | `feat/bisection` | C | C; adds `baselineTestRunId` (R22) | none |
+| Piece | Repo | Branch | From | Depends on | Spec | Built |
+|---|---|---|---|---|---|---|
+| C core harness | api | `feat/core` | main | nothing (R19, R29) | R32 | 9 of 32; B7 stopped |
+| B bisection | api | `feat/bisection` | C | C; adds `baselineTestRunId` (R22) | none | not started |
 
 - Each PR targets the branch it starts from until that merges, then main (R31).
 

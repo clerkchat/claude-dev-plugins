@@ -123,6 +123,28 @@ many repositories' integration tests share databases and must never run
 concurrently. A larger fan-out is a multi-agent workflow, which runs only when
 the user asks for one.
 
+### The build log
+
+Log every delegated piece in `.clerk-dev/build.md` with
+`${CLAUDE_PLUGIN_ROOT}/scripts/build.py` (below, `build.py`); status reports
+progress from it, so a piece not logged is invisible there:
+
+- when briefing: `build.py add <worktree> "<piece>" --spec R52 --reqs 4,5
+  --model <model> --effort <effort>`, which gives the piece's id (B3);
+- when the agent stops on a question: `build.py stop <worktree> B3 --question
+  "<the question>"`; after it is settled and recorded, `build.py resend` with
+  the new model or effort if they changed;
+- when it is sent back with a correction: `build.py resend <worktree> B3
+  --note "<what changed>"`;
+- after committing: `build.py done <worktree> B3 --commit <sha> --covered
+  "<the report's requirements line, as 4:done,5:partial: what is missing>"`,
+  adding `--deviation "..."` for each one accepted;
+- when dropped: `build.py abandon <worktree> B3 --note "<why>"`.
+
+A change done inline that covers spec requirements is logged too, as a piece
+added and marked done in one go, so the progress stays whole. Requirement
+status lives only here; the spec is not edited for it.
+
 ### After each piece
 
 1. Read the report. `stopped` or `questions:` go back to the user (or are
@@ -134,7 +156,8 @@ the user asks for one.
    shape), and run the brief's tests yourself.
 3. Commit as step 6 of the `review-fix` skill describes: only the piece's
    files, a message that stands alone and describes the change, never
-   `.clerk-dev/` paths or record ids. Tick the spec's open items it closes.
+   `.clerk-dev/` paths or record ids. Mark the piece done in the build log, and
+   tick the spec's open items it closes.
 4. Say one line: the piece, the commit, the tests, anything accepted.
 
 At milestones (the end of a chunk, a set of pieces that make one behavior),

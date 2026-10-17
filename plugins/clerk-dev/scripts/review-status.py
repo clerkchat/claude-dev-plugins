@@ -16,6 +16,10 @@ Prints a short Markdown summary:
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
     in-progress fixes, and open findings whose code moved since the review;
+  - implementation progress from the build log (.clerk-dev/build.md): per
+    spec, requirements done, partial, in progress, and not started; pieces
+    stopped on a question or not landed; pieces built since the last review;
+    and the other worktrees' progress;
   - this worktree's passes (.clerk-dev/passes.md): open, ended but unchecked,
     and checked ones whose check run still has open findings;
   - the feature, when the hub (records.py hub) holds one: records by type,
@@ -105,6 +109,46 @@ def pass_word(e):
 
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
+
+def build_block(wt, rows, out, unreviewed):
+    """Implementation progress from the build log here, and a line per other
+    worktree of the workspace. Returns (first, later) next steps."""
+    bd = load("build.py")
+    first, later = [], []
+    try:
+        entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
+        lines = bd.progress_lines(wt) if entries else []
+    except SystemExit as e:
+        out.append(""); out.append(f"**Implementation:** the build log could not be read: {e}"); return first, later
+    others = []
+    for rname, other in related_worktrees(wt, rows):
+        try:
+            if bd.read(os.path.join(other, ".clerk-dev", "build.md")):
+                others += [f"{rname}: {l.strip()}" for l in bd.progress_lines(other) if not l.startswith(" ")]
+        except SystemExit: others.append(f"{rname}: build log unreadable")
+    if not entries and not others: return first, later
+    out.append("")
+    out.append("**Implementation:**" + ("" if entries else " nothing built in this worktree yet."))
+    out += [f"- {l.strip()}" if not l.startswith(" ") else f"  - {l.strip()}" for l in lines]
+    out += [f"- {o}" for o in others]
+    for e in entries:
+        st = e["f"].get("Status")
+        if st == "stopped":
+            q = e["multi"]["Question"][-1] if e["multi"]["Question"] else "its question"
+            first.append(f"Answer {e['id']} ({e['title']})'s question, record the answer, then resend it: {q}")
+        elif st == "briefed":
+            first.append(f"Land {e['id']} ({e['title']}): briefed and not committed; finish it, resend it, or abandon it.")
+    shas = [s for s, _ in unreviewed]
+    built = [e for e in entries if e["f"].get("Status") == "done" and e["f"].get("Commit") and any(s.startswith(e["f"]["Commit"]) for s in shas)]
+    if built:
+        later.insert(0, f"Check the {len(built)} piece{plural(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass's narrow check, or \"re-review the branch\".")
+    for s, r, items, state, mine in bd.progress(wt) if entries else []:
+        busy = {n for e in mine if e["f"].get("Status") in ("briefed", "stopped") for n, _, _ in bd.reqs_of(e)}
+        left = [n for n in sorted(items) if n not in state and n not in busy]
+        partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
+        if partial: later.append(f"Finish the partial requirement{plural(partial)} of {s}: {bd.compress(s, partial)}.")
+        if left and not busy: later.append(f"Next piece for {s}: {bd.compress(s, left[:6])}{' and more' if len(left) > 6 else ''} are not started (the plan sets the order).")
+    return first, later
 
 def feature_block(wt, rows, out):
     """Feature records, open design questions, spec open items, and passes in
@@ -266,9 +310,10 @@ def main():
                     pst, pin, pnum = sf.state(prun)
                     left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
                     if left: pass_steps.append(f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`.")
+    bfirst, blater = build_block(wt, rows, out, unreviewed)
     first, later = feature_block(wt, rows, out)
-    steps[0:0] = pass_steps + first
-    steps.extend(later)
+    steps[0:0] = bfirst + pass_steps + first
+    steps.extend(blater + later)
 
     # Findings
     if have_run:

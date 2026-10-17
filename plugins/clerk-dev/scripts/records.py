@@ -46,7 +46,7 @@ Record frontmatter:
   supersedes: R3
   ---
 """
-import argparse, datetime, os, re, subprocess, sys
+import argparse, datetime, importlib.util, os, re, subprocess, sys
 
 TYPES = ("brainstorm", "design", "decision", "capabilities", "plan", "spec")
 STATUSES = ("active", "superseded", "discarded")
@@ -321,6 +321,20 @@ def digest(d):
         for q in re.finditer(r"^- \[ \] (Q\d+)\. (.*)$", text, re.M):
             w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
             out.append(f"- {c['name']}.{q.group(1)} ({w.group(1) if w else '?'}): {q.group(2)}")
+    out += ["", "# Build progress", ""]
+    try:
+        bd = importlib.util.spec_from_file_location("build", os.path.join(os.path.dirname(os.path.abspath(__file__)), "build.py"))
+        bm = importlib.util.module_from_spec(bd); bd.loader.exec_module(bm)
+        hub_wt = os.path.dirname(os.path.dirname(d))
+        _, repos = workspace(hub_wt)
+        wts = list(dict.fromkeys([hub_wt] + list(repos.values())))
+        got = []
+        for w in wts:
+            if os.path.exists(os.path.join(w, ".clerk-dev", "build.md")):
+                got += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(w)]
+        out += got or ["nothing built yet"]
+    except SystemExit as e:
+        out.append(f"(build log unreadable: {e})")
     out += ["", "# Open items in active specs", ""]
     for r in live:
         if r["type"] != "spec": continue
