@@ -78,6 +78,10 @@ Reviews read the active ones, so the spec-conformance and completeness focuses
 check the code against your specs. An existing `Notes-*.md` or `Spec-*.md` can
 be imported.
 
+Ideas that are good but not for now are parked ("park that idea"): each with
+why it is worth having and when to look again, listed in the index and the
+overview, until it is adopted as a record or dropped.
+
 > Check the design.
 >
 > Run the lenses on R9.

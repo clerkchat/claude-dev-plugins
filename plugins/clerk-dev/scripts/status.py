@@ -442,6 +442,11 @@ def design_view(wt, rows, out):
             if label != "gaps": out += [f"  - {short(x, 110)}" for x in xs[:6]] + ([f"  - and {len(xs) - 6} more"] if len(xs) > 6 else [])
     else:
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d))]
+    parked = [i for i in rc.ideas(d) if not i["done"]]
+    if parked:
+        by = {}
+        for i in parked: by.setdefault(i["fields"].get("Area") or "feature-wide", []).append(i["id"])
+        out += ["", f"**Parked ideas:** {len(parked)} ({'; '.join(f'{a}: {len(v)}' for a, v in by.items())}); `records.py ideas` lists them with why and when."]
     settle_all = list(dict.fromkeys(settle_all))
     first = [f"Settle the settle-first design questions: {', '.join(settle_all)} (\"walk the design questions\")."] if settle_all else []
     if ov["disagreements"] or mixed:
@@ -493,6 +498,8 @@ def area_view(wt, rows, out, name):
     if qs_lines: out += ["", "**Open questions:**"] + qs_lines
     dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(re.findall(r"\bR\d+\b", x)) & ids]
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
+    parked = [i for i in rc.ideas(d) if not i["done"] and (i["fields"].get("Area") or "") == area]
+    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['id']}: {short(i['text'], 90)}" + (f" When: {i['fields']['When']}." if i["fields"].get("When") else "") for i in parked]
     specs = [spec] if spec else [r for r in live if r.get("type") == "spec"]
     prog, pas = [], []
     for wname, p in [("", wt)] + builders(wt, rows):

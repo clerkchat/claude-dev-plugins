@@ -15,10 +15,12 @@ how it was broken down and planned. They live in the hub worktree, at
     R13-1.md                  a design check of R13 (the design-check skill)
     R13-1/raw/<lens>.md       each lens's reply, verbatim
   overview.md                 generated from the active records; never edited
+  ideas.md                    parked ideas, I1, I2, ...; kept by records.py
 ```
 
 `overview.md` is the feature's current state in one read, generated from the
-active records (below). Check files are not records: they have no R id, are never superseded, and are
+active records (below). `ideas.md` holds ideas set aside for later (below). Check files are not
+records: they have no R id, are never superseded, and are
 listed in the index under every record they checked.
 
 Manage files only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`: it
@@ -227,6 +229,26 @@ Endpoints, payloads, events, and schemas other parts or repositories rely on.
 - [ ] Decide the download URL lifetime.
 ```
 
+## Ideas
+
+Good ideas come up all the time that are not for now. Parking one keeps it
+from being lost or from creeping into the current work. `ideas.md` is a
+checkbox list (I1, I2, ...) kept by `records.py idea`, `adopt`, `drop`, and
+`unpark`, in the item vocabulary of "Items" in `skills/review/tracking.md`:
+
+- **Parked** (status open): the idea, where it came from (a record, a check
+  question, "this session"), why it is worth having, and when to look at it
+  again: a trigger rather than a date ("after the core lands", "if exports
+  get slow"). An area when it belongs to one; inherited from its `from`
+  record otherwise.
+- **Adopted** (fixed): it became a record (a brainstorm, a decision, a spec,
+  or a piece of the plan); Outcome names the record.
+- **Dropped** (wont-fix): it will not be done; Outcome says why.
+
+An idea is not a rejected alternative (those stay in the decision that
+rejected them) or a deferred finding (that stays in the review). Ideas are not
+records: they are not superseded, and parking one decides nothing.
+
 ## The overview
 
 Records are history, split one decision per file, which is right for drilling
@@ -306,6 +328,12 @@ spec, no plan.
 Records that disagree, or that rely on a superseded record, one bullet each
 naming both sides: "R5 relies on R3's frozen-contract rule; R3 is superseded
 by R28 (R5, R28)."
+
+## Parked
+
+One line per parked idea, by area, with when to look again (I4, harness:
+streaming results; when a suite runs longer than a minute). "None." when there
+are none.
 
 ## Explored
 

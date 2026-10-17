@@ -32,6 +32,11 @@ Usage:
   records.py stamp-overview WORKTREE    after writing overview.md
   records.py overview-status WORKTREE
   records.py suggest WORKTREE           roll-up designs, plans, stale overview
+  records.py idea WORKTREE "text" [--area A] [--from R12|"this session"] [--why ...] [--when ...]
+  records.py ideas WORKTREE [--all] [--area A | --area -]
+  records.py adopt WORKTREE I3 --by R60   the record the idea became
+  records.py drop WORKTREE I3 --why "..."
+  records.py unpark WORKTREE I3           back to parked
 
 Record frontmatter:
   ---
@@ -256,6 +261,10 @@ def index(d):
             for r in ordered(grp): rows += entry(r, d, repos)
             rows.append("")
         if not live: rows += ["No active records.", ""]
+    parked = [i for i in ideas(d) if not i["done"]]
+    if parked:
+        rows += ["## Ideas", "", f"Parked, {len(parked)}; all of them, with why and when, in [ideas.md](ideas.md).", ""]
+        rows += [f"- **{i['id']}**{' (' + i['fields']['Area'] + ')' if i['fields'].get('Area') else ''}: {i['text']}" for i in parked] + [""]
     cs = checks(d)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
@@ -269,7 +278,7 @@ def index(d):
             rows.append(f"- **{r['id']}** {r.get('type', '')} ({where}): [{r.get('title', '')}]({os.path.relpath(r['path'], d)}){note}")
         rows.append("")
     block = "\n".join(rows).rstrip("\n") + "\n"
-    text = re.sub(r"^## (Records|Checks|History)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
+    text = re.sub(r"^## (Records|Ideas|Checks|History)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
     open(p, "w", encoding="utf-8").write(text + "\n\n" + block)
 
 def suggestions(d):
@@ -335,6 +344,8 @@ def digest(d):
         out += got or ["nothing built yet"]
     except SystemExit as e:
         out.append(f"(build log unreadable: {e})")
+    out += ["", "# Parked ideas", ""]
+    out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} Why: {i['fields'].get('Why', '-')}. When: {i['fields'].get('When', '-')}." for i in ideas(d) if not i["done"]] or ["none"]
     out += ["", "# Open items in active specs", ""]
     for r in live:
         if r["type"] != "spec": continue
@@ -358,6 +369,32 @@ def stamp_overview(d):
     index(d)
     return last
 
+IDEA_FIELDS = ("Area", "From", "Why", "When", "Added", "Instruction", "Status", "Outcome")
+IDEAS_HEADER = """# Ideas
+
+Ideas set aside for later: each says what it is, where it came from, why it is
+worth having, and when to look at it again. Kept by records.py; an idea is
+parked while open, adopted when it becomes a record (Outcome names it), and
+dropped when it will not be done (Outcome says why).
+
+"""
+
+def items_mod():
+    s = importlib.util.spec_from_file_location("items", os.path.join(os.path.dirname(os.path.abspath(__file__)), "items.py"))
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+    return m
+
+def ideas(d):
+    p = os.path.join(d, "ideas.md")
+    return items_mod().read(p, list(IDEA_FIELDS)) if os.path.exists(p) else []
+
+def idea_word(i):
+    st = i["fields"].get("Status", "open")
+    return {"open": "parked", "in-progress": "being explored", "fixed": "adopted", "wont-fix": "dropped", "deferred": "parked"}.get(st, st)
+
+def write_ideas(d, its):
+    items_mod().write(os.path.join(d, "ideas.md"), its, IDEAS_HEADER, order=IDEA_FIELDS)
+
 def area_of(d, ids):
     """The area records share, or "" when they have none or differ."""
     got = {find(d, i).get("area", "") for i in ids}
@@ -379,6 +416,12 @@ def main():
     re_ = sp.add_parser("reactivate"); re_.add_argument("wt"); re_.add_argument("rid")
     sp.add_parser("index").add_argument("wt")
     for c in ("digest", "stamp-overview", "overview-status", "suggest"): sp.add_parser(c).add_argument("wt")
+    ia = sp.add_parser("idea"); ia.add_argument("wt"); ia.add_argument("text"); ia.add_argument("--area"); ia.add_argument("--from", dest="src")
+    ia.add_argument("--why"); ia.add_argument("--when")
+    il = sp.add_parser("ideas"); il.add_argument("wt"); il.add_argument("--all", action="store_true"); il.add_argument("--area")
+    iad = sp.add_parser("adopt"); iad.add_argument("wt"); iad.add_argument("iid"); iad.add_argument("--by", required=True)
+    idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
+    ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
     a = ap.parse_args()
     today = datetime.date.today().isoformat()
 
@@ -453,5 +496,27 @@ def main():
         print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
     elif a.cmd == "suggest":
         print("\n".join(suggestions(d)) or "nothing to suggest")
+    elif a.cmd == "idea":
+        its = ideas(d); n = max([int(i["id"][1:]) for i in its] or [0]) + 1
+        src = a.src or ""
+        area = a.area if a.area is not None else (area_of(d, [x.strip() for x in re.findall(r"\bR\d+\b", src)]) if re.search(r"\bR\d+\b", src) else "")
+        f = {"Area": slug(area) if area else "", "From": src, "Why": (a.why or "").rstrip("."), "When": (a.when or "").rstrip("."),
+             "Added": today, "Status": "open"}
+        its.append({"done": False, "id": f"I{n}", "text": a.text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
+        write_ideas(d, its); index(d); print(f"I{n} parked" + (f" (area {f['Area']})" if f.get("Area") else ""))
+    elif a.cmd == "ideas":
+        for i in ideas(d):
+            if not a.all and i["done"]: continue
+            if a.area is not None and i["fields"].get("Area", "") != ("" if a.area == "-" else a.area): continue
+            f = i["fields"]
+            print(f"{i['id']} {idea_word(i)}{' (' + f['Area'] + ')' if f.get('Area') else ''}: {i['text']}"
+                  + "".join(f"  {k}: {f[k]}." for k in ("Why", "When", "From", "Outcome") if f.get(k)))
+    elif a.cmd in ("adopt", "drop", "unpark"):
+        im = items_mod(); its = ideas(d); i = im.find(its, a.iid)
+        if a.cmd == "adopt":
+            find(d, a.by); im.set_status(i, "fixed", f"adopted as {a.by.upper()}")
+        elif a.cmd == "drop": im.set_status(i, "wont-fix", f"dropped: {a.why}")
+        else: im.set_status(i, "open")
+        write_ideas(d, its); index(d); print(f"{i['id']} {idea_word(i)}")
 
 if __name__ == "__main__": main()

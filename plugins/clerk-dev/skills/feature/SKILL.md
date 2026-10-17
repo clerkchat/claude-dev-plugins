@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
 argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | spec <piece> | list | import <file>]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 ---
@@ -91,6 +91,22 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
 A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
 a brainstorm, a new brainstorm.
+
+## Parked ideas
+
+When an idea comes up that is not for now ("cool, but later", "let's skip that
+for now", "park that"), or when you set one aside yourself while scoping, park
+it: `records.py idea <worktree> "<the idea>" --from <R-id, check question, or
+"this session"> --why "<what it would buy>" --when "<what would make it worth
+doing>"`, with `--area` when it belongs to one. One line to the user ("parked
+as I7"). Offer to park ideas the conversation drops without deciding, at most
+once per pause, listing them in a line each.
+
+"What ideas did we park", "anything parked for the harness": `records.py ideas
+<worktree> [--area <area>]`. When the work reaches an idea's trigger, mention
+it in a line. When an idea is taken up, write the record it becomes and
+`records.py adopt <worktree> I7 --by R<n>`; when it is ruled out, `records.py
+drop <worktree> I7 --why "<why>"`.
 
 ## The overview
 
