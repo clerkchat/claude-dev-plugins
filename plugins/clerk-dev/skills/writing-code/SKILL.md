@@ -142,7 +142,17 @@ progress from it, so a piece not logged is invisible there:
 - when dropped: `build.py abandon <worktree> B3 --note "<why>"`.
 
 A change done inline that covers spec requirements is logged too, as a piece
-added and marked done in one go, so the progress stays whole. Requirement
+added and marked done in one go, so the progress stays whole.
+
+"Log the built work" (status suggests it when the branch has commits the log
+does not name): list the branch's commits since its base, read each one's
+message and the files it changed (`git show --stat`, and the diff only where
+the message does not say), match it to the spec's requirements, and log each
+group of commits that make one piece as a piece added and marked done, with
+the last commit and the requirements it covers, partial where the commit
+leaves part of a requirement for later. Show the mapping in a few lines
+before writing it. Commits that cover no requirement (merges, unrelated
+fixes) are left out, and say so in one line. Requirement
 status lives only here; the spec is not edited for it.
 
 ### After each piece

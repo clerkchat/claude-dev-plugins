@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Where a worktree's review work stands, from files and git only.
 
-Usage: review-status.py [WORKTREE] [--run LABEL] [--no-mark]
+Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|implementation|review]
+
+--focus implementation prints only the building: progress per spec here and in
+the worktrees building the same feature, commits not in the build log, passes
+in progress, the design questions and open items of the specs being built, and
+next steps about building. --focus review leaves out the feature and the build.
 
 Prints a short Markdown summary:
   - the review run (label, target, reviewed commit, date), and the feature
@@ -121,7 +126,7 @@ def build_block(wt, rows, out, unreviewed):
     except SystemExit as e:
         out.append(""); out.append(f"**Implementation:** the build log could not be read: {e}"); return first, later
     others = []
-    for rname, other in related_worktrees(wt, rows):
+    for rname, other in builders(wt, rows):
         try:
             if bd.read(os.path.join(other, ".clerk-dev", "build.md")):
                 others += [f"{rname}: {l.strip()}" for l in bd.progress_lines(other) if not l.startswith(" ")]
@@ -147,7 +152,9 @@ def build_block(wt, rows, out, unreviewed):
         left = [n for n in sorted(items) if n not in state and n not in busy]
         partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
         if partial: later.append(f"Finish the partial requirement{plural(partial)} of {s}: {bd.compress(s, partial)}.")
-        if left and not busy: later.append(f"Next piece for {s}: {bd.compress(s, left[:6])}{' and more' if len(left) > 6 else ''} are not started (the plan sets the order).")
+        if left and not busy:
+            nxt = "; ".join(f"{s}.{n} {short(items[n], 70)}" for n in left[:3])
+            later.append(f"Next piece for {s}, from what is not started ({len(left)} requirements; the plan and the spec's order decide): {nxt}.")
     return first, later
 
 def feature_block(wt, rows, out):
@@ -203,6 +210,93 @@ def feature_block(wt, rows, out):
         later.append("Refresh the feature overview: \"refresh the overview\".")
     return first, later
 
+def builders(wt, rows):
+    """(name, path) of the other worktrees building this feature: the
+    workspace's rows, and any worktree of this repository whose workspace
+    file names this worktree's hub."""
+    rc = load("records.py")
+    try: hub = os.path.realpath(rc.hub(wt))
+    except SystemExit: hub = ""
+    out = list(related_worktrees(wt, rows))
+    seen = {os.path.realpath(p) for _, p in out} | {os.path.realpath(wt)}
+    for line in git(wt, "worktree", "list", "--porcelain").splitlines():
+        if not line.startswith("worktree "): continue
+        p = os.path.realpath(line[9:])
+        if p in seen or not os.path.isdir(p): continue
+        try: theirs = os.path.realpath(rc.hub(p))
+        except SystemExit: continue
+        if hub and theirs == hub and p != hub:
+            out.append((f"{repo_name(p, [])} ({os.path.basename(p)})", p)); seen.add(p)
+    return out
+
+def branch_base(wt):
+    """The merge base with the remote main branch, or "" when there is none."""
+    main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
+    return git(wt, "merge-base", "HEAD", main) if main else ""
+
+def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
+    """Where the building stands: progress per spec this worktree builds (from
+    the build log, or the spec's size when nothing is logged), commits not in
+    the log, passes, and the design questions and open items of those specs.
+    Returns the next steps, building only."""
+    bd = load("build.py"); rc = load("records.py"); it = load("items.py")
+    first, later = build_block(wt, rows, out, unreviewed)
+    try: entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
+    except SystemExit: entries = []
+    me = repo_name(wt, rows)
+    try: d = rc.fdir(wt)
+    except SystemExit: d = None
+    recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
+    logged = {e["f"].get("Spec") for e in entries}
+    specs = [r for r in recs if r.get("type") == "spec" and r.get("status") == "active" and (r.get("repo") in ("", None, me) or r["id"] in logged)]
+    unlogged_specs = [r for r in specs if r["id"] not in logged]
+    elsewhere = {l.split(": ", 1)[1].split(" ", 1)[0] for l in out if l.startswith("- ") and ": R" in l}
+    unlogged_specs = [r for r in unlogged_specs if r["id"] not in elsewhere]
+    if unlogged_specs:
+        if not entries and not any(l.startswith("**Implementation:**") for l in out): out += ["", "**Implementation:** no pieces logged in this worktree."]
+        for r in unlogged_specs:
+            _, items = bd.spec_requirements(d, r["id"])
+            out.append(f"- {r['id']} {short(r.get('title', ''), 60)}: {len(items or {})} requirements, none logged as built")
+    base = branch_base(wt)
+    done_shas = [e["f"]["Commit"] for e in entries if e["f"].get("Commit")]
+    builds_elsewhere = not entries and any(os.path.exists(os.path.join(p, ".clerk-dev", "build.md")) for _, p in builders(wt, rows))
+    commits = [l.split("\t", 1) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base and not builds_elsewhere else []
+    unlogged = [(s, subj) for s, subj in commits if not any(s.startswith(c) for c in done_shas)]
+    if commits:
+        out.append(f"- Commits on the branch: {len(commits)}, {len(unlogged)} not in the build log" + (":" if unlogged else "."))
+        for s, subj in unlogged[:5]: out.append(f"  - `{s[:9]}` {short(subj, 80)}")
+        if len(unlogged) > 5: out.append(f"  - and {len(unlogged) - 5} earlier")
+    if passes:
+        live = [e for e in passes if e["f"].get("Status") in ("open", "ended")]
+        if live: out.append(f"- Passes in progress: {'; '.join(pass_line(e) for e in live)}")
+    spec_ids = {r["id"] for r in specs}
+    areas = {r.get("area") for r in specs if r.get("area")}
+    area_of = {r["id"]: r.get("area") for r in recs}
+    settle = []
+    for c in rc.checks(d) if d else []:
+        if not c["open"] or not (set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas): continue
+        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        out.append(f"- Design questions open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
+        if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
+    for r in specs:
+        body = open(r["path"], encoding="utf-8").read()
+        m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+        n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
+        if n: out.append(f"- {r['id']} open items: {n}")
+    steps = first + pass_steps
+    if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
+    if unlogged and specs:
+        steps.append(f"Log the {len(unlogged)} commit{plural(unlogged)} already built against the specs' requirements, so progress is counted: \"log the built work\".")
+        later = [s for s in later if not s.startswith("Next piece")]
+    steps += later
+    if builds_elsewhere:
+        where = ", ".join(os.path.basename(p) for _, p in builders(wt, rows) if os.path.exists(os.path.join(p, ".clerk-dev", "build.md")))
+        steps.append(f"The building happens in {where}; its next steps are in a status asked there.")
+    elif not entries and not unlogged and unlogged_specs:
+        steps.append(f"Start building {unlogged_specs[0]['id']}: cut its requirements into pieces and brief the first (the writing-code skill).")
+    return steps
+
 def related_worktrees(wt, rows):
     real = os.path.realpath(wt)
     return [(name, path) for name, path in rows if path != real and os.path.isdir(path)]
@@ -211,6 +305,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("worktree", nargs="?", default=".")
     ap.add_argument("--run"); ap.add_argument("--no-mark", action="store_true")
+    ap.add_argument("--focus", choices=("all", "implementation", "review"), default="all",
+                    help="implementation: building progress and its next steps only; review: the review only")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
     run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
@@ -219,7 +315,7 @@ def main():
     head = git(wt, "rev-parse", "HEAD")
     out, steps = [], []
     rows = workspace_rows(wt)
-    out.append(f"## Where {repo_name(wt, rows)} stands ({branch})\n")
+    out.append(f"## Where {'the implementation in ' if a.focus == 'implementation' else ''}{repo_name(wt, rows)} stands ({branch})\n")
 
     # Review run and commits since it
     status = instr = numbers = {}
@@ -310,10 +406,17 @@ def main():
                     pst, pin, pnum = sf.state(prun)
                     left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
                     if left: pass_steps.append(f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`.")
-    bfirst, blater = build_block(wt, rows, out, unreviewed)
-    first, later = feature_block(wt, rows, out)
-    steps[0:0] = bfirst + pass_steps + first
-    steps.extend(blater + later)
+    if a.focus == "implementation":
+        out[:] = [out[0]] + [l for l in out[1:] if l.startswith("**Working tree")]
+        steps = implementation_view(wt, rows, out, unreviewed, pass_steps, passes)
+        out.append("")
+        out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else ["**Next:** nothing pending in the building."]
+        print(re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
+    if a.focus == "all":
+        bfirst, blater = build_block(wt, rows, out, unreviewed)
+        first, later = feature_block(wt, rows, out)
+        steps[0:0] = bfirst + pass_steps + first
+        steps.extend(blater + later)
 
     # Findings
     if have_run:

@@ -28,7 +28,7 @@ def load(name, file):
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     return mod
 
-rs = load("rs", "review-status.py")
+rs = load("rs", "status.py")
 git = rs.git
 
 def git_raw(repo, *args):

@@ -303,8 +303,8 @@ see Step 6b):
   usage recorded in raw and verify headers, by lens and model.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/progress.py`: watches runs on disk for the
   progress lines under Between waves and in feature mode.
-- `${CLAUDE_PLUGIN_ROOT}/scripts/review-status.py [WORKTREE]`: where the review
-  work stands, for the `review-status` skill.
+- `${CLAUDE_PLUGIN_ROOT}/scripts/status.py [WORKTREE]`: where the review
+  work stands, for the `status` skill.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py`: open findings whose code
   later commits touched, for the triage skill's check before fixing.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/pr-comments.py`: pull request comments into a
