@@ -255,6 +255,12 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     first, later = build_block(wt, rows, out, unreviewed)
     try: entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
     except SystemExit: entries = []
+    if entries:
+        i = next((k for k, l in enumerate(out) if l.startswith("**Implementation:**")), None)
+        if i is not None:
+            j = i + 1
+            while j < len(out) and (out[j].startswith("- R") or out[j].startswith("  - ")): j += 1
+            out[i + 1:j] = bd.checklist_lines(wt)
     me = repo_name(wt, rows)
     try: d = rc.fdir(wt)
     except SystemExit: d = None
@@ -297,6 +303,8 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
         m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
         n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
         if n: out.append(f"- {r['id']} open items: {n}")
+    mspecs = {m["f"].get("Spec") for m in bd.milestones(entries)}
+    pass_steps = [s for s in pass_steps if not any(e["id"] in s and e["f"].get("Piece") in mspecs for e in (passes or []))]
     steps = first + pass_steps
     if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
     if unlogged and specs:

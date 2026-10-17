@@ -184,7 +184,14 @@ status lives only here; the spec is not edited for it.
    files, a message that stands alone and describes the change, never
    `.clerk-dev/` paths or record ids. Mark the piece done in the build log, and
    tick the spec's open items it closes.
-4. Say one line: the piece, the commit, the tests, anything accepted.
+4. Say one line: the piece, the commit, the tests, anything accepted, and the
+   count it moves ("B15 done in 4c1e2ab, tests pass: R52 now 27 of 32").
+
+Whenever you report progress against a spec at more length (the user asks,
+the draft ends, a milestone's passes are done), show `build.py checklist
+<worktree> --spec R52` as it prints it: one checkbox per requirement, ticked
+when done, with partial and in-progress items marked. Never list requirement
+numbers in prose ("1 to 18, 20 to 24 done; 19, 25 to 28 open").
 
 ### Milestones
 

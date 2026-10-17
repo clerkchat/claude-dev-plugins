@@ -21,6 +21,7 @@ Usage:
   build.py milestone WORKTREE --spec R52 --piece "C core harness" --passes prep,happy-path,security,edge-cases,tests [--required security]
   build.py skip WORKTREE M1 edge-cases --why "..."     (never a required pass)
   build.py milestones WORKTREE
+  build.py checklist WORKTREE [--spec R52]          progress as a checklist, one line per requirement
 
 Without --covered, `done` marks every requirement of the piece done. Statuses:
 briefed (handed to an implementer), stopped (it stopped on a question),
@@ -174,6 +175,43 @@ def progress_lines(wt, spec=None):
             lines.append(f"  {e['id']} {e['title']}: {e['f'].get('Status')}" + (f", on: {q}" if e["f"].get("Status") == "stopped" and q else ""))
     return lines
 
+def label(text, limit=72):
+    """A requirement's text cut to its first clause, for one checklist line."""
+    text = re.sub(r"\s+", " ", text).strip()
+    spans = []
+    hidden = re.sub(r"`[^`]*`", lambda m: spans.append(m.group(0)) or f"\x00{len(spans) - 1}\x00", text)
+    m = re.match(r"(.+?)(?:[.;:](?:\s|$)|$)", hidden)
+    hidden = m.group(1) if m else hidden
+    text = re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], hidden)
+    if text.count("(") > text.count(")"): text = text[:text.rfind("(")].rstrip()
+    if len(text) <= limit: return text
+    cut = text[:limit].rsplit(" ", 1)[0]
+    if cut.count("`") % 2: cut = cut[:cut.rfind("`")].rstrip()
+    if cut.count("(") > cut.count(")"): cut = cut[:cut.rfind("(")].rstrip()
+    return cut.rstrip(",;:(") + "…"
+
+def checklist_lines(wt, spec=None):
+    """Per spec: a heading line with the count, then one checkbox per
+    requirement: [x] done (and the piece), [ ] partial, in progress, or not
+    started, with what is missing or which piece is on it."""
+    out = []
+    for s, r, items, state, mine in progress(wt, spec):
+        title = r.get("title", "") if r else "(not found in the hub)"
+        live = [e for e in mine if e["f"].get("Status") in ("briefed", "stopped")]
+        busy = {n: e for e in live for n, _, _ in reqs_of(e)}
+        done = sum(1 for v in state.values() if v[0] == "done")
+        out.append(f"{s} {title}: {done} of {len(items)} done")
+        for n in sorted(items):
+            st, note, by = state.get(n, (None, "", None))
+            if st == "done": out.append(f"- [x] {n}. {label(items[n])} ({by})")
+            elif n in busy:
+                e = busy[n]; word = "stopped on a question" if e["f"].get("Status") == "stopped" else "in progress"
+                out.append(f"- [ ] {n}. {label(items[n])} ({word}, {e['id']})")
+            elif st == "partial": out.append(f"- [ ] {n}. {label(items[n])} (partial, {by}: {note or 'not finished'})")
+            else: out.append(f"- [ ] {n}. {label(items[n])}")
+        out.append("")
+    return out[:-1] if out else out
+
 def compress(s, nums):
     """R52.3, R52.5 to R52.9"""
     runs = []
@@ -265,6 +303,7 @@ def main():
     ab = sp.add_parser("abandon"); ab.add_argument("wt"); ab.add_argument("bid"); ab.add_argument("--note")
     l_ = sp.add_parser("list"); l_.add_argument("wt"); l_.add_argument("--open", action="store_true")
     pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--spec")
+    cl = sp.add_parser("checklist"); cl.add_argument("wt"); cl.add_argument("--spec")
     ms = sp.add_parser("milestone"); ms.add_argument("wt"); ms.add_argument("--spec", required=True); ms.add_argument("--piece", required=True)
     ms.add_argument("--passes", required=True); ms.add_argument("--required")
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
@@ -298,6 +337,9 @@ def main():
         m = find(entries, a.mid)
         if a.focus in [x.strip() for x in m["f"].get("Required", "").split(",")]: sys.exit(f"{a.focus} is required for {m['id']}; it cannot be skipped")
         m["multi"]["Skipped"].append(f"{a.focus}: {a.why}"); write(p, entries); print(f"{m['id']}: {a.focus} skipped")
+        return
+    if a.cmd == "checklist":
+        print("\n".join(checklist_lines(a.wt, a.spec.upper() if a.spec else None)) or "no pieces logged")
         return
     if a.cmd == "milestones":
         lines, steps = milestone_lines(a.wt)
