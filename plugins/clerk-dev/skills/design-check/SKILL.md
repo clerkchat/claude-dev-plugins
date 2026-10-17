@@ -40,6 +40,12 @@ user through them and records each answer.
    WORKSPACE: <.clerk-dev/review-workspace.md, or none>
    ```
 
+   For the feature's central record, the spec or design most other records
+   build on (the core chunk's spec, the active design of its extension
+   points), run the `contracts` and `cross-repo` lenses with `model: fable`,
+   falling back to Opus as Model fallback in the review skill describes; every
+   other lens, and every other record, uses the agent's own model.
+
    The repository a record is about is its `repo` field; find its worktree in
    the workspace file, defaulting to this worktree. Records **span
    repositories** when the workspace lists more than one repository and either

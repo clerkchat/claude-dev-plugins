@@ -92,12 +92,24 @@ Pass `model` and `effort` on each implementer call:
 
 | Piece | Model | Effort |
 | --- | --- | --- |
-| Shape-setting code others build on: core types, interfaces, extension points, cross-module wiring, schema and migration design, concurrency-sensitive code | opus | high |
+| Foundation pieces, where a mistake is expensive to undo: the feature's central types and extension-point interfaces that every later piece builds on; schema changes to tables that are already deployed; concurrency or state-machine code with no settled pattern to follow | fable | high |
+| Other shape-setting code others build on: types, interfaces, cross-module wiring, new schema and migration design, concurrency-sensitive code | opus | high |
 | Implementing to a settled spec inside established patterns; ports of reference code; their tests | sonnet | medium |
 | Mechanical edits: moves and renames with their import updates, regenerated files, applying one pattern across files | sonnet | low |
 
+Fable is for the few pieces in the first row, not a default: it costs about
+two and a half times Opus. Most features have a handful of such pieces, near
+the start.
+
 Raise a piece a row when its first attempt comes back with deviations or
-failing tests that point at reasoning, not at the brief.
+failing tests that point at reasoning, not at the brief; a piece that fails
+that way at Opus goes to Fable.
+
+Not every account has Fable, and it may have its own usage limits. When an
+implementer on Fable fails because the model is unavailable or a limit is
+reached, run the same brief on Opus at the same effort, say so once in a line,
+and use Opus for the rest of the session's Fable pieces, as Model fallback in
+the review skill describes.
 
 ### The brief
 
