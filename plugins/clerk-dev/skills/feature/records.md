@@ -241,7 +241,7 @@ the records it comes from, so it can be checked against them. It adds no claim,
 opinion, or recommendation of its own; where records disagree or leave a gap,
 it says so under Open. Aim for something read in five minutes.
 
-```markdown
+````markdown
 # Overview: report exports
 
 ## Goal
@@ -256,12 +256,24 @@ them and the decisions behind each part (R30; R21, R22).
 
 ## Plan
 
-The order of work: each piece or chunk in order, with its repository, what it
-depends on, and its spec when it has one (from plans, capabilities, and
-decisions that set order, citing them).
+The order of work, from plans, capabilities, and decisions that set order,
+citing them. When pieces depend on each other in more than a straight line,
+start with a dependency graph in a code block. Then one row per piece, in
+order, so it can be skimmed: the piece, its repository, its branch or worktree
+when the records name one, what it branches from, what it depends on, and its
+spec. Ordering rules and notes that fit no row follow as a short list.
 
-1. Core harness (api; spec R31): depends on nothing (R19, R29).
-2. Bisection (api): depends on 1; adds the `narrowing` column (R13, R22).
+```
+main ──► [C] core ──┬──► [A] assertions ──► [CA] capture
+                    └──► [B] bisection
+```
+
+| Piece | Repo | Branch | From | Depends on | Spec |
+|---|---|---|---|---|---|
+| C core harness | api | `feat/core` | main | nothing (R19, R29) | R32 |
+| B bisection | api | `feat/bisection` | C | C; adds `baselineTestRunId` (R22) | none |
+
+- Each PR targets the branch it starts from until that merges, then main (R31).
 
 ## By area
 
@@ -283,7 +295,7 @@ spec, records that disagree.
 
 One line per brainstorm: what it explored (R1: how to split the harness branch
 into chunks).
-```
+````
 
 When there are no areas, By area becomes Decisions, one line each.
 

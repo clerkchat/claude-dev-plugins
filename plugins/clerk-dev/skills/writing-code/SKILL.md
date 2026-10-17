@@ -1,6 +1,6 @@
 ---
 name: writing-code
-description: How to shape code you write or change: refactor first to a clean baseline, reuse and extend what the codebase already has, keep one source of truth, and extract clean abstractions instead of repeating logic. Use before writing or changing code of any size - implementing a feature, a spec, a pass, a fix, a follow-up, or a small edit - and when planning how a change will be built. Preloaded by the review fixer.
+description: How to write code: delegate the building of settled pieces to implementer subagents at the right model and effort, while the session that owns the branch settles choices, reviews, and commits; and how to shape the code itself (refactor first to a clean baseline, reuse and extend what exists, one source of truth, clean abstractions). Use before writing or changing code of any size - implementing a feature, a spec, a chunk, a port, a pass, a fix, a follow-up, or a small edit - and when planning how a change will be built. Preloaded by the implementer and the review fixer.
 ---
 
 # Writing code
@@ -53,3 +53,90 @@ that code, propose the refactor instead of making it.
 - Abstractions at the right level: no framework for one caller, no wrapper
   around one call, no parameter added to a shared type because one function
   needs it.
+
+## Delegating
+
+This section is for the session that owns the branch. An implementer or fixer
+agent that preloads this skill skips it: it is the piece being delegated.
+
+The feature records exist so that design choices are settled outside the code.
+Once they are, building is delegated: the session that owns the branch keeps
+the judgment (what to build, in what order, whether the result is right) and
+the commits, and hands each piece to a `clerk-dev:implementer` agent with a
+brief. This keeps the session's context for the whole feature instead of
+filling it with one file's details, and gives every piece a check before it
+lands.
+
+### What stays in the session
+
+- Settling choices. When a piece needs a choice no record settles and it
+  shapes code others build on, settle it with the user first and record it (a
+  decision, or an open item resolved in the spec), then delegate. An agent that
+  stops on a `questions:` line is handled the same way.
+- Cutting the work into pieces and ordering them.
+- Reviewing each result, running its tests, and committing it.
+- Changes small enough that the brief would be longer than the change: a few
+  lines, one obvious edit. Do those inline.
+
+### Pieces
+
+A piece is one requirement or a few that belong together, or one port of
+reference code, with tests that prove it, small enough to review in a few
+minutes: usually a module, an entity with its migration, a set of DTOs, an
+executor step. Cut along the spec's requirements, and order pieces so each
+builds on committed ones.
+
+### Model and effort
+
+Pass `model` and `effort` on each implementer call:
+
+| Piece | Model | Effort |
+| --- | --- | --- |
+| Shape-setting code others build on: core types, interfaces, extension points, cross-module wiring, schema and migration design, concurrency-sensitive code | opus | high |
+| Implementing to a settled spec inside established patterns; ports of reference code; their tests | sonnet | medium |
+| Mechanical edits: moves and renames with their import updates, regenerated files, applying one pattern across files | sonnet | low |
+
+Raise a piece a row when its first attempt comes back with deviations or
+failing tests that point at reasoning, not at the brief.
+
+### The brief
+
+Give paths, not contents. Include:
+
+- the goal, in a sentence or two;
+- the requirements it covers, by spec id and number, and the spec's path;
+- the decisions it must follow, by id and path;
+- the reference code to port or follow (`git show <ref>:<path>` for another
+  branch);
+- the files expected to change, and any it must not touch;
+- the tests to write or port, and the exact command to run them;
+- the rules that apply beyond the repository's conventions: the user's
+  instructions that bear on code (for example a no-comments rule) and the
+  branch's Purpose. Do not assume the agent sees the user's own instructions;
+  restate the ones that apply.
+
+### Order and parallelism
+
+Run pieces one at a time by default. Run two at once only when they change
+disjoint files and their tests share no resources (databases, ports, fixtures);
+many repositories' integration tests share databases and must never run
+concurrently. A larger fan-out is a multi-agent workflow, which runs only when
+the user asks for one.
+
+### After each piece
+
+1. Read the report. `stopped` or `questions:` go back to the user (or are
+   settled from the records) before anything else; `deviations:` are judged
+   against the spec and decisions, and either accepted (say so to the user in
+   a line, and record it when it changes a decision) or sent back with a
+   correction.
+2. Read the diff (`git diff --stat`, then the parts that carry the piece's
+   shape), and run the brief's tests yourself.
+3. Commit as step 6 of the `review-fix` skill describes: only the piece's
+   files, a message that stands alone and describes the change, never
+   `.clerk-dev/` paths or record ids. Tick the spec's open items it closes.
+4. Say one line: the piece, the commit, the tests, anything accepted.
+
+At milestones (the end of a chunk, a set of pieces that make one behavior),
+check the work with a pass's narrow check or a review, as the user prefers.
+

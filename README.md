@@ -88,6 +88,16 @@ and writes the questions worth settling before building, marked settle-first,
 worth settling, or note. "Walk the design questions" goes through them with
 you, recording each answer as a decision.
 
+#### Building: delegated pieces
+
+With the choices settled in records, building is delegated. The session you
+talk to cuts the work into pieces (a requirement or a few, a port of reference
+code), hands each to an implementer agent with a brief that cites the spec and
+decisions, on Opus for code others build on and Sonnet for the rest, reviews
+the result, runs its tests, and commits it. Choices no record settles come back
+to you before they are built. Your session keeps its context for the whole
+feature instead of one file's details.
+
 #### While writing: passes
 
 > What passes does this need?

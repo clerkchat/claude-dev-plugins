@@ -43,8 +43,14 @@ commit rules below.
    Leave out anything another pass in the catalogue owns. Show the items in a
    few lines.
 3. **Write.** Follow the `writing-code` skill throughout.
-   - Claude mode: do the items, one coherent change per commit, running the
-     tests the change touches before each commit. Mark each item as it lands
+   - Claude mode: do the items, one coherent change per commit, delegated as
+     the skill's Delegating section describes: group items that change the
+     same code into one piece, brief a `clerk-dev:implementer` per piece with
+     the lens's Pass mode text and the items as its goal, at the model and
+     effort the piece calls for (a pass's items are usually sonnet, medium;
+     prep refactors that reshape shared code, opus, high), review, run the
+     tests, and commit each. Items of a few lines are done inline. Mark each
+     item as it lands
      (`passes.py done <worktree> P<n> <k>`, or `--na "<why>"` when it turns out
      not to apply). Stay inside the items: something outside them goes in a
      line to the user, not into this pass.
