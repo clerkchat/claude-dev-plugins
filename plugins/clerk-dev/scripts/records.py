@@ -290,23 +290,54 @@ def rules(d, area=None):
     if area is not None: rs = [r for r in rs if not r.get("area") or r.get("area") == area]
     return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), int(r["id"][1:])))]
 
+def body_section(body, heading):
+    m = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+    return m.group(1).strip() if m else ""
+
+def labeled(label, text):
+    """A bold label and its text: inline for one paragraph, below it for lists
+    or several paragraphs."""
+    if not text: return []
+    if "\n\n" in text or re.match(r"^\s*(?:[-*+]|\d+\.)\s", text): return [f"**{label}:**", "", text, ""]
+    return [f"**{label}:** {re.sub(r'\s*\n\s*', ' ', text)}", ""]
+
 def write_guidance(d):
-    """guidance.md: every active guidance rule in one file, for lens prompts
-    and implementer briefs; regenerated with the index, never edited."""
+    """guidance.md, the feature's guidance as a handbook: every active rule at
+    a glance, then each in full by area (rule, why, what it applies to, where
+    it came from), then superseded and discarded ones. Lens prompts and
+    implementer briefs read it; regenerated with the index, never edited."""
     p = os.path.join(d, "guidance.md")
     rs = rules(d)
-    if not rs:
+    past = [r for r in records(d) if r.get("type") == "guidance" and r.get("status") != "active"]
+    if not rs and not past:
         if os.path.exists(p): os.remove(p)
         return
     out = ["# Guidance", "", "The user's standing guidance for this feature: rules that settle choices",
            "beyond the question that prompted them. Follow them; when one cannot hold,",
            "say so rather than work around it. Generated from the guidance records by",
-           "records.py; never edited.", ""]
+           "records.py; never edited. To change a rule, write a guidance record that",
+           "supersedes it.", ""]
+    if rs:
+        out += ["## At a glance", ""]
+        out += [f"- **{r['id']}**{' (' + r['area'] + ')' if r.get('area') else ''}: {rule}" for r, rule in rs] + [""]
     area = None
     for r, rule in rs:
         a = r.get("area") or "Feature-wide"
-        if a != area: out += ([""] if area is not None else []) + [f"## {a}", ""]; area = a
-        out.append(f"- {r['id']}: {rule} ({os.path.relpath(r['path'], d)})")
+        if a != area: out += [f"## {a}", ""]; area = a
+        _, body = parse(r["path"])
+        out += [f"### {r['id']}. {r.get('title', '')}", "", body_section(body, "Rule") or rule, ""]
+        out += labeled("Why", body_section(body, "Why"))
+        out += labeled("Applies to", body_section(body, "Applies to"))
+        src = body_section(body, "From") or r.get("from", "")
+        if r.get("supersedes"): src = (src.rstrip(".") + ". " if src else "") + f"Supersedes {r['supersedes']}."
+        out += labeled("From", src)
+        out += [f"[{r['id']} record]({os.path.relpath(r['path'], d)}), {r.get('date', '')}", ""]
+    if past:
+        out += ["## History", ""]
+        for r in past:
+            how = f"superseded by {r['superseded_by']}" if r.get("superseded_by") else (f"discarded: {r['note']}" if r.get("note") else r.get("status", ""))
+            out.append(f"- **{r['id']}**{' (' + r['area'] + ')' if r.get('area') else ''}: {gist(r, limit=200)} ({how}; [record]({os.path.relpath(r['path'], d)}))")
+        out.append("")
     open(p, "w", encoding="utf-8").write("\n".join(out).rstrip("\n") + "\n")
 
 def suggestions(d):
