@@ -288,9 +288,24 @@ one line:
 
 ## Open
 
-Settle-first design questions, other open questions, open items in specs, and
-gaps the records show: an area with decisions but no design, a piece with no
-spec, records that disagree.
+Three subsections, always with these headings (status counts their bullets),
+each "None." when empty:
+
+### Questions
+
+Settle-first design questions first, then other open questions and open items
+in specs, one bullet each, citing the check or record.
+
+### Gaps
+
+What the records lack: an area with decisions but no design, a piece with no
+spec, no plan.
+
+### Disagreements
+
+Records that disagree, or that rely on a superseded record, one bullet each
+naming both sides: "R5 relies on R3's frozen-contract rule; R3 is superseded
+by R28 (R5, R28)."
 
 ## Explored
 

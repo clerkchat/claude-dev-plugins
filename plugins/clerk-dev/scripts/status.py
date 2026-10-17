@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """Where a worktree's review work stands, from files and git only.
 
-Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|implementation|review]
+Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review] [--area NAME|R52]
+
+--focus design prints whether the feature is ready to build: readiness per
+piece of the overview's plan (spec, design check, settle-first questions,
+Baseline, how far built), each area's decisions and design, open questions by
+area (flagging checks of superseded records), and the overview's gaps and
+disagreements. --area prints one area, or one spec (a piece) and its area:
+the overview's summary of it, its records, open questions, the disagreements
+that name its records, build progress and passes on its specs.
 
 --focus implementation prints only the building: progress per spec here and in
 the worktrees building the same feature, commits not in the build log, passes
@@ -35,7 +43,7 @@ Prints a short Markdown summary:
 
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
-import argparse, datetime, importlib.util, os, re, subprocess
+import argparse, datetime, importlib.util, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location("sf", os.path.join(HERE, "stale-findings.py"))
@@ -297,6 +305,221 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
         steps.append(f"Start building {unlogged_specs[0]['id']}: cut its requirements into pieces and brief the first (the writing-code skill).")
     return steps
 
+def section(text, heading, level=2):
+    m = re.search(rf"^{'#' * level} {re.escape(heading)}\n(.*?)(?=^#{{1,{level}}} |\Z)", text, re.S | re.M)
+    return m.group(1) if m else ""
+
+def bullets(text):
+    out, cur = [], None
+    for line in text.splitlines():
+        if re.match(r"^[-*] ", line): cur = line[2:].strip(); out.append(cur)
+        elif cur is not None and line.startswith("  ") and line.strip(): out[-1] += " " + line.strip()
+        elif not line.strip(): cur = None
+    return out
+
+def overview_parts(d):
+    """From overview.md: the Plan table's rows, the Open subsections, and each
+    area's summary under By area. Older overviews without the Open subsections
+    are read for a paragraph about disagreement."""
+    p = os.path.join(d, "overview.md")
+    parts = {"plan": [], "gaps": [], "disagreements": [], "areas": {}}
+    if not os.path.exists(p): return parts
+    text = open(p, encoding="utf-8").read()
+    plan = section(text, "Plan")
+    rows = [l for l in plan.splitlines() if l.strip().startswith("|")]
+    if len(rows) > 2:
+        head = [c.strip().lower() for c in rows[0].strip().strip("|").split("|")]
+        for l in rows[2:]:
+            cells = [c.strip() for c in l.strip().strip("|").split("|")]
+            parts["plan"].append(dict(zip(head, cells)))
+    op = section(text, "Open")
+    if "### Disagreements" in op:
+        parts["disagreements"] = [b for b in bullets(section(op, "Disagreements", 3)) if b.lower() != "none."]
+        parts["gaps"] = [b for b in bullets(section(op, "Gaps", 3)) if b.lower() != "none."]
+    else:
+        for m in re.finditer(r"^([^\n-][^\n]*)\n+((?:[-*] .*\n(?:  .*\n)*)+)", op, re.M):
+            head = m.group(1).lower()
+            key = "mixed" if "gap" in head and "disagree" in head else "disagreements" if "disagree" in head else "gaps" if "gap" in head else None
+            if key: parts.setdefault(key, []).extend(bullets(m.group(2)))
+    by = section(text, "By area")
+    for m in re.finditer(r"^### ([^\n]+)\n(.*?)(?=^### |\Z)", by, re.S | re.M):
+        para = next((b.strip() for b in re.split(r"\n\s*\n", m.group(2)) if b.strip() and not b.strip().startswith(("-", "*"))), "")
+        parts["areas"][m.group(1).strip().lower()] = re.sub(r"\s+", " ", para)
+    return parts
+
+def spec_facts(d, r, cs, it):
+    """Readiness facts of one spec: its checks, open settle-first questions in
+    them, whether its Baseline is filled, and its open items."""
+    body = open(r["path"], encoding="utf-8").read()
+    mine = [c for c in cs if r["id"] in c["records"]]
+    settle = []
+    for c in mine:
+        settle += [f"{c['name']}.{q['id']}" for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"] and q["fields"].get("Weight", "").startswith("settle-first")]
+    base = section(body, "Baseline").strip()
+    m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+    items = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
+    missing = ([] if mine else ["no design check"]) + ([f"{len(settle)} settle-first open"] if settle else []) + ([] if base else ["no Baseline"])
+    return {"checks": mine, "settle": settle, "baseline": bool(base), "items": items, "missing": missing}
+
+def area_states(recs):
+    """[(area, decisions, design note)] for every area with active records."""
+    live = [r for r in recs if r.get("status") == "active"]
+    out = []
+    for a in sorted({r.get("area", "") for r in live}, key=lambda a: (a != "", a)):
+        decs = [r for r in live if r.get("area", "") == a and r.get("type") == "decision"]
+        des = [r for r in live if r.get("area", "") == a and r.get("type") == "design"]
+        if des:
+            newest = max(int(x["id"][1:]) for x in des)
+            later = [x["id"] for x in decs if int(x["id"][1:]) > newest]
+            note = f"design R{newest}" + (f", older than {len(later)} decision{plural(later)}" if later else ", current")
+        else: note = "no design"
+        out.append((a or "feature-wide", decs, note))
+    return out
+
+def design_view(wt, rows, out):
+    """Whether the feature is ready to build: readiness per piece, each area's
+    decisions and design, open questions by area, and the overview's gaps and
+    disagreements. Returns the next steps, design only."""
+    rc = load("records.py"); it = load("items.py"); bd = load("build.py")
+    d = rc.fdir(wt)
+    if not os.path.exists(os.path.join(d, "feature.md")):
+        out += ["", "**Design:** no feature records here or in a hub."]; return ["Start a feature: \"start a feature for <name>\"."]
+    recs = rc.records(d); cs = rc.checks(d); ov = overview_parts(d)
+    specs = {r["id"]: r for r in recs if r.get("type") == "spec" and r.get("status") == "active"}
+    built = {}
+    for _, p in [("", wt)] + builders(wt, rows):
+        try:
+            for s, _, items, state, _ in bd.progress(p):
+                built[s] = f"{sum(1 for v in state.values() if v[0] == 'done')} of {len(items)} built"
+        except SystemExit: pass
+    steps, settle_all, nospec = [], [], []
+    out += ["", "**Readiness:**" + ("" if ov["plan"] else " (no Plan table in the overview; by spec)")]
+    named = set()
+    for row in ov["plan"]:
+        piece = row.get("piece", "?"); sid = next(iter(re.findall(r"\bR\d+\b", row.get("spec", ""))), "")
+        r = specs.get(sid)
+        if not r:
+            out.append(f"- {piece}: no spec"); nospec.append(piece); continue
+        named.add(sid); f = spec_facts(d, r, cs, it)
+        word = "ready" if not f["missing"] else "not ready: " + ", ".join(f["missing"])
+        out.append(f"- {piece}: {sid}, {word}" + (f"; {built[sid]}" if sid in built else "") + (f"; {f['items']} open items" if f["items"] else ""))
+        settle_all += f["settle"]
+        if "no design check" in f["missing"]: steps.append(f"Design-check {sid} ({short(r.get('title', ''), 40)}): \"design-check {sid}\".")
+        if not f["baseline"]: steps.append(f"Fill {sid}'s Baseline: the refactor to do first, or \"Clean\" with why.")
+    for sid, r in specs.items():
+        if sid in named: continue
+        f = spec_facts(d, r, cs, it)
+        word = "ready" if not f["missing"] else "not ready: " + ", ".join(f["missing"])
+        out.append(f"- {sid} {short(r.get('title', ''), 50)}: {word}" + (f"; {built[sid]}" if sid in built else "") + (f"; {f['items']} open items" if f["items"] else ""))
+        settle_all += f["settle"]
+        if "no design check" in f["missing"]: steps.append(f"Design-check {sid}: \"design-check {sid}\".")
+        if not f["baseline"]: steps.append(f"Fill {sid}'s Baseline: the refactor to do first, or \"Clean\" with why.")
+    if nospec:
+        steps.insert(0, f"Write the spec for {nospec[0]}, next in the plan without one" + (f" ({len(nospec) - 1} more after it)." if len(nospec) > 1 else "."))
+    out += ["", "**Areas:**"]
+    for a, decs, note in area_states(recs):
+        out.append(f"- {a}: {len(decs)} active decision{plural(decs)}, {note}")
+    area_of = {r["id"]: r.get("area") or "feature-wide" for r in recs}
+    qlines, other = [], 0
+    for c in cs:
+        if not c["open"]: continue
+        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        other += len(qs) - len(sfq)
+        status_of = {r["id"]: r for r in recs}
+        gone = [x for x in c["records"] if status_of.get(x, {}).get("status") == "superseded"]
+        note = "; on " + ", ".join(f"superseded {x} (now {status_of[x].get('superseded_by')})" for x in gone) if gone else ""
+        qlines.append(f"- {area_of.get(c['records'][0], '?') if c['records'] else '?'}: {c['name']}, {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else "") + note)
+        settle_all += [f"{c['name']}.{q}" for q in sfq]
+    if qlines: out += ["", "**Open questions:**"] + qlines
+    mixed = ov.get("mixed", [])
+    if ov["gaps"] or ov["disagreements"] or mixed:
+        state = re.sub(r"^Overview: \[overview.md\]\(overview.md\), ", "", rc.overview_line(d)).rstrip(".")
+        out += ["", f"**From the overview** ({state}):"]
+        for label, xs in (("gaps", ov["gaps"]), ("disagreements", ov["disagreements"]), ("gaps and disagreements", mixed)):
+            if not xs: continue
+            out.append(f"- {label}: {len(xs)}")
+            if label != "gaps": out += [f"  - {short(x, 110)}" for x in xs[:6]] + ([f"  - and {len(xs) - 6} more"] if len(xs) > 6 else [])
+    else:
+        out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d))]
+    settle_all = list(dict.fromkeys(settle_all))
+    first = [f"Settle the settle-first design questions: {', '.join(settle_all)} (\"walk the design questions\")."] if settle_all else []
+    if ov["disagreements"] or mixed:
+        n = len(ov["disagreements"]) + len(mixed)
+        first.append(f"Resolve the {n} {'disagreements' if not mixed else 'gaps and disagreements'} the overview lists, each with a new or superseding record, then refresh it.")
+    rolls = [s for s in rc.suggestions(d) if not s.startswith("The overview")]
+    tail = rolls + ([f"Decide or defer the {other} other open design question{plural(other)}."] if other else [])
+    if any(s.startswith("The overview") for s in rc.suggestions(d)): tail.append("Refresh the overview: \"refresh the overview\".")
+    return first + list(dict.fromkeys(steps)) + tail
+
+def area_view(wt, rows, out, name):
+    """One area, or one spec (a piece) and its area: the overview's summary of
+    it, its records, open questions, disagreements that name its records, build
+    progress and passes on its specs. Returns the next steps for it."""
+    rc = load("records.py"); it = load("items.py"); bd = load("build.py")
+    d = rc.fdir(wt); recs = rc.records(d)
+    spec = None
+    if re.fullmatch(r"[Rr]\d+", name):
+        spec = next((r for r in recs if r["id"] == name.upper()), None)
+        if not spec: sys.exit(f"{name.upper()} is not a record of this feature")
+        area = spec.get("area", "")
+    else:
+        area = rc.slug(name)
+        known = sorted({r.get("area") for r in recs if r.get("area")})
+        if area not in known and area != "feature-wide": sys.exit(f"no area {name}; the areas are: {', '.join(known) or 'none'}")
+        if area == "feature-wide": area = ""
+    label = (f"{spec['id']} {spec.get('title', '')}" if spec else "") + (f" (area {area or 'feature-wide'})" if spec else area or "feature-wide")
+    out[0] = f"## Where {label} stands\n"
+    mine = [r for r in recs if r.get("area", "") == area]
+    ids = {r["id"] for r in mine}
+    ov = overview_parts(d)
+    summ = ov["areas"].get((area or "feature-wide").lower())
+    if summ: out += [summ, ""]
+    live = [r for r in mine if r.get("status") == "active"]
+    counts_by_type = {k: sum(1 for r in live if r.get("type") == k) for k in ("design", "spec", "plan", "decision")}
+    out.append(f"**Records:** {len(live)} active ({', '.join(f'{counts_by_type[k]} {k}{'s' if counts_by_type[k] != 1 else ''}' for k in ('design', 'spec', 'plan', 'decision') if any(r.get('type') == k for r in live))}), {len(mine) - len(live)} history.")
+    for r in rc.ordered([r for r in live if r.get("type") != "decision"]):
+        out.append(f"- {r['id']} {r['type']}: {short(r.get('title', ''), 70)}")
+    decs = [r for r in live if r.get("type") == "decision"]
+    if decs: out.append(f"- decisions: {', '.join(r['id'] for r in decs)}")
+    steps, settle = [], []
+    qs_lines = []
+    for c in rc.checks(d):
+        if not c["open"] or not set(c["records"]) & ids: continue
+        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        qs_lines.append(f"- {c['name']}: {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else ""))
+        settle += [f"{c['name']}.{q}" for q in sfq]
+    if qs_lines: out += ["", "**Open questions:**"] + qs_lines
+    dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(re.findall(r"\bR\d+\b", x)) & ids]
+    if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
+    specs = [spec] if spec else [r for r in live if r.get("type") == "spec"]
+    prog, pas = [], []
+    for wname, p in [("", wt)] + builders(wt, rows):
+        try:
+            for s, r, items, state, pieces in bd.progress(p):
+                if s not in {x["id"] for x in specs}: continue
+                where = f" ({wname})" if wname else ""
+                prog += [f"- {l.strip()}{where if not l.startswith(' ') else ''}" if not l.startswith(" ") else f"  - {l.strip()}" for l in bd.progress_lines(p, s)]
+                for e in pieces:
+                    if e["f"].get("Status") == "stopped": steps.insert(0, f"Answer {e['id']}'s question{where}: {e['multi']['Question'][-1] if e['multi']['Question'] else ''}")
+        except SystemExit: pass
+        ps, _ = read_passes(p)
+        pas += [f"- {pass_line(e)}" for e in ps if e["f"].get("Piece") in {x["id"] for x in specs} and e["f"].get("Status") in ("open", "ended", "checked")]
+    if specs:
+        out += ["", "**Build:**"] + (prog or [f"- {x['id']}: nothing logged as built" for x in specs])
+    if pas: out += ["", "**Passes:**"] + pas
+    if settle: steps.insert(0, f"Settle {', '.join(settle)} (\"walk the design questions\").")
+    if dis: steps.append(f"Resolve the {len(dis)} disagreement{plural(dis)} touching it, each with a new or superseding record.")
+    for x in specs:
+        f = spec_facts(d, x, rc.checks(d), it)
+        if "no design check" in f["missing"]: steps.append(f"Design-check {x['id']}.")
+        if not f["baseline"]: steps.append(f"Fill {x['id']}'s Baseline.")
+    if not specs and not spec: steps.append(f"No spec in {area or 'feature-wide'} yet; write one for its first piece when it is ready to build.")
+    if decs and not any(r.get("type") == "design" for r in live) and len(decs) >= 3:
+        steps.append(f"Roll its {len(decs)} decisions into a design that cites them.")
+    return steps
+
 def related_worktrees(wt, rows):
     real = os.path.realpath(wt)
     return [(name, path) for name, path in rows if path != real and os.path.isdir(path)]
@@ -305,8 +528,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("worktree", nargs="?", default=".")
     ap.add_argument("--run"); ap.add_argument("--no-mark", action="store_true")
-    ap.add_argument("--focus", choices=("all", "implementation", "review"), default="all",
-                    help="implementation: building progress and its next steps only; review: the review only")
+    ap.add_argument("--focus", choices=("all", "design", "implementation", "review"), default="all",
+                    help="design: readiness to build; implementation: building progress and its next steps only; review: the review only")
+    ap.add_argument("--area", help="one area, or a spec id for one piece and its area")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
     run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
@@ -315,7 +539,12 @@ def main():
     head = git(wt, "rev-parse", "HEAD")
     out, steps = [], []
     rows = workspace_rows(wt)
-    out.append(f"## Where {'the implementation in ' if a.focus == 'implementation' else ''}{repo_name(wt, rows)} stands ({branch})\n")
+    out.append(f"## Where {'the implementation in ' if a.focus == 'implementation' else 'the design of ' if a.focus == 'design' else ''}{repo_name(wt, rows)} stands ({branch})\n")
+    if a.focus == "design" or a.area:
+        steps = area_view(wt, rows, out, a.area) if a.area else design_view(wt, rows, out)
+        out.append("")
+        out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(dict.fromkeys(steps), 1)] if steps else ["**Next:** nothing pending."]
+        print(re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
 
     # Review run and commits since it
     status = instr = numbers = {}
