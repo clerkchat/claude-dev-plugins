@@ -7,6 +7,8 @@ allowed-tools: Bash(git *), Bash(gh pr view *), Bash(python3 *), Read, Grep, Glo
 
 # Working follow-ups
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 A follow-up is work this repository owes because a change landed somewhere else,
 usually a contract change made while fixing a review finding in another
 repository. The file and its format are in `skills/review/tracking.md` of this

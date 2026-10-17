@@ -7,6 +7,8 @@ allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Writ
 
 # Passes
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 The catalogue of passes, their lenses, and how to suggest them for a piece is
 `passes.md` next to this file. The log is `.clerk-dev/passes.md`, managed only
 through `${CLAUDE_PLUGIN_ROOT}/scripts/passes.py` (below, `passes.py`), which

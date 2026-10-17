@@ -5,6 +5,8 @@ description: How to write code: delegate the building of settled pieces to imple
 
 # Writing code
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 Human reviewers of this team's changes keep asking for more reuse, cleaner
 abstractions, and less duplication than agents deliver. Lean hard that way.
 This is deliberately strong; the team tunes it down if it goes too far.

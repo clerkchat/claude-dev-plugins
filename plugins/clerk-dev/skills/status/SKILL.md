@@ -6,6 +6,8 @@ allowed-tools: Bash(python3 *), Bash(git *), Read
 
 # Where the work stands
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 Run, from the worktree:
 
 ```

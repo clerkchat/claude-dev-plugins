@@ -141,6 +141,8 @@ reads it but never asks, offers, or records anything.
 
 ## How you talk to the user
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 When this session runs headless (started with `claude -p`, as feature mode does
 for each repository), there is no one to answer a question. Never ask: follow
 the flags, and if a decision is needed that the flags do not settle, stop and

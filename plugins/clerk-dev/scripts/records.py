@@ -32,6 +32,7 @@ Usage:
   records.py stamp-overview WORKTREE    after writing overview.md
   records.py overview-status WORKTREE
   records.py suggest WORKTREE           roll-up designs, plans, stale overview
+  records.py names WORKTREE R31 S C R52.19 B15 ...   a short name for each id or code
   records.py rules WORKTREE [--area A] [--path]   active guidance; --path writes and prints guidance.md
   records.py idea WORKTREE "text" [--area A] [--from R12|"this session"] [--why ...] [--when ...]
   records.py ideas WORKTREE [--all] [--area A | --area -]
@@ -340,6 +341,68 @@ def write_guidance(d):
         out.append("")
     open(p, "w", encoding="utf-8").write("\n".join(out).rstrip("\n") + "\n")
 
+def plan_pieces(d):
+    """{code: name} of the plan's pieces, from the overview's Plan table, whose
+    first column starts with the piece's code ("C core harness")."""
+    p = os.path.join(d, "overview.md")
+    if not os.path.exists(p): return {}
+    m = re.search(r"^## Plan\n(.*?)(?=^## |\Z)", open(p, encoding="utf-8").read(), re.S | re.M)
+    out = {}
+    for line in (m.group(1) if m else "").splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.strip().startswith("|") else []
+        mm = re.match(r"^([A-Z][A-Z0-9]{0,3})\s+(.+)$", cells[0]) if cells else None
+        if mm and mm.group(1) != "Piece": out[mm.group(1)] = re.sub(r"`", "", mm.group(2)).strip()
+    return out
+
+def names(wt, ids):
+    """A short name for each id or code, for glossing it in conversation:
+    records (R31), requirements (R52.19), checks and their questions
+    (R30-1, R30-1.Q12), plan pieces (C), ideas (I7), pieces and milestones
+    of the build log (B15, M1), passes (P3), and follow-ups (F3)."""
+    d = fdir(wt); recs = {r["id"]: r for r in records(d)}
+    pieces = plan_pieces(d)
+    here = os.path.abspath(wt)
+    def load(name):
+        s = importlib.util.spec_from_file_location(name.replace(".py", ""), os.path.join(os.path.dirname(os.path.abspath(__file__)), name))
+        m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+    out = []
+    for raw in ids:
+        x = raw.strip().rstrip(",.;:")
+        X = x.upper()
+        name = None
+        try:
+            if re.fullmatch(r"R\d+", X) and X in recs:
+                r = recs[X]; name = f"{r.get('type')}: {r.get('title')}" + ("" if r.get("status") in ("active", "") else f" ({r.get('status')})")
+            elif re.fullmatch(r"R\d+\.\d+", X):
+                s, n = X.split(".")
+                _, items = load("build.py").spec_requirements(d, s)
+                if items and int(n) in items: name = f"requirement of {s}: {load('build.py').label(items[int(n)])}"
+            elif re.fullmatch(r"R\d+-\d+(\.Q\d+)?", X):
+                c, _, q = X.partition(".")
+                cp = os.path.join(d, "checks", c + ".md")
+                if os.path.exists(cp):
+                    if q:
+                        it = next((i for i in items_mod().read(cp) if i["id"] == q), None)
+                        if it: name = f"design question: {it['text']}"
+                    else: name = f"design check of {c.split('-')[0]}"
+            elif re.fullmatch(r"I\d+", X):
+                it = next((i for i in ideas(d) if i["id"] == X), None)
+                if it: name = f"idea ({idea_word(it)}): {it['text']}"
+            elif re.fullmatch(r"[BM]\d+", X):
+                e = next((e for e in load("build.py").read(os.path.join(here, ".clerk-dev", "build.md")) if e["id"] == X), None)
+                if e: name = ("milestone: " if X[0] == "M" else "piece: ") + e["title"]
+            elif re.fullmatch(r"P\d+", X):
+                e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if e["id"] == X), None)
+                if e: name = f"pass: {e['title']}"
+            elif re.fullmatch(r"F\d+", X):
+                e = next((i for i in load("followups.py").read(os.path.join(here, ".clerk-dev", "followups.md")) if i["id"] == X), None)
+                if e: name = f"follow-up: {e['text']}"
+            if name is None and x in pieces: name = f"plan piece: {pieces[x]}"
+        except SystemExit:
+            pass
+        out.append(f"{x}: {name or 'unknown'}")
+    return out
+
 def suggestions(d):
     """Records worth writing: roll-up designs, plans, and a stale overview."""
     rs = records(d); live = [r for r in rs if r.get("status") == "active"]
@@ -481,6 +544,7 @@ def main():
     iad = sp.add_parser("adopt"); iad.add_argument("wt"); iad.add_argument("iid"); iad.add_argument("--by", required=True)
     idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
     ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
+    nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
     rl = sp.add_parser("rules"); rl.add_argument("wt"); rl.add_argument("--area"); rl.add_argument("--path", action="store_true")
     a = ap.parse_args()
     today = datetime.date.today().isoformat()
@@ -558,6 +622,8 @@ def main():
         print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
     elif a.cmd == "suggest":
         print("\n".join(suggestions(d)) or "nothing to suggest")
+    elif a.cmd == "names":
+        print("\n".join(names(a.wt, a.ids)))
     elif a.cmd == "rules":
         if a.path:
             write_guidance(d); g = os.path.join(d, "guidance.md")

@@ -7,6 +7,8 @@ allowed-tools: Bash(git *), Bash(python3 *), Bash(gh *), Read, Grep, Glob, Agent
 
 # Fixing review findings
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 You coordinate; you do not edit code in this session. Every code change goes
 through the `clerk-dev:review-fixer` agent. The review run's files are the
 source of truth; see the `review` skill in this plugin for the run directory

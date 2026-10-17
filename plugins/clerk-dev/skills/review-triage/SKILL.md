@@ -7,6 +7,8 @@ allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 
 # Review triage
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 The user marks each finding in a review report with an instruction: Fix as
 recommended (optionally with a note), Discuss, Defer, or Ignore. This skill
 works through those instructions. You coordinate; you never edit code, and you

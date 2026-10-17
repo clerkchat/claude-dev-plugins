@@ -190,6 +190,35 @@ changes. The line to the user: "Recorded as guidance R61 (harness):
 capabilities wire in through explicit lists. Say if it is narrower than
 that."
 
+## Naming things to the user
+
+Everything said to the user names what an id or code stands for. On its first
+mention in a message, an id is never bare: lead with what it is and give the
+id after it ("the chunk plan (R31) allows independent improvements as PRs
+ahead of the core chunk (C)"), or follow the id with a gloss of two to six
+words ("R31 (the chunk plan)"). Later mentions in the same message may be
+bare. This covers record ids (R31), requirements (R52.19), checks and their
+questions (R30-1.Q12), plan pieces (S, C), build pieces and milestones (B15,
+M1), passes (P3), follow-ups (F3), ideas (I7), and finding numbers ("finding
+12 (the unbounded export query)").
+
+Get the names with `records.py names <worktree> R31 S C B15 ...` rather than
+opening files. A gloss says what the thing is, not all it says.
+
+Files keep their ids as they are: records, check files, logs, and reports cite
+ids by design, and commit messages carry none. The rule is for conversation.
+
+So rather than:
+
+> Seams 1 and 2 don't need a chunk. R31 already allows "independent
+> improvements may become PRs ahead of C", so they're main PRs, like S.
+
+say:
+
+> Seams 1 and 2 don't need a chunk. The chunk plan (R31) already allows
+> "independent improvements may become PRs ahead of" the core harness chunk
+> (C), so they're PRs to main, like the sandbox change (S).
+
 ## Items
 
 Review findings, follow-ups, and design-check questions are all items, and use

@@ -7,6 +7,8 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 
 # Feature records
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 The records, their types, templates, and rules are in `records.md` next to this
 file; read it before writing the first record in a session. Files are managed
 only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`; it prints the path of

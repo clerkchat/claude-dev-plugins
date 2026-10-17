@@ -7,6 +7,8 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agen
 
 # Design check
 
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+
 Runs the review lenses in design mode (see Design mode in the `review-protocol`
 skill) on feature records (see `skills/feature/records.md`), and writes the
 questions they raise to a check file in the hub. Then, when asked, walks the
