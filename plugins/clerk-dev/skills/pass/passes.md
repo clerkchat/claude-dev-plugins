@@ -27,6 +27,19 @@ Within a pass, only the lenses whose categories the piece touches apply
 (`routing.md`); a security pass on a piece with no new store skips
 `data-privacy`.
 
+## Order within a milestone
+
+A milestone (a row of the feature's plan) runs its passes in this order:
+
+1. prep;
+2. happy-path: the draft;
+3. dry, when suggested: it reshapes code, so it goes before the passes that
+   check that code;
+4. security, when any of its lenses is triggered: **required**, it cannot be
+   skipped, and its findings must be triaged before the milestone is ready;
+5. the rest in the catalogue table's order;
+6. tests and rollout last.
+
 ## Suggesting passes
 
 A piece is a spec record, or the paths the engineer names. Classify its files,

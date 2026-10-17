@@ -144,6 +144,10 @@ def build_block(wt, rows, out, unreviewed):
     out.append("**Implementation:**" + ("" if entries else " nothing built in this worktree yet."))
     out += [f"- {l.strip()}" if not l.startswith(" ") else f"  - {l.strip()}" for l in lines]
     out += [f"- {o}" for o in others]
+    mlines, msteps = bd.milestone_lines(wt) if entries else ([], [])
+    if mlines:
+        out += ["", "**Milestones:**"] + [f"- {l}" if not l.startswith(" ") else f"  - {l.strip()}" for l in mlines]
+        first += msteps
     for e in entries:
         st = e["f"].get("Status")
         if st == "stopped":
@@ -161,8 +165,8 @@ def build_block(wt, rows, out, unreviewed):
         partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
         if partial: later.append(f"Finish the partial requirement{plural(partial)} of {s}: {bd.compress(s, partial)}.")
         if left and not busy:
-            nxt = "; ".join(f"{s}.{n} {short(items[n], 70)}" for n in left[:3])
-            later.append(f"Next piece for {s}, from what is not started ({len(left)} requirements; the plan and the spec's order decide): {nxt}.")
+            nxt = "; ".join(f"{s}.{n} {short(items[n], 70).rstrip('.')}" for n in left[:3])
+            later.append(f"Next piece for {s}, from what is not started ({len(left)} requirement{plural(left)}; the plan and the spec's order decide): {nxt}.")
     return first, later
 
 def feature_block(wt, rows, out):
@@ -276,6 +280,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
         if len(unlogged) > 5: out.append(f"  - and {len(unlogged) - 5} earlier")
     if passes:
         live = [e for e in passes if e["f"].get("Status") in ("open", "ended")]
+        live = [e for e in live if not (e["f"].get("Status") == "ended" and e["f"].get("Note") == "no commits")]
         if live: out.append(f"- Passes in progress: {'; '.join(pass_line(e) for e in live)}")
     spec_ids = {r["id"] for r in specs}
     areas = {r.get("area") for r in specs if r.get("area")}

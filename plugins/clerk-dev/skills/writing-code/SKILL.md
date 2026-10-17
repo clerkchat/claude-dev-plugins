@@ -186,6 +186,35 @@ status lives only here; the spec is not edited for it.
    tick the spec's open items it closes.
 4. Say one line: the piece, the commit, the tests, anything accepted.
 
-At milestones (the end of a chunk, a set of pieces that make one behavior),
-check the work with a pass's narrow check or a review, as the user prefers.
+### Milestones
+
+An implementer holds one focus at a time: the draft, or one pass. The focuses
+are applied by orchestrating passes, not by adding checklists to a brief. A
+brief never quotes a lens's text, except the one lens of the pass it belongs
+to.
+
+A milestone is a row of the feature's plan (the overview's Plan table, one
+chunk). Work it as a sequence of passes, with the `pass` skill:
+
+1. **Plan it** when its work starts: `build.py milestone <worktree> --spec
+   R52 --piece "<the plan row's piece>" --passes <list>`. The list is prep,
+   happy-path, then the passes `skills/pass/passes.md` suggests for the
+   milestone's spec, in the order it gives; security is required when it is
+   in the list. Show the plan in one line and go on.
+2. **Prep**, the refactor-first pass; it may end with no changes.
+3. **The draft** is the happy-path pass: start it, build its pieces as above
+   (delegated, logged in the build log, committed one by one), end it when the
+   draft is whole, and run its narrow check.
+4. **The other passes**, in order, each as the `pass` skill runs one: its own
+   implementer with its one lens's Pass mode text, then its narrow check.
+5. **Ready** when every planned pass has run or was skipped with a reason
+   (`build.py skip <worktree> M1 <pass> --why "..."`; never a required one)
+   and the required passes' findings are triaged. `build.py milestones` and
+   status say where each milestone stands and what runs next.
+
+Run the sequence without pausing between passes. Stop and bring to the user:
+a question an implementer stopped on, a check that found anything rated major
+or blocker (triage it before the next pass, since later passes build on the
+code), or any finding in a required pass's check. Minor findings collect in
+their pass's run for triage at the end.
 

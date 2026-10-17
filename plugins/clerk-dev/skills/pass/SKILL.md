@@ -27,6 +27,14 @@ reason each, in a few lines. Do not start one.
 
 ## Running a pass
 
+Inside a milestone (the `writing-code` skill's Milestones), the happy-path pass
+is the draft: start it, then build its pieces as that skill describes
+(delegated, logged in the build log) instead of listing items, and end it when
+the draft is whole. The other passes run as below, one after another, with the
+milestone's stopping rules: stop for an implementer's question, for a check
+with findings rated major or blocker (`grep -cE "severity: (blocker|major)"
+<run>/merged.md`), and for any finding in a required pass.
+
 The request to run a pass is the go-ahead to edit and commit for it, under the
 commit rules below.
 

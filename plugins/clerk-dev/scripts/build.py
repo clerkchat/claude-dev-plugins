@@ -18,6 +18,9 @@ Usage:
   build.py abandon WORKTREE B3 [--note "..."]
   build.py list WORKTREE [--open]
   build.py progress WORKTREE [--spec R52]
+  build.py milestone WORKTREE --spec R52 --piece "C core harness" --passes prep,happy-path,security,edge-cases,tests [--required security]
+  build.py skip WORKTREE M1 edge-cases --why "..."     (never a required pass)
+  build.py milestones WORKTREE
 
 Without --covered, `done` marks every requirement of the piece done. Statuses:
 briefed (handed to an implementer), stopped (it stopped on a question),
@@ -40,8 +43,8 @@ import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned")
-FIELDS = ("Spec", "Requirements", "Model", "Status", "Commit", "Attempts", "Question", "Deviation", "Started", "Note")
-REPEATABLE = ("Question", "Deviation")
+FIELDS = ("Spec", "Piece", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
+REPEATABLE = ("Question", "Deviation", "Skipped")
 HEADER = """# Build log
 
 Each piece of implementation delegated on this branch: the spec requirements it
@@ -49,7 +52,7 @@ covers and where it stands. Kept by build.py; it reads this file strictly, so
 edit with care.
 
 """
-ENTRY_RE = re.compile(r"^- \[( |x)\] (B\d+)\. (.+)$")
+ENTRY_RE = re.compile(r"^- \[( |x)\] ([BM]\d+)\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
 
 def load(name):
@@ -89,7 +92,7 @@ def read(p):
 def write(p, entries):
     out = [HEADER]
     for e in entries:
-        out.append(f"- [{'x' if e['f'].get('Status') in ('done', 'abandoned') else ' '}] {e['id']}. {e['title']}\n")
+        out.append(f"- [{'x' if e['f'].get('Status') in ('done', 'abandoned', 'ready') else ' '}] {e['id']}. {e['title']}\n")
         for k in FIELDS:
             if k in REPEATABLE: out += [f"  - {k}: {v}\n" for v in e["multi"][k]]
             elif e["f"].get(k): out.append(f"  - {k}: {e['f'][k]}\n")
@@ -111,7 +114,7 @@ def fmt_reqs(rs):
     return ", ".join(f"{n}" + (f" {st}" if st else "") + (f" ({note})" if note else "") for n, st, note in rs)
 
 def find(entries, bid):
-    bid = bid.upper() if bid.upper().startswith("B") else f"B{bid}"
+    bid = bid.upper() if re.match(r"[BMbm]\d+$", bid) else f"B{bid}"
     e = next((e for e in entries if e["id"] == bid), None)
     if not e: sys.exit(f"{bid} not found")
     return e
@@ -136,7 +139,7 @@ def progress(wt, spec=None):
     this worktree's log, for every spec the log names (or the one given)."""
     rc = load("records.py")
     d = rc.fdir(wt)
-    entries = read(os.path.join(wt, ".clerk-dev", "build.md"))
+    entries = pieces(read(os.path.join(wt, ".clerk-dev", "build.md")))
     specs = [spec] if spec else sorted({e["f"].get("Spec") for e in entries if e["f"].get("Spec")}, key=lambda s: int(s[1:]))
     out = []
     for s in specs:
@@ -179,6 +182,77 @@ def compress(s, nums):
         else: runs.append([n, n])
     return ", ".join(f"{s}.{a}" if a == b else f"{s}.{a}, {s}.{b}" if b == a + 1 else f"{s}.{a} to {s}.{b}" for a, b in runs)
 
+# Milestones: a row of the feature's plan, worked as a sequence of passes
+# (prep, the draft as happy-path, then one focus each). Only the plan is
+# stored; where each pass stands is read from the pass log.
+
+def pieces(entries): return [e for e in entries if e["id"].startswith("B")]
+def milestones(entries): return [e for e in entries if e["id"].startswith("M")]
+
+def pass_states(wt, spec):
+    """{focus: latest pass entry} for passes on this spec in the pass log."""
+    p = os.path.join(wt, ".clerk-dev", "passes.md")
+    if not os.path.exists(p): return {}
+    out = {}
+    for e in load("passes.py").read(p):
+        if e["f"].get("Piece") != spec: continue
+        out[e["title"].split(" on ")[0].strip()] = e
+    return out
+
+def open_findings(wt, e):
+    """Open findings in a checked pass's run, or None when it cannot tell."""
+    label = (e["f"].get("Check") or "").split(";")[0].strip()
+    run = os.path.join(wt, ".clerk-dev", label)
+    if not label or not os.path.exists(os.path.join(run, "merged.md")): return None
+    sf = load("stale-findings.py")
+    st, ins, num = sf.state(run)
+    return sum(1 for m in sf.load_findings(run) if m in num and sf.is_open(m, st, ins))
+
+def milestone_view(wt, m):
+    """(rows of (focus, word, required), next step or None, ready)."""
+    plan = [x.strip() for x in m["f"].get("Passes", "").split(",") if x.strip()]
+    req = {x.strip() for x in m["f"].get("Required", "").split(",") if x.strip()}
+    skipped = {s.split(":", 1)[0].strip(): s.split(":", 1)[1].strip() if ":" in s else "" for s in m["multi"]["Skipped"]}
+    states = pass_states(wt, m["f"].get("Spec"))
+    rows, nxt, ready = [], None, True
+    for f in plan:
+        e = states.get(f)
+        if f in skipped:
+            rows.append((f, f"skipped: {skipped[f]}", f in req)); continue
+        if not e or e["f"].get("Status") == "abandoned":
+            rows.append((f, "not run" if not e else "abandoned", f in req)); ready = False
+            nxt = nxt or (f"draft {m['title']}: start the happy-path pass and build its pieces" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Spec')}" + (" (required)" if f in req else ""))
+            continue
+        st = e["f"].get("Status")
+        if st == "open":
+            rows.append((f, f"{e['id']} open", f in req)); ready = False
+            nxt = nxt or (f"finish the draft ({e['id']}), then end it" if f == "happy-path" else f"finish pass {e['id']} ({f}), then end it")
+        elif st == "ended" and e["f"].get("Note") != "no commits":
+            rows.append((f, f"{e['id']} ended, not checked", f in req)); ready = False
+            nxt = nxt or f"check pass {e['id']} ({f})"
+        else:
+            word = f"{e['id']} " + ("no changes" if e["f"].get("Note") == "no commits" and st == "ended" else "checked")
+            n = open_findings(wt, e) if st == "checked" else 0
+            if n: word += f", {n} open finding{'s' if n != 1 else ''}"
+            if n and f in req:
+                ready = False
+                label = (e["f"].get("Check") or "").split(";")[0].strip()
+                nxt = nxt or f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""
+            rows.append((f, word, f in req))
+    return rows, nxt, ready
+
+def milestone_lines(wt):
+    entries = read(os.path.join(wt, ".clerk-dev", "build.md"))
+    out, steps = [], []
+    for m in milestones(entries):
+        if m["f"].get("Status") == "abandoned": continue
+        rows, nxt, ready = milestone_view(wt, m)
+        out.append(f"{m['id']} {m['title']} ({m['f'].get('Spec')}): " + ("ready to merge" if ready else "in progress"))
+        out.append("  " + "; ".join(f"{f}{' (required)' if r else ''}: {w}" for f, w, r in rows))
+        if nxt: steps.append(f"{m['id']} {m['title']}: {nxt}.")
+        elif ready: steps.append(f"{m['id']} {m['title']} is ready to merge: its planned passes ran and required findings are triaged.")
+    return out, steps
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -191,6 +265,10 @@ def main():
     ab = sp.add_parser("abandon"); ab.add_argument("wt"); ab.add_argument("bid"); ab.add_argument("--note")
     l_ = sp.add_parser("list"); l_.add_argument("wt"); l_.add_argument("--open", action="store_true")
     pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--spec")
+    ms = sp.add_parser("milestone"); ms.add_argument("wt"); ms.add_argument("--spec", required=True); ms.add_argument("--piece", required=True)
+    ms.add_argument("--passes", required=True); ms.add_argument("--required")
+    sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
+    mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
     p = path(a.wt); entries = read(p); today = datetime.date.today().isoformat()
 
@@ -198,15 +276,36 @@ def main():
         spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
         nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
         if not nums: sys.exit("--reqs names no requirement numbers")
-        n = max([int(e["id"][1:]) for e in entries] or [0]) + 1
+        n = max([int(e["id"][1:]) for e in pieces(entries)] or [0]) + 1
         entries.append({"id": f"B{n}", "title": a.title.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
             "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Model": f"{a.model} {a.effort}",
             "Status": "briefed", "Attempts": "1", "Started": today}})
         write(p, entries); print(f"B{n} briefed: {spec} requirements {', '.join(map(str, nums))}")
         return
+    if a.cmd == "milestone":
+        spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
+        plan = [x.strip() for x in a.passes.split(",") if x.strip()]
+        known = catalogue()
+        bad = [x for x in plan if known and x not in known]
+        if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
+        req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
+        n = max([int(e["id"][1:]) for e in milestones(entries)] or [0]) + 1
+        entries.append({"id": f"M{n}", "title": a.piece.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
+            "Spec": spec, "Passes": ", ".join(plan), "Required": ", ".join(req), "Started": today}})
+        write(p, entries); print(f"M{n} planned: {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
+        return
+    if a.cmd == "skip":
+        m = find(entries, a.mid)
+        if a.focus in [x.strip() for x in m["f"].get("Required", "").split(",")]: sys.exit(f"{a.focus} is required for {m['id']}; it cannot be skipped")
+        m["multi"]["Skipped"].append(f"{a.focus}: {a.why}"); write(p, entries); print(f"{m['id']}: {a.focus} skipped")
+        return
+    if a.cmd == "milestones":
+        lines, steps = milestone_lines(a.wt)
+        print("\n".join(lines + [""] + steps) if lines else "no milestones")
+        return
     if a.cmd in ("list", "progress"):
         if a.cmd == "list":
-            for e in entries:
+            for e in pieces(entries):
                 st = e["f"].get("Status")
                 if a.open and st in ("done", "abandoned"): continue
                 print(f"{e['id']} {e['title']}  [{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
@@ -245,6 +344,16 @@ def main():
         e["f"]["Status"] = "abandoned"
         if a.note: e["f"]["Note"] = a.note
         write(p, entries); print(f"{e['id']} abandoned")
+
+def catalogue():
+    """Pass names from the catalogue table in skills/pass/passes.md."""
+    p = os.path.join(HERE, "..", "skills", "pass", "passes.md")
+    if not os.path.exists(p): return []
+    names = []
+    for line in open(p, encoding="utf-8"):
+        m = re.match(r"^\|\s*([a-z][a-z-]*)\s*\|", line)
+        if m and m.group(1) not in ("pass", "category"): names.append(m.group(1))
+    return names
 
 def git_short(wt, sha):
     return subprocess.run(["git", "-C", wt, "rev-parse", "--short", sha], capture_output=True, text=True).stdout.strip() or sha
