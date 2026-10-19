@@ -85,8 +85,11 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   "<why>"`.
 - **capabilities**: `--from` the design. Each piece names its repository and its
   dependencies.
-- **plan**: order across pieces and repositories. Replanning is a new plan with
-  `--supersedes`.
+- **plan**: order across pieces and repositories, cut into milestones: each
+  numbered step is one milestone, naming its pieces, its spec, and the point
+  where it is done (what works, and what a review can check). Building works
+  milestone by milestone, so a plan without them is not finished. Replanning is
+  a new plan with `--supersedes`.
 - **spec**: one per piece, `--repo` the repository it is built in, `--from` the
   capabilities or design record. Before writing Approach, read the code the
   piece will touch: the patterns to follow, the helpers to reuse or extend,

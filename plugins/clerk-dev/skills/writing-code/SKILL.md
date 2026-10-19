@@ -80,6 +80,20 @@ brief. This keeps the session's context for the whole feature instead of
 filling it with one file's details, and gives every piece a check before it
 lands.
 
+### Before the first piece
+
+Before delegating or writing the first piece on a branch, check two things,
+and fix what is missing before building:
+
+- `.clerk-dev/branch-notes.md` has a Purpose. If not, draft it as
+  `skills/review/tracking.md` describes and say in one line where.
+- The work is cut into milestones: the feature's active plan names, for each
+  step, its pieces, its spec, and what is done when it ends. If there is no
+  plan, or its steps have no done line, propose the milestones to the user (a
+  short numbered list) and record them as a plan, or a new plan superseding
+  the old one, with the `feature` skill. Small changes with no feature records
+  skip this.
+
 ### What stays in the session
 
 - Settling choices. When a piece needs a choice no record settles and it

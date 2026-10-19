@@ -209,14 +209,18 @@ depends on.
 ### plan
 
 Order and sequencing across pieces and repositories, including which repository
-goes first and where work is expected to loop back. Replanning writes a new plan
-that supersedes the old one.
+goes first and where work is expected to loop back. Each numbered step is a
+milestone: its pieces, its spec, and what is true when it is done. The
+`writing-code` skill builds one milestone at a time, so every step needs that
+done line. Replanning writes a new plan that supersedes the old one.
 
 ```markdown
 # R8. Report exports: plan
 
-1. api: pieces 1 and 2 (R7), behind the `report-exports` flag.
-2. web: piece 3; expect contract changes back to api from this exploration.
+1. api: pieces 1 and 2 (R7, spec R9), behind the `report-exports` flag.
+   Done: an export can be started and polled with the flag on; api review.
+2. web: piece 3 (spec R10); expect contract changes back to api from this
+   exploration. Done: the dialog exports a report end to end.
 3. Feature review across api and web.
 
 ## Risks to the order
