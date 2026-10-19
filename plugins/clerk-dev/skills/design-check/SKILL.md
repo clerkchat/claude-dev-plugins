@@ -9,6 +9,11 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agen
 
 When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
 
+If this conversation was compacted, re-read this file before going on: a
+compacted skill may be cut short, and the steps it drops are the ones that
+keep the work safe. Prefer `/clear` at a natural boundary to compaction; the
+`checkpoint` skill writes down what is pending first.
+
 Runs the review lenses in design mode (see Design mode in the `review-protocol`
 skill) on feature records (see `skills/feature/records.md`), and writes the
 questions they raise to a check file in the hub. Then, when asked, walks the

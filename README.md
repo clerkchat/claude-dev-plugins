@@ -142,7 +142,11 @@ re-review reads only what changed since the last one.
 Progress is always saved to files in the worktree, never only in the
 conversation. You can `/clear` at any point to free up context, then ask again
 ("where are we?", "triage the review findings") and it picks up where it left
-off.
+off. Say "checkpoint" first: it writes down whatever the conversation settled
+that is not in a file yet (decisions, guidance, parked ideas, logged pieces)
+and tells you whether it is safe to clear. Prefer clearing at a natural
+boundary to letting the conversation compact, which can shorten a skill's
+instructions mid-task.
 
 #### A typical review
 

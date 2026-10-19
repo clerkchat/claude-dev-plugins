@@ -9,6 +9,11 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 
 When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
 
+If this conversation was compacted, re-read this file before going on: a
+compacted skill may be cut short, and the steps it drops are the ones that
+keep the work safe. Prefer `/clear` at a natural boundary to compaction; the
+`checkpoint` skill writes down what is pending first.
+
 The records, their types, templates, and rules are in `records.md` next to this
 file; read it before writing the first record in a session. Files are managed
 only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`; it prints the path of

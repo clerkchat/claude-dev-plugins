@@ -7,6 +7,11 @@ description: How to write code: delegate the building of settled pieces to imple
 
 When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
 
+If this conversation was compacted, re-read this file before going on: a
+compacted skill may be cut short, and the steps it drops are the ones that
+keep the work safe. Prefer `/clear` at a natural boundary to compaction; the
+`checkpoint` skill writes down what is pending first.
+
 Human reviewers of this team's changes keep asking for more reuse, cleaner
 abstractions, and less duplication than agents deliver. Lean hard that way.
 This is deliberately strong; the team tunes it down if it goes too far.
