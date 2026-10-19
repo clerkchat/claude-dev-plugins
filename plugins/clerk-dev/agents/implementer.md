@@ -36,7 +36,9 @@ It gives you:
    `questions`.
 2. Follow the writing-code skill. Its refactor-first step applies within the
    piece: a reshaping of code inside the files you were given is fine; a
-   refactor beyond them is reported, not done.
+   refactor beyond them is reported, not done. When the brief names later
+   pieces that touch the same code, shape this piece's code so they land as
+   small additions, without building any of them.
 3. When porting, keep the reference's behavior and tests, and change only what
    the new structure, the decisions, or this repository's patterns require.
    A test weakened or dropped to make the port pass is a deviation; report it.

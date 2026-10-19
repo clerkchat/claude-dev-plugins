@@ -31,6 +31,12 @@ If so, do that refactor first, in its own commits, with the tests passing and
 behavior unchanged, and build the change on it; the change's own commits should
 read as small additions. If not, say in one line that the baseline is clean.
 
+When the change is one piece of several (a plan's milestones, a spec's
+pieces), look ahead too: read what the later pieces will touch, and prefer the
+refactor that makes this piece and those smaller or plainer. Keep the look
+short. When nothing is clear yet, say so in one line and look again at the next
+piece, when more of the shape is known; do not refactor for a guess.
+
 This holds at every scale: a feature's first piece, a one-function fix, a
 follow-up. Refactoring deployed code still follows the branch's scope (Branch
 scope in `skills/review/tracking.md`): when the branch's Purpose does not cover
@@ -128,6 +134,8 @@ Give paths, not contents. Include:
 - the reference code to port or follow (`git show <ref>:<path>` for another
   branch);
 - the files expected to change, and any it must not touch;
+- the later pieces that will touch the same code, by name and spec id, so the
+  agent shapes this piece's code for them without building them;
 - the tests to write or port, and the exact command to run them;
 - the rules that apply beyond the repository's conventions: the user's
   instructions that bear on code (for example a no-comments rule), the
@@ -221,7 +229,8 @@ chunk). Work it as a sequence of passes, with the `pass` skill:
    happy-path, then the passes `skills/pass/passes.md` suggests for the
    milestone's spec, in the order it gives; security is required when it is
    in the list. Show the plan in one line and go on.
-2. **Prep**, the refactor-first pass; it may end with no changes.
+2. **Prep**, the refactor-first pass, looking ahead to the milestone's later
+   pieces and the plan's later milestones; it may end with no changes.
 3. **The draft** is the happy-path pass: start it, build its pieces as above
    (delegated, logged in the build log, committed one by one), end it when the
    draft is whole, and run its narrow check.
