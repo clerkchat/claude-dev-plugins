@@ -255,10 +255,14 @@ Waves take minutes, so say something while one runs:
 
 ## Model fallback
 
-Fable is used for three jobs only: the cross-repository check, verifying
-findings of severity `blocker` (and every verifier in `--deep` mode), and a
-second attempt at a fix that a recheck found only partly resolved (in the
-`review-fix` skill). Each is assigned by passing `model: fable` on the
+Fable is used for these jobs only: the cross-repository check, verifying
+findings of severity `blocker` (and `major` ones on a final pass, and every
+verifier in `--deep` mode), the `security` and `tenancy` lenses of a security
+pass's narrow check (`--pass`), and a second attempt at a fix that a recheck
+found only partly resolved (in the `review-fix` skill). Outside the review,
+the feature, design-check, and writing-code skills use Fable for specs, the
+overview, roll-ups, settle-first lenses in design checks, foundation pieces,
+and stopped pieces' questions, all with this same fallback. Each is assigned by passing `model: fable` on the
 invocation. Not every account has access to Fable, and access may come with its
 own usage limits, neither of which can be checked ahead of time, so:
 
@@ -348,7 +352,9 @@ need to read it unless debugging agent output.
   skill). The lenses are exactly those given: no routing, triage, or quick-mode
   cap adds or drops one. `DOCS` is only the pass's piece (its spec record), not
   every active record, and every lens prompt gets a `PASS:` line naming the
-  focus and the piece.
+  focus and the piece. For the security pass, the one a milestone cannot skip,
+  run its `security` and `tenancy` instances with `model: fable` (see Model
+  fallback); its check is the merge gate for those concerns.
 - `--lenses a,b,c` to replace routing, `--lenses +a,+b` to add to it, or
   `--lenses -a` to remove one from it.
 - `--quick` or `--deep` (default standard). Quick: triggered lenses only, capped
@@ -981,8 +987,8 @@ minors, they never hold the merge, and below 75 they are mostly rejected or
 adjusted anyway. Below their bar they are counted, not reported. Do not skip any selected finding to save cost; a
 verifier call is cheap next to a missed major. Run one verifier subagent per
 selected finding in parallel, effort `high`: model `fable` for findings of
-severity `blocker`, and for every finding in deep mode; `opus` for `major`
-findings; `sonnet` with effort `medium` for `minor` findings, including every
+severity `blocker`, for `major` findings on a final pass (the merge gate), and
+for every finding in deep mode; `opus` for other `major` findings; `sonnet` with effort `medium` for `minor` findings, including every
 tech-debt finding (those with a `debt` label), whose questions are judgments a
 careful reader settles from the code in view: whether the defect is there,
 whether a proposal keeps the behavior and is worth doing (see Model fallback). The verifier reads the finding, the relevant slice patch, and

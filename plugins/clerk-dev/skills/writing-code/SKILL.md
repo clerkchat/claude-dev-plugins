@@ -173,7 +173,13 @@ status lives only here; the spec is not edited for it.
 ### After each piece
 
 1. Read the report. `stopped` or `questions:` go back to the user (or are
-   settled from the records and guidance) before anything else. When the
+   settled from the records and guidance) before anything else. Before asking,
+   when a question is not already settled by a record or guidance, hand it to a
+   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes),
+   with the question, the piece's brief, and the code and records it touches,
+   asking for the options, what each would cost and constrain later, and a
+   recommendation. Put that to the user in a few lines rather than the bare
+   question. When the
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
    `skills/review/tracking.md` describes, and say so in one line.

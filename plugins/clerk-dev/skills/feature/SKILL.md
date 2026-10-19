@@ -88,7 +88,15 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   and what to refactor first (the Baseline section; always filled, "Clean"
   with a reason when nothing needs it). Keep
   Requirements numbered and checkable, and Open items as checkboxes; reviews
-  read both.
+  read both. Every implementer works from the spec, so draft it with a
+  `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
+  give it the spec template in `records.md`, the records the piece builds on
+  (its capabilities or plan row, the design, the decisions and guidance of its
+  area: `records.py rules <worktree> --area <area>`), the reference code to
+  port by path, and the output path `records.py new` gave; ask it to write the
+  body and list anything it could not settle from the records as open items.
+  Then read it, settle what you can with the user, and edit it in this
+  session.
 
 A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
@@ -130,7 +138,8 @@ own when a conversation that wrote, superseded, or retagged records reaches a
 pause: say so in one line and do it.
 
 To refresh: write `records.py digest <worktree>` to a scratch file, and hand it
-to a `general-purpose` subagent with the path of `records.md` (for the format
+to a `general-purpose` subagent on `model: fable`, effort `high` (finding the
+gaps and disagreements across every record is the part that needs it; falling back to Opus at the same effort as Model fallback in the `review` skill describes), with the path of `records.md` (for the format
 and rules) and the output path `<hub>/.clerk-dev/feature/overview.md`, asking it
 to write the overview from the digest alone, citing ids for every statement.
 When it returns, run `records.py stamp-overview <worktree>`, and tell the user
@@ -147,7 +156,10 @@ them up into a design that cites them), a design older than several decisions
 (supersede it with one that includes them), a decision that reads like a plan
 or breakdown (file it as one, `--from` that decision), no plan yet on a large
 feature. A roll-up design or plan restates what the decisions settled, citing
-them; it does not decide anything new.
+them; it does not decide anything new. Draft it with a `general-purpose`
+subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes), given the records it
+rolls up and the template, asked to cite every decision it draws on and to
+list, rather than resolve, any that do not fit together.
 
 ## Answering from the records
 
