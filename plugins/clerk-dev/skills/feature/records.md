@@ -265,6 +265,8 @@ library helpers to reuse or extend (with paths).
 ## Contracts
 
 Endpoints, payloads, events, and schemas other parts or repositories rely on.
+For runtime state handed to another component, when in the run it comes into
+being.
 
 ## Open items
 

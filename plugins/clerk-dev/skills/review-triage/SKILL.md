@@ -157,7 +157,9 @@ skipped without deciding counts as left and stays marked.
 2. Present it in a few short paragraphs: what the finding says, what is
    uncertain or contested, and the realistic options (fix as recommended, fix
    differently, defer, ignore), with your recommendation and why. Quote the code
-   only when it settles the question.
+   only when it settles the question. Before trading a fix judged risky for a
+   workaround, present the fix's smallest form ("Changing live code" in the
+   `writing-code` skill).
 3. Answer the user's questions from the run files and the code. Read code as
    needed, but do not edit. When an answer needs more than a few files read, ask
    an `Explore` agent the question and keep only its answer.

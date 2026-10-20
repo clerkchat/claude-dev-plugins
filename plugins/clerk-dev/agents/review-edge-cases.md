@@ -77,6 +77,9 @@ the review protocol):
 - Time, time zones, and ordering: does the design assume events arrive in
   order, or that clocks agree?
 - Partial failure: what state is left when step three of five fails?
+- Lifecycle: when the design hands runtime state to another component (an id,
+  a row, a config, a result), at what point in the run does that value come
+  into being, and is it there every time the component reads it?
 
 ## Pass mode
 

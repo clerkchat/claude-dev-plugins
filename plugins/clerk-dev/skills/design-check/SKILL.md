@@ -147,7 +147,8 @@ through Q3"), take the open questions in order, settle-first first, one at a
 time:
 
 1. Show the question with its why and suggestion, briefly, and the code or
-   record it points at when that helps.
+   record it points at when that helps. When an option is called risky, find
+   its smallest form first ("Changing live code" in the `writing-code` skill).
 2. Discuss until the user decides, and record the instruction with
    `${CLAUDE_PLUGIN_ROOT}/scripts/items.py set <check file> Q3
    "<instruction>" [--note "..."]`, in the words of "Items" in

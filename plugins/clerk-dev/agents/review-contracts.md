@@ -58,6 +58,11 @@ For each seam in the slice map, follow one value across it end to end:
    integers, class instances, undefined versus null) because the seam is JSON.
 6. Type duplication: two hand-written types for the same shape on either side of
    a seam, with no compile-time link.
+7. Changed meaning: an existing function, flag, column, or predicate whose
+   signature stays the same but whose meaning changed (`hasId()` once meant
+   "inserted" and now means "has an early id"). List its callers, including
+   the unchanged ones, and check that each still agrees with the new meaning.
+   The lines that break are the ones the diff does not show.
 
 ## Scenario quality
 

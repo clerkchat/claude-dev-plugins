@@ -42,6 +42,28 @@ follow-up. Refactoring deployed code still follows the branch's scope (Branch
 scope in `skills/review/tracking.md`): when the branch's Purpose does not cover
 that code, propose the refactor instead of making it.
 
+## Changing live code
+
+An enabling refactor of deployed code, especially on a hot path, keeps the
+same values as new code but weighs them differently: what the paths you did
+not touch do matters more than how tidy the change is.
+
+- Add to a decision rather than redefine it. When a function, flag, column, or
+  predicate already means something to its callers (`hasId()` meaning "this
+  row was inserted"), keep that meaning and add an explicit signal for the new
+  case. Changing what an existing signal means changes every caller at once,
+  including the ones you did not read.
+- Make the new condition opt-in, with a default under which every path you did
+  not touch behaves exactly as before. The old behavior is the fallback.
+- Before changing a branch, find its live callers and say how many take it.
+
+Before calling the clean fix risky and offering a workaround instead, find the
+fix's smallest form: the opt-in flag, the added signal, the precedent the
+codebase already has. Present that version next to the workaround, with the
+argument for its safety. Judged in the abstract, the right fix often looks
+riskier than it is. This holds wherever options are put to the user: here, in
+design questions, and in review discussions.
+
 ## Reuse
 
 - Before writing any helper, type, validator, query, or pattern, search the
