@@ -73,8 +73,9 @@ for nothing wider.
    defect the branch did not introduce, and its recommendation is a separate
    pull request. "Fix as recommended" on it, or "fix N" with nothing more, is
    not a fix on this branch: record `--instruct N=defer:separate pull request`,
-   say so in one line, and stop. Fix it here only when the user says so
-   explicitly ("fix it on this branch", or Fix as noted). The same holds for a
+   apply Defer as "Items" in `skills/review/tracking.md` describes (the
+   finding is the source), say so in one line, and stop. Fix it here only when
+   the user says so explicitly ("fix it on this branch", or Fix as noted). The same holds for a
    finding in the `debt` section (the report's "Cleanup and refactoring")
    whose recommendation starts "In a separate pull request:"; one that starts
    "In this pull request:" is fixed as usual.

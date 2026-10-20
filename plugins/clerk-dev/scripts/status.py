@@ -2,6 +2,7 @@
 """Where a worktree's review work stands, from files and git only.
 
 Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review] [--area NAME|R52]
+       status.py [WORKTREE] --setup
 
 --focus design prints whether the feature is ready to build: readiness per
 piece of the overview's plan (spec, design check, settle-first questions,
@@ -40,6 +41,19 @@ Prints a short Markdown summary:
     specs, and passes in progress in the other worktrees, by repository;
   - a numbered list of next steps, most pressing first; once triage is done
     and fixes have landed, the last step is the final pass.
+
+  - the setup gaps first, under Setup, when there are any (see --setup);
+  - open deferred items (.clerk-dev/deferred.md) after the follow-ups: the
+    count, and each item's id, text, and Revisit;
+  - the Note of each open pass and open piece, the handoff a checkpoint left.
+
+--setup prints only what a feature work session is missing, one line each with
+what to do, or "Setup: complete.": a Purpose in the branch notes; a hub and
+feature when the worktree has a build log or passes, or another worktree names
+it in its workspace and holds feature records; a review workspace when
+records, specs, or follow-ups name other repositories (or it lacks a row for
+one); workspace rows whose worktree is missing; a plan with a done line on
+every step when active specs exist. It changes nothing.
 
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
@@ -106,6 +120,85 @@ def load(name):
     assert s and s.loader
     m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
     return m
+
+def has_feature(p):
+    return os.path.exists(os.path.join(p, ".clerk-dev", "feature", "feature.md"))
+
+def hub_feature_elsewhere(wt, rows):
+    """A worktree holding feature records that names this one in its review
+    workspace, or that this one's workspace names: the hub it should point at."""
+    real = os.path.realpath(wt)
+    near = [os.path.realpath(l[9:]) for l in git(wt, "worktree", "list", "--porcelain").splitlines() if l.startswith("worktree ")]
+    mine = {p for _, p in rows}
+    for p in dict.fromkeys([p for _, p in rows] + near):
+        if p != real and os.path.isdir(p) and has_feature(p) and (p in mine or real in {q for _, q in workspace_rows(p)}): return p
+
+def other_repos(wt, rows, d):
+    """Repositories other than this one that its active records and open
+    follow-ups name."""
+    rc = load("records.py"); me = repo_name(wt, rows)
+    named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
+    named |= {re.split(r"[ @]", i["from"])[0] for i in parse_followups(wt) if not i["done"] and i["from"]}
+    return sorted(n for n in named if n and n != me)
+
+def plan_gaps(d):
+    """Steps of the active plans without a done line, when active specs exist."""
+    rc = load("records.py"); recs = rc.records(d)
+    if not any(r.get("type") == "spec" and r.get("status") == "active" for r in recs): return []
+    plans = [r for r in recs if r.get("type") == "plan" and r.get("status") == "active"]
+    if not plans: return ["no active plan: propose the milestones to the user and record them as a plan (the feature skill)"]
+    out = []
+    for r in plans:
+        body = rc.parse(r["path"])[1].split("\n## ", 1)[0]
+        steps = re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]
+        if not steps: out.append(f"plan {r['id']} has no numbered steps: add the milestones in a new plan superseding it (the feature skill)"); continue
+        bare = [re.match(r"\d+", t).group(0) for t in steps if not re.search(r"\bdone\b", t, re.I)]
+        if bare: out.append(f"plan {r['id']} has no done line on step{plural(bare)} {', '.join(bare)}: supersede it with a plan that gives each step one (the feature skill)")
+    return out
+
+def setup_gaps(wt, rows):
+    """What a feature work session in this worktree is missing, one line each
+    with what to do. Reads only; never writes."""
+    rc = load("records.py"); gaps = []
+    purpose, _ = rc.branch_notes(wt)
+    if not purpose: gaps.append("Purpose: " + ("the branch notes have no Purpose" if purpose is not None else "no .clerk-dev/branch-notes.md") + "; draft it as tracking.md's Branch notes describes and show it to the user")
+    missing = [(n, p) for n, p in rows if not os.path.isdir(p)]
+    gaps += [f"workspace row {n}: {p} does not exist; fix the row in .clerk-dev/review-workspace.md or create the worktree" for n, p in missing]
+    declared, _ = rc.workspace(wt)
+    if declared and os.path.realpath(os.path.expanduser(declared)) not in {p for _, p in rows} and not os.path.isdir(os.path.expanduser(declared)):
+        gaps.append(f"hub {declared} (the Hub line of .clerk-dev/review-workspace.md) does not exist; fix the line")
+    try: d = rc.fdir(wt)
+    except SystemExit: d = None
+    featured = bool(d) and os.path.exists(os.path.join(d, "feature.md"))
+    if d and not featured:
+        elsewhere = hub_feature_elsewhere(wt, rows)
+        passes, _ = read_passes(wt)
+        try: built = load("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
+        except SystemExit: built = []
+        if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to .clerk-dev/review-workspace.md (skills/review/workspace-manifest.md)")
+        elif built or passes: gaps.append("this worktree has a " + ("build log" if built else "pass log") + " but no feature; start one: records.py start <worktree> \"<name>\" (the feature skill)")
+    named = other_repos(wt, rows, d)
+    if named:
+        have = {n for n, _ in rows}
+        if not rows: gaps.append(f"records or follow-ups name {', '.join(named)} but there is no review workspace; set one up as skills/review/workspace-manifest.md describes")
+        elif set(named) - have: gaps.append(f"records or follow-ups name {', '.join(sorted(set(named) - have))} but the review workspace has no row for {'it' if len(set(named) - have) == 1 else 'them'}; add {'one' if len(set(named) - have) == 1 else 'rows'}")
+    if featured: gaps += plan_gaps(d)
+    return gaps
+
+def setup_lines(gaps):
+    return ["**Setup:**"] + [f"- {g}" for g in gaps] + [""] if gaps else []
+
+def handoff_lines(wt, passes):
+    """The Note of each open pass and open piece."""
+    try: pieces = load("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
+    except SystemExit: pieces = []
+    live = [e for e in passes if e["f"].get("Status") == "open"] + [e for e in pieces if e["f"].get("Status") in ("briefed", "stopped")]
+    notes = [f"- {e['id']} {e['title']}: {e['f']['Note']}" for e in live if e["f"].get("Note")]
+    return ["", "**Handoff notes:**"] + notes if notes else []
+
+def deferred_lines(wt):
+    its = [i for i in load("items.py").read(os.path.join(wt, ".clerk-dev", "deferred.md")) if not i["done"]]
+    return [f"**Deferred items:** {len(its)} open."] + [f"- {i['id']}: {short(i['text'])}" + (f" (revisit: {i['fields']['Revisit']})" if i["fields"].get("Revisit") else "") for i in its] if its else []
 
 def read_passes(wt):
     """The pass log's entries, or None with the reason when it cannot be read."""
@@ -560,6 +653,7 @@ def main():
     ap.add_argument("--focus", choices=("all", "design", "implementation", "review"), default="all",
                     help="design: readiness to build; implementation: building progress and its next steps only; review: the review only")
     ap.add_argument("--area", help="one area, or a spec id for one piece and its area")
+    ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
     load("records.py").guard(wt)
@@ -569,7 +663,11 @@ def main():
     head = git(wt, "rev-parse", "HEAD")
     out, steps = [], []
     rows = workspace_rows(wt)
+    gaps = setup_gaps(wt, rows)
+    if a.setup:
+        emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
     out.append(f"## Where {'the implementation in ' if a.focus == 'implementation' else 'the design of ' if a.focus == 'design' else ''}{repo_name(wt, rows)} stands ({branch})\n")
+    out += setup_lines(gaps)
     if a.focus == "design" or a.area:
         steps = area_view(wt, rows, out, a.area) if a.area else design_view(wt, rows, out)
         out.append("")
@@ -635,6 +733,7 @@ def main():
     if items and not a.no_mark:
         try: open(seen_path, "w").write(str(max(i["id"] for i in items)) + "\n")
         except OSError: pass
+    out += deferred_lines(wt)
 
     # Follow-ups elsewhere
     me = repo_name(wt, rows)
@@ -665,12 +764,15 @@ def main():
                     pst, pin, pnum = sf.state(prun)
                     left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
                     if left: pass_steps.append(f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`.")
+    notes = handoff_lines(wt, passes)
     if a.focus == "implementation":
-        out[:] = [out[0]] + [l for l in out[1:] if l.startswith("**Working tree")]
+        out[:] = [out[0]] + setup_lines(gaps) + [l for l in out[1:] if l.startswith("**Working tree")]
         steps = implementation_view(wt, rows, out, unreviewed, pass_steps, passes)
+        out += notes
         out.append("")
         out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else ["**Next:** nothing pending in the building."]
         emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
+    out += notes
     if a.focus == "all":
         bfirst, blater = build_block(wt, rows, out, unreviewed)
         first, later = feature_block(wt, rows, out)

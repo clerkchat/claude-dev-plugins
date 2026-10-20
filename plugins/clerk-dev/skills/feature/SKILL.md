@@ -29,6 +29,14 @@ Do what the user asks, and suggest a next record only when it is clearly due
 (several brainstorms converging, a design with no decisions behind it, a plan
 with a piece that has no spec).
 
+## Setup first
+
+Start the session with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py
+<worktree> --setup`. It prints what the worktree is missing for feature work (a
+Purpose, a hub and feature, a review workspace, workspace rows whose worktree is
+missing, a plan with done lines) or "Setup: complete." Settle each gap with the
+user before going on, then carry on with the request.
+
 ## Finding the feature
 
 1. `records.py hub <worktree>` prints the hub. Records always go there, whatever

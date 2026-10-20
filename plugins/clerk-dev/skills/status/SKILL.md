@@ -13,7 +13,13 @@ compacted skill may be cut short, and the steps it drops are the ones that
 keep the work safe. Prefer `/clear` at a natural boundary to compaction; the
 `checkpoint` skill writes down what is pending first.
 
-Run, from the worktree:
+Start with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --setup`,
+which prints what the worktree is missing for feature work (a Purpose, a hub
+and feature, a review workspace, a plan with done lines) or "Setup: complete."
+Settle any gap with the user before going on: say what is missing and what it
+would take to fix, and fix it when they agree.
+
+Then run, from the worktree:
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> [--focus implementation|review]
@@ -35,8 +41,8 @@ review"): `--focus review`. Anything broader
 Its output already glosses each id on its first mention (`records.py gloss`);
 keep those glosses when you show or summarize it, and gloss any id you add.
 
-It reads only files and git: the latest review run, `.clerk-dev/followups.md` and
-`.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
+It reads only files and git: the latest review run, `.clerk-dev/followups.md`,
+`.clerk-dev/deferred.md`, and `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
 worktrees of
 `.clerk-dev/review-workspace.md`, the feature records and design checks in the
 hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen`,

@@ -60,7 +60,11 @@ session.
   may lose their reports. Wait for them, or say which are running and what to
   do with their results in the next session.
 - An open pass or a briefed piece: these are in the logs already and survive a
-  clear; name them so the next session picks them up.
+  clear. Write what the next session needs to finish it (what to log, what to
+  run next) as its note, replacing the old one: `passes.py note <worktree> P9
+  "<next steps>"` or `build.py note <worktree> B3 "<next steps>"`. Status shows
+  the note of every open pass and piece, so this is the only place in-flight
+  next steps go; no other file takes them.
 
 ## 4. Report
 
@@ -69,7 +73,9 @@ In a few lines:
 - what was written, one line each, with names ("decision R74, chunk C ships
   the seams as PRs to main ahead of the core chunk");
 - what is still open and only in this conversation, if anything;
-- what is in flight;
+- what is in flight, with the notes just written;
 - **safe to clear** or **not yet, because ...**;
 - what to ask after clearing to pick up: "where are we on the implementation"
-  or "where are we on the design", as fits.
+  or "where are we on the design", as fits. Next steps that belong to no open
+  pass or piece are not written down: status reports its own, so name only
+  what it already reports.

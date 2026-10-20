@@ -104,17 +104,22 @@ lands.
 
 ### Before the first piece
 
-Before delegating or writing the first piece on a branch, check two things,
-and fix what is missing before building:
+Before delegating or writing the first piece on a branch, run
+`${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --setup` and settle each
+gap it prints with the user before building. Two of its gaps are this skill's
+own:
 
-- `.clerk-dev/branch-notes.md` has a Purpose. If not, draft it as
+- No Purpose in `.clerk-dev/branch-notes.md`: draft it as
   `skills/review/tracking.md` describes and say in one line where.
-- The work is cut into milestones: the feature's active plan names, for each
-  step, its pieces, its spec, and what is done when it ends. If there is no
-  plan, or its steps have no done line, propose the milestones to the user (a
-  short numbered list) and record them as a plan, or a new plan superseding
+- The work is not cut into milestones: the feature's active plan names, for
+  each step, its pieces, its spec, and what is done when it ends. If there is
+  no plan, or its steps have no done line, propose the milestones to the user
+  (a short numbered list) and record them as a plan, or a new plan superseding
   the old one, with the `feature` skill. Small changes with no feature records
   skip this.
+
+The others (a hub and feature, a review workspace, workspace rows whose
+worktree is missing) are settled as the output says.
 
 ### What stays in the session
 

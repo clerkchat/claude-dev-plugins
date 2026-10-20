@@ -452,16 +452,17 @@ def names(wt, ids):
             elif re.fullmatch(r"P\d+", X):
                 e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if e["id"] == X), None)
                 if e: name = f"pass: {e['title']}"
-            elif re.fullmatch(r"F\d+", X):
-                e = next((i for i in load("followups.py").read(os.path.join(here, ".clerk-dev", "followups.md")) if i["id"] == X), None)
-                if e: name = f"follow-up: {e['text']}"
+            elif re.fullmatch(r"[FD]\d+", X):
+                kind, file = ("follow-up", "followups") if X[0] == "F" else ("deferred item", "deferred")
+                e = next((i for i in load(f"{file}.py").read(os.path.join(here, ".clerk-dev", f"{file}.md")) if i["id"] == X), None)
+                if e: name = f"{kind}: {e['text']}"
             if name is None and x in pieces: name = f"plan piece: {pieces[x]}"
         except SystemExit:
             pass
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
-ID_RE = re.compile(r"(?<!\w)(R\d+(?:\.\d+)?|[BMPFI]\d+)(?![\w.]?\d)('s)?")
+ID_RE = re.compile(r"(?<!\w)(R\d+(?:\.\d+)?|[BMPFID]\d+)(?![\w.]?\d)('s)?")
 
 def gloss(wt, text, n=50):
     """The text with each id's first plain mention followed by its short name,

@@ -166,7 +166,8 @@ time:
      supersedes it;
    - nothing to change: the reason, in one line.
 4. Close it: `items.py status <check file> Q3 fixed --ref "<record id or
-   reason>"` (`deferred` or `wont-fix` for Defer and Ignore), and move on.
+   reason>"` (`wont-fix` for Ignore); for Defer, follow "Items" in
+   `skills/review/tracking.md`, with the question as the source. Then move on.
    Discuss and Refine leave it open until decided.
 
 Records written while walking follow the `feature` skill's rules. When the user's answer carries guidance (a rule beyond this case), or says

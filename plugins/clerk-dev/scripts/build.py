@@ -16,6 +16,7 @@ Usage:
   build.py stop WORKTREE B3 --question "..."
   build.py resend WORKTREE B3 [--note "..."] [--model opus] [--effort high]
   build.py abandon WORKTREE B3 [--note "..."]
+  build.py note WORKTREE B3 "what to do next"       (a briefed or stopped piece only; "" clears it)
   build.py drop WORKTREE --spec R18 --reqs 17 --why "R24 moved it to R23.3"
   build.py list WORKTREE [--open]
   build.py progress WORKTREE [--spec R52]
@@ -41,6 +42,7 @@ Entry format:
     - Question: does TurnContext carry the clock?
     - Deviation: kept the reference's retry count
     - Started: 2026-10-16
+    - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 """
 import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile
 
@@ -313,6 +315,7 @@ def main():
     r_ = sp.add_parser("resend"); r_.add_argument("wt"); r_.add_argument("bid"); r_.add_argument("--note"); r_.add_argument("--model"); r_.add_argument("--effort")
     dr = sp.add_parser("drop"); dr.add_argument("wt"); dr.add_argument("--spec", required=True); dr.add_argument("--reqs", required=True); dr.add_argument("--why", required=True)
     ab = sp.add_parser("abandon"); ab.add_argument("wt"); ab.add_argument("bid"); ab.add_argument("--note")
+    nt = sp.add_parser("note"); nt.add_argument("wt"); nt.add_argument("bid"); nt.add_argument("text")
     l_ = sp.add_parser("list"); l_.add_argument("wt"); l_.add_argument("--open", action="store_true")
     pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--spec")
     cl = sp.add_parser("checklist"); cl.add_argument("wt"); cl.add_argument("--spec")
@@ -408,6 +411,12 @@ def main():
             e["f"]["Model"] = f"{a.model or m0} {a.effort or e0}"
         if a.note: e["f"]["Note"] = a.note
         write(p, entries); print(f"{e['id']} briefed again (attempt {e['f']['Attempts']}, {e['f']['Model']})")
+    elif a.cmd == "note":
+        if e["f"].get("Status") not in ("briefed", "stopped"): sys.exit(f"{e['id']} is {e['f'].get('Status') or 'a milestone'}, not an open piece")
+        text = " ".join(a.text.split())
+        if text: e["f"]["Note"] = text
+        else: e["f"].pop("Note", None)
+        write(p, entries); print(f"{e['id']} note " + ("set" if text else "cleared"))
     elif a.cmd == "abandon":
         e["f"]["Status"] = "abandoned"
         if a.note: e["f"]["Note"] = a.note

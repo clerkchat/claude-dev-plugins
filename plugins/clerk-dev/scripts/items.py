@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and write item files: follow-ups (F3) and design-check questions (Q3).
+"""Read and write item files: follow-ups (F3), deferred items (D3), and design-check questions (Q3).
 
 An item file is a Markdown checkbox list, one item per top-level checkbox with
 its fields as a nested bullet list, so a Markdown formatter keeps the layout.
@@ -14,7 +14,9 @@ Usage:
   items.py status FILE ID STATUS [--ref "commit, record, or reason"]
   items.py validate FILE
 
-Other scripts import read(), write(), and the constants.
+Other scripts import read(), write(), and the constants. WorktreeList is the
+worktree-list layer `followups.py` and `deferred.py` are thin over: add, list,
+close, reopen, and set on `<worktree>/.clerk-dev/<file>`.
 """
 import argparse, datetime, importlib.util, os, re, sys, tempfile
 
@@ -103,9 +105,78 @@ def find(items, iid):
     if not it: sys.exit(f"{iid} not found")
     return it
 
-def guard_file(path):
+def records():
     s = importlib.util.spec_from_file_location("records", os.path.join(os.path.dirname(os.path.abspath(__file__)), "records.py"))
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); m.guard_file(path)
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+
+def guard_file(path): records().guard_file(path)
+
+def close(it, status, ref=None):
+    set_status(it, status, (f"in {ref}" if re.fullmatch(r"[0-9a-f]{7,40}", ref) else ref) if ref else "closed")
+
+def reopen(it): set_status(it, "open")
+
+def set_instruction(it, value, note=None):
+    it["fields"]["Instruction"] = instruction(value) + (f": {note}" if note else "")
+
+class WorktreeList:
+    def __init__(self, filename, prefix, header, extras=(), required=(), closes=DONE, legacy_outcome=None):
+        self.filename, self.prefix, self.header, self.required, self.closes, self.legacy_outcome = filename, prefix, header, tuple(required), closes, legacy_outcome
+        self.extras = tuple(extras)
+        self.fields = ("From", *self.extras, "Added", "Instruction", "Status", "Outcome")
+
+    def path(self, wt):
+        records().exclude(wt)
+        return os.path.join(wt, ".clerk-dev", self.filename)
+
+    def read(self, p):
+        its = read(p, list(self.fields) + ([self.legacy_outcome] if self.legacy_outcome else []))
+        for it in its:
+            f = it["fields"]
+            if self.legacy_outcome in f:
+                f.setdefault("Outcome", f.pop(self.legacy_outcome)); f["Status"] = "fixed"; it["done"] = True
+            it["meta"] = [f"{k}: {f[k]}" for k in self.fields if f.get(k)]
+        return its
+
+    def write(self, p, its): write(p, its, self.header, order=self.fields)
+
+    def add(self, its, text, source, instruction_value=None, **extra):
+        n = max([int(i["id"][1:]) for i in its] or [0]) + 1
+        f = {"From": source, **{k: extra.get(k) or "" for k in self.extras}, "Added": datetime.date.today().isoformat(),
+             "Instruction": instruction(instruction_value) if instruction_value else "", "Status": "open"}
+        its.append({"done": False, "id": f"{self.prefix}{n}", "text": text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
+        return its[-1]["id"]
+
+    def main(self, prog, usage=None):
+        ap = argparse.ArgumentParser(prog=prog, description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
+        sp = ap.add_subparsers(dest="cmd", required=True)
+        a = sp.add_parser("add"); a.add_argument("wt"); a.add_argument("text"); a.add_argument("--from", dest="src", required=True)
+        for k in self.extras: a.add_argument(f"--{k.lower()}", dest=k, required=k in self.required)
+        a.add_argument("--instruction")
+        l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
+        c = sp.add_parser("close"); c.add_argument("wt"); c.add_argument("iid"); c.add_argument("--ref")
+        c.add_argument("--status", choices=self.closes, default="fixed")
+        r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("iid")
+        s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("iid"); s.add_argument("instruction"); s.add_argument("--note")
+        args = ap.parse_args()
+        records().guard(args.wt)
+        p = self.path(args.wt); its = self.read(p)
+        if args.cmd == "add":
+            iid = self.add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in self.extras})
+            self.write(p, its); print(f"{iid} added to {p}")
+        elif args.cmd == "list":
+            for i in its:
+                if args.open and i["done"]: continue
+                print(f"{'x' if i['done'] else ' '} {i['id']}. {i['text']}  [{'; '.join(i['meta'])}]")
+        else:
+            it = find(its, args.iid)
+            if args.cmd == "set":
+                set_instruction(it, args.instruction, args.note)
+                self.write(p, its); print(f"{it['id']}: {it['fields']['Instruction']}")
+            else:
+                if args.cmd == "close": close(it, args.status, args.ref)
+                else: reopen(it)
+                self.write(p, its); print(f"{args.iid} {'closed (' + args.status + ')' if args.cmd == 'close' else 'reopened'}")
 
 def main():
     ap = argparse.ArgumentParser()
@@ -130,7 +201,7 @@ def main():
     else:
         it = find(items, a.iid)
         if a.cmd == "set":
-            it["fields"]["Instruction"] = instruction(a.value) + (f": {a.note}" if a.note else "")
+            set_instruction(it, a.value, a.note)
         else:
             set_status(it, a.value, a.ref)
         write(a.file, items, header_of(a.file), order=labels_in(a.file))

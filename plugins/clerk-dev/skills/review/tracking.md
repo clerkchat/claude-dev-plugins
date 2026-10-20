@@ -12,6 +12,7 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the rules the user set for this branch only (Guidance); may be written before the first review | the review orchestrator, the `review-fix` and `review-followups` skills (draft Purpose when missing), any skill recording an answer's guidance for this branch ("Guidance from answers" below), the user | `records.py guidance`, whose file every lens, verifier, fixer, and implementer brief gets; the `review-fix`, `review-followups`, and `review-triage` skills and the fixer (Branch scope below) |
 | `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
 | `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
+| `.clerk-dev/deferred.md` | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
 | `.clerk-dev/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
 | `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, capabilities, plans, specs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
 | `.clerk-dev/passes.md` | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and narrow-check result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
@@ -293,8 +294,9 @@ say:
 
 Review findings, follow-ups, and design-check questions are all items, and use
 one vocabulary in two layers. Findings keep their cards and `status.tsv`;
-follow-ups (`F3`) and design questions (`Q3`) are checkbox lists read and
-written by `scripts/items.py` (`followups.py` builds on it).
+follow-ups (`F3`), deferred items (`D3`), and design questions (`Q3`) are
+checkbox lists read and written by `scripts/items.py` (`followups.py` and
+`deferred.py` build on it).
 
 Instruction, what to do; blank means not decided yet (a follow-up with none is
 done as written):
@@ -303,7 +305,16 @@ done as written):
 - `Fix as noted`: do it as the note after the colon says ("Fix as noted: use
   the banner, not a toast").
 - `Discuss`: talk it through with the user before anything else happens.
-- `Defer`: not now; the status becomes `deferred`, with where it went.
+- `Defer`: not now. Add a deferred item with `deferred.py add <worktree>
+  "<what>" --from <source> --path "<what was done for now>" --open "<what is
+  left>" [--revisit "<when to look again>"]`, where the source is the finding
+  (`<run> N`), question (`R18-1.Q6`), follow-up (`F3`), pass item (`P3.4`),
+  piece (`B9`), or "this session". Then set the source's status to `deferred`
+  with its Outcome naming the new D id: `render-report.py --set N=deferred:D3`
+  for a finding, `items.py status <file> Q3 deferred --ref D3` for a design
+  question, `followups.py close <worktree> F3 --status deferred --ref D3` for a
+  follow-up, `passes.py done <worktree> P3 4 --na "deferred, D3"` for a pass
+  item. "Deferred items" below says what they are.
 - `Ignore`: not at all; the status becomes `wont-fix`, with why.
 - `Refine`: investigate first (read the source change and the local code),
   propose a concrete fix or a reason not to, then set one of the others.
@@ -314,6 +325,21 @@ Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
 `deferred`. The box is ticked exactly when the status is one of the last three.
 `Outcome` holds what closed it: a commit (`in 1a2b3c4`), a decision record
 (`R18`), or a reason. A design question is `fixed` when its answer is recorded.
+
+## Deferred items
+
+A deferred item (`D3`, in `.clerk-dev/deferred.md`, kept by `deferred.py`) is a
+known gap with a path chosen for now, not an idea: ideas are good things for
+later, a deferred item is something this work already knows is missing. Its
+fields are From (the source), Path (what was done for now), Open (what is left
+to decide or do), Revisit (a trigger, such as "after the R13 draft"), Added,
+Instruction, Status, and Outcome.
+
+It closes in one of two ways: `fixed`, with the commit that closed the gap
+(`deferred.py close <worktree> D3 --ref <sha>`), or `wont-fix`, with the reason
+(`--status wont-fix --ref "<why>"`). `deferred.py reopen` puts one back. A plan
+step's done line may say "deferred items reviewed", meaning every open item was
+looked at when the step ended: closed, or revisited with a new trigger.
 
 ## What stays the user's
 

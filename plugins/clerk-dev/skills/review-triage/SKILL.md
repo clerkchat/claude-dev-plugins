@@ -113,9 +113,9 @@ The queue is every finding whose instruction is `fix` or `noted` and whose
 status is not `fixed`, `wont-fix`, or `deferred`, in finding-number order. Say
 in one line how many there are and roughly how long (about five minutes each).
 
-A finding in "Already on main" marked Fix as recommended is recorded as
-deferred to a separate pull request, not fixed, as the `review-fix` skill
-describes; it counts in the queue's summary as deferred.
+A finding in "Already on main" marked Fix as recommended is deferred to a
+separate pull request, not fixed, as the `review-fix` skill describes; it counts
+in the queue's summary as deferred.
 
 Work the queue in this session: for each finding, follow the `review-fix`
 skill's steps in queue mode, as recommended, as noted (findings marked Fix as
@@ -199,7 +199,10 @@ Choose the instruction by what the fix will follow:
   Notes then hold the design, and they replace the recommendation. If a note
   would start "do not do what the card says", the choice is `noted`.
 - `defer:<ticket or reason>`, `ignore:<reason>`: a reason for Ignore is worth
-  asking for; re-reviews show it next to any finding that comes up again.
+  asking for; re-reviews show it next to any finding that comes up again. For
+  Defer, also follow "Items" in `skills/review/tracking.md`, with the finding
+  as the source (`<run> N`); its Path and Open come from the reason and the
+  discussion.
 
 A discussion's Notes entry records what was decided, not the conversation. Write
 it like this:

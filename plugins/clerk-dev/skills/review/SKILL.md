@@ -76,6 +76,14 @@ repository, and Resuming, rather than gathering the same facts with your own
 shell commands (chained `cat`s of files that may be absent fail the call, and
 zsh expands a word starting with `=`).
 
+Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --setup` in the
+same step, for the worktree of the run. It lists what the worktree is missing
+for feature work: a Purpose (settled by Branch notes first, below), a hub and
+feature, a review workspace when records or follow-ups name other repositories,
+workspace rows whose worktree is missing, a plan with done lines. Settle any
+other gap with the user before the run goes on; "Setup: complete." means
+nothing to settle.
+
 ## Branch notes first
 
 Read `.clerk-dev/branch-notes.md` before scoping. When it or its Purpose is

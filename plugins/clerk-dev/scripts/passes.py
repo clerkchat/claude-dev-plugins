@@ -12,6 +12,7 @@ Usage:
   passes.py item WORKTREE P3 "what to do, with path:line"
   passes.py done WORKTREE P3 N [--na "why not applicable"]
   passes.py end WORKTREE P3
+  passes.py note WORKTREE P3 "what to do next"      (an open pass only; "" clears it)
   passes.py range WORKTREE P3
   passes.py check WORKTREE P3 --run LABEL --ran a,b (--findings a=2,b=0 | --result empty|error) [--note "..."]
   passes.py abandon WORKTREE P3 [--note "..."]
@@ -35,6 +36,7 @@ Entry format:
       - [-] 2. Unicode names: not applicable, names are opaque here
       - [ ] 3. Provider timeout leaves the import running (src/import.ts:88)
     - Check: pass-p3-1016; ran edge-cases, error-handling; edge-cases 2, error-handling 0
+    - Note: log item 3 once the timeout test passes   (the handoff of an open pass; status shows it)
 """
 import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile
 
@@ -136,6 +138,7 @@ def main():
     i = sp.add_parser("item"); i.add_argument("wt"); i.add_argument("pid"); i.add_argument("text")
     d = sp.add_parser("done"); d.add_argument("wt"); d.add_argument("pid"); d.add_argument("n", type=int); d.add_argument("--na")
     e_ = sp.add_parser("end"); e_.add_argument("wt"); e_.add_argument("pid")
+    n_ = sp.add_parser("note"); n_.add_argument("wt"); n_.add_argument("pid"); n_.add_argument("text")
     r = sp.add_parser("range"); r.add_argument("wt"); r.add_argument("pid")
     sh = sp.add_parser("show"); sh.add_argument("wt"); sh.add_argument("pid")
     c = sp.add_parser("check"); c.add_argument("wt"); c.add_argument("pid"); c.add_argument("--run", required=True); c.add_argument("--ran", required=True)
@@ -172,6 +175,12 @@ def main():
         it["mark"] = "-" if a.na else "x"
         if a.na: it["text"] = re.sub(r":? not applicable.*$", "", it["text"]) + f": not applicable, {a.na}"
         write(p, passes); print(f"{e['id']} item {a.n} {'not applicable' if a.na else 'done'}")
+    elif a.cmd == "note":
+        if e["f"].get("Status") != "open": sys.exit(f"{e['id']} is {e['f'].get('Status')}, not open")
+        text = " ".join(a.text.split())
+        if text: e["f"]["Note"] = text
+        else: e["f"].pop("Note", None)
+        write(p, passes); print(f"{e['id']} note " + ("set" if text else "cleared"))
     elif a.cmd == "end":
         if e["f"].get("Status") != "open": sys.exit(f"{e['id']} is {e['f'].get('Status')}, not open")
         dl = dirty(a.wt, [x.strip() for x in e["f"].get("Left out", "").split(",") if x.strip()])

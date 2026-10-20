@@ -49,9 +49,10 @@ report is the only thing an item should add here.
      alike, when the user's answer carries guidance (a rule beyond this item)
      or says `guidance: ...`, record it as "Guidance from answers" in
      `skills/review/tracking.md` describes;
-   - `Defer` or `Ignore` still open: close them now, `followups.py close
-     <worktree> F3 --status deferred|wont-fix --ref "<the note, or why>"`, in
-     one line each.
+   - `Defer` still open: apply Defer as "Items" in `skills/review/tracking.md`
+     describes, with the follow-up as the source (`F3`), in one line each.
+   - `Ignore` still open: close it now, `followups.py close <worktree> F3
+     --status wont-fix --ref "<the note, or why>"`, in one line each.
    Fix the work list now; its length is the total.
 2. Draft this worktree's Purpose if it is missing (Branch notes in
    `skills/review/tracking.md`), then write the guidance file to the

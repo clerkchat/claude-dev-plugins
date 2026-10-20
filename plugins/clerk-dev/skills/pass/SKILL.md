@@ -63,7 +63,9 @@ commit rules below.
      item as it lands
      (`passes.py done <worktree> P<n> <k>`, or `--na "<why>"` when it turns out
      not to apply). Stay inside the items: something outside them goes in a
-     line to the user, not into this pass.
+     line to the user, not into this pass. An item the pass cannot finish is
+     deferred as "Items" in `skills/review/tracking.md` describes, with the
+     pass item as the source (`P<n>.<k>`).
    - Guide mode: stop after the list. The engineer writes and commits; when
      they say they are done, mark the items they name and go on.
 4. **End.** `passes.py end <worktree> P<n>`. It refuses while tracked changes
