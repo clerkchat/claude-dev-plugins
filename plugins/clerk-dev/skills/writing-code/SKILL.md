@@ -5,7 +5,7 @@ description: How to write code: delegate the building of settled pieces to imple
 
 # Writing code
 
-When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that

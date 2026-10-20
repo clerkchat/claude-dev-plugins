@@ -205,6 +205,22 @@ M1), passes (P3), follow-ups (F3), ideas (I7), and finding numbers ("finding
 Get the names with `records.py names <worktree> R31 S C B15 ...` rather than
 opening files. A gloss says what the thing is, not all it says.
 
+The rule holds in every case, the ones where it slips most included:
+
+- Each message stands alone. An id glossed in an earlier message is glossed
+  again in this one; the user may have cleared, scrolled, or switched sessions.
+- Relayed text counts. A subagent's report (an overview refresh, a design
+  check, an implementer, a lens) cites bare ids by design; rewrite it with
+  glosses before passing it on, never paste it through.
+- Ids used as labels count. A bullet or heading that leads with "R19 vs R21:"
+  or "B15:" is a first mention; gloss it there ("R19 (production edits only
+  without runtime effect) vs R21 (small, safe changes allowed):").
+- Lists and counts count ("guidance R15 and R19 to R22"): gloss each id, or
+  replace the list with what the records are about when the ids add nothing.
+
+Before sending a message that mentions any id, run `records.py names` on every
+id in it you have not glossed, and check the draft for bare ids.
+
 Files keep their ids as they are: records, check files, logs, and reports cite
 ids by design, and commit messages carry none. The rule is for conversation.
 

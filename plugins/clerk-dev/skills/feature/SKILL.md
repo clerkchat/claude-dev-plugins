@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 
 # Feature records
 
-When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: never bare on first mention.
+When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -151,7 +151,9 @@ gaps and disagreements across every record is the part that needs it; falling ba
 and rules) and the output path `<hub>/.clerk-dev/feature/overview.md`, asking it
 to write the overview from the digest alone, citing ids for every statement.
 When it returns, run `records.py stamp-overview <worktree>`, and tell the user
-the path. If the user wants something in it changed, that is a new or
+the path. Its report cites bare ids; run `records.py names` on them and gloss
+each one in what you tell the user (the gaps and disagreements it found
+especially), as "Naming things to the user" requires. If the user wants something in it changed, that is a new or
 superseding record, then a refresh; never edit the overview itself.
 
 ## Rolling up
