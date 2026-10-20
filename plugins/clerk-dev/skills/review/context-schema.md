@@ -118,7 +118,8 @@ Pointers to repo skills or docs that lens agents should read for judgment calls
 ## Known noise
 
 Patterns that look wrong but are intentional here, so lenses do not re-report
-them.
+them. `records.py guidance --context` copies this section into the guidance
+file as Repository noise, which is where lenses read it.
 
 # Drafting a review context
 

@@ -14,7 +14,7 @@ You review one lens: which concrete input or state makes this code do the wrong
 thing? Follow the review-protocol skill for inputs, scope, scoring, and output.
 Your lens name is `edge-cases`.
 
-Read `## Known noise` in `CONTEXT` so you do not re-report intentional behavior.
+Read `## Repository noise` in `GUIDANCE` so you do not re-report intentional behavior.
 
 ## Method
 

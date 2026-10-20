@@ -33,7 +33,8 @@ Usage:
   records.py overview-status WORKTREE
   records.py suggest WORKTREE           roll-up designs, plans, stale overview
   records.py names WORKTREE R31 S C R52.19 B15 ...   a short name for each id or code
-  records.py guidance WORKTREE [--area A] [--out FILE]   branch scope, branch guidance, and the feature's active guidance
+  records.py guidance WORKTREE [--area A | --for R33|R33.4|R18-1.Q6] [--context REVIEW-CONTEXT.md] [--out FILE]
+                                        branch scope, branch guidance, the feature's active guidance, and the repository's Known noise
   records.py idea WORKTREE "text" [--area A] [--from R12|"this session"] [--why ...] [--when ...]
   records.py ideas WORKTREE [--all] [--area A | --area -]
   records.py adopt WORKTREE I3 --by R60   the record the idea became
@@ -342,7 +343,11 @@ def lint(label, text):
     start = start if len(start) <= 60 else start[:60].rsplit(" ", 1)[0] + "..."
     return [f'warning: {label}: "{start}" names {tok}; guidance is for principles, consider a decision, requirement, or Purpose']
 
-def guidance(wt, area=None):
+def noise(context):
+    if not context or not os.path.exists(context): return ""
+    return body_section(open(context, encoding="utf-8").read(), "Known noise")
+
+def guidance(wt, area=None, context=None):
     purpose, branch_rules = branch_notes(wt)
     out = ["# Guidance", "", "These are the user's standing rules for this worktree, narrowest scope first: the branch, then the feature. A rule that cannot hold is raised, not silently broken.", "",
            "## Branch scope", "", purpose or ("No branch notes in this worktree." if purpose is None else "The branch notes have no Purpose."), "",
@@ -361,7 +366,18 @@ def guidance(wt, area=None):
             out += rule_lines(f"{r['id']}. {r.get('title', '')}" + (f" ({r['area']})" if r.get("area") else ""), body, rule)
             warnings += lint(r["id"], body_section(body, "Rule") or rule)
         if not feature_rules: out += ["None.", ""]
+    known = noise(context)
+    if known: out += ["## Repository noise", "", "Patterns that look wrong but are intentional in this repository; do not report them.", "", known, ""]
     return "\n".join(out).rstrip("\n") + "\n", warnings
+
+def plan_steps(r):
+    body = parse(r["path"])[1].split("\n## ", 1)[0]
+    return {int(re.match(r"\d+", t).group(0)): t.strip() for t in re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]}
+
+def plan_step(d, ref):
+    m = re.fullmatch(r"(R\d+)\.(\d+)", ref.strip().upper())
+    r = next((r for r in records(d) if m and r["id"] == m.group(1) and r.get("type") == "plan"), None)
+    return r, plan_steps(r).get(int(m.group(2))) if r else None
 
 def plan_pieces(d):
     """{code: name} of the plan's pieces, from the overview's Plan table, whose
@@ -447,7 +463,7 @@ def gloss(wt, text, n=50):
     def glossed(m):
         before, after = text[:m.start()], text[m.end():]
         named = titles.get(m.group(1)) and after.lstrip(":").startswith(" " + titles[m.group(1)])
-        return named or after.startswith(" (") or (before.endswith("(") and after.startswith(")"))
+        return named or (after.startswith(" (") and not after.startswith(" (new)")) or (before.endswith("(") and after.startswith(")"))
     def quoted(m):
         line = text[:m.start()].rsplit("\n", 1)[-1]
         return line.count('"') % 2 == 1 or line.count("`") % 2 == 1
@@ -576,6 +592,13 @@ def idea_word(i):
 def write_ideas(d, its):
     items_mod().write(os.path.join(d, "ideas.md"), its, IDEAS_HEADER, order=IDEA_FIELDS)
 
+REF_RE = re.compile(r"R(\d+)(?:\.\d+|-\d+(?:\.Q\d+)?)?")
+
+def area_for(wt, ref):
+    x = ref.strip().upper()
+    if not REF_RE.fullmatch(x) or names(wt, [x])[0].endswith(": unknown"): sys.exit(f"{ref} is not a record, requirement, or design question in this feature")
+    return find(fdir(wt), "R" + REF_RE.fullmatch(x).group(1)).get("area", "")
+
 def area_of(d, ids):
     """The area records share, or "" when they have none or differ."""
     got = {find(d, i).get("area", "") for i in ids}
@@ -604,7 +627,7 @@ def main():
     idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
     ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
     nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
-    gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--out")
+    gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--for", dest="ref"); gd.add_argument("--context"); gd.add_argument("--out")
     a = ap.parse_args()
     today = datetime.date.today().isoformat()
     guard(a.wt)
@@ -612,7 +635,8 @@ def main():
     if a.cmd == "hub":
         print(hub(a.wt)); return
     if a.cmd == "guidance":
-        text, warnings = guidance(a.wt, a.area)
+        if a.ref and a.area is not None: sys.exit("--for and --area both choose the area; give one")
+        text, warnings = guidance(a.wt, area_for(a.wt, a.ref) if a.ref else a.area, a.context)
         for w in warnings: print(w, file=sys.stderr)
         if a.out:
             os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

@@ -29,7 +29,7 @@ Within a pass, only the lenses whose categories the piece touches apply
 
 ## Order within a milestone
 
-A milestone (a row of the feature's plan) runs its passes in this order:
+A milestone (a step of the feature's plan) runs its passes in this order:
 
 1. prep;
 2. happy-path: the draft;

@@ -178,9 +178,11 @@ Give paths, not contents. Include:
 - the later pieces that will touch the same code, by name and spec id, so the
   agent shapes this piece's code for them without building them;
 - the tests to write or port, and the exact command to run them;
-- the guidance file's path: `records.py guidance <worktree> --area <area>
-  --out <scratchpad>/guidance-<area>.md` writes the branch's Purpose, its
-  guidance, and the feature's active guidance for the piece's area;
+- the guidance file's path: `records.py guidance <worktree> --for <the
+  piece's spec> [--context <the repository's review-context SKILL.md>] --out
+  <scratchpad>/guidance-<area>.md` writes the branch's Purpose, its guidance,
+  the feature's active guidance for the spec's area, and the repository's Known
+  noise (`--area <area>` names the area directly);
 - the rules that apply beyond the repository's conventions: the user's
   instructions that bear on code (for example a no-comments rule). Do not
   assume the agent sees the user's own instructions; restate the ones that
@@ -268,14 +270,20 @@ are applied by orchestrating passes, not by adding checklists to a brief. A
 brief never quotes a lens's text, except the one lens of the pass it belongs
 to.
 
-A milestone is a row of the feature's plan (the overview's Plan table, one
-chunk). Work it as a sequence of passes, with the `pass` skill:
+A milestone is a numbered step of the feature's active plan. Work it as a
+sequence of passes, with the `pass` skill:
 
-1. **Plan it** when its work starts: `build.py milestone <worktree> --spec
-   R52 --piece "<the plan row's piece>" --passes <list>`. The list is prep,
-   happy-path, then the passes `skills/pass/passes.md` suggests for the
-   milestone's spec, in the order it gives; security is required when it is
-   in the list. Show the plan in one line and go on.
+1. **Plan it** when its work starts: `build.py milestone <worktree> --step
+   R8.2 --passes <list>`, where R8.2 is step 2 of plan R8. The log takes the
+   spec and the piece from the step and keeps the pointer, so it does not
+   restate the plan; it stops when the plan or the step is missing, or the plan
+   is not active. When the step names no spec, add `--spec`; a log with no plan
+   takes `--spec R52 --piece "<piece>"` instead. The list is prep, happy-path,
+   then the passes `skills/pass/passes.md` suggests for the milestone's spec,
+   in the order it gives; security is required when it is in the list. Show the
+   plan in one line and go on. When the plan is replaced, status flags a
+   milestone under way that points at a step that is gone or a superseded plan;
+   edit its Plan line in the build log to the new plan's step.
 2. **Prep**, the refactor-first pass, looking ahead to the milestone's later
    pieces and the plan's later milestones; it may end with no changes.
 3. **The draft** is the happy-path pass: start it, build its pieces as above

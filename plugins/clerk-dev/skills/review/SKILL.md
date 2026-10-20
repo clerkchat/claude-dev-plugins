@@ -904,9 +904,10 @@ plus `BAR: final` on a final pass, and `PASS: <focus>; piece <R id or none>`
 with `--pass`.
 
 Before the first wave, write the guidance file with `records.py guidance
-<worktree> --out <run>/guidance.md`: the branch's Purpose (read, or drafted, at
-the start of the run; see Branch notes first), its guidance rules, and the
-feature's active guidance (see Branch notes in `tracking.md`). Pass its path as
+<worktree> --context <the CONTEXT path, when there is one> --out
+<run>/guidance.md`: the branch's Purpose (read, or drafted, at the start of the
+run; see Branch notes first), its guidance rules, the feature's active guidance
+(see Branch notes in `tracking.md`), and the review context's Known noise. Pass its path as
 `GUIDANCE` to every lens and verifier. Relay any warning it prints about
 guidance that names specific code in one line. When the branch notes have
 Guidance rules or the feature has active guidance, mention in the plan in one
@@ -1329,8 +1330,8 @@ skills, and review context, and writes its run and report under that worktree's
    `clerk-dev:review-cross-repo` with `model: fable` (see Model fallback) and
    repeated `REPO`, `DIFF`, `BASE`, `HEAD`,
    `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's guidance
-   file, `records.py guidance <its worktree> --out <run>/guidance-<repo>.md`,
-   whose branch scope says what that side meant to change), plus `MODE`,
+   file, `records.py guidance <its worktree> --context <its CONTEXT> --out
+   <run>/guidance-<repo>.md`, whose branch scope says what that side meant to change), plus `MODE`,
    `PR`, and `DOCS`; `DOCS` includes each repository's
    `.clerk-dev/followups.md` (see `tracking.md`). Merge, verify,
    and number its findings in this session's run directory as usual.

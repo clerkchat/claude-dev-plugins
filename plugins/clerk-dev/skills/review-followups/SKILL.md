@@ -57,7 +57,9 @@ report is the only thing an item should add here.
    Fix the work list now; its length is the total.
 2. Draft this worktree's Purpose if it is missing (Branch notes in
    `skills/review/tracking.md`), then write the guidance file to the
-   scratchpad: `records.py guidance <worktree> --out <scratchpad>/guidance.md`.
+   scratchpad: `records.py guidance <worktree> --context
+   <worktree>/.claude/skills/review-context/SKILL.md --out
+   <scratchpad>/guidance.md`.
    Write it again whenever a rule is recorded during the run.
 3. Check the working tree with `git status --short`. Each commit must hold only
    its item's change, so uncommitted edits to tracked files get in the way. If

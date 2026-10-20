@@ -43,7 +43,7 @@ user through them and records each answer.
    SUPPORTING: <absolute paths, or none>
    REPO: <absolute path of the repository the records are about>
    CONTEXT: <.claude/skills/review-context/SKILL.md of that repository, or none>
-   GUIDANCE: <path of that repository's guidance file>
+   GUIDANCE: <path of that repository's guidance file, written as below>
    WORKSPACE: <.clerk-dev/review-workspace.md, or none>
    ```
 
@@ -69,9 +69,11 @@ user through them and records each answer.
    ```
 
    Write each guidance file before launching, with `records.py guidance
-   <that repository's worktree> [--area <the checked records' area>] --out
+   <that repository's worktree> [--area <the checked records' area>]
+   [--context <its CONTEXT>] --out
    <hub>/.clerk-dev/feature/checks/R<n>-<k>/guidance-<repo>.md`: its branch
-   scope, its branch guidance, and the feature's active guidance.
+   scope, its branch guidance, the feature's active guidance, and its review
+   context's Known noise.
 4. **Keep the raw output.** Write each agent's reply verbatim to
    `<hub>/.clerk-dev/feature/checks/R<n>-<k>/raw/<lens>.md` (naming below)
    with `${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out

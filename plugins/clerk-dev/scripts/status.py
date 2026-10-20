@@ -55,7 +55,8 @@ feature when the worktree has a build log or passes, or another worktree names
 it in its workspace and holds feature records; a review workspace when
 records, specs, or follow-ups name other repositories (or it lacks a row for
 one); workspace rows whose worktree is missing; a plan with a done line on
-every step when active specs exist. It changes nothing.
+every step when active specs exist; a milestone under way whose Plan step is
+gone or whose plan was superseded or discarded. It changes nothing.
 
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
@@ -141,11 +142,25 @@ def plan_gaps(d):
     if not plans: return ["no active plan: propose the milestones to the user and record them as a plan (the feature skill)"]
     out = []
     for r in plans:
-        body = rc.parse(r["path"])[1].split("\n## ", 1)[0]
-        steps = re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]
+        steps = rc.plan_steps(r)
         if not steps: out.append(f"plan {r['id']} has no numbered steps: add the milestones in a new plan superseding it (the feature skill)"); continue
-        bare = [re.match(r"\d+", t).group(0) for t in steps if not re.search(r"\bdone\b", t, re.I)]
+        bare = [str(n) for n, t in steps.items() if not re.search(r"\bdone\b", t, re.I)]
         if bare: out.append(f"plan {r['id']} has no done line on step{plural(bare)} {', '.join(bare)}: supersede it with a plan that gives each step one (the feature skill)")
+    return out
+
+def milestone_drift(wt, d):
+    rc, bd = load_script("records.py"), load_script("build.py")
+    out = []
+    try:
+        for m in bd.milestones(bd.read(os.path.join(wt, ".clerk-dev", "build.md"))):
+            ref = m["f"].get("Plan")
+            if not ref or m["f"].get("Status") == "abandoned" or bd.milestone_view(wt, m)[2]: continue
+            r, text = rc.plan_step(d, ref)
+            who, fix = f"{m['id']} points at plan step {ref}", "; point its Plan line in .clerk-dev/build.md at the current plan's step, or abandon it (build.py abandon)"
+            if not r: out.append(f"{who}, but no plan has that id{fix}")
+            elif r.get("status") != "active": out.append(f"{who}, but {r['id']} is {r.get('status')}" + (f" by {r['superseded_by']}" if r.get("superseded_by") else "") + fix)
+            elif text is None: out.append(f"{who}, but {r['id']} has no such step{fix}")
+    except SystemExit: pass
     return out
 
 def setup_gaps(wt, rows):
@@ -174,7 +189,7 @@ def setup_gaps(wt, rows):
         have = {n for n, _ in rows}
         if not rows: gaps.append(f"records or follow-ups name {', '.join(named)} but there is no review workspace; set one up as skills/review/workspace-manifest.md describes")
         elif set(named) - have: gaps.append(f"records or follow-ups name {', '.join(sorted(set(named) - have))} but the review workspace has no row for {'it' if len(set(named) - have) == 1 else 'them'}; add {'one' if len(set(named) - have) == 1 else 'rows'}")
-    if featured: gaps += plan_gaps(d)
+    if featured: gaps += plan_gaps(d) + milestone_drift(wt, d)
     return gaps
 
 def setup_lines(gaps):
@@ -731,7 +746,7 @@ def main():
         out.append(f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if seen and new else "") + ".")
         for i in open_items:
             tag = " (new)" if seen and i["id"] > seen else ""
-            out.append(f"- F{i['id']}{tag}: {short(i['text'])} ({i['from'] or 'source unknown'})")
+            out.append(f"- F{i['id']}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
     else:
         out.append(f"**Follow-ups owed here:** none open ({len(items)} done)." if items else "**Follow-ups owed here:** none.")
     if items and not a.no_mark:

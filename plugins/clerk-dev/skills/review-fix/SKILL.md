@@ -55,8 +55,10 @@ worktree, not to a review run: it may exist before the first review, and it
 applies to every run until changed. Its format, and how to draft Purpose when
 it is missing, are in Branch notes in `skills/review/tracking.md`. At the start
 of every fix request, draft Purpose if it is missing, then write the guidance
-file, `records.py guidance <worktree> --out <run>/guidance.md`, so it holds
-the rules recorded since the review; every brief points at it. Its branch scope
+file, `records.py guidance <worktree> --context
+<worktree>/.claude/skills/review-context/SKILL.md --out <run>/guidance.md`, so it
+holds the rules recorded since the review and the repository's Known noise;
+every brief points at it. Its branch scope
 decides what is in scope for a fix and how to make it (Branch scope in
 `tracking.md`; the fixer applies it), and its branch and feature guidance steer
 fixes and discussions.

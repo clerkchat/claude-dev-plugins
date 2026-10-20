@@ -14,8 +14,9 @@ You review one lens: if someone breaks this change next month, which test fails?
 Follow the review-protocol skill for inputs, scope, scoring, and output. Your
 lens name is `tests`.
 
-Read `## Existing review material` and `## Known noise` in `CONTEXT` for the
-repo's testing conventions (what is mocked, what is real, which helpers exist).
+Read `## Existing review material` in `CONTEXT` for the repo's testing
+conventions (what is mocked, what is real, which helpers exist), and
+`## Repository noise` in `GUIDANCE` for what not to re-report.
 Without context, read two or three neighboring test files to learn the
 conventions before judging.
 

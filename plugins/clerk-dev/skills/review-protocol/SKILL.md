@@ -41,13 +41,14 @@ The orchestrator's prompt gives you:
   `## Hazards by focus`: those are the issues this team's reviewers flag
   repeatedly, and every one that applies to the patch must be checked, not just
   considered. When `## Existing review material` lists documents, skim the parts
-  relevant to your lens as well.
+  relevant to your lens as well. `## Known noise` is not read from here: it
+  arrives in `GUIDANCE`, with the user's rules.
 - `MODE`: `quick`, `standard`, or `deep`. Quick means fewer, higher-confidence
   findings and less tracing; deep means trace callers and callees as far as
   needed.
 - `REPO`: absolute path of the repository root.
 - `PR`: the pull request title and body, or `none`.
-- `GUIDANCE`: path of this worktree's guidance file, or `none`. It has three
+- `GUIDANCE`: path of this worktree's guidance file, or `none`. It has four
   parts:
   - Branch scope, the branch's Purpose: judge the diff by it. Code it lists as
     new can change without compatibility concerns, deployed code it lists as
@@ -61,6 +62,9 @@ The orchestrator's prompt gives you:
     rule. Code that breaks a rule is a finding of your lens when the rule is
     about your lens's concern; cite the rule's id, or a branch rule's heading,
     in `evidence`.
+  - Repository noise, when the repository's review context has a Known noise
+    section: patterns that look wrong but are intentional here. Do not report
+    them.
   The guidance does not change the confidence rubric. If it tells you to skip
   something you believe is a blocker, report the blocker anyway and say that
   the guidance asked to skip this kind of finding.

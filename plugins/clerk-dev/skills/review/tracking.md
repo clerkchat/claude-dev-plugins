@@ -59,9 +59,12 @@ old, or names code that no longer exists, ask whether it still applies before
 relying on it. Never record anything the user did not say.
 
 Agents get these rules through one file, not this one:
-`records.py guidance <worktree> [--area <area>] --out <file>` writes Purpose,
-these rules, and the feature's active guidance into it, and that file is what
-lenses, verifiers, fixers, and implementer briefs get as `GUIDANCE`.
+`records.py guidance <worktree> [--area <area> | --for <R33, R33.4, or
+R18-1.Q6>] [--context <review-context SKILL.md>] --out <file>` writes Purpose,
+these rules, the feature's active guidance, and the review context's Known noise
+into it, and that file is what lenses, verifiers, fixers, and implementer briefs
+get as `GUIDANCE`. `--for` takes the area of the record it names; `--context`
+adds the noise.
 
 Drafting Purpose when the file or section is missing:
 

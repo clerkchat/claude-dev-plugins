@@ -20,7 +20,8 @@ Usage:
   build.py drop WORKTREE --spec R18 --reqs 17 --why "R24 moved it to R23.3"
   build.py list WORKTREE [--open]
   build.py progress WORKTREE [--spec R52]
-  build.py milestone WORKTREE --spec R52 --piece "C core harness" --passes prep,happy-path,security,edge-cases,tests [--required security]
+  build.py milestone WORKTREE --step R8.2 --passes prep,happy-path,security,edge-cases,tests [--required security]
+  build.py milestone WORKTREE --spec R52 --piece "C core harness" --passes ...     (a log with no plan)
   build.py skip WORKTREE M1 edge-cases --why "..."     (never a required pass)
   build.py milestones WORKTREE
   build.py checklist WORKTREE [--spec R52]          progress as a checklist, one line per requirement
@@ -49,7 +50,7 @@ from records import load_script
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
-FIELDS = ("Spec", "Piece", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
+FIELDS = ("Spec", "Piece", "Plan", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
 REPEATABLE = ("Question", "Deviation", "Skipped")
 HEADER = """# Build log
 
@@ -228,9 +229,23 @@ def compress(s, nums):
         else: runs.append([n, n])
     return ", ".join(f"{s}.{a}" if a == b else f"{s}.{a}, {s}.{b}" if b == a + 1 else f"{s}.{a} to {s}.{b}" for a, b in runs)
 
-# Milestones: a row of the feature's plan, worked as a sequence of passes
-# (prep, the draft as happy-path, then one focus each). Only the plan is
-# stored; where each pass stands is read from the pass log.
+def step_piece(text):
+    text = re.sub(r"^\d+\.\s+", "", text)
+    return re.sub(r"\s+", " ", re.split(r"\bDone:", text, maxsplit=1, flags=re.I)[0]).strip(" .;,:")
+
+def step_spec(text):
+    m = re.search(r"\bspecs? (R\d+)", text)
+    return m.group(1) if m else None
+
+def plan_step_of(wt, ref):
+    ref = ref.strip().upper()
+    if not re.fullmatch(r"R\d+\.\d+", ref): sys.exit(f"--step takes a plan step such as R8.2, not {ref!r}")
+    rc = load_script("records.py")
+    r, text = rc.plan_step(rc.fdir(wt), ref)
+    if not r: sys.exit(f"{ref.split('.')[0]} is not a plan record in the hub")
+    if r.get("status") != "active": sys.exit(f"plan {r['id']} is {r.get('status')}" + (f" (by {r['superseded_by']})" if r.get("superseded_by") else "") + "; use a step of the active plan")
+    if text is None: sys.exit(f"plan {r['id']} has no step {ref.split('.')[1]}")
+    return ref, text
 
 def pieces(entries): return [e for e in entries if e["id"].startswith("B")]
 def milestones(entries): return [e for e in entries if e["id"].startswith("M")]
@@ -314,7 +329,7 @@ def main():
     l_ = sp.add_parser("list"); l_.add_argument("wt"); l_.add_argument("--open", action="store_true")
     pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--spec")
     cl = sp.add_parser("checklist"); cl.add_argument("wt"); cl.add_argument("--spec")
-    ms = sp.add_parser("milestone"); ms.add_argument("wt"); ms.add_argument("--spec", required=True); ms.add_argument("--piece", required=True)
+    ms = sp.add_parser("milestone"); ms.add_argument("wt"); ms.add_argument("--step"); ms.add_argument("--spec"); ms.add_argument("--piece")
     ms.add_argument("--passes", required=True); ms.add_argument("--required")
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
@@ -346,16 +361,19 @@ def main():
         write(p, entries); print(f"B{n} dropped: {compress(spec, nums)}")
         return
     if a.cmd == "milestone":
-        spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
+        step, text = plan_step_of(a.wt, a.step) if a.step else (None, "")
+        spec, piece = a.spec or step_spec(text), a.piece or step_piece(text)
+        if not spec or not piece: sys.exit(f"step {step} names no spec; add --spec" if step else "give --step, or --spec and --piece")
+        spec = spec.upper() if spec.upper().startswith("R") else f"R{spec}"
         plan = [x.strip() for x in a.passes.split(",") if x.strip()]
         known = catalogue()
         bad = [x for x in plan if known and x not in known]
         if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
         req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
         n = max([int(e["id"][1:]) for e in milestones(entries)] or [0]) + 1
-        entries.append({"id": f"M{n}", "title": a.piece.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
-            "Spec": spec, "Passes": ", ".join(plan), "Required": ", ".join(req), "Started": today}})
-        write(p, entries); print(f"M{n} planned: {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
+        entries.append({"id": f"M{n}", "title": piece.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
+            "Spec": spec, "Plan": step, "Passes": ", ".join(plan), "Required": ", ".join(req), "Started": today}})
+        write(p, entries); print(f"M{n} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
         return
     if a.cmd == "skip":
         m = find(entries, a.mid)
