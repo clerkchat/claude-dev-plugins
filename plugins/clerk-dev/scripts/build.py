@@ -44,7 +44,8 @@ Entry format:
     - Started: 2026-10-16
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile
+import argparse, datetime, os, re, subprocess, sys, tempfile
+from records import load_script
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
@@ -59,12 +60,6 @@ edit with care.
 """
 ENTRY_RE = re.compile(r"^- \[( |x)\] ([BM]\d+)\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
-
-def load(name):
-    s = importlib.util.spec_from_file_location(name.replace(".py", "").replace("-", "_"), os.path.join(HERE, name))
-    assert s and s.loader
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-    return m
 
 def path(wt):
     d = os.path.join(wt, ".clerk-dev"); os.makedirs(d, exist_ok=True)
@@ -127,7 +122,7 @@ def find(entries, bid):
 def spec_requirements(hub_dir, spec_id):
     """{number: text} of a spec's top-level numbered Requirements, or None
     when the spec is not found."""
-    rc = load("records.py")
+    rc = load_script("records.py")
     r = next((r for r in rc.records(hub_dir) if r["id"] == spec_id), None)
     if not r: return None, None
     _, body = rc.parse(r["path"])
@@ -145,7 +140,7 @@ def dropped_of(mine):
 def progress(wt, spec=None):
     """Per spec: (record, {n: text}, {n: (state, note, piece id)}, pieces) from
     this worktree's log, for every spec the log names (or the one given)."""
-    rc = load("records.py")
+    rc = load_script("records.py")
     d = rc.fdir(wt)
     entries = pieces(read(os.path.join(wt, ".clerk-dev", "build.md")))
     specs = [spec] if spec else sorted({e["f"].get("Spec") for e in entries if e["f"].get("Spec")}, key=lambda s: int(s[1:]))
@@ -210,7 +205,7 @@ def checklist_lines(wt, spec=None):
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
         done = sum(1 for v in state.values() if v[0] == "done")
         out.append(f"{s} {title}: {done} of {len(items)} done")
-        _, all_items = spec_requirements(load("records.py").fdir(wt), s)
+        _, all_items = spec_requirements(load_script("records.py").fdir(wt), s)
         gone = dropped_of(mine)
         for n in sorted(set(items) | set(gone)):
             if n in gone:
@@ -245,7 +240,7 @@ def pass_states(wt, spec):
     p = os.path.join(wt, ".clerk-dev", "passes.md")
     if not os.path.exists(p): return {}
     out = {}
-    for e in load("passes.py").read(p):
+    for e in load_script("passes.py").read(p):
         if e["f"].get("Piece") != spec: continue
         out[e["title"].split(" on ")[0].strip()] = e
     return out
@@ -255,7 +250,7 @@ def open_findings(wt, e):
     label = (e["f"].get("Check") or "").split(";")[0].strip()
     run = os.path.join(wt, ".clerk-dev", label)
     if not label or not os.path.exists(os.path.join(run, "merged.md")): return None
-    sf = load("stale-findings.py")
+    sf = load_script("stale-findings.py")
     st, ins, num = sf.state(run)
     return sum(1 for m in sf.load_findings(run) if m in num and sf.is_open(m, st, ins))
 
@@ -324,7 +319,7 @@ def main():
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
-    load("records.py").guard(a.wt)
+    load_script("records.py").guard(a.wt)
     p = path(a.wt); entries = read(p); today = datetime.date.today().isoformat()
 
     if a.cmd == "add":
@@ -341,7 +336,7 @@ def main():
         spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
         nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
         if not nums: sys.exit("--reqs names no requirement numbers")
-        _, items = spec_requirements(load("records.py").fdir(a.wt), spec)
+        _, items = spec_requirements(load_script("records.py").fdir(a.wt), spec)
         if items is None: sys.exit(f"{spec} not found in the hub")
         unknown = [n for n in nums if n not in items]
         if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")

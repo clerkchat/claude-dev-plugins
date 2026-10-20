@@ -95,6 +95,11 @@ commit rules below.
 
 ## Answers during a pass
 
+When an item needs a choice nothing settles, or an implementer stops on one,
+weigh it with the `deliberate` skill before asking. Put the answer in the
+implementer's brief, and when it changes what the pass does, in its items
+(`passes.py item`, or `passes.py done ... --na "<why>"`).
+
 When the user's answer carries guidance (a rule beyond this case), or says
 `guidance: ...`, record it as "Guidance from answers" in
 `skills/review/tracking.md` describes, and say so in one line.

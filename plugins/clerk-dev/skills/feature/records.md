@@ -16,7 +16,6 @@ how it was broken down and planned. They live in the hub worktree, at
     R13-1/raw/<lens>.md       each lens's reply, verbatim
   overview.md                 generated from the active records; never edited
   ideas.md                    parked ideas, I1, I2, ...; kept by records.py
-  guidance.md                 the guidance as a handbook, generated; never edited
 ```
 
 `overview.md` is the feature's current state in one read, generated from the
@@ -173,10 +172,10 @@ records what it rejected; guidance decides the next ones. Written without
 being asked whenever an answer carries one (see "Guidance from answers" in
 `skills/review/tracking.md`). Refined by superseding, like a decision.
 Implementer briefs, lens and fixer prompts, and design checks all get the
-active guidance through the file `records.py guidance` writes. `guidance.md`
-is also the place to read it: every rule at a glance, then each in full by
-area with its why, what it applies to, and where it came from, and superseded
-rules under History.
+active guidance through the file `records.py guidance` writes, and people read
+it the same way: the branch's scope and guidance, then every active rule in
+full with its why and what it applies to. Superseded and discarded rules show
+in `records.py list`.
 
 ```markdown
 # R61. Capabilities wire in through explicit lists

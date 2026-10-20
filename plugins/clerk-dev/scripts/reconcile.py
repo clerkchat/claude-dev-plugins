@@ -33,11 +33,10 @@ in-progress, wont-fix, or deferred (open needs no row) (a previous "fixed" that 
 again is reopened, so it is not carried), and copies previous resolution
 text into CUR_RUN/resolution/ prefixed with the previous run's label.
 """
-import argparse, importlib.util, os, re, sys
+import argparse, os, re, sys
+from records import load_script
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("mf", os.path.join(HERE, "merge-findings.py"))
-mf = importlib.util.module_from_spec(spec); spec.loader.exec_module(mf)
+mf = load_script("merge-findings.py")
 
 STOP = set("the a an and or of to in on for is are be by with that this it as at from not no when so then than its into".split())
 

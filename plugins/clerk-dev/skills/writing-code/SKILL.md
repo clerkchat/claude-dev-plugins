@@ -61,8 +61,7 @@ Before calling the clean fix risky and offering a workaround instead, find the
 fix's smallest form: the opt-in flag, the added signal, the precedent the
 codebase already has. Present that version next to the workaround, with the
 argument for its safety. Judged in the abstract, the right fix often looks
-riskier than it is. This holds wherever options are put to the user: here, in
-design questions, and in review discussions.
+riskier than it is.
 
 ## Reuse
 
@@ -124,9 +123,10 @@ worktree is missing) are settled as the output says.
 ### What stays in the session
 
 - Settling choices. When a piece needs a choice no record settles and it
-  shapes code others build on, settle it with the user first and record it (a
-  decision, or an open item resolved in the spec), then delegate. An agent that
-  stops on a `questions:` line is handled the same way.
+  shapes code others build on, settle it with the user first (the
+  `deliberate` skill) and record it (a decision, or an open item resolved in
+  the spec), then delegate. An agent that stops on a `questions:` line is
+  handled the same way.
 - Cutting the work into pieces and ordering them.
 - Reviewing each result, running its tests, and committing it.
 - Changes small enough that the brief would be longer than the change: a few
@@ -236,12 +236,10 @@ status lives only here; the spec is not edited for it.
 
 1. Read the report. `stopped` or `questions:` go back to the user (or are
    settled from the records and guidance) before anything else. Before asking,
-   when a question is not already settled by a record or guidance, hand it to a
-   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes),
-   with the question, the piece's brief, and the code and records it touches,
-   asking for the options, what each would cost and constrain later, and a
-   recommendation. Put that to the user in a few lines rather than the bare
-   question. When the
+   when a question is not already settled by a record or guidance, weigh it
+   with the `deliberate` skill, with the piece's brief and the code and
+   records it touches as its facts, and put its decision brief to the user
+   rather than the bare question. When the
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
    `skills/review/tracking.md` describes, and say so in one line.

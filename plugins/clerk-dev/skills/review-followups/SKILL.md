@@ -39,13 +39,14 @@ report is the only thing an item should add here.
    them by instruction (the vocabulary is "Items" in `skills/review/tracking.md`):
    - none, `Fix as recommended`, or `Fix as noted`: the work list, done in id
      order; a note replaces the item's text where they differ;
-   - `Refine`: before the work list, investigate each (read the source change
-     with `git -C <source worktree> show <sha>`, and the local code it touches),
-     propose a concrete fix or a reason not to, and ask the user to pick an
-     instruction; record it with `followups.py set`, and add the item to the
-     work list when it becomes a fix;
-   - `Discuss`: after the work list, walk them with the user one at a time and
-     record what they decide with `followups.py set`; for Refine and Discuss
+   - `Refine`: before the work list, weigh each with the `deliberate` skill,
+     whose facts include the source change (`git -C <source worktree> show
+     <sha>`) and the local code it touches; record the instruction the user
+     picks with `followups.py set`, and add the item to the work list when it
+     becomes a fix;
+   - `Discuss`: after the work list, walk them with the user one at a time,
+     with the `deliberate` skill when one needs a choice, and record what they
+     decide with `followups.py set`; for Refine and Discuss
      alike, when the user's answer carries guidance (a rule beyond this item)
      or says `guidance: ...`, record it as "Guidance from answers" in
      `skills/review/tracking.md` describes;
@@ -88,8 +89,8 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 2. Check for an open decision. Items often leave a product choice open: wording
    the user will read, where a control goes, what to show on an empty or error
    state. When the item text does not settle it and nothing in the code or
-   the guidance does, present the options with your recommendation and wait for
-   the user's choice before delegating; put the choice in the brief. A choice
+   the guidance does, weigh it with the `deliberate` skill and wait for the
+   user's choice before delegating; put the choice in the brief. A choice
    that would settle later items the same way is recorded as "Guidance from
    answers" in `skills/review/tracking.md` describes.
 3. Delegate to `clerk-dev:review-fixer`, saying that the brief is a follow-up,

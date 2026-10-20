@@ -279,7 +279,8 @@ def index(d):
             where = r.get("area") or "feature-wide"
             rows.append(f"- **{r['id']}** {r.get('type', '')} ({where}): [{r.get('title', '')}]({os.path.relpath(r['path'], d)}){note}")
         rows.append("")
-    write_guidance(d)
+    stale = os.path.join(d, "guidance.md")
+    if os.path.exists(stale): os.remove(stale)
     block = "\n".join(rows).rstrip("\n") + "\n"
     text = re.sub(r"^## (Records|Ideas|Checks|History)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
     open(p, "w", encoding="utf-8").write(text + "\n\n" + block)
@@ -304,43 +305,6 @@ def labeled(label, text):
 
 def rule_lines(heading, body, rule):
     return [f"### {heading}", "", body_section(body, "Rule") or rule, ""] + labeled("Why", body_section(body, "Why")) + labeled("Applies to", body_section(body, "Applies to"))
-
-def write_guidance(d):
-    """guidance.md, the feature's guidance as a handbook: every active rule at
-    a glance, then each in full by area (rule, why, what it applies to, where
-    it came from), then superseded and discarded ones. Lens prompts and
-    implementer briefs read it; regenerated with the index, never edited."""
-    p = os.path.join(d, "guidance.md")
-    rs = rules(d)
-    past = [r for r in records(d) if r.get("type") == "guidance" and r.get("status") != "active"]
-    if not rs and not past:
-        if os.path.exists(p): os.remove(p)
-        return
-    out = ["# Guidance", "", "The user's standing guidance for this feature: rules that settle choices",
-           "beyond the question that prompted them. Follow them; when one cannot hold,",
-           "say so rather than work around it. Generated from the guidance records by",
-           "records.py; never edited. To change a rule, write a guidance record that",
-           "supersedes it.", ""]
-    if rs:
-        out += ["## At a glance", ""]
-        out += [f"- **{r['id']}**{' (' + r['area'] + ')' if r.get('area') else ''}: {rule}" for r, rule in rs] + [""]
-    area = None
-    for r, rule in rs:
-        a = r.get("area") or "Feature-wide"
-        if a != area: out += [f"## {a}", ""]; area = a
-        _, body = parse(r["path"])
-        out += rule_lines(f"{r['id']}. {r.get('title', '')}", body, rule)
-        src = body_section(body, "From") or r.get("from", "")
-        if r.get("supersedes"): src = (src.rstrip(".") + ". " if src else "") + f"Supersedes {r['supersedes']}."
-        out += labeled("From", src)
-        out += [f"[{r['id']} record]({os.path.relpath(r['path'], d)}), {r.get('date', '')}", ""]
-    if past:
-        out += ["## History", ""]
-        for r in past:
-            how = f"superseded by {r['superseded_by']}" if r.get("superseded_by") else (f"discarded: {r['note']}" if r.get("note") else r.get("status", ""))
-            out.append(f"- **{r['id']}**{' (' + r['area'] + ')' if r.get('area') else ''}: {gist(r, limit=200)} ({how}; [record]({os.path.relpath(r['path'], d)}))")
-        out.append("")
-    open(p, "w", encoding="utf-8").write("\n".join(out).rstrip("\n") + "\n")
 
 def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
 
@@ -482,7 +446,7 @@ def gloss(wt, text, n=50):
         titles[x] = name.partition(": ")[2][:20]
     def glossed(m):
         before, after = text[:m.start()], text[m.end():]
-        named = titles.get(m.group(1)) and after.startswith(" " + titles[m.group(1)])
+        named = titles.get(m.group(1)) and after.lstrip(":").startswith(" " + titles[m.group(1)])
         return named or after.startswith(" (") or (before.endswith("(") and after.startswith(")"))
     def quoted(m):
         line = text[:m.start()].rsplit("\n", 1)[-1]

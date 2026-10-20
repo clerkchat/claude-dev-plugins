@@ -15,11 +15,9 @@ Usage:
 SRC is a finding "<run> N", a question "R18-1.Q6", a pass item "P3.4", a piece
 "B9", or "this session".
 """
-import importlib.util, os
+from records import load_script
 
-_spec = importlib.util.spec_from_file_location("items", os.path.join(os.path.dirname(os.path.abspath(__file__)), "items.py"))
-assert _spec and _spec.loader
-items = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(items)
+items = load_script("items.py")
 
 HEADER = """# Deferred
 

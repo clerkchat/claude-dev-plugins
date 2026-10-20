@@ -222,6 +222,14 @@ fits:
 When unsure, record it as a decision, and say so in the confirmation line so
 the user can redirect it.
 
+When the user redirects where something was recorded ("that is a branch rule,
+not a decision"), fix it the usual way: supersede, discard, or move it to the
+place the routing gives, with a note starting `rerouted:` that says where it
+went (`rerouted: to branch guidance`). The note is the discard's `--note`, or
+a line in the body of the superseding record or the moved branch rule. Status
+counts these notes, so how often the routing sends answers to the wrong place
+can be judged.
+
 Promoting a rule to a wider scope (a branch rule the user wants for the whole
 feature, a feature rule for all their work) supersedes the narrower copy,
 saying "promoted to <where>". A guidance record is superseded by the new
@@ -318,9 +326,9 @@ done as written):
   item. "Deferred items" below says what they are.
 - `Ignore`: not at all; the status becomes `wont-fix`, with why.
 - `Refine`: investigate first (read the source change and the local code),
-  propose a concrete fix or a reason not to, then set one of the others.
-  Follow-ups and design questions only; a finding's author is a lens in this
-  repository, and Discuss covers it.
+  propose a concrete fix or a reason not to, as the `deliberate` skill does,
+  then set one of the others. Follow-ups and design questions only; a
+  finding's author is a lens in this repository, and Discuss covers it.
 
 Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
 `deferred`. The box is ticked exactly when the status is one of the last three.

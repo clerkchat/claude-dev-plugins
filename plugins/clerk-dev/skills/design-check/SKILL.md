@@ -148,16 +148,16 @@ follow-ups. `Instruction` is empty until the user decides; `Status` and
 
 When the user asks to go through them ("walk the design questions", "go
 through Q3"), take the open questions in order, settle-first first, one at a
-time:
+time. When several need a choice, prepare their briefs first, as "Several
+items waiting" in the `deliberate` skill describes.
 
 1. Show the question with its why and suggestion, briefly, and the code or
-   record it points at when that helps. When an option is called risky, find
-   its smallest form first ("Changing live code" in the `writing-code` skill).
+   record it points at when that helps. When it needs a choice among options,
+   or the user says Refine, weigh it with the `deliberate` skill.
 2. Discuss until the user decides, and record the instruction with
    `${CLAUDE_PLUGIN_ROOT}/scripts/items.py set <check file> Q3
    "<instruction>" [--note "..."]`, in the words of "Items" in
-   `skills/review/tracking.md` (Fix as recommended adopts the suggestion;
-   Refine means investigate the code first and come back with a proposal).
+   `skills/review/tracking.md` (Fix as recommended adopts the suggestion).
 3. Record the answer where it belongs:
    - a choice: a decision record (`records.py new <worktree> decision "..."
      --from R<n>`, with `--supersedes` when it changes an active decision,

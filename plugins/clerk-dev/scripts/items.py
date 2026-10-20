@@ -18,7 +18,8 @@ Other scripts import read(), write(), and the constants. WorktreeList is the
 worktree-list layer `followups.py` and `deferred.py` are thin over: add, list,
 close, reopen, and set on `<worktree>/.clerk-dev/<file>`.
 """
-import argparse, datetime, importlib.util, os, re, sys, tempfile
+import argparse, datetime, os, re, sys, tempfile
+from records import load_script
 
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")
@@ -105,11 +106,7 @@ def find(items, iid):
     if not it: sys.exit(f"{iid} not found")
     return it
 
-def records():
-    s = importlib.util.spec_from_file_location("records", os.path.join(os.path.dirname(os.path.abspath(__file__)), "records.py"))
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
-
-def guard_file(path): records().guard_file(path)
+def guard_file(path): load_script("records.py").guard_file(path)
 
 def close(it, status, ref=None):
     set_status(it, status, (f"in {ref}" if re.fullmatch(r"[0-9a-f]{7,40}", ref) else ref) if ref else "closed")
@@ -126,7 +123,7 @@ class WorktreeList:
         self.fields = ("From", *self.extras, "Added", "Instruction", "Status", "Outcome")
 
     def path(self, wt):
-        records().exclude(wt)
+        load_script("records.py").exclude(wt)
         return os.path.join(wt, ".clerk-dev", self.filename)
 
     def read(self, p):
@@ -159,7 +156,7 @@ class WorktreeList:
         r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("iid")
         s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("iid"); s.add_argument("instruction"); s.add_argument("--note")
         args = ap.parse_args()
-        records().guard(args.wt)
+        load_script("records.py").guard(args.wt)
         p = self.path(args.wt); its = self.read(p)
         if args.cmd == "add":
             iid = self.add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in self.extras})

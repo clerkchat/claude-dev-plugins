@@ -23,13 +23,10 @@ renders inside the finding's card; an unlinked one renders as its own card in
 the "Pull request comments" section. Human comments are never filtered by any
 confidence bar.
 """
-import argparse, importlib.util, json, os, re, subprocess, sys
+import argparse, json, os, re, subprocess, sys
+from records import load_script
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-def mod(name, file):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, file))
-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
-rc = mod("rc", "reconcile.py"); mf = rc.mf
+rc = load_script("reconcile.py"); mf = rc.mf
 
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName

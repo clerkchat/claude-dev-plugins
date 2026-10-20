@@ -13,13 +13,13 @@ writes CUR_RUN/reconcile/matches.tsv with one `carried` row per earlier
 finding and CUR_RUN/reconcile/previous.txt. Nothing is copied over an
 existing file.
 """
-import datetime, importlib.util, os, re, shutil, sys
+import datetime, os, re, shutil, sys
+from records import load_script
 
 def import_pending(prev):
     """Bring ticks and notes the user made in the previous report since its
     last render into its status and instruction files, so they are carried."""
-    spec = importlib.util.spec_from_file_location("rr", os.path.join(os.path.dirname(os.path.abspath(__file__)), "render-report.py"))
-    rr = importlib.util.module_from_spec(spec); spec.loader.exec_module(rr)
+    rr = load_script("render-report.py")
     today = datetime.date.today().isoformat()
     st = rr.import_hand_edits(prev, rr.read_status(prev), today); rr.write_status(prev, st)
     ins = rr.read_instructions(prev); changed = rr.import_instruction_edits(prev, ins, today)

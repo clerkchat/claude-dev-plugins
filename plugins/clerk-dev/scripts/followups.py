@@ -24,11 +24,9 @@ Entry format:
     - Status: open
     - Outcome: 2026-10-09 in 1a2b3c4   (once closed)
 """
-import importlib.util, os
+from records import load_script
 
-_spec = importlib.util.spec_from_file_location("items", os.path.join(os.path.dirname(os.path.abspath(__file__)), "items.py"))
-assert _spec and _spec.loader
-items = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(items)
+items = load_script("items.py")
 
 HEADER = """# Follow-ups
 

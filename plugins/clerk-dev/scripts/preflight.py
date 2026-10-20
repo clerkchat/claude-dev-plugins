@@ -18,17 +18,10 @@ For each worktree (default: the current directory) prints a Markdown block:
 Never fetches, writes nothing, and always exits 0: a missing piece is
 printed as missing rather than failing the call.
 """
-import argparse, datetime, importlib.util, os, re, subprocess, time
+import argparse, datetime, os, re, subprocess, time
+from records import load_script
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-
-def load(name, file):
-    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, file))
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-    return mod
-
-rs = load("rs", "status.py")
+rs = load_script("status.py")
 git = rs.git
 
 def git_raw(repo, *args):
@@ -72,7 +65,7 @@ def block(path, log_n):
     wt = git(path, "rev-parse", "--show-toplevel")
     if not wt:
         return [f"## {path}", "", "Not a git worktree (or the path does not exist).", ""]
-    rs.load("records.py").guard(wt)
+    load_script("records.py").guard(wt)
     rows = rs.workspace_rows(wt)
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")

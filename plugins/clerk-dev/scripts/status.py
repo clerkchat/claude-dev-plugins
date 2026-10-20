@@ -46,6 +46,8 @@ Prints a short Markdown summary:
   - open deferred items (.clerk-dev/deferred.md) after the follow-ups: the
     count, and each item's id, text, and Revisit;
   - the Note of each open pass and open piece, the handoff a checkpoint left.
+  - Rerouted, when a record's note or the branch notes has a note starting
+    `rerouted:` (an answer recorded in the wrong place): the count, and which.
 
 --setup prints only what a feature work session is missing, one line each with
 what to do, or "Setup: complete.": a Purpose in the branch notes; a hub and
@@ -57,12 +59,10 @@ every step when active specs exist. It changes nothing.
 
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys
+import argparse, datetime, os, re, subprocess, sys
+from records import load_script
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("sf", os.path.join(HERE, "stale-findings.py"))
-assert spec and spec.loader
-sf = importlib.util.module_from_spec(spec); spec.loader.exec_module(sf)
+sf = load_script("stale-findings.py")
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
 
@@ -75,7 +75,7 @@ def plural(x):
     return "" if n == 1 else "s"
 
 def emit(wt, text):
-    try: text = load("records.py").gloss(wt, text)
+    try: text = load_script("records.py").gloss(wt, text)
     except SystemExit: pass
     print(text)
 
@@ -84,9 +84,7 @@ def short(text, n=90):
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 def parse_followups(wt):
-    spec = importlib.util.spec_from_file_location("fu", os.path.join(HERE, "followups.py"))
-    assert spec and spec.loader
-    fu = importlib.util.module_from_spec(spec); spec.loader.exec_module(fu)
+    fu = load_script("followups.py")
     return [{"id": int(it["id"][1:]), "done": it["done"], "text": it["text"],
              "from": it["fields"].get("From", ""), "added": it["fields"].get("Added", "")}
             for it in fu.read(os.path.join(wt, ".clerk-dev", "followups.md"))]
@@ -115,12 +113,6 @@ def repo_name(wt, rows):
     common = git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
     return os.path.basename(os.path.dirname(common)) if common else os.path.basename(real)
 
-def load(name):
-    s = importlib.util.spec_from_file_location(name.replace("-", "_").replace(".py", ""), os.path.join(HERE, name))
-    assert s and s.loader
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-    return m
-
 def has_feature(p):
     return os.path.exists(os.path.join(p, ".clerk-dev", "feature", "feature.md"))
 
@@ -136,14 +128,14 @@ def hub_feature_elsewhere(wt, rows):
 def other_repos(wt, rows, d):
     """Repositories other than this one that its active records and open
     follow-ups name."""
-    rc = load("records.py"); me = repo_name(wt, rows)
+    rc = load_script("records.py"); me = repo_name(wt, rows)
     named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
     named |= {re.split(r"[ @]", i["from"])[0] for i in parse_followups(wt) if not i["done"] and i["from"]}
     return sorted(n for n in named if n and n != me)
 
 def plan_gaps(d):
     """Steps of the active plans without a done line, when active specs exist."""
-    rc = load("records.py"); recs = rc.records(d)
+    rc = load_script("records.py"); recs = rc.records(d)
     if not any(r.get("type") == "spec" and r.get("status") == "active" for r in recs): return []
     plans = [r for r in recs if r.get("type") == "plan" and r.get("status") == "active"]
     if not plans: return ["no active plan: propose the milestones to the user and record them as a plan (the feature skill)"]
@@ -159,7 +151,7 @@ def plan_gaps(d):
 def setup_gaps(wt, rows):
     """What a feature work session in this worktree is missing, one line each
     with what to do. Reads only; never writes."""
-    rc = load("records.py"); gaps = []
+    rc = load_script("records.py"); gaps = []
     purpose, _ = rc.branch_notes(wt)
     if not purpose: gaps.append("Purpose: " + ("the branch notes have no Purpose" if purpose is not None else "no .clerk-dev/branch-notes.md") + "; draft it as tracking.md's Branch notes describes and show it to the user")
     missing = [(n, p) for n, p in rows if not os.path.isdir(p)]
@@ -173,7 +165,7 @@ def setup_gaps(wt, rows):
     if d and not featured:
         elsewhere = hub_feature_elsewhere(wt, rows)
         passes, _ = read_passes(wt)
-        try: built = load("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
+        try: built = load_script("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
         except SystemExit: built = []
         if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to .clerk-dev/review-workspace.md (skills/review/workspace-manifest.md)")
         elif built or passes: gaps.append("this worktree has a " + ("build log" if built else "pass log") + " but no feature; start one: records.py start <worktree> \"<name>\" (the feature skill)")
@@ -190,21 +182,33 @@ def setup_lines(gaps):
 
 def handoff_lines(wt, passes):
     """The Note of each open pass and open piece."""
-    try: pieces = load("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
+    try: pieces = load_script("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
     except SystemExit: pieces = []
     live = [e for e in passes if e["f"].get("Status") == "open"] + [e for e in pieces if e["f"].get("Status") in ("briefed", "stopped")]
     notes = [f"- {e['id']} {e['title']}: {e['f']['Note']}" for e in live if e["f"].get("Note")]
     return ["", "**Handoff notes:**"] + notes if notes else []
 
 def deferred_lines(wt):
-    its = [i for i in load("items.py").read(os.path.join(wt, ".clerk-dev", "deferred.md")) if not i["done"]]
+    its = [i for i in load_script("items.py").read(os.path.join(wt, ".clerk-dev", "deferred.md")) if not i["done"]]
     return [f"**Deferred items:** {len(its)} open."] + [f"- {i['id']}: {short(i['text'])}" + (f" (revisit: {i['fields']['Revisit']})" if i["fields"].get("Revisit") else "") for i in its] if its else []
+
+REROUTED_RE = re.compile(r"^\s*(?:[-*]\s+)?(?:\d{4}-\d{2}-\d{2}\.?\s+)?rerouted:", re.I)
+
+def rerouted_lines(wt):
+    rc = load_script("records.py")
+    try: recs = rc.records(rc.fdir(wt))
+    except SystemExit: recs = []
+    ids = [r["id"] for r in recs if REROUTED_RE.match(r.get("note", "")) or any(REROUTED_RE.match(l) for l in rc.parse(r["path"])[1].splitlines())]
+    p = rc.notes_path(wt)
+    in_notes = sum(1 for l in open(p, encoding="utf-8").read().splitlines() if REROUTED_RE.match(l)) if os.path.exists(p) else 0
+    where = ids + ([f"{in_notes} in the branch notes"] if in_notes else [])
+    return ["", f"**Rerouted:** {len(ids) + in_notes}: {', '.join(where)}."] if where else []
 
 def read_passes(wt):
     """The pass log's entries, or None with the reason when it cannot be read."""
     p = os.path.join(wt, ".clerk-dev", "passes.md")
     if not os.path.exists(p): return [], None
-    try: return load("passes.py").read(p), None
+    try: return load_script("passes.py").read(p), None
     except SystemExit as e: return [], str(e)
 
 def pass_word(e):
@@ -213,7 +217,7 @@ def pass_word(e):
     if st == "ended": return "ended, not checked" + (" (no commits)" if f.get("Note") == "no commits" else "")
     if st != "checked": return st
     check = f.get("Check") or ""
-    cs = load("passes.py").counts(check)
+    cs = load_script("passes.py").counts(check)
     if cs is None: return "checked, " + check.split(";")[-1].strip()
     n = sum(cs.values())
     return "checked, clean" if n == 0 else f"checked, {n} finding{plural(n)} in `{check.split(';')[0].strip()}`"
@@ -224,7 +228,7 @@ def pass_line(e):
 def build_block(wt, rows, out, unreviewed):
     """Implementation progress from the build log here, and a line per other
     worktree of the workspace. Returns (first, later) next steps."""
-    bd = load("build.py")
+    bd = load_script("build.py")
     first, later = [], []
     try:
         entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
@@ -273,7 +277,7 @@ def feature_block(wt, rows, out):
     come before anything else (settle-first questions) and those that come
     last."""
     first, later = [], []
-    rc = load("records.py"); it = load("items.py")
+    rc = load_script("records.py"); it = load_script("items.py")
     try: d = rc.fdir(wt)
     except SystemExit as e:
         out.append(f"**Feature:** {e}"); return first, later
@@ -324,7 +328,7 @@ def builders(wt, rows):
     """(name, path) of the other worktrees building this feature: the
     workspace's rows, and any worktree of this repository whose workspace
     file names this worktree's hub."""
-    rc = load("records.py")
+    rc = load_script("records.py")
     try: hub = os.path.realpath(rc.hub(wt))
     except SystemExit: hub = ""
     out = list(related_worktrees(wt, rows))
@@ -349,7 +353,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     the build log, or the spec's size when nothing is logged), commits not in
     the log, passes, and the design questions and open items of those specs.
     Returns the next steps, building only."""
-    bd = load("build.py"); rc = load("records.py"); it = load("items.py")
+    bd = load_script("build.py"); rc = load_script("records.py"); it = load_script("items.py")
     first, later = build_block(wt, rows, out, unreviewed)
     try: entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
     except SystemExit: entries = []
@@ -491,7 +495,7 @@ def design_view(wt, rows, out):
     """Whether the feature is ready to build: readiness per piece, each area's
     decisions and design, open questions by area, and the overview's gaps and
     disagreements. Returns the next steps, design only."""
-    rc = load("records.py"); it = load("items.py"); bd = load("build.py")
+    rc = load_script("records.py"); it = load_script("items.py"); bd = load_script("build.py")
     d = rc.fdir(wt)
     if not os.path.exists(os.path.join(d, "feature.md")):
         out += ["", "**Design:** no feature records here or in a hub."]; return ["Start a feature: \"start a feature for <name>\"."]
@@ -574,7 +578,7 @@ def area_view(wt, rows, out, name):
     """One area, or one spec (a piece) and its area: the overview's summary of
     it, its records, open questions, disagreements that name its records, build
     progress and passes on its specs. Returns the next steps for it."""
-    rc = load("records.py"); it = load("items.py"); bd = load("build.py")
+    rc = load_script("records.py"); it = load_script("items.py"); bd = load_script("build.py")
     d = rc.fdir(wt); recs = rc.records(d)
     spec = None
     if re.fullmatch(r"[Rr]\d+", name):
@@ -656,7 +660,7 @@ def main():
     ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
-    load("records.py").guard(wt)
+    load_script("records.py").guard(wt)
     run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
     have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -776,6 +780,7 @@ def main():
     if a.focus == "all":
         bfirst, blater = build_block(wt, rows, out, unreviewed)
         first, later = feature_block(wt, rows, out)
+        out += rerouted_lines(wt)
         steps[0:0] = bfirst + pass_steps + first
         steps.extend(blater + later)
 

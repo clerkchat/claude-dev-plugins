@@ -33,7 +33,8 @@ Usage:
 Open means a status other than fixed, wont-fix, or deferred, and an
 instruction other than defer or ignore.
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys
+import argparse, datetime, os, re, subprocess, sys
+from records import load_script
 
 CLOSED_STATUS = {"fixed", "wont-fix", "deferred"}
 CLOSED_CHOICE = {"defer", "ignore"}
@@ -52,10 +53,7 @@ def tsv(path):
     return [r.split("\t") for r in rows[1:] if r.strip()]
 
 def load_findings(run):
-    here = os.path.dirname(os.path.abspath(__file__))
-    spec = importlib.util.spec_from_file_location("mf", os.path.join(here, "merge-findings.py"))
-    assert spec and spec.loader
-    mf = importlib.util.module_from_spec(spec); spec.loader.exec_module(mf)
+    mf = load_script("merge-findings.py")
     out = {}
     text = open(os.path.join(run, "merged.md"), encoding="utf-8").read()
     for block in mf.parse_blocks(text):
@@ -94,9 +92,7 @@ def fix_commits(repo, status, run=None):
 
 def followup_labels(repo):
     """Commits that closed a follow-up, by full sha, to its id (F3)."""
-    spec = importlib.util.spec_from_file_location("fu", os.path.join(os.path.dirname(os.path.abspath(__file__)), "followups.py"))
-    assert spec and spec.loader
-    fu = importlib.util.module_from_spec(spec); spec.loader.exec_module(fu)
+    fu = load_script("followups.py")
     labels = {}
     for it in fu.read(os.path.join(repo, ".clerk-dev", "followups.md")):
         m = re.search(r"\bin ([0-9a-f]{7,40})\b", it["fields"].get("Outcome", "") or it["fields"].get("Done", ""))

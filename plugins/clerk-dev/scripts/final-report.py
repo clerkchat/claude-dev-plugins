@@ -23,12 +23,11 @@ reconcile/appended.tsv and appended-map.tsv and append-judged.tsv,
 final/verify/<new id>.md (the `bar:` line), final/below.md, raw/, report.md,
 summary.md.
 """
-import argparse, datetime, importlib.util, os, re
+import argparse, datetime, os, re
+from records import load_script
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("sf", os.path.join(HERE, "stale-findings.py"))
-assert spec and spec.loader
-sf = importlib.util.module_from_spec(spec); spec.loader.exec_module(sf)
+sf = load_script("stale-findings.py")
 
 CATEGORIES = [
     ("correctness", "Breaking correctness", "crashes on common paths, silently wrong results, data loss"),

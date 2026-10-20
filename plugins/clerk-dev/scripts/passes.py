@@ -38,7 +38,8 @@ Entry format:
     - Check: pass-p3-1016; ran edge-cases, error-handling; edge-cases 2, error-handling 0
     - Note: log item 3 once the timeout test passes   (the handoff of an open pass; status shows it)
 """
-import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile
+import argparse, datetime, json, os, re, subprocess, sys, tempfile
+from records import load_script
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -127,8 +128,7 @@ def counts(check):
     return {k: int(v) for k, v in re.findall(r"([a-z-]+) (\d+)", m.group(1))} if m else None
 
 def guard(wt):
-    s = importlib.util.spec_from_file_location("records", os.path.join(os.path.dirname(os.path.abspath(__file__)), "records.py"))
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); m.guard(wt)
+    load_script("records.py").guard(wt)
 
 def main():
     ap = argparse.ArgumentParser()

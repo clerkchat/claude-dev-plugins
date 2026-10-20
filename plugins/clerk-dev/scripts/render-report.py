@@ -67,6 +67,7 @@ present, else shortened from the claim.
 """
 import argparse, os, re, subprocess, sys, textwrap
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from records import load_script
 from importlib import import_module
 mf = import_module("merge-findings") if False else None
 
@@ -81,10 +82,7 @@ RUN = "."
 IDNUM = {}
 TITLE_BY_ID = {}
 
-def load_merge_module():
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("mf", os.path.join(os.path.dirname(os.path.abspath(__file__)), "merge-findings.py"))
-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+def load_merge_module(): return load_script("merge-findings.py")
 
 def read_merged(path, mf):
     text = open(path, encoding="utf-8").read()

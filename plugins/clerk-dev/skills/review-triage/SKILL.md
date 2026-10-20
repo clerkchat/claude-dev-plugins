@@ -143,6 +143,8 @@ and say 'go through the discussions'."
 The list is every finding whose instruction is `discuss` and whose status is
 still open, in number order. Fix the list when the pass starts; its length is
 the pass total. Take them one at a time, and hold only the current one in mind.
+When several are contested, prepare their briefs when the pass starts, as
+"Several items waiting" in the `deliberate` skill describes.
 
 Open each presentation with a progress line, before the finding's number and
 title: "Discussion 3 of 12: 2 decided, 10 left (this one included)." Decided
@@ -156,12 +158,11 @@ skipped without deciding counts as left and stays marked.
    the guidance file (`records.py guidance <worktree> --out <run>/guidance.md`,
    written when the pass starts and again after a rule is recorded), whose
    branch scope and rules may already settle it.
-2. Present it in a few short paragraphs: what the finding says, what is
-   uncertain or contested, and the realistic options (fix as recommended, fix
-   differently, defer, ignore), with your recommendation and why. Quote the code
-   only when it settles the question. Before trading a fix judged risky for a
-   workaround, present the fix's smallest form ("Changing live code" in the
-   `writing-code` skill).
+2. Present it. When it is contested (the user's notes question the
+   recommendation or ask which way to go, the verifier was unsure, the card
+   offers alternatives, or it moved here from the fix queue), weigh it with the
+   `deliberate` skill. Otherwise say in a few lines what the finding says and
+   what you recommend.
 3. Answer the user's questions from the run files and the code. Read code as
    needed, but do not edit. When an answer needs more than a few files read, ask
    an `Explore` agent the question and keep only its answer.
