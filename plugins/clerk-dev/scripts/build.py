@@ -16,6 +16,7 @@ Usage:
   build.py stop WORKTREE B3 --question "..."
   build.py resend WORKTREE B3 [--note "..."] [--model opus] [--effort high]
   build.py abandon WORKTREE B3 [--note "..."]
+  build.py drop WORKTREE --spec R18 --reqs 17 --why "R24 moved it to R23.3"
   build.py list WORKTREE [--open]
   build.py progress WORKTREE [--spec R52]
   build.py milestone WORKTREE --spec R52 --piece "C core harness" --passes prep,happy-path,security,edge-cases,tests [--required security]
@@ -25,7 +26,8 @@ Usage:
 
 Without --covered, `done` marks every requirement of the piece done. Statuses:
 briefed (handed to an implementer), stopped (it stopped on a question),
-done (landed in a commit), abandoned. `resend` puts a stopped or rejected piece
+done (landed in a commit), abandoned, dropped (requirements a later decision
+took out of the spec; they leave its count). `resend` puts a stopped or rejected piece
 back to briefed and counts the attempt.
 
 Entry format:
@@ -43,7 +45,7 @@ Entry format:
 import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STATES = ("briefed", "stopped", "done", "abandoned")
+STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
 FIELDS = ("Spec", "Piece", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
 REPEATABLE = ("Question", "Deviation", "Skipped")
 HEADER = """# Build log
@@ -135,6 +137,9 @@ def spec_requirements(hub_dir, spec_id):
         elif cur and line.startswith(" ") and line.strip(): items[cur] += " " + line.strip()
     return r, items
 
+def dropped_of(mine):
+    return {n: e for e in mine if e["f"].get("Status") == "dropped" for n, _, _ in reqs_of(e)}
+
 def progress(wt, spec=None):
     """Per spec: (record, {n: text}, {n: (state, note, piece id)}, pieces) from
     this worktree's log, for every spec the log names (or the one given)."""
@@ -147,12 +152,13 @@ def progress(wt, spec=None):
         r, items = spec_requirements(d, s)
         state = {}
         mine = [e for e in entries if e["f"].get("Spec") == s]
+        items = {n: t for n, t in (items or {}).items() if n not in dropped_of(mine)}
         for e in mine:
             if e["f"].get("Status") != "done": continue
             for n, st, note in reqs_of(e):
                 st = st or "done"
                 if state.get(n, ("",))[0] != "done": state[n] = (st, note, e["id"])
-        out.append((s, r, items or {}, state, mine))
+        out.append((s, r, items, state, mine))
     return out
 
 def progress_lines(wt, spec=None):
@@ -167,6 +173,7 @@ def progress_lines(wt, spec=None):
         left = [n for n in sorted(items) if n not in state and n not in busy]
         head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the spec lists none)"
         if partial: head += f", {len(partial)} partial ({', '.join(f'{s}.{n}' for n in sorted(partial))})"
+        if dropped_of(mine): head += f", {len(dropped_of(mine))} dropped"
         lines.append(head)
         if busy - set(state): lines.append(f"  in progress: {compress(s, sorted(busy - set(state)))}")
         if left: lines.append(f"  not started: {compress(s, left)}")
@@ -201,7 +208,11 @@ def checklist_lines(wt, spec=None):
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
         done = sum(1 for v in state.values() if v[0] == "done")
         out.append(f"{s} {title}: {done} of {len(items)} done")
-        for n in sorted(items):
+        _, all_items = spec_requirements(load("records.py").fdir(wt), s)
+        gone = dropped_of(mine)
+        for n in sorted(set(items) | set(gone)):
+            if n in gone:
+                out.append(f"- [-] {n}. {label((all_items or {}).get(n, ''))} (dropped, {gone[n]['id']}: {gone[n]['f'].get('Note', '')})"); continue
             st, note, by = state.get(n, (None, "", None))
             if st == "done": out.append(f"- [x] {n}. {label(items[n])} ({by})")
             elif n in busy:
@@ -300,6 +311,7 @@ def main():
     d_.add_argument("--covered"); d_.add_argument("--deviation", action="append", default=[])
     s_ = sp.add_parser("stop"); s_.add_argument("wt"); s_.add_argument("bid"); s_.add_argument("--question", required=True)
     r_ = sp.add_parser("resend"); r_.add_argument("wt"); r_.add_argument("bid"); r_.add_argument("--note"); r_.add_argument("--model"); r_.add_argument("--effort")
+    dr = sp.add_parser("drop"); dr.add_argument("wt"); dr.add_argument("--spec", required=True); dr.add_argument("--reqs", required=True); dr.add_argument("--why", required=True)
     ab = sp.add_parser("abandon"); ab.add_argument("wt"); ab.add_argument("bid"); ab.add_argument("--note")
     l_ = sp.add_parser("list"); l_.add_argument("wt"); l_.add_argument("--open", action="store_true")
     pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--spec")
@@ -320,6 +332,19 @@ def main():
             "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Model": f"{a.model} {a.effort}",
             "Status": "briefed", "Attempts": "1", "Started": today}})
         write(p, entries); print(f"B{n} briefed: {spec} requirements {', '.join(map(str, nums))}")
+        return
+    if a.cmd == "drop":
+        spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
+        nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
+        if not nums: sys.exit("--reqs names no requirement numbers")
+        _, items = spec_requirements(load("records.py").fdir(a.wt), spec)
+        if items is None: sys.exit(f"{spec} not found in the hub")
+        unknown = [n for n in nums if n not in items]
+        if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")
+        n = max([int(e["id"][1:]) for e in pieces(entries)] or [0]) + 1
+        entries.append({"id": f"B{n}", "title": f"Drop {compress(spec, nums)}", "multi": {k: [] for k in REPEATABLE}, "f": {
+            "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Status": "dropped", "Started": today, "Note": a.why}})
+        write(p, entries); print(f"B{n} dropped: {compress(spec, nums)}")
         return
     if a.cmd == "milestone":
         spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
@@ -349,7 +374,7 @@ def main():
         if a.cmd == "list":
             for e in pieces(entries):
                 st = e["f"].get("Status")
-                if a.open and st in ("done", "abandoned"): continue
+                if a.open and st in ("done", "abandoned", "dropped"): continue
                 print(f"{e['id']} {e['title']}  [{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
                       + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
         else:
@@ -357,7 +382,7 @@ def main():
         return
     e = find(entries, a.bid)
     if a.cmd == "done":
-        if e["f"].get("Status") == "abandoned": sys.exit(f"{e['id']} is abandoned")
+        if e["f"].get("Status") in ("abandoned", "dropped"): sys.exit(f"{e['id']} is {e['f']['Status']}")
         if subprocess.run(["git", "-C", a.wt, "cat-file", "-e", a.commit + "^{commit}"], capture_output=True).returncode != 0: sys.exit(f"{a.commit} is not a commit here")
         planned = {n for n, _, _ in reqs_of(e)}
         cov = {}
@@ -375,7 +400,7 @@ def main():
         e["f"]["Status"] = "stopped"; e["multi"]["Question"].append(a.question)
         write(p, entries); print(f"{e['id']} stopped: {a.question}")
     elif a.cmd == "resend":
-        if e["f"].get("Status") in ("done", "abandoned"): sys.exit(f"{e['id']} is {e['f'].get('Status')}")
+        if e["f"].get("Status") in ("done", "abandoned", "dropped"): sys.exit(f"{e['id']} is {e['f'].get('Status')}")
         e["f"]["Status"] = "briefed"; e["f"]["Attempts"] = str(int(e["f"].get("Attempts", "1")) + 1)
         if a.model or a.effort:
             m0, e0 = (e["f"].get("Model", "sonnet medium").split() + ["medium"])[:2]

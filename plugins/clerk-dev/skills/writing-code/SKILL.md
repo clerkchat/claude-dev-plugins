@@ -205,6 +205,12 @@ progress from it, so a piece not logged is invisible there:
   adding `--deviation "..."` for each one accepted;
 - when dropped: `build.py abandon <worktree> B3 --note "<why>"`.
 
+When a decision takes a requirement out of a spec (moved to another spec,
+or no longer wanted), do not supersede the spec to delete one line: run
+`build.py drop <worktree> --spec R18 --reqs 17 --why "<the decision that
+dropped it, and where it went>"`. The requirement leaves the spec's count and
+shows as dropped in the checklist; the spec itself stays as written.
+
 A change done inline that covers spec requirements is logged too, as a piece
 added and marked done in one go, so the progress stays whole.
 
