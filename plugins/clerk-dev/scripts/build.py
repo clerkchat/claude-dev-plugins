@@ -321,6 +321,7 @@ def main():
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
+    load("records.py").guard(a.wt)
     p = path(a.wt); entries = read(p); today = datetime.date.today().isoformat()
 
     if a.cmd == "add":

@@ -53,8 +53,10 @@ report is the only thing an item should add here.
      <worktree> F3 --status deferred|wont-fix --ref "<the note, or why>"`, in
      one line each.
    Fix the work list now; its length is the total.
-2. Read `.clerk-dev/branch-notes.md` (Purpose and Fixes) of this worktree, as the
-   `review-fix` skill describes. Draft Purpose first if it is missing.
+2. Draft this worktree's Purpose if it is missing (Branch notes in
+   `skills/review/tracking.md`), then write the guidance file to the
+   scratchpad: `records.py guidance <worktree> --out <scratchpad>/guidance.md`.
+   Write it again whenever a rule is recorded during the run.
 3. Check the working tree with `git status --short`. Each commit must hold only
    its item's change, so uncommitted edits to tracked files get in the way. If
    there are any, stop and ask the user whether to commit or set them aside
@@ -75,9 +77,9 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    and the commit so the fixer can read the change with
    `git -C <path> show <sha>`. When the item names a
    finding, add the source run's `resolution/<merged id>.md` if it exists
-   (resolve the number through that run's `numbers.tsv`). Add this worktree's
-   Purpose and the Fixes entries that cover the item. When this worktree has a
-   review run (`.clerk-dev/latest` with a `merged.md`), give the fixer the command
+   (resolve the number through that run's `numbers.tsv`). Point it at the
+   guidance file, whose branch scope and rules the fix follows. When this
+   worktree has a review run (`.clerk-dev/latest` with a `merged.md`), give the fixer the command
    to list the open findings in the files it will change:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py <run> --repo
    <worktree> --open-in <files>`,
@@ -85,10 +87,10 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 2. Check for an open decision. Items often leave a product choice open: wording
    the user will read, where a control goes, what to show on an empty or error
    state. When the item text does not settle it and nothing in the code or
-   branch notes does, present the options with your recommendation and wait for
+   the guidance does, present the options with your recommendation and wait for
    the user's choice before delegating; put the choice in the brief. A choice
-   that would settle later items the same way goes into the branch notes, as the
-   `review-triage` skill describes under Standing rules in the branch notes.
+   that would settle later items the same way is recorded as "Guidance from
+   answers" in `skills/review/tracking.md` describes.
 3. Delegate to `clerk-dev:review-fixer`, saying that the brief is a follow-up,
    not a finding. It defaults to sonnet; pass `model: opus` when the item
    touches structure or more than two files.

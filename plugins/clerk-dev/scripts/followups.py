@@ -66,6 +66,10 @@ def read(p):
 def write(p, its):
     items.write(p, its, HEADER, order=FIELDS)
 
+def guard(wt):
+    s = importlib.util.spec_from_file_location("records", os.path.join(os.path.dirname(os.path.abspath(__file__)), "records.py"))
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); m.guard(wt)
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -77,6 +81,7 @@ def main():
     r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("fid")
     s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("fid"); s.add_argument("instruction"); s.add_argument("--note")
     args = ap.parse_args()
+    guard(args.wt)
     p = path(args.wt); its = read(p); today = datetime.date.today().isoformat()
     if args.cmd == "add":
         n = max([int(i["id"][1:]) for i in its] or [0]) + 1

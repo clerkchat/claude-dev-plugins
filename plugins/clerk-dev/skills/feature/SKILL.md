@@ -99,8 +99,9 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   read both. Every implementer works from the spec, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
   give it the spec template in `records.md`, the records the piece builds on
-  (its capabilities or plan row, the design, the decisions and guidance of its
-  area: `records.py rules <worktree> --area <area>`), the reference code to
+  (its capabilities or plan row, the design, the decisions of its area, and
+  the guidance file `records.py guidance <worktree> --area <area> --out
+  <scratchpad>/guidance-<area>.md` writes), the reference code to
   port by path, and the output path `records.py new` gave; ask it to write the
   body and list anything it could not settle from the records as open items.
   Then read it, settle what you can with the user, and edit it in this
@@ -115,11 +116,12 @@ a brainstorm, a new brainstorm.
 Whenever the user answers a question or steers the work, in this skill or any
 other, and the answer carries a rule beyond this case, or the user writes
 `guidance: ...`, record it as "Guidance from answers" in
-`skills/review/tracking.md` describes: a `guidance` record for the feature or
-one of its areas, the branch notes for this branch only, and a proposal first
-for anything wider. Say in one line what was recorded. "What guidance have I
-given", "the rules for the harness": `records.py rules <worktree> [--area
-<area>]`.
+`skills/review/tracking.md` describes: its routing says whether it is
+guidance at all, and its scope where it goes (a `###` rule in the branch notes
+for this branch only, a `guidance` record for the feature or one of its areas,
+and a proposal first for anything wider). Say in one line what was recorded.
+"What guidance have I given", "the rules for the harness": `records.py
+guidance <worktree> [--area <area>]`.
 
 ## Parked ideas
 

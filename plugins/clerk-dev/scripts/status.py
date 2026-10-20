@@ -562,6 +562,7 @@ def main():
     ap.add_argument("--area", help="one area, or a spec id for one piece and its area")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
+    load("records.py").guard(wt)
     run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
     have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")

@@ -33,7 +33,7 @@ Usage:
   records.py overview-status WORKTREE
   records.py suggest WORKTREE           roll-up designs, plans, stale overview
   records.py names WORKTREE R31 S C R52.19 B15 ...   a short name for each id or code
-  records.py rules WORKTREE [--area A] [--path]   active guidance; --path writes and prints guidance.md
+  records.py guidance WORKTREE [--area A] [--out FILE]   branch scope, branch guidance, and the feature's active guidance
   records.py idea WORKTREE "text" [--area A] [--from R12|"this session"] [--why ...] [--when ...]
   records.py ideas WORKTREE [--all] [--area A | --area -]
   records.py adopt WORKTREE I3 --by R60   the record the idea became
@@ -302,6 +302,9 @@ def labeled(label, text):
     if "\n\n" in text or re.match(r"^\s*(?:[-*+]|\d+\.)\s", text): return [f"**{label}:**", "", text, ""]
     return [f"**{label}:** {re.sub(r'\s*\n\s*', ' ', text)}", ""]
 
+def rule_lines(heading, body, rule):
+    return [f"### {heading}", "", body_section(body, "Rule") or rule, ""] + labeled("Why", body_section(body, "Why")) + labeled("Applies to", body_section(body, "Applies to"))
+
 def write_guidance(d):
     """guidance.md, the feature's guidance as a handbook: every active rule at
     a glance, then each in full by area (rule, why, what it applies to, where
@@ -326,9 +329,7 @@ def write_guidance(d):
         a = r.get("area") or "Feature-wide"
         if a != area: out += [f"## {a}", ""]; area = a
         _, body = parse(r["path"])
-        out += [f"### {r['id']}. {r.get('title', '')}", "", body_section(body, "Rule") or rule, ""]
-        out += labeled("Why", body_section(body, "Why"))
-        out += labeled("Applies to", body_section(body, "Applies to"))
+        out += rule_lines(f"{r['id']}. {r.get('title', '')}", body, rule)
         src = body_section(body, "From") or r.get("from", "")
         if r.get("supersedes"): src = (src.rstrip(".") + ". " if src else "") + f"Supersedes {r['supersedes']}."
         out += labeled("From", src)
@@ -340,6 +341,63 @@ def write_guidance(d):
             out.append(f"- **{r['id']}**{' (' + r['area'] + ')' if r.get('area') else ''}: {gist(r, limit=200)} ({how}; [record]({os.path.relpath(r['path'], d)}))")
         out.append("")
     open(p, "w", encoding="utf-8").write("\n".join(out).rstrip("\n") + "\n")
+
+def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
+
+def guard(wt):
+    p = notes_path(wt)
+    if os.path.exists(p) and {"## Review", "## Fixes"} & set(open(p, encoding="utf-8").read().splitlines()):
+        sys.exit(f'{p} still has the old "## Review"/"## Fixes" sections; run /clerk-dev:migrate in this worktree first.')
+
+def guard_file(path):
+    parts = os.path.abspath(path).split(os.sep)
+    if ".clerk-dev" in parts: guard(os.sep.join(parts[:parts.index(".clerk-dev")]) or os.sep)
+
+def headings(text, marker):
+    parts = re.split(rf"^{marker} (.+?)[ \t]*$", text, flags=re.M)
+    return list(zip(parts[1::2], (b.strip() for b in parts[2::2])))
+
+def branch_notes(wt):
+    p = notes_path(wt)
+    if not os.path.exists(p): return None, []
+    sections = dict(headings(open(p, encoding="utf-8").read(), "##"))
+    return sections.get("Purpose", ""), headings(sections.get("Guidance", ""), "###")
+
+BRANCH_NAME_RE = re.compile(r"\b(?:feat|fix|chore|refactor|docs|test|hotfix|release)/[\w.-]+")
+
+def code_named(text):
+    for tok in re.findall(r"`([^`]+)`", text):
+        if re.search(r"[/.(_]|[a-z][A-Z]", tok): return tok
+    m = BRANCH_NAME_RE.search(text)
+    return m.group(0) if m else None
+
+def lint(label, text):
+    tok = code_named(text)
+    if not tok: return []
+    start = re.sub(r"\s+", " ", text).strip()
+    start = start if len(start) <= 60 else start[:60].rsplit(" ", 1)[0] + "..."
+    return [f'warning: {label}: "{start}" names {tok}; guidance is for principles, consider a decision, requirement, or Purpose']
+
+def guidance(wt, area=None):
+    purpose, branch_rules = branch_notes(wt)
+    out = ["# Guidance", "", "These are the user's standing rules for this worktree, narrowest scope first: the branch, then the feature. A rule that cannot hold is raised, not silently broken.", "",
+           "## Branch scope", "", purpose or ("No branch notes in this worktree." if purpose is None else "The branch notes have no Purpose."), "",
+           "## Branch guidance", ""]
+    warnings = []
+    for rule, body in branch_rules:
+        out += [f"### {rule}", "", body, ""]
+        warnings += lint("branch", rule)
+    if not branch_rules: out += ["None.", ""]
+    d = fdir(wt)
+    if os.path.exists(os.path.join(d, "feature.md")):
+        out += ["## Feature guidance", ""]
+        feature_rules = rules(d, area)
+        for r, rule in feature_rules:
+            _, body = parse(r["path"])
+            out += rule_lines(f"{r['id']}. {r.get('title', '')}" + (f" ({r['area']})" if r.get("area") else ""), body, rule)
+            warnings += lint(r["id"], body_section(body, "Rule") or rule)
+        if not feature_rules: out += ["None.", ""]
+    return "\n".join(out).rstrip("\n") + "\n", warnings
 
 def plan_pieces(d):
     """{code: name} of the plan's pieces, from the overview's Plan table, whose
@@ -574,12 +632,21 @@ def main():
     idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
     ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
     nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
-    rl = sp.add_parser("rules"); rl.add_argument("wt"); rl.add_argument("--area"); rl.add_argument("--path", action="store_true")
+    gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--out")
     a = ap.parse_args()
     today = datetime.date.today().isoformat()
+    guard(a.wt)
 
     if a.cmd == "hub":
         print(hub(a.wt)); return
+    if a.cmd == "guidance":
+        text, warnings = guidance(a.wt, a.area)
+        for w in warnings: print(w, file=sys.stderr)
+        if a.out:
+            os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+            open(a.out, "w", encoding="utf-8").write(text); print(a.out)
+        else: sys.stdout.write(text)
+        return
     d = fdir(a.wt)
     if a.cmd == "start":
         h = hub(a.wt); exclude(h); os.makedirs(os.path.join(d, "records"), exist_ok=True)
@@ -653,12 +720,6 @@ def main():
         print("\n".join(suggestions(d)) or "nothing to suggest")
     elif a.cmd == "names":
         print("\n".join(names(a.wt, a.ids)))
-    elif a.cmd == "rules":
-        if a.path:
-            write_guidance(d); g = os.path.join(d, "guidance.md")
-            print(g if os.path.exists(g) else "none")
-        else:
-            print("\n".join(f"{r['id']}{' (' + r['area'] + ')' if r.get('area') else ''}: {rule}" for r, rule in rules(d, a.area)) or "no guidance")
     elif a.cmd == "idea":
         its = ideas(d); n = max([int(i["id"][1:]) for i in its] or [0]) + 1
         src = a.src or ""

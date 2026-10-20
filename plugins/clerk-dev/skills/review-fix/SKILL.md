@@ -37,61 +37,29 @@ If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that keep
 items separate and commits clean.
 
-## The user's standing notes
+## Branch notes and guidance
 
 When the user's answer carries guidance (a rule beyond this case), or says
 `guidance: ...`, record it as "Guidance from answers" in
-`skills/review/tracking.md` describes, and say so in one line. An adjustment ("fix 4, but keep the old name") is guidance when it
-would apply to other findings too.
+`skills/review/tracking.md` describes, and say so in one line. An adjustment
+("fix 4, but keep the old name") is guidance when it would apply to other
+findings too, or when the user gives the same one a second time; a one-off
+adjustment stays in that finding's brief and resolution only. A decision about
+one finding belongs in that finding's Notes, recorded as the `review-triage`
+skill describes under Recording a decision, never in a finding's instruction
+note.
 
-`<worktree>/.clerk-dev/branch-notes.md` says what the branch is for and holds the
-user's standing instructions for this worktree's reviews and fixes. It belongs
-to the worktree, not to a review run: it may exist before the first review, and
-it applies to every run until changed. Read it at the start of every fix
-request, before building the brief. Its format, and how to draft its Purpose
-when it is missing, are in `skills/review/tracking.md` of this plugin. Its
-sections:
-
-```
-# Branch notes
-
-## Purpose
-What this branch builds: ...
-New in this branch: ...
-Deployed code it changes on purpose: ...
-
-## Review
-- 2026-10-08. Do not report naming findings in generated DTOs.
-
-## Fixes
-- 2026-10-08. All findings: reuse ProjectAccessGuard rather than inline team checks.
-- 2026-10-08. Migrations: add new indexes to the branch's own migrations, not new files.
-```
-
-"Purpose" decides what is in scope for a fix and how to make it (Branch scope
-in `tracking.md`; the fixer applies it).
-"Review" steers the reviewers and verifiers (the review orchestrator passes the
-file to them). "Fixes" steers fixes and discussions. Use the "Fixes" entries
-whose scope covers the finding.
-
-Add an entry when the user states something meant to apply beyond the current
-finding: phrased as a general rule ("always", "from now on", "in this area",
-"for the index fixes"), or the same adjustment given a second time. One-off
-adjustments ("fix 4 but use X") stay in that finding's brief and resolution
-only. Each entry is one line, dated, in the user's terms, with its scope, under
-"Fixes" unless it is about what a review should look for or report. Create the
-file with its three headings when it does not exist, drafting Purpose as
-`tracking.md` describes, (and `.clerk-dev/` with its `.git/info/exclude` entry, if
-needed).
-
-A standing note belongs in this file; a decision about one finding belongs in
-that finding's Notes, recorded as the `review-triage` skill describes under
-Recording a decision, never in a finding's instruction note.
-
-When an entry is added or changed, say so in one sentence. When the user
-retracts one, delete it. Never record anything the user did not say. When an
-entry is several weeks old, or names code that no longer exists, ask whether it
-still applies before relying on it.
+`<worktree>/.clerk-dev/branch-notes.md` says what the branch is for (Purpose)
+and holds the user's rules for this branch (Guidance). It belongs to the
+worktree, not to a review run: it may exist before the first review, and it
+applies to every run until changed. Its format, and how to draft Purpose when
+it is missing, are in Branch notes in `skills/review/tracking.md`. At the start
+of every fix request, draft Purpose if it is missing, then write the guidance
+file, `records.py guidance <worktree> --out <run>/guidance.md`, so it holds
+the rules recorded since the review; every brief points at it. Its branch scope
+decides what is in scope for a fix and how to make it (Branch scope in
+`tracking.md`; the fixer applies it), and its branch and feature guidance steer
+fixes and discussions.
 
 ## Fixing a finding
 
@@ -116,15 +84,15 @@ for nothing wider.
    picked alternatives), which are short and must not be paraphrased. Point it
    at: the merged entry `- id: <merged id>` in `<run>/merged.md`,
    `<run>/verify/<merged id>.md`, `<run>/notes/<merged id>.md` when it exists,
-   `.clerk-dev/branch-notes.md`, and `.claude/skills/review-context/SKILL.md` when
+   `<run>/guidance.md`, and `.claude/skills/review-context/SKILL.md` when
    it exists. What the fixer must take from them: the card text; the merged
    entry's `claim`, `scenario`, `evidence`, and `fix` (for a pull request
    comment, its text, replies, and the verifier's note stand in for these; when
    a comment is linked to the finding, include its text too, since the
    reviewer's point may add to the finding's); the verifier's note from
    `verify/<id>.md`; the `snippet` range; the repo review-context sections the
-   finding's lens would have read; the Purpose section and the "Fixes" entries
-   in `.clerk-dev/branch-notes.md` whose scope covers this finding; the finding's
+   finding's lens would have read; the branch scope and the guidance rules in
+   `<run>/guidance.md` that bear on this finding; the finding's
    instruction note and its free-text notes (`notes/<merged id>.md`), which are
    the user's words about this finding; and any adjustment the user asked for.
    When the instruction picks labeled alternatives ("Fix as recommended (a)",
@@ -133,7 +101,7 @@ for nothing wider.
    others were not chosen. When the instruction is "Fix as noted", the Notes are
    the design: put them first in the brief, labeled as replacing the card's
    recommendation, and keep the recommendation only as background. Adjustments
-   override the branch notes, and both override the recommendation. Read a
+   override the guidance, and both override the recommendation. Read a
    finding's files yourself only when you must decide something in this session
    (a product choice to lay out for the user, step 3).
 3. Delegate. You never edit code in this session; you coordinate. Launch the
@@ -152,7 +120,8 @@ for nothing wider.
    `--instruct N=discuss:<reason>` and tell the user why. When the reason is
    deployed code that Purpose does not cover, propose the change and its rollout
    considerations, as Branch scope in `tracking.md` describes; if the user
-   approves, add the area to Purpose and run the fix again. If the tests fail,
+   approves, add the area to Purpose, write the guidance file again, and run
+   the fix again. If the tests fail,
    stop: record `in-progress` with the files touched, show the failure, and ask
    how to proceed. Nothing is committed. (Queue mode differs; see below.)
 6. Commit, one commit per finding: `git add` only the files the fix changed

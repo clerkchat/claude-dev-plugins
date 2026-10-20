@@ -72,6 +72,7 @@ def block(path, log_n):
     wt = git(path, "rev-parse", "--show-toplevel")
     if not wt:
         return [f"## {path}", "", "Not a git worktree (or the path does not exist).", ""]
+    rs.load("records.py").guard(wt)
     rows = rs.workspace_rows(wt)
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")
@@ -129,7 +130,7 @@ def main():
     for path in a.worktrees:
         try:
             out += block(os.path.expanduser(path), a.log)
-        except Exception as e:  # report and go on; one bad worktree should not hide the others
+        except (Exception, SystemExit) as e:  # report and go on; one bad worktree should not hide the others
             out += [f"## {path}", "", f"preflight failed: {e}", ""]
     print("\n".join(out))
 

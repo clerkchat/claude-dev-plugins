@@ -9,7 +9,7 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/<label>/`        | one review run                                                                                                                                            | the review orchestrator                                                                                                                                                                                                                       | everything below; see "Run directory contents" in `SKILL.md`                                                                                                          |
 | `.clerk-dev/latest`          | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
 | `.clerk-dev/latest-feature`  | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `status.py`                                                                                                                                          |
-| `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the user's standing notes for reviews (Review) and fixes (Fixes); may be written before the first review | the review orchestrator, the `review-fix` and `review-followups` skills (draft Purpose when missing), the `review-fix` skill (standing instructions), the `review-triage` skill (rules decided in discussion), the user | the review orchestrator (passes it to lenses and verifiers), the `review-fix`, `review-followups`, and `review-triage` skills, the fixer (Branch scope below)                        |
+| `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the rules the user set for this branch only (Guidance); may be written before the first review | the review orchestrator, the `review-fix` and `review-followups` skills (draft Purpose when missing), any skill recording an answer's guidance for this branch ("Guidance from answers" below), the user | `records.py guidance`, whose file every lens, verifier, fixer, and implementer brief gets; the `review-fix`, `review-followups`, and `review-triage` skills and the fixer (Branch scope below) |
 | `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
 | `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
 | `.clerk-dev/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
@@ -20,7 +20,7 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 ## Branch notes
 
 `<worktree>/.clerk-dev/branch-notes.md` says what the branch is for and holds the
-user's standing notes. Format:
+rules the user set for this branch only. Format:
 
 ```
 # Branch notes
@@ -36,12 +36,31 @@ Deployed code it changes on purpose (change with care, state rollout):
 Out of scope: <what the branch is not for>.
 - 2026-10-09. Also handles X (added when the user widened the scope).
 
-## Review
-- 2026-10-08. <what reviewers should look for, skip, or phrase differently>
+## Guidance
 
-## Fixes
-- 2026-10-08. <scope>: <how fixes should be done>
+### Do not report naming findings in generated files
+Why: they are regenerated from the schema; a naming fix belongs there.
+From: discussion of finding 12, 2026-10-08
+
+### Prefer one test per scenario over table-driven tests
+Why: the user reads failures by test name.
+From: the user, 2026-10-09
 ```
+
+Each rule under Guidance is a `###` heading that states it in one line, then
+body lines (usually a `Why:` line), and ends with `From: <source>, <date>`.
+State it so it stands without the question that prompted it, and in the terms
+of the work, not of one file or symbol. Skills add rules here through
+"Guidance from answers" below; the user edits them freely. When a rule refines or contradicts one already
+here, edit that rule rather than adding a second; never leave two that
+disagree. When the user retracts one, delete it. When a rule is several weeks
+old, or names code that no longer exists, ask whether it still applies before
+relying on it. Never record anything the user did not say.
+
+Agents get these rules through one file, not this one:
+`records.py guidance <worktree> [--area <area>] --out <file>` writes Purpose,
+these rules, and the feature's active guidance into it, and that file is what
+lenses, verifiers, fixers, and implementer briefs get as `GUIDANCE`.
 
 Drafting Purpose when the file or section is missing:
 
@@ -64,8 +83,8 @@ Drafting Purpose when the file or section is missing:
    changes are "Deployed code it changes on purpose".
 5. For a fresh branch with no changes yet, draft from the request alone, and
    keep it short.
-6. Write the file with all three headings (empty Review and Fixes when there is
-   nothing for them), create `.clerk-dev/` and its `.git/info/exclude` entry if
+6. Write the file with both headings (an empty Guidance when there is nothing
+   for it), create `.clerk-dev/` and its `.git/info/exclude` entry if
    needed, and say in one line that it was drafted and where. Do not wait for
    approval; the user edits it when it is wrong. The one exception is an
    interactive review: it shows the draft and asks the user to check it before
@@ -158,37 +177,67 @@ Readers:
 When the user answers a question (a design question, an implementer's stopped
 piece, a finding to discuss or a fix to adjust, a follow-up to refine, a pass
 item), the answer often carries guidance: a rule that would settle other
-choices the same way, beyond this one. Record it without being asked, at the
-narrowest scope that covers it, and say in one line what was recorded and
-where, so the user can correct the scope or the wording.
+choices the same way, beyond this one. Record it without being asked, where
+the routing below sends it, and say in one line what was recorded and where,
+so the user can correct the place, the scope, or the wording.
 
 Recognize it two ways:
 
 - **Explicit:** a line or message starting `guidance:` (any case), optionally
   with a scope, `guidance (branch): ...` or `guidance (harness): ...`. Always
-  record it, as given.
+  record it, in the user's words: at the scope given when the routing below
+  finds it is guidance, and where the routing sends it otherwise, saying so.
 - **Implicit:** the answer states a rule rather than a one-off: "always",
   "never", "prefer", "in general", "as a rule", "we don't", "from now on", or
   reasoning that would decide other cases too ("because the core should not
   know capability names"). Record it, and phrase the rule so it stands without
   the question.
 
-Scope, narrowest first:
+Route it before picking a scope. Ask these in order, and take the first that
+fits:
 
-| Reaches | Goes to |
-| --- | --- |
-| this question only | the question's own outcome or notes, as today |
-| this branch | `.clerk-dev/branch-notes.md`, as in "Standing rules in the branch notes" of the `review-triage` skill |
-| this feature, or one of its areas | a `guidance` record in the hub (`records.py new <worktree> guidance "<rule>" --area <area> --from <the question>`), body as in `skills/feature/records.md` |
-| all the user's work | the user's own CLAUDE.md: propose the line and ask first |
-| the team | the plugin itself, such as the `writing-code` skill: propose it and ask first |
+1. Would the sentence still be true for a different feature? It is guidance.
+   Pick its scope, narrowest first:
+   - this branch: a `###` rule under Guidance in the branch notes (Branch notes
+     above);
+   - this feature, or one of its areas: a `guidance` record in the hub
+     (`records.py new <worktree> guidance "<rule>" --area <area> --from <the
+     question>`), body as in `skills/feature/records.md`;
+   - all the user's work: the user's own CLAUDE.md; propose the line and ask
+     first;
+   - the team: the plugin itself, such as the `writing-code` skill; propose it
+     and ask first.
+2. Does it describe what the product does or must do? A requirement in the
+   spec, or a decision when it was chosen among alternatives.
+3. Does it fix the shape of something between components (a type, a route, an
+   event, a table another part reads)? A decision, or the spec's Contracts.
+4. Does it say what may change on this branch, or how carefully? Purpose, as a
+   dated line under "New in this branch" or "Deployed code it changes on
+   purpose".
+5. Is it a fact about branches, repositories, or worktrees? The review
+   workspace manifest (`workspace-manifest.md`) or the feature summary.
+6. Does it settle this question only? The question's own outcome or notes.
+
+When unsure, record it as a decision, and say so in the confirmation line so
+the user can redirect it.
+
+Promoting a rule to a wider scope (a branch rule the user wants for the whole
+feature, a feature rule for all their work) supersedes the narrower copy,
+saying "promoted to <where>". A guidance record is superseded by the new
+record when the wider place is one, and otherwise discarded with that note
+(`records.py discard <worktree> R61 --note "promoted to <where>"`). A promoted
+branch rule is deleted from the branch notes.
+
+Nothing the plugin records goes to Claude's memory. Memory is for preferences
+about how sessions behave, not for rules, decisions, or scope.
 
 When new guidance refines or contradicts an active one, supersede it rather
 than add a second. When it contradicts an active decision, record the guidance
 and say which decision it bears on; the user decides whether that decision
 changes. The line to the user: "Recorded as guidance R61 (harness):
 capabilities wire in through explicit lists. Say if it is narrower than
-that."
+that." For a branch rule: "Added to this branch's guidance: do not report
+naming findings in generated files. Say if it reaches the whole feature."
 
 ## Naming things to the user
 

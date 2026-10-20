@@ -36,7 +36,7 @@ Entry format:
       - [ ] 3. Provider timeout leaves the import running (src/import.ts:88)
     - Check: pass-p3-1016; ran edge-cases, error-handling; edge-cases 2, error-handling 0
 """
-import argparse, datetime, json, os, re, subprocess, sys, tempfile
+import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -124,6 +124,10 @@ def counts(check):
     m = re.search(r";\s*((?:[a-z-]+ \d+(?:, )?)+)\s*(?:;|$)", check or "")
     return {k: int(v) for k, v in re.findall(r"([a-z-]+) (\d+)", m.group(1))} if m else None
 
+def guard(wt):
+    s = importlib.util.spec_from_file_location("records", os.path.join(os.path.dirname(os.path.abspath(__file__)), "records.py"))
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); m.guard(wt)
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -141,6 +145,7 @@ def main():
     l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
     sp.add_parser("stats").add_argument("wt")
     a = ap.parse_args()
+    guard(a.wt)
     p = path(a.wt); passes = read(p); today = datetime.date.today().isoformat()
 
     if a.cmd == "start":

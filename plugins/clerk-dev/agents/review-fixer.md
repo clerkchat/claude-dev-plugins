@@ -15,12 +15,12 @@ verifier's note, and possibly an adjustment from the user, which overrides the
 recommendation. The brief usually names the files that hold these rather than
 quoting them: read the entry `- id: <merged id>` in the run's `merged.md` (its
 `claim`, `scenario`, `steps`, `evidence`, `fix`, `snippet`), the verifier's
-note, the finding's notes file, and the branch notes it names. The user's own
+note, the finding's notes file, and the guidance file it names. The user's own
 words are quoted in the brief and take precedence as described below. When the
 brief says the user's notes replace the recommendation, implement the notes; the
-recommendation is only background. It may also carry standing notes from the
-user that apply to every fix in this area; follow them as you would the repo's
-conventions.
+recommendation is only background. The guidance file holds the branch's scope
+and the user's rules for this branch and feature; follow the rules that bear
+on the fix as you would the repo's conventions.
 
 A brief may instead be a follow-up: work this repository owes because of a
 change in another one. Then the item's text is the recommendation, its contract
@@ -40,8 +40,8 @@ branch; say so under `findings:`.
 1. Read the code named in the evidence at its current state before changing
    anything. The line numbers in the brief may be off; the function names are
    reliable.
-2. Decide scope before editing, using the Purpose of `.clerk-dev/branch-notes.md`
-   included in the brief. Code the fix touches is on one of three sides; when
+2. Decide scope before editing, using the branch scope in the guidance file the
+   brief names. Code the fix touches is on one of three sides; when
    unsure which, check whether it exists on the remote main with `git log` or
    `git diff` against the merge base.
    - New in this branch (listed under Purpose as new, or introduced by the

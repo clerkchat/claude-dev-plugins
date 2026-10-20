@@ -16,7 +16,7 @@ Usage:
 
 Other scripts import read(), write(), and the constants.
 """
-import argparse, datetime, os, re, sys, tempfile
+import argparse, datetime, importlib.util, os, re, sys, tempfile
 
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")
@@ -103,6 +103,10 @@ def find(items, iid):
     if not it: sys.exit(f"{iid} not found")
     return it
 
+def guard_file(path):
+    s = importlib.util.spec_from_file_location("records", os.path.join(os.path.dirname(os.path.abspath(__file__)), "records.py"))
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); m.guard_file(path)
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -111,6 +115,7 @@ def main():
     st = sp.add_parser("status"); st.add_argument("file"); st.add_argument("iid"); st.add_argument("value"); st.add_argument("--ref")
     sp.add_parser("validate").add_argument("file")
     a = ap.parse_args()
+    guard_file(a.file)
     if not os.path.exists(a.file): sys.exit(f"{a.file} does not exist")
     items = read(a.file)
     if a.cmd == "list":

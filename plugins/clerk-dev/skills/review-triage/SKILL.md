@@ -153,7 +153,9 @@ skipped without deciding counts as left and stays marked.
    resolution text if any, the instruction's note (which may say why it moved
    here from the fix queue), and the user's free-text notes in
    `notes/<merged id>.md`, which often hold the question they want answered, and
-   the Purpose and "Fixes" sections of `.clerk-dev/branch-notes.md`.
+   the guidance file (`records.py guidance <worktree> --out <run>/guidance.md`,
+   written when the pass starts and again after a rule is recorded), whose
+   branch scope and rules may already settle it.
 2. Present it in a few short paragraphs: what the finding says, what is
    uncertain or contested, and the realistic options (fix as recommended, fix
    differently, defer, ignore), with your recommendation and why. Quote the code
@@ -164,7 +166,7 @@ skipped without deciding counts as left and stays marked.
    needed, but do not edit. When an answer needs more than a few files read, ask
    an `Explore` agent the question and keep only its answer.
 4. Record the decision as described under Recording a decision, including any
-   standing rule it sets in the branch notes, then, for a fix, run it right away
+   rule it sets beyond its finding (Rules beyond the finding), then, for a fix, run it right away
    by following the `review-fix` skill in queue mode.
 5. Move to the next. Before the next one, drop the previous one's detail; the
    file is the record.
@@ -220,34 +222,20 @@ scope and where it went; any precondition to check first. About fifteen lines at
 most, no code blocks. Refer to other findings by number. Show the user the entry
 before writing it when the discussion was long.
 
-### Standing rules in the branch notes
-
-This is the branch row of "Guidance from answers" in
-`skills/review/tracking.md`; a rule that reaches the whole feature or one of
-its areas becomes a guidance record instead, and an explicit `guidance:` from
-the user is always recorded.
+### Rules beyond the finding
 
 Some decisions reach past their finding: a rule that would settle similar
-findings the same way, or a change to what the branch is for. Write those into
-`.clerk-dev/branch-notes.md` as well, without being asked, as soon as the decision
-is recorded. Reviews pass the file to every reviewer and verifier, and fixes
-follow it, so a rule written there keeps the next run from raising the same
-question.
-
-- How fixes should be done (a convention, a pattern to prefer, a value to use,
-  what not to touch) goes under `## Fixes`.
-- What reviewers should look for, accept, or stop raising goes under
-  `## Review`.
-- A widened or narrowed scope, or deployed code the branch now changes on
-  purpose, goes under `## Purpose` as a dated line naming the finding.
-
-Write each as one dated line, `- <date>. <topic>: <the rule>`, stated so it
-stands on its own without the finding: the rule and, when it is not obvious,
-why. Name the finding only in Purpose lines. If an existing line covers the same
-ground, edit that line rather than adding a second one; never leave two lines
-that disagree. A decision that only settles its own finding (this card's tweak,
-a one-off exception) stays in the finding's Notes. Do not ask first; say in one
-line what you added and under which heading, so the user can correct it.
+findings the same way, or a change to what the branch is for. Record those as
+well, without being asked, as soon as the decision is recorded, as "Guidance
+from answers" in `skills/review/tracking.md` describes: its routing says
+where each goes (a `###` rule under Guidance in the branch notes, a guidance
+record, a dated Purpose line naming the finding, or a decision), and the format
+of a branch rule is in Branch notes there. Every review and fix gets the rules
+through the guidance file, so a rule recorded now keeps the next run from
+raising the same question. A decision that only settles its own finding (this
+card's tweak, a one-off exception) stays in the finding's Notes. Do not ask
+first; say in one line what you recorded and where, so the user can correct
+it.
 
 ## What never happens here
 

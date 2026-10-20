@@ -173,11 +173,13 @@ Give paths, not contents. Include:
 - the later pieces that will touch the same code, by name and spec id, so the
   agent shapes this piece's code for them without building them;
 - the tests to write or port, and the exact command to run them;
+- the guidance file's path: `records.py guidance <worktree> --area <area>
+  --out <scratchpad>/guidance-<area>.md` writes the branch's Purpose, its
+  guidance, and the feature's active guidance for the piece's area;
 - the rules that apply beyond the repository's conventions: the user's
-  instructions that bear on code (for example a no-comments rule), the
-  branch's Purpose, and the feature's active guidance for the piece's area
-  (`records.py rules <worktree> --area <area>`, quoted with their ids). Do not assume the agent sees the user's own instructions;
-  restate the ones that apply.
+  instructions that bear on code (for example a no-comments rule). Do not
+  assume the agent sees the user's own instructions; restate the ones that
+  apply.
 
 ### Order and parallelism
 

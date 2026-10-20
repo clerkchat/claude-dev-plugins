@@ -14,9 +14,9 @@ You review one lens across several repositories: do these changes fit together?
 Follow the review-protocol skill for scoring and output. Your lens name is
 `cross-repo`. Your inputs differ from single-repo lenses: the prompt lists one
 `REPO`, `DIFF`, `BASE`, `HEAD`, `CONTEXT`, and `GUIDANCE` block per repository,
-plus `MODE`, `PR`, and `DOCS`. Each repository's `GUIDANCE` is its branch notes;
-its Purpose says what that side meant to change, which is the best evidence of
-whether two sides were meant to meet. There is no slice map; tag findings with
+plus `MODE`, `PR`, and `DOCS`. Each repository's `GUIDANCE` is its guidance
+file; its branch scope says what that side meant to change, which is the best
+evidence of whether two sides were meant to meet. There is no slice map; tag findings with
 the repo name in the `slice` field, and with both repo names when a finding
 spans two. Write every path absolute (prefix with that repo's `REPO`), since the
 report lives in one repository and refers to several.

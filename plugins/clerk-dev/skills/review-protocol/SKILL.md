@@ -47,24 +47,26 @@ The orchestrator's prompt gives you:
   needed.
 - `REPO`: absolute path of the repository root.
 - `PR`: the pull request title and body, or `none`.
-- `GUIDANCE`: path of the branch notes file, or `none`. Its Purpose says what
-  the branch is for: code it lists as new can change without compatibility
-  concerns, deployed code it lists as changed on purpose is intended (report how
-  it is changed, not that it is), and anything else the diff changes is
-  unexpected and worth saying so. Read its "Review" section and follow it as the
-  user's direction for this review: it can narrow or widen what you report and
-  how you phrase it. It does not change the confidence rubric. If it tells you
-  to skip something you believe is a blocker, report the blocker anyway and say
-  that the guidance asked to skip this kind of finding.
+- `GUIDANCE`: path of this worktree's guidance file, or `none`. It has three
+  parts:
+  - Branch scope, the branch's Purpose: judge the diff by it. Code it lists as
+    new can change without compatibility concerns, deployed code it lists as
+    changed on purpose is intended (report how it is changed, not that it is),
+    and anything else the diff changes is unexpected and worth saying so.
+  - Branch guidance and Feature guidance: the user's rules for this branch and
+    for the feature, the feature's with record ids. Follow them as the user's
+    direction: they settle the questions they answer, and can narrow or widen
+    what you report and how you phrase it. Do not recommend against one; when
+    a defect can only be fixed by going against one, report it and name the
+    rule. Code that breaks a rule is a finding of your lens when the rule is
+    about your lens's concern; cite the rule's id, or a branch rule's heading,
+    in `evidence`.
+  The guidance does not change the confidence rubric. If it tells you to skip
+  something you believe is a blocker, report the blocker anyway and say that
+  the guidance asked to skip this kind of finding.
 - `WORKSPACE`: path of `.clerk-dev/review-workspace.md`, or `none`. Its rows name
   the other repositories and worktrees of this job; use them to say which
   repository a fix needs a follow-up in.
-- `FEATURE_GUIDANCE`: path of the feature's `guidance.md`, or `none`: the
-  user's standing rules for the feature, each with its record id. Treat them
-  as the user's direction, like the branch notes: do not recommend against
-  one, and when a defect can only be fixed by going against one, report it and
-  name the rule. Code that breaks a rule is a finding of your lens when the
-  rule is about your lens's concern; cite the rule's id in `evidence`.
 - `BAR`: `final` on a final pass, else absent. See Final pass bar below.
 - `DOCS`: paths of work-tracking documents (specs, notes, plans) selected for
   this change, or `none`. Most lenses ignore these; spec-conformance and
@@ -112,9 +114,9 @@ leave it out on a final pass.
 
 Below the bar, and not reported however real: naming, design and duplication,
 test coverage, comments and wording, rare edge cases that recover on their own,
-minor performance. The branch notes' Review section may widen or narrow the bar
-for this branch; follow it as usual. Severity is `blocker` or `major`; a finding
-you would call `minor` is below the bar.
+minor performance. The guidance may widen or narrow the bar for this branch;
+follow it as usual. Severity is `blocker` or `major`; a finding you would call
+`minor` is below the bar.
 
 ## Recheck mode
 
@@ -361,13 +363,12 @@ Inputs:
   spec details), or `none`. Read them to know what is already settled; do not
   check them.
 - `REPO`, `CONTEXT`, `GUIDANCE`: the repository the records are about, its
-  review context, and its branch notes, as in review. When the records span
+  review context, and its guidance file, as in review. When the records span
   repositories, there is instead one `REPOSITORY` block per repository, each
   with `NAME`, `REPO`, `CONTEXT`, and `GUIDANCE`; ground each question in the
   repository it concerns, and check contracts from both sides.
-- `WORKSPACE`, `FEATURE_GUIDANCE`: as in review. Do not ask what active
-  guidance already answers, unless the code shows the rule cannot hold; then
-  say so and cite it.
+- `WORKSPACE`: as in review. Do not ask what the guidance already answers,
+  unless the code shows the rule cannot hold; then say so and cite it.
 
 Method:
 

@@ -88,8 +88,8 @@ the user to check it before any reviewer runs:
 - Show the drafted Purpose in a few lines: what the branch builds, what is new,
   and what deployed code it changes on purpose.
 - Give the file's path and ask the user to edit it: correct what is wrong, move
-  anything misfiled between "new" and "deployed", and add under Review anything
-  reviewers should focus on or leave alone.
+  anything misfiled between "new" and "deployed", and add under Guidance, as a
+  `###` rule, anything reviewers should focus on or leave alone.
 - Say what to answer: "go" when it is right, after any edits.
 
 When the run would stop for the plan anyway (a whole-branch review started from
@@ -888,20 +888,22 @@ MODE: <quick | standard | deep>
 REPO: <absolute repo root>
 PR: <title and body, or none>
 DOCS: <paths of selected work-tracking documents, or none>
-GUIDANCE: <path of .clerk-dev/branch-notes.md, or none>
-FEATURE_GUIDANCE: <path from `records.py rules <worktree> --path`, or none>
+GUIDANCE: <path of <run>/guidance.md>
 WORKSPACE: <path of .clerk-dev/review-workspace.md, or none>
 ```
 
 plus `BAR: final` on a final pass, and `PASS: <focus>; piece <R id or none>`
 with `--pass`.
 
-`<worktree>/.clerk-dev/branch-notes.md` says what the branch is for (Purpose) and
-holds the user's standing review guidance (Review); its format is in
-`tracking.md`. It was read, or drafted, at the start of the run (see Branch
-notes first). Pass its path as `GUIDANCE` to every lens and verifier. When the Review section has
-entries, mention in the plan in one line that the user's review notes apply, and
-add a sentence about them to "About this review" through `not-reviewed.md`.
+Before the first wave, write the guidance file with `records.py guidance
+<worktree> --out <run>/guidance.md`: the branch's Purpose (read, or drafted, at
+the start of the run; see Branch notes first), its guidance rules, and the
+feature's active guidance (see Branch notes in `tracking.md`). Pass its path as
+`GUIDANCE` to every lens and verifier. Relay any warning it prints about
+guidance that names specific code in one line. When the branch notes have
+Guidance rules or the feature has active guidance, mention in the plan in one
+line that the user's guidance applies, and add a sentence about it to "About
+this review" through `not-reviewed.md`.
 
 In quick mode, pass `model: sonnet` on the invocation to override the agent's
 frontmatter. Do not add instructions; the agent's own prompt and the protocol
@@ -1318,9 +1320,10 @@ skills, and review context, and writes its run and report under that worktree's
    because contract mismatches do not care when a change was made. Run
    `clerk-dev:review-cross-repo` with `model: fable` (see Model fallback) and
    repeated `REPO`, `DIFF`, `BASE`, `HEAD`,
-   `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's
-   `.clerk-dev/branch-notes.md`, whose Purpose says what that side meant to
-   change), plus `MODE`, `PR`, and `DOCS`; `DOCS` includes each repository's
+   `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's guidance
+   file, `records.py guidance <its worktree> --out <run>/guidance-<repo>.md`,
+   whose branch scope says what that side meant to change), plus `MODE`,
+   `PR`, and `DOCS`; `DOCS` includes each repository's
    `.clerk-dev/followups.md` (see `tracking.md`). Merge, verify,
    and number its findings in this session's run directory as usual.
    With `--final`, the lens and its verifiers also get `BAR: final`, and
@@ -1375,7 +1378,8 @@ cross-repository check is starting and roughly how long it takes.
 (`all.patch`, `whole.patch`, one per slice), `triage/`, `plan.md` (with the
 instance list), `progress.md`, `raw/<lens>[-<slice>].md`, `so-far.md` (interim,
 unverified), `merged.md` (and `merged-new.md` in incremental runs),
-`verify/<id>.md`, `reconcile/`, `pr/`, `titles.tsv`, `overrides/`, `summary.md`,
+`verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
+`reconcile/`, `pr/`, `titles.tsv`, `overrides/`, `summary.md`,
 `not-reviewed.md`, `numbers.tsv`, `status.tsv`, `instructions.tsv`,
 `notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `.render/<generation>/` with
 the `rendered-*.tsv` snapshots, `report.md`, `report.prev.md`, `stale.tsv`
