@@ -7,7 +7,7 @@ allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 
 # Review triage
 
-When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The user marks each finding in a review report with an instruction: Fix as
 recommended (optionally with a note), Discuss, Defer, or Ignore. This skill
@@ -238,8 +238,8 @@ of a branch rule is in Branch notes there. Every review and fix gets the rules
 through the guidance file, so a rule recorded now keeps the next run from
 raising the same question. A decision that only settles its own finding (this
 card's tweak, a one-off exception) stays in the finding's Notes. Do not ask
-first; say in one line what you recorded and where, so the user can correct
-it.
+first; say in one line what the rule says and how far it reaches, so the user can
+correct it.
 
 ## What never happens here
 

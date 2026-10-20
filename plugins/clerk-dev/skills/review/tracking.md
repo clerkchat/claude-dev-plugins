@@ -182,8 +182,8 @@ When the user answers a question (a design question, an implementer's stopped
 piece, a finding to discuss or a fix to adjust, a follow-up to refine, a pass
 item), the answer often carries guidance: a rule that would settle other
 choices the same way, beyond this one. Record it without being asked, where
-the routing below sends it, and say in one line what was recorded and where,
-so the user can correct the place, the scope, or the wording.
+the routing below sends it, and say in one line what the rule says and how far it reaches, as "Talking to
+the user" describes, so the user can correct the scope or the wording.
 
 Recognize it two ways:
 
@@ -252,9 +252,37 @@ capabilities wire in through explicit lists. Say if it is narrower than
 that." For a branch rule: "Added to this branch's guidance: do not report
 naming findings in generated files. Say if it reaches the whole feature."
 
-## Naming things to the user
+## Talking to the user
 
-Everything said to the user names what an id or code stands for. On its first
+The user works at the level of the feature: what it does, the choices in it,
+the rules they set, and what needs their judgment. The plugin exists to take the
+inventory off their hands, so the conversation is about the feature, and the
+inventory stays out of it unless they ask.
+
+- Lead with the substance: what changed in the feature or the code, what was
+  decided, what is open, and what you need from them. Say it in the feature's
+  own words ("the voice runtime now hangs up cleanly when the caller drops"),
+  not the plugin's ("P10 done, B17 closed, R40 stamped").
+- Bookkeeping gets at most one short closing line, and only when the user
+  might want to correct it: a rule recorded from their answer, a decision
+  written down, an idea parked. Say what it says and its reach, not the
+  mechanics ("Noted as a rule for the voice runtime: no retries on hangup."),
+  never the file, the record kind, a script, or the steps taken. Routine
+  writes (stamps, statuses, logs, progress, checkpoint notes that only restate
+  the conversation) go unmentioned.
+- Use the plugin's vocabulary (pass, piece, milestone, record, item, lens,
+  area, overview) only when the user needs it to steer the work, and then in
+  plain words ("the edge-cases work on the voice runtime", not "P10"). If the
+  user has to ask what a label means, the message should not have needed it.
+- Drop an id whenever it adds nothing to what the user will do next. Keep it
+  when they are likely to refer back to it ("fix 3"), and then name it as
+  below.
+- Short and in prose. No tables or headings for a short answer; a list only
+  for things the user will pick from or tick off.
+
+### Naming ids
+
+When an id does appear, it names what it stands for. On its first
 mention in a message, an id is never bare: lead with what it is and give the
 id after it ("the chunk plan (R31) allows independent improvements as PRs
 ahead of the core chunk (C)"), or follow the id with a gloss of two to six

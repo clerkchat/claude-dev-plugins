@@ -149,7 +149,7 @@ reads it but never asks, offers, or records anything.
 
 ## How you talk to the user
 
-When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 When this session runs headless (started with `claude -p`, as feature mode does
 for each repository), there is no one to answer a question. Never ask: follow

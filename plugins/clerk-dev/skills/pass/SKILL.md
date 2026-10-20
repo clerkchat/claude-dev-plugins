@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Writ
 
 # Passes
 
-When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The catalogue of passes, their lenses, and how to suggest them for a piece is
 `passes.md` next to this file. The log is `.clerk-dev/passes.md`, managed only

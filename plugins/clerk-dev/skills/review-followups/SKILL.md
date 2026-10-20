@@ -7,7 +7,7 @@ allowed-tools: Bash(git *), Bash(gh pr view *), Bash(python3 *), Read, Grep, Glo
 
 # Working follow-ups
 
-When talking to the user, name ids and codes as "Naming things to the user" in `skills/review/tracking.md` describes: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 A follow-up is work this repository owes because a change landed somewhere else,
 usually a contract change made while fixing a review finding in another
