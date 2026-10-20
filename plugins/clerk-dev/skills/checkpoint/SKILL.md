@@ -22,7 +22,8 @@ Read back over this conversation since the start or the last checkpoint, and
 list each thing that was settled but has no file yet:
 
 - **Decisions**: a choice made between options. A `decision` record (the
-  `feature` skill), or an edit to a record written earlier in this session.
+  `feature` skill, which also says when it supersedes and restates an earlier
+  record), or an edit to a record written earlier in this session.
 - **Guidance**: a rule the user gave beyond one case, or anything they wrote
   as `guidance: ...`. Recorded as "Guidance from answers" in
   `skills/review/tracking.md` describes, at its scope.

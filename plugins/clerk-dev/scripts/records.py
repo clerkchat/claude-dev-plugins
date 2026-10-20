@@ -412,6 +412,11 @@ def plan_pieces(d):
         if mm and mm.group(1) != "Piece": out[mm.group(1)] = re.sub(r"`", "", mm.group(2)).strip()
     return out
 
+def load_script(name):
+    s = importlib.util.spec_from_file_location(name.replace(".py", ""), os.path.join(os.path.dirname(os.path.abspath(__file__)), name))
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+    return m
+
 def names(wt, ids):
     """A short name for each id or code, for glossing it in conversation:
     records (R31), requirements (R52.19), checks and their questions
@@ -420,9 +425,7 @@ def names(wt, ids):
     d = fdir(wt); recs = {r["id"]: r for r in records(d)}
     pieces = plan_pieces(d)
     here = os.path.abspath(wt)
-    def load(name):
-        s = importlib.util.spec_from_file_location(name.replace(".py", ""), os.path.join(os.path.dirname(os.path.abspath(__file__)), name))
-        m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+    load = load_script
     out = []
     for raw in ids:
         x = raw.strip().rstrip(",.;:")
@@ -519,18 +522,38 @@ def suggestions(d):
         if through is None or old != basis: out.append("The overview is missing or stale; refresh it.")
     return out
 
+def build_log(d):
+    bm = load_script("build.py")
+    hub_wt = os.path.dirname(os.path.dirname(d))
+    _, repos = workspace(hub_wt)
+    lines, built = [], set()
+    try:
+        for w in dict.fromkeys([hub_wt] + list(repos.values())):
+            if not os.path.exists(os.path.join(w, ".clerk-dev", "build.md")): continue
+            lines += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(w)]
+            built |= {s for s, _, items, state, mine in bm.progress(w) if (items or bm.dropped_of(mine)) and all(state.get(n, ("",))[0] == "done" for n in items)}
+    except SystemExit as e:
+        return [f"(build log unreadable: {e})"], None
+    return lines or ["nothing built yet"], built
+
+def idea_status(i):
+    outcome = re.sub(r"^\d{4}-\d{2}-\d{2} ", "", i["fields"].get("Outcome", ""))
+    if i["done"] and outcome: return f"Status: {outcome}."
+    f = i["fields"]
+    return f"Status: {idea_word(i)}. Why: {f.get('Why', '-')}. When: {f.get('When', '-')}."
+
 def digest(d):
-    """What the overview writer reads: the summary, every active record in full
-    (brainstorms as one line each), open design questions, and spec open items."""
     rs = records(d)
     out = []
     fp = os.path.join(d, "feature.md")
     m = re.search(r"^## Summary\n(.*?)(?=^## |\Z)", open(fp, encoding="utf-8").read(), re.S | re.M)
     out += ["# Summary", "", (m.group(1).strip() if m else "(none)"), ""]
     live = [r for r in rs if r.get("status") == "active" and r.get("type") != "brainstorm"]
+    lines, built = build_log(d)
     for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, int(r["id"][1:]))):
         _, body = parse(r["path"])
-        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'})", body.strip(), ""]
+        mark = f"; built: {'unknown' if built is None else 'yes' if r['id'] in built else 'no'}" if r["type"] == "spec" else ""
+        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'}{mark})", body.strip(), ""]
     out += ["# Brainstorms (history; one line each)", ""]
     out += [f"- {r['id']} ({r.get('area') or 'feature-wide'}): {r.get('title', '')}. {gist(r)}" for r in rs if r.get("type") == "brainstorm"] + [""]
     out += ["# Superseded or discarded (ids only)", "", ", ".join(f"{r['id']} {r.get('status')}" for r in rs if r.get("status") in ("superseded", "discarded")) or "none", ""]
@@ -540,22 +563,9 @@ def digest(d):
         for q in re.finditer(r"^- \[ \] (Q\d+)\. (.*)$", text, re.M):
             w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
             out.append(f"- {c['name']}.{q.group(1)} ({w.group(1) if w else '?'}): {q.group(2)}")
-    out += ["", "# Build progress", ""]
-    try:
-        bd = importlib.util.spec_from_file_location("build", os.path.join(os.path.dirname(os.path.abspath(__file__)), "build.py"))
-        bm = importlib.util.module_from_spec(bd); bd.loader.exec_module(bm)
-        hub_wt = os.path.dirname(os.path.dirname(d))
-        _, repos = workspace(hub_wt)
-        wts = list(dict.fromkeys([hub_wt] + list(repos.values())))
-        got = []
-        for w in wts:
-            if os.path.exists(os.path.join(w, ".clerk-dev", "build.md")):
-                got += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(w)]
-        out += got or ["nothing built yet"]
-    except SystemExit as e:
-        out.append(f"(build log unreadable: {e})")
-    out += ["", "# Parked ideas", ""]
-    out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} Why: {i['fields'].get('Why', '-')}. When: {i['fields'].get('When', '-')}." for i in ideas(d) if not i["done"]] or ["none"]
+    out += ["", "# Build progress", ""] + lines
+    out += ["", "# Ideas", ""]
+    out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} {idea_status(i)}" for i in ideas(d)] or ["none"]
     out += ["", "# Open items in active specs", ""]
     for r in live:
         if r["type"] != "spec": continue
@@ -589,10 +599,7 @@ dropped when it will not be done (Outcome says why).
 
 """
 
-def items_mod():
-    s = importlib.util.spec_from_file_location("items", os.path.join(os.path.dirname(os.path.abspath(__file__)), "items.py"))
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-    return m
+def items_mod(): return load_script("items.py")
 
 def ideas(d):
     p = os.path.join(d, "ideas.md")

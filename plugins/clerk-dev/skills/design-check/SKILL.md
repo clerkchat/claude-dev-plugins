@@ -160,7 +160,9 @@ time:
    Refine means investigate the code first and come back with a proposal).
 3. Record the answer where it belongs:
    - a choice: a decision record (`records.py new <worktree> decision "..."
-     --from R<n>`, with `--supersedes` when it changes an active decision);
+     --from R<n>`, with `--supersedes` when it changes an active decision,
+     restating it in full as "When a record changes another" in
+     `skills/feature/SKILL.md` describes);
    - a gap in a spec: an open item added to the spec (allowed at any time),
      or, when the gap changes the requirements or approach, a new spec that
      supersedes it;

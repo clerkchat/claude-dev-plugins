@@ -38,6 +38,16 @@ file.
   record), which the script makes.
   One exception: a spec's Open items checklist tracks progress, so ticking an
   item or adding one is fine at any time.
+- **Restate in full.** A record that changes any part of an active record
+  supersedes it and states the whole current version: what still holds, and the
+  change. No record amends another in part ("as R8, except ..."). When a change
+  touches one part of a large design or capabilities record, restate that
+  record, or first split the settled part into its own decision and supersede
+  that. A spec whose piece is built (every requirement done or dropped in the
+  build log) is history and is not restated; a later spec that changes its
+  behavior names it and the change in its Approach. The procedure, including
+  the check before writing, is "When a record changes another" in
+  `skills/feature/SKILL.md`.
 - **Ids.** One sequence per feature: R1, R2, ... The id is the handle in
   conversation ("R7"), in other records (`from:`), and in items that link to a
   decision.
@@ -262,7 +272,8 @@ to drop. Or "Clean: <why>" when the existing code already fits.
 ## Approach
 
 Where the code goes, the patterns to follow, and the existing code and shared
-library helpers to reuse or extend (with paths).
+library helpers to reuse or extend (with paths). Name any built spec whose
+behavior this one changes, and what changes.
 
 ## Contracts
 
@@ -274,6 +285,11 @@ being.
 
 - [ ] Decide the download URL lifetime.
 ```
+
+Lists inside a spec other than Requirements and Open items use plain numbers,
+cited as R9.4 (spec, then number). Never prefix list items with a letter id (I,
+F, D, B, M, P, Q, R): those are the plugin's ids for ideas, follow-ups,
+deferred items, build pieces, milestones, passes, questions, and records.
 
 ## Ideas
 
@@ -379,15 +395,22 @@ spec, no plan.
 
 ### Disagreements
 
-Records that disagree, that rely on a superseded record, or that go against
-active guidance, one bullet each naming both sides: "R5 relies on R3's frozen-contract rule; R3 is superseded
-by R28 (R5, R28)."
+Only two kinds, one bullet each naming both sides. A recording defect: a later
+record changes an earlier active one without superseding it, or relies on a
+superseded one; name the record that should supersede which, and say it is to
+be restated in full ("R28 changes R3's frozen-contract rule but does not
+supersede it; write a record superseding R3 that restates it in full (R3,
+R28)."). A real conflict for the user to decide: records, or a record and
+active guidance, that cannot both hold. A built spec and a later spec that
+names its change in Approach are consistent, not a disagreement.
 
 ## Parked
 
 One line per parked idea, by area, with when to look again (I4, harness:
 streaming results; when a suite runs longer than a minute). "None." when there
-are none.
+are none. The digest also lists adopted and dropped ideas; they are not
+parked, and an adopted idea is cited by the record it became wherever that
+record is described, never reported as missing.
 
 ## Explored
 

@@ -233,7 +233,8 @@ Nothing the plugin records goes to Claude's memory. Memory is for preferences
 about how sessions behave, not for rules, decisions, or scope.
 
 When new guidance refines or contradicts an active one, supersede it rather
-than add a second. When it contradicts an active decision, record the guidance
+than add a second, restated in full as "When a record changes another" in
+`skills/feature/SKILL.md` describes. When it contradicts an active decision, record the guidance
 and say which decision it bears on; the user decides whether that decision
 changes. The line to the user: "Recorded as guidance R61 (harness):
 capabilities wire in through explicit lists. Say if it is narrower than

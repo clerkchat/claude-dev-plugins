@@ -88,8 +88,8 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
 - **design**: when brainstorming settles. `--from` the brainstorms it settles.
   Write a decision record for each significant choice first, and cite them.
 - **decision**: one choice per record, with what was rejected and why. When a
-  new choice changes an earlier one, `--supersedes R<n>`; never edit the old
-  one. When the user drops one, `records.py discard <worktree> R<n> --note
+  new choice changes an earlier one, `--supersedes R<n>` and restate it ("When
+  a record changes another" below); never edit the old one. When the user drops one, `records.py discard <worktree> R<n> --note
   "<why>"`.
 - **capabilities**: `--from` the design. Each piece names its repository and its
   dependencies.
@@ -104,7 +104,11 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   and what to refactor first (the Baseline section; always filled, "Clean"
   with a reason when nothing needs it). Keep
   Requirements numbered and checkable, and Open items as checkboxes; reviews
-  read both. Every implementer works from the spec, so draft it with a
+  read both. When the piece changes the behavior of a spec that is already
+  built, Approach names that spec and what changes ("When a record changes
+  another" below). Any other list in a spec uses plain numbers, cited as
+  R33.4, never letter-prefixed ids (I, F, D, B, M, P, Q, R), which clash with
+  the plugin's ids. Every implementer works from the spec, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
   give it the spec template in `records.md`, the records the piece builds on
   (its capabilities or plan row, the design, the decisions of its area, and
@@ -114,6 +118,33 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   body and list anything it could not settle from the records as open items.
   Then read it, settle what you can with the user, and edit it in this
   session.
+
+## When a record changes another
+
+A record that changes any part of an active record supersedes it and states the
+whole current version: what still holds, and the change. No record amends
+another in part ("as R8, except ..."), because that moves the merge to read
+time, when the context is gone and each reader merges differently. The writer
+has the most context.
+
+Before writing any record, find the active records it changes: the area's
+active records (`records.py list <worktree> --active --area <area>`) and those
+its `from` cites. Supersede each one it changes with `--supersedes`, and write
+the body as the complete current version, so a reader never needs the old
+record to understand it. `--supersedes` takes one record: when the new record
+changes several, give it the one it mostly restates, restate the others in the
+body, and discard each of them with `records.py discard <worktree> R<n> --note
+"restated in R<new>"`.
+
+When the change touches one part of a large design or capabilities record,
+either restate that whole record, or first split the settled part into its own
+decision and supersede that.
+
+Carve-out: a spec whose piece is built is history and is not restated. A spec
+is built when the build log shows all its requirements done or dropped;
+`records.py digest` marks each active spec "built: yes" or "built: no". A later
+spec that changes a built spec's behavior says so in its Approach, naming that
+spec and what changes; the overview treats that as consistent.
 
 A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
@@ -160,6 +191,13 @@ to a `general-purpose` subagent on `model: fable`, effort `high` (finding the
 gaps and disagreements across every record is the part that needs it; falling back to Opus at the same effort as Model fallback in the `review` skill describes), with the path of `records.md` (for the format
 and rules) and the output path `<hub>/.clerk-dev/feature/overview.md`, asking it
 to write the overview from the digest alone, citing ids for every statement.
+The digest marks each spec built or not and lists every idea with its status;
+the overview names an adopted idea by the record it became, and never calls
+one missing. Disagreements are only recording defects (a later record that
+should have superseded an earlier one: name both, and say the later one is to
+be restated in full) or real conflicts for the user to decide; a built spec and
+a later spec that names its change in Approach are consistent, not a
+disagreement.
 When it returns, run `records.py stamp-overview <worktree>`, and tell the user
 the path. Its report cites bare ids; run `records.py names` on them and gloss
 each one in what you tell the user (the gaps and disagreements it found
