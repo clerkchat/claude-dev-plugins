@@ -218,8 +218,13 @@ The rule holds in every case, the ones where it slips most included:
 - Lists and counts count ("guidance R15 and R19 to R22"): gloss each id, or
   replace the list with what the records are about when the ids add nothing.
 
-Before sending a message that mentions any id, run `records.py names` on every
+Scripts whose output is shown to the user (`status.py`) gloss ids themselves
+with `records.py`'s `gloss`. Before sending a message that mentions any id, run `records.py names` on every
 id in it you have not glossed, and check the draft for bare ids.
+
+The plugin's scripts (`records.py`, `status.py`, and the rest) are tooling,
+not something the user runs: never name them to the user. Point to what to
+say instead ("what guidance have I given", "what ideas did we park").
 
 Files keep their ids as they are: records, check files, logs, and reports cite
 ids by design, and commit messages carry none. The rule is for conversation.

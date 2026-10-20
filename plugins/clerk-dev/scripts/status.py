@@ -60,6 +60,11 @@ def plural(x):
     n = x if isinstance(x, int) else len(x)
     return "" if n == 1 else "s"
 
+def emit(wt, text):
+    try: text = load("records.py").gloss(wt, text)
+    except SystemExit: pass
+    print(text)
+
 def short(text, n=90):
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
@@ -415,7 +420,7 @@ def design_view(wt, rows, out):
             out.append(f"- {piece}: no spec"); nospec.append(piece); continue
         named.add(sid); f = spec_facts(d, r, cs, it)
         word = "ready" if not f["missing"] else "not ready: " + ", ".join(f["missing"])
-        out.append(f"- {piece}: {sid}, {word}" + (f"; {built[sid]}" if sid in built else "") + (f"; {f['items']} open items" if f["items"] else ""))
+        out.append(f"- {piece} ({sid}): {word}" + (f"; {built[sid]}" if sid in built else "") + (f"; {f['items']} open items" if f["items"] else ""))
         settle_all += f["settle"]
         if "no design check" in f["missing"]: steps.append(f"Design-check {sid} ({short(r.get('title', ''), 40)}): \"design-check {sid}\".")
         if not f["baseline"]: steps.append(f"Fill {sid}'s Baseline: the refactor to do first, or \"Clean\" with why.")
@@ -456,12 +461,12 @@ def design_view(wt, rows, out):
     else:
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d))]
     gl = rc.rules(d)
-    if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural(gl)}; `records.py rules` lists them."]
+    if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural(gl)}; say \"what guidance have I given\" to list them."]
     parked = [i for i in rc.ideas(d) if not i["done"]]
     if parked:
         by = {}
         for i in parked: by.setdefault(i["fields"].get("Area") or "feature-wide", []).append(i["id"])
-        out += ["", f"**Parked ideas:** {len(parked)} ({'; '.join(f'{a}: {len(v)}' for a, v in by.items())}); `records.py ideas` lists them with why and when."]
+        out += ["", f"**Parked ideas:** {len(parked)} ({'; '.join(f'{a}: {len(v)}' for a, v in by.items())}); say \"what ideas did we park\" to list them with why and when."]
     settle_all = list(dict.fromkeys(settle_all))
     first = [f"Settle the settle-first design questions: {', '.join(settle_all)} (\"walk the design questions\")."] if settle_all else []
     if ov["disagreements"] or mixed:
@@ -568,7 +573,7 @@ def main():
         steps = area_view(wt, rows, out, a.area) if a.area else design_view(wt, rows, out)
         out.append("")
         out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(dict.fromkeys(steps), 1)] if steps else ["**Next:** nothing pending."]
-        print(re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
+        emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
 
     # Review run and commits since it
     status = instr = numbers = {}
@@ -664,7 +669,7 @@ def main():
         steps = implementation_view(wt, rows, out, unreviewed, pass_steps, passes)
         out.append("")
         out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else ["**Next:** nothing pending in the building."]
-        print(re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
+        emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
     if a.focus == "all":
         bfirst, blater = build_block(wt, rows, out, unreviewed)
         first, later = feature_block(wt, rows, out)
@@ -733,7 +738,7 @@ def main():
         out.extend(f"{n}. {s}" for n, s in enumerate(steps, 1))
     else:
         out.append("**Next:** nothing pending.")
-    print("\n".join(out))
+    emit(wt, "\n".join(out))
 
 if __name__ == "__main__":
     main()

@@ -32,6 +32,9 @@ not one). About the review only ("status of the review", "what's left in the
 review"): `--focus review`. Anything broader
 ("where are we", "what's next"): no focus, which shows everything.
 
+Its output already glosses each id on its first mention (`records.py gloss`);
+keep those glosses when you show or summarize it, and gloss any id you add.
+
 It reads only files and git: the latest review run, `.clerk-dev/followups.md` and
 `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
 worktrees of

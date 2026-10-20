@@ -403,6 +403,35 @@ def names(wt, ids):
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
+ID_RE = re.compile(r"(?<!\w)(R\d+(?:\.\d+)?|[BMPFI]\d+)(?![\w.]?\d)('s)?")
+
+def gloss(wt, text, n=50):
+    """The text with each id's first plain mention followed by its short name,
+    so text shown to the user never leaves an id bare. An id already glossed
+    ("R31 (the chunk plan)", "the chunk plan (R31)") stays as it is, and so do
+    its later mentions and ids inside quotes, which are things to type."""
+    found = list(ID_RE.finditer(text))
+    ids = list(dict.fromkeys(m.group(1) for m in found))
+    known, titles = {}, {}
+    for line in names(wt, ids) if ids else []:
+        x, _, name = line.partition(": ")
+        if name == "unknown": continue
+        known[x] = name if len(name) <= n else name[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+        titles[x] = name.partition(": ")[2][:20]
+    def glossed(m):
+        before, after = text[:m.start()], text[m.end():]
+        named = titles.get(m.group(1)) and after.startswith(" " + titles[m.group(1)])
+        return named or after.startswith(" (") or (before.endswith("(") and after.startswith(")"))
+    def quoted(m):
+        line = text[:m.start()].rsplit("\n", 1)[-1]
+        return line.count('"') % 2 == 1 or line.count("`") % 2 == 1
+    done = {m.group(1) for m in found if glossed(m)}
+    def sub(m):
+        x = m.group(1)
+        if x in done or x not in known or quoted(m): return m.group(0)
+        done.add(x); return f"{m.group(0)} ({known[x]})"
+    return ID_RE.sub(sub, text)
+
 def suggestions(d):
     """Records worth writing: roll-up designs, plans, and a stale overview."""
     rs = records(d); live = [r for r in rs if r.get("status") == "active"]
