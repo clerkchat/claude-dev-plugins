@@ -308,10 +308,10 @@ def milestone_lines(wt):
     for m in milestones(entries):
         if m["f"].get("Status") == "abandoned": continue
         rows, nxt, ready = milestone_view(wt, m)
-        out.append(f"{m['id']} {m['title']} ({m['f'].get('Spec')}): " + ("ready to merge" if ready else "in progress"))
+        out.append(f"{m['id']} {m['title']} ({m['f'].get('Spec')}): " + ("complete" if ready else "in progress"))
         out.append("  " + "; ".join(f"{f}{' (required)' if r else ''}: {w}" for f, w, r in rows))
         if nxt: steps.append(f"{m['id']} {m['title']}: {nxt}.")
-        elif ready: steps.append(f"{m['id']} {m['title']} is ready to merge: its planned passes ran and required findings are triaged.")
+        elif ready: steps.append(f"{m['id']} {m['title']} is complete: its planned passes ran and required findings are triaged; go on to the plan's next milestone.")
     return out, steps
 
 def main():

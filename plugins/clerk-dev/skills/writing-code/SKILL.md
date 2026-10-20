@@ -270,8 +270,11 @@ are applied by orchestrating passes, not by adding checklists to a brief. A
 brief never quotes a lens's text, except the one lens of the pass it belongs
 to.
 
-A milestone is a numbered step of the feature's active plan. Work it as a
-sequence of passes, with the `pass` skill:
+A milestone is a numbered step of the feature's active plan: a checkpoint
+where the work so far gets its review passes, not a point to merge or open a
+pull request. Merging and pull requests are the user's call, never a next
+step a milestone suggests. Work it as a sequence of passes, with the `pass`
+skill:
 
 1. **Plan it** when its work starts: `build.py milestone <worktree> --step
    R8.2 --passes <list>`, where R8.2 is step 2 of plan R8. The log takes the
@@ -291,10 +294,11 @@ sequence of passes, with the `pass` skill:
    draft is whole, and run its narrow check.
 4. **The other passes**, in order, each as the `pass` skill runs one: its own
    implementer with its one lens's Pass mode text, then its narrow check.
-5. **Ready** when every planned pass has run or was skipped with a reason
+5. **Complete** when every planned pass has run or was skipped with a reason
    (`build.py skip <worktree> M1 <pass> --why "..."`; never a required one)
    and the required passes' findings are triaged. `build.py milestones` and
-   status say where each milestone stands and what runs next.
+   status say where each milestone stands and what runs next; a complete
+   milestone leads to the next one.
 
 Run the sequence without pausing between passes. Stop and bring to the user:
 a question an implementer stopped on, a check that found anything rated major
