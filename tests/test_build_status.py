@@ -327,6 +327,7 @@ class WorkspaceTests(StatusCase):
         self.assertIn("; built: yes (", digest_head(self.repo, "R1"))
         self.assertTrue(digest_head(self.repo, "R9").endswith("; built: unknown)"))
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read a mode 0 directory")
     def test_an_unreadable_worktree_is_reported_and_other_marks_stay(self):
         os.chmod(self.other.path, 0)
         self.addCleanup(os.chmod, self.other.path, stat.S_IRWXU)
