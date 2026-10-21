@@ -45,7 +45,7 @@ Entry format:
     - Started: 2026-10-16
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 """
-import argparse, datetime, os, re, subprocess, sys, tempfile
+import argparse, datetime, os, re, sys, tempfile
 from records import exclude, git, load_script, record_id
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -78,7 +78,7 @@ def read(p):
         if not line.strip(): continue
         m = ENTRY_RE.match(line)
         if m:
-            cur = {"id": m.group(2), "title": m.group(3), "f": {}, "multi": {k: [] for k in REPEATABLE}}; out.append(cur); continue
+            cur = blank_entry(m.group(2), m.group(3)); out.append(cur); continue
         if cur is None:
             if line.startswith("#") or not line.startswith((" ", "-")): continue
             sys.exit(f"{p}:{n}: unrecognized line before the first piece: {line!r}")
@@ -114,6 +114,24 @@ def fmt_reqs(rs):
 
 def next_id(entries, prefix):
     return prefix + str(max([int(e["id"][1:]) for e in entries if e["id"].startswith(prefix)] or [0]) + 1)
+
+def blank_entry(eid, title, **fields):
+    return {"id": eid, "title": title, "f": fields, "multi": {k: [] for k in REPEATABLE}}
+
+def new_entry(entries, prefix, title, **fields):
+    e = blank_entry(next_id(entries, prefix), title, **fields)
+    entries.append(e)
+    return e
+
+def parse_reqs(spec, text):
+    nums = sorted({int(x) for x in re.findall(r"\d+", text.replace(spec + ".", ""))})
+    if not nums: sys.exit("--reqs names no requirement numbers")
+    return nums
+
+def commit_fields(wt, sha):
+    full = git(wt, "rev-parse", "--verify", "-q", sha + "^{commit}")
+    if not full: sys.exit(f"{sha} is not a commit here")
+    return {"Commit": git(wt, "rev-parse", "--short", full)}
 
 def find(entries, bid):
     bid = bid.upper() if re.match(r"[BMbm]\d+$", bid) else f"B{bid}"
@@ -343,26 +361,21 @@ def main():
 
     if a.cmd == "add":
         spec = record_id(a.spec)
-        nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
-        if not nums: sys.exit("--reqs names no requirement numbers")
-        bid = next_id(entries, "B")
-        entries.append({"id": bid, "title": a.title.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
-            "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Model": f"{a.model} {a.effort}",
-            "Status": "briefed", "Attempts": "1", "Started": today}})
-        write(p, entries); print(f"{bid} briefed: {spec} requirements {', '.join(map(str, nums))}")
+        nums = parse_reqs(spec, a.reqs)
+        e = new_entry(entries, "B", a.title.rstrip("."), Spec=spec, Requirements=", ".join(map(str, nums)),
+                      Model=f"{a.model} {a.effort}", Status="briefed", Attempts="1", Started=today)
+        write(p, entries); print(f"{e['id']} briefed: {spec} requirements {', '.join(map(str, nums))}")
         return
     if a.cmd == "drop":
         spec = record_id(a.spec)
-        nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
-        if not nums: sys.exit("--reqs names no requirement numbers")
+        nums = parse_reqs(spec, a.reqs)
         _, items = spec_requirements(load_script("records.py").fdir(a.wt), spec)
         if items is None: sys.exit(f"{spec} not found in the hub")
         unknown = [n for n in nums if n not in items]
         if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")
-        bid = next_id(entries, "B")
-        entries.append({"id": bid, "title": f"Drop {compress(spec, nums)}", "multi": {k: [] for k in REPEATABLE}, "f": {
-            "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Status": "dropped", "Started": today, "Note": a.why}})
-        write(p, entries); print(f"{bid} dropped: {compress(spec, nums)}")
+        e = new_entry(entries, "B", f"Drop {compress(spec, nums)}", Spec=spec, Requirements=", ".join(map(str, nums)),
+                      Status="dropped", Started=today, Note=a.why)
+        write(p, entries); print(f"{e['id']} dropped: {compress(spec, nums)}")
         return
     if a.cmd == "milestone":
         step, text = plan_step_of(a.wt, a.step) if a.step else (None, "")
@@ -374,10 +387,8 @@ def main():
         bad = [x for x in plan if known and x not in known]
         if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
         req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
-        mid = next_id(entries, "M")
-        entries.append({"id": mid, "title": piece.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
-            "Spec": spec, "Plan": step, "Passes": ", ".join(plan), "Required": ", ".join(req), "Started": today}})
-        write(p, entries); print(f"{mid} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
+        m = new_entry(entries, "M", piece.rstrip("."), Spec=spec, Plan=step, Passes=", ".join(plan), Required=", ".join(req), Started=today)
+        write(p, entries); print(f"{m['id']} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
         return
     if a.cmd == "skip":
         m = find(entries, a.mid)
@@ -404,7 +415,7 @@ def main():
     e = find(entries, a.bid)
     if a.cmd == "done":
         if e["f"].get("Status") in ("abandoned", "dropped"): sys.exit(f"{e['id']} is {e['f']['Status']}")
-        if subprocess.run(["git", "-C", a.wt, "cat-file", "-e", a.commit + "^{commit}"], capture_output=True).returncode != 0: sys.exit(f"{a.commit} is not a commit here")
+        commit = commit_fields(a.wt, a.commit)
         planned = {n for n, _, _ in reqs_of(e)}
         cov = {}
         if a.covered:
@@ -414,7 +425,7 @@ def main():
                 cov[int(m.group(1))] = (m.group(2), (m.group(3) or "").strip())
         rs = [(n, *cov.get(n, ("done", ""))) for n in sorted(planned | set(cov))]
         e["f"]["Requirements"] = fmt_reqs(rs)
-        e["f"]["Commit"] = git_short(a.wt, a.commit); e["f"]["Status"] = "done"
+        e["f"].update(commit, Status="done")
         e["multi"]["Deviation"] += a.deviation
         write(p, entries); print(f"{e['id']} done in {e['f']['Commit']}: {e['f']['Requirements']}")
     elif a.cmd == "stop":
@@ -456,8 +467,5 @@ def branch_base(wt):
 
 def names_commit(entry, sha):
     return bool(entry["f"].get("Commit")) and sha.startswith(entry["f"]["Commit"])
-
-def git_short(wt, sha):
-    return subprocess.run(["git", "-C", wt, "rev-parse", "--short", sha], capture_output=True, text=True).stdout.strip() or sha
 
 if __name__ == "__main__": main()
