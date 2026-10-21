@@ -132,9 +132,9 @@ class BuiltRefusalTests(FeatureRepoCase):
         self.assertNotIn("Record: R5", self.repo.log_text())
 
     def test_a_whole_plan_is_never_logged(self):
-        self.repo.build("built", "R4", "--commit", self.c1)
-        self.repo.build_ok("built", "R1", "--commit", self.c1)
-        self.assertNotIn("R4 (", self.repo.build_ok("records"))
+        code, out = self.repo.build("built", "R4", "--commit", self.c1)
+        self.assertNotEqual(code, 0, out)
+        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", "build.md")))
 
     def test_a_commit_is_required(self):
         code, out = self.repo.build("built", "R1")
