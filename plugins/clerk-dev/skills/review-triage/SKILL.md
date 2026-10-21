@@ -181,7 +181,8 @@ resumes with whatever is still marked.
 
 When the last discussion is decided, look back over the pass as "Lessons
 from a discussion" in `skills/review/tracking.md` describes, from the decisions
-recorded in the report when the conversation was cleared partway.
+recorded in the report when the conversation was cleared partway. Then
+run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 ## Recording a decision
 

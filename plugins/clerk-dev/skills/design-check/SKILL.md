@@ -178,5 +178,5 @@ Records written while walking follow the `feature` skill's rules. When the user'
 `guidance: ...`, record it as "Guidance from answers" in
 `skills/review/tracking.md` describes, and say so in one line.
 When the walk's last question is settled, look back over it as "Lessons
-from a discussion" in `skills/review/tracking.md` describes, before the next
-step starts.
+from a discussion" in `skills/review/tracking.md` describes, then
+run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.

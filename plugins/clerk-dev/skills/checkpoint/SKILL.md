@@ -80,3 +80,22 @@ In a few lines:
   or "where are we on the design", as fits. Next steps that belong to no open
   pass or piece are not written down: status reports its own, so name only
   what it already reports.
+
+## Closing checkpoint
+
+Other skills run this without being asked when a unit of work closes, since
+that is where the user is most likely to clear: a milestone completes, a pass
+reports its check, a design-check walk ends, a deliberation the user brought
+directly is recorded, the triage queues are empty, the follow-ups are worked
+through. Run steps 1 to 3 as above, with these differences:
+
+- Start from the last checkpoint or the start of the unit, whichever is later.
+- Write only what was settled; never ask about what was only discussed, and
+  leave the overview stale rather than refresh it.
+- Report in one line after the skill's own report: "Checkpointed: <what was
+  written, names only>. Safe to clear." or "Not safe to clear yet: <why>."
+  When nothing needed writing and nothing is in flight, say only "Safe to
+  clear."
+
+Run it once per unit; when one skill's unit closes inside another's (a
+deliberation inside a triage discussion), the outer skill's closing runs it.

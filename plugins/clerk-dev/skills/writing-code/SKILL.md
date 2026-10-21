@@ -298,7 +298,7 @@ skill:
    (`build.py skip <worktree> M1 <pass> --why "..."`; never a required one)
    and the required passes' findings are triaged. `build.py milestones` and
    status say where each milestone stands and what runs next; a complete
-   milestone leads to the next one.
+   milestone leads to the next one. When a milestone completes, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 Run the sequence without pausing between passes. Stop and bring to the user:
 a question an implementer stopped on, a check that found anything rated major

@@ -131,4 +131,5 @@ Say how many items were done with their commits, which were left open and why in
 a few words each, any follow-ups added elsewhere, and any findings noted as
 affected. There is no recheck lens for a follow-up; the next review of this
 branch checks open and closed items through its completeness lens, and the next
-triage checks the open findings against these commits.
+triage checks the open findings against these commits. After saying so,
+run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.

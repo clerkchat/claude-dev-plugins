@@ -87,6 +87,8 @@ step 7.
    brought directly, a decision record through the `feature` skill. Then check
    whether the answer carries guidance, a rule beyond this item, and route it
    as "Guidance from answers" in `skills/review/tracking.md` describes.
+   When the user brought the choice directly rather than through another
+   skill, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 ## The decision brief
 

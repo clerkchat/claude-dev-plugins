@@ -91,7 +91,7 @@ commit rules below.
    the check's findings by lens with the run label. The pass ends here.
    Findings are fixed through `review-fix` with the run label ("fix 3
    <label>") or `review-triage`; never start fixing them, or a second pass, on
-   your own.
+   your own. After the report, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 ## Answers during a pass
 
