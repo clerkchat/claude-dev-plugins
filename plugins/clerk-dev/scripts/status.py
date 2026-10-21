@@ -442,7 +442,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     pass_steps = [s for s in pass_steps if not any(e["id"] in s and e["f"].get("Piece") in mspecs for e in (passes or []))]
     steps = first + pass_steps
     if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
-    if unlogged and specs:
+    if unlogged and any(r.get("type") in bd.BUILDABLE and r.get("status") == "active" for r in recs):
         steps.append(f"Log the {len(unlogged)} commit{plural(unlogged)} already built, each against the requirements it covers or the record it built, so progress is counted: \"log the built work\".")
         later = [s for s in later if not s.startswith("Next piece")]
     steps += later
