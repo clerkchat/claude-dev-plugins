@@ -147,6 +147,17 @@ still has an answer.
 same way: reuse what exists, keep one source of truth, and tidy the code before
 adding to it.
 
+**Bold with new code, careful with live code.** A skilled engineer treats code
+nobody runs yet differently from a path production depends on. Each branch
+says which is which: code it introduces, deployed code it is meant to change,
+and deployed code it should leave alone. New code is changed freely, with no
+compatibility shims or follow-up migrations, since nothing depends on it yet.
+Deployed code it means to change is changed minimally, with the rollout
+spelled out: old and new code side by side, jobs in flight, existing data.
+Anything else live is not touched without asking you first. Reviews judge
+the change the same way, so they don't ask for backward compatibility in code
+that has never shipped.
+
 **Saying "not now" on purpose.** Good ideas that are not for this branch are
 parked with why they matter and when to look again. The branch's stated purpose
 keeps the work in scope, and work another repository owes becomes a follow-up
