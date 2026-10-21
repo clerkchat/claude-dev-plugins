@@ -179,6 +179,10 @@ with the next one unless the user clears.
 If the user stops partway, everything is in the files; the next invocation
 resumes with whatever is still marked.
 
+When the last discussion is decided, look back over the pass as "Lessons
+from a discussion" in `skills/review/tracking.md` describes, from the decisions
+recorded in the report when the conversation was cleared partway.
+
 ## Recording a decision
 
 Two fields hold what was decided, and each has one job:

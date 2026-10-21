@@ -177,3 +177,6 @@ items waiting" in the `deliberate` skill describes.
 Records written while walking follow the `feature` skill's rules. When the user's answer carries guidance (a rule beyond this case), or says
 `guidance: ...`, record it as "Guidance from answers" in
 `skills/review/tracking.md` describes, and say so in one line.
+When the walk's last question is settled, look back over it as "Lessons
+from a discussion" in `skills/review/tracking.md` describes, before the next
+step starts.

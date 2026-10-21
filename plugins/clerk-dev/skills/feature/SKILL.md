@@ -162,6 +162,11 @@ and a proposal first for anything wider). Say in one line what was recorded.
 "What guidance have I given", "the rules for the harness": `records.py
 guidance <worktree> [--area <area>]`.
 
+When the last open question of a set put to the user is settled (a spec's or
+plan's open questions, or any other skill's discussion), look back over the
+whole discussion as "Lessons from a discussion" in `skills/review/tracking.md`
+describes, before the next step starts.
+
 ## Parked ideas
 
 When an idea comes up that is not for now ("cool, but later", "let's skip that

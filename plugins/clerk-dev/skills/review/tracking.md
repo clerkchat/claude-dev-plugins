@@ -252,6 +252,47 @@ capabilities wire in through explicit lists. Say if it is narrower than
 that." For a branch rule: "Added to this branch's guidance: do not report
 naming findings in generated files. Say if it reaches the whole feature."
 
+### Lessons from a discussion
+
+A discussion is a set of questions put to the user together: a spec's or
+plan's open questions, a design check's walk, the triage's discussions, a
+stopped piece with several questions, a pass's open items. When its last
+question is settled, and before the next step starts (a build, the next
+piece, the next pass), look back over the whole discussion once for guidance
+no single answer stated. This is the only time it happens; the rules above
+still record what an answer states as it comes.
+
+1. Gather the candidates. Look for:
+   - reasons the user gave that would decide other cases ("both humans and
+     agent-swarm read these reports");
+   - choices against a draft's or a brief's recommendation, and what made the
+     recommendation wrong;
+   - guidance or decisions cited during the discussion, and whether the outcome
+     honored them or showed their limit (a rule cited against the option the
+     user chose);
+   - gaps in the records the discussion exposed: a decision the built code no
+     longer matches, a term no record defines.
+2. Check each against the active guidance and decisions (`records.py guidance
+   <worktree>`, and the decisions the discussion touched). Say which it is:
+   - **new:** nothing active says it;
+   - **extends:** an active rule says part of it; widen that rule;
+   - **conflicts:** an active rule or decision says otherwise, or was applied
+     past its reason; propose superseding it with the limit stated, or keeping
+     it and treating this as a one-off, and recommend one;
+   - **records gap:** not guidance; say where the routing above sends it and
+     when (now, or a record update already planned).
+3. Propose them in one message: each as a rule that stands on its own, its
+   scope from the routing above, its kind from step 2, and for a conflict the
+   options with the recommendation first. Keep it to what would decide a
+   future case; drop observations that only explain this one.
+4. Record what the user accepts, in the words they settle on, through the
+   routing above, and say in one line each what was recorded. Then start the
+   next step.
+
+These are inferred, not said, so propose them and wait; never record one
+unasked. When nothing generalizes, say so in one line and move on. When the
+user says to skip it ("no lessons", "just build"), skip it without a word.
+
 ## Talking to the user
 
 The user works at the level of the feature: what it does, the choices in it,
