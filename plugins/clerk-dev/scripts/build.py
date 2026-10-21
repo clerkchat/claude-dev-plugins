@@ -105,16 +105,20 @@ def refind(wt, entries):
         else: unlinked.append(e)
     return relinked, unlinked
 
-def is_ancestor(wt, sha):
-    return git_run(wt, "merge-base", "--is-ancestor", sha, "HEAD").returncode == 0
+def is_ancestor(wt, sha, of="HEAD"):
+    return git_run(wt, "merge-base", "--is-ancestor", sha, of).returncode == 0
 
 def unlinked_reason(e):
     return f"\"{e['f']['Subject']}\"" if e["f"].get("Subject") else "no subject to re-find it by"
 
 def off_branch(wt, full):
-    if any(sha == full for sha, _ in branch_commits(wt)): return ""
-    if not is_ancestor(wt, full): return "HEAD does not reach it, so status lists the entry as unlinked until HEAD does or it is re-linked"
-    return "it is on the main branch, older than this branch's base" if branch_base(wt) else ""
+    own = branch_commits(wt)
+    if any(sha == full for sha, _ in own): return ""
+    if not is_ancestor(wt, full):
+        return "HEAD does not reach it, so status lists the entry as unlinked until HEAD does or it is re-linked" if own else "HEAD does not reach it, and nothing will flag that later"
+    base = branch_base(wt)
+    if not base: return ""
+    return "it is on the main branch, older than this branch's base" if is_ancestor(wt, full, base) else "it is a merge commit, which the branch's own commits leave out"
 
 def path(wt):
     exclude(wt)
