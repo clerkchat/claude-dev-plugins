@@ -212,7 +212,13 @@ progress from it, so a piece not logged is invisible there:
 - after committing: `build.py done <worktree> B3 --commit <sha> --covered
   "<the report's requirements line, as 4:done,5:partial: what is missing>"`,
   adding `--deviation "..."` for each one accepted;
-- when dropped: `build.py abandon <worktree> B3 --note "<why>"`.
+- when dropped: `build.py abandon <worktree> B3 --note "<why>"`;
+- after committing work that builds a decision, a plan step, or a whole spec
+  rather than requirements: `build.py built <worktree> R27 --commit <sha>`
+  (`R32.4` for a plan step). Any skill that commits does this when its brief
+  names a record the commit builds, and never cites the record in the commit
+  message. A rebase that changes the hash is followed by its subject; status
+  says when an entry needs re-linking by hand (`build.py relink`).
 
 When a decision takes a requirement out of a spec (moved to another spec,
 or no longer wanted), do not supersede the spec to delete one line: run
@@ -226,10 +232,11 @@ added and marked done in one go, so the progress stays whole.
 "Log the built work" (status suggests it when the branch has commits the log
 does not name): list the branch's commits since its base, read each one's
 message and the files it changed (`git show --stat`, and the diff only where
-the message does not say), match it to the spec's requirements, and log each
-group of commits that make one piece as a piece added and marked done, with
-the last commit and the requirements it covers, partial where the commit
-leaves part of a requirement for later. Show the mapping in a few lines
+the message does not say), match it to the spec's requirements or to the
+decision or plan step it built, and log each group of commits that make one
+piece as a piece added and marked done, with the last commit and the
+requirements it covers, partial where the commit leaves part of a requirement
+for later; a commit that built a record goes in with `built`. Show the mapping in a few lines
 before writing it. Commits that cover no requirement (merges, unrelated
 fixes) are left out, and say so in one line. Requirement
 status lives only here; the spec is not edited for it.
@@ -252,7 +259,8 @@ status lives only here; the spec is not edited for it.
    shape), and run the brief's tests yourself.
 3. Commit as step 6 of the `review-fix` skill describes: only the piece's
    files, a message that stands alone and describes the change, never
-   `.clerk-dev/` paths or record ids. Mark the piece done in the build log, and
+   `.clerk-dev/` paths or record ids. Mark the piece done in the build log (or log
+   the record it builds with `built`, as "The build log" describes), and
    tick the spec's open items it closes.
 4. Say one line: the piece, the commit, the tests, anything accepted, and the
    count it moves ("B15 done in 4c1e2ab, tests pass: R52 now 27 of 32").

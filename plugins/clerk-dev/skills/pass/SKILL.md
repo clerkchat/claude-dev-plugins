@@ -110,7 +110,9 @@ Follow step 6 of the `review-fix` skill for staging and messages: add only the
 files this pass changed, never anything under `.clerk-dev/` or files left out,
 and write messages that stand alone, describing the change ("Return early when
 the import has no contacts"), never the pass or its id. Never push or amend; a
-pass's range depends on its commits staying put.
+pass's range depends on its commits staying put. A commit that builds a record
+the pass's brief names is logged as "The build log" in the `writing-code`
+skill describes.
 
 ## Other requests
 

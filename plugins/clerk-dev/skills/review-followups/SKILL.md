@@ -109,7 +109,8 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    follows the repository's usual style and says what the client now does; the
    body, two or three sentences from the fixer's `summary`, says what changed on
    the other side (the contract, in plain words) and what this change does about
-   it.
+   it. When the brief names a record the follow-up builds, log it after the
+   commit as "The build log" in the `writing-code` skill describes.
 6. Close the item: `followups.py close <worktree> F3 --ref <sha>`. Any
    follow-ups the fixer listed for yet another repository are added with
    `followups.py add` to that repository's worktree, and its `contract:` line is

@@ -137,7 +137,8 @@ for nothing wider.
    log` who has
    never seen the report. The fixer's `summary` line is the starting point for
    the body. No push, no amend. Several findings in one request get one commit
-   each, in number order.
+   each, in number order. When the brief names a record the fix builds, log it
+   after the commit as "The build log" in the `writing-code` skill describes.
 7. Recheck immediately, as under Rechecking, against that commit.
 8. Write `<run>/resolution/<merged id>.md`, plain prose of a few short
    paragraphs, each standing alone:

@@ -393,7 +393,10 @@ in specs, one bullet each, citing the check or record.
 ### Gaps
 
 What the records lack: an area with decisions but no design, a piece with no
-spec, no plan.
+spec that the digest does not mark built, no plan. A decision or plan step the
+digest marks built is not a gap without a spec: write it under its area as
+built, citing the commit, and fill the Plan table's Built cell as `built,
+<sha>`.
 
 ### Disagreements
 
