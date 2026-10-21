@@ -55,6 +55,7 @@ Record frontmatter:
   ---
 """
 import argparse, datetime, importlib.util, os, re, subprocess, sys
+from typing import NamedTuple
 
 TYPES = ("brainstorm", "design", "decision", "guidance", "capabilities", "plan", "spec")
 STATUSES = ("active", "superseded", "discarded")
@@ -419,8 +420,11 @@ def names(wt, ids):
                 r = recs[X]; name = f"{r.get('type')}: {r.get('title')}" + ("" if r.get("status") in ("active", "") else f" ({r.get('status')})")
             elif re.fullmatch(r"R\d+\.\d+", X):
                 s, n = X.split(".")
-                _, items = load("build.py").spec_requirements(d, s)
-                if items and int(n) in items: name = f"requirement of {s}: {load('build.py').label(items[int(n)])}"
+                bm = load("build.py")
+                _, items = bm.spec_requirements(d, s)
+                _, step = plan_step(d, X)
+                if items and int(n) in items: name = f"requirement of {s}: {bm.label(items[int(n)])}"
+                elif step is not None: name = f"step {n} of plan {s}: {bm.step_piece(step)}"
             elif re.fullmatch(r"R\d+-\d+(\.Q\d+)?", X):
                 c, _, q = X.partition(".")
                 cp = os.path.join(d, "checks", c + ".md")
@@ -434,7 +438,7 @@ def names(wt, ids):
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
             elif re.fullmatch(r"[BM]\d+", X):
                 e = next((e for e in load("build.py").log_entries(here) if e["id"] == X), None)
-                if e: name = ("milestone: " if X[0] == "M" else "piece: ") + e["title"]
+                if e: name = ("milestone: " if X[0] == "M" else f"piece for {e['f']['Record']}: " if e["f"].get("Record") else "piece: ") + e["title"]
             elif re.fullmatch(r"P\d+", X):
                 e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if e["id"] == X), None)
                 if e: name = f"pass: {e['title']}"
@@ -508,20 +512,65 @@ def suggestions(d):
 def built_specs(rows):
     return {r.spec for r in rows if (r.items or r.dropped) and all(r.state.get(n, ("",))[0] == "done" for n in r.items)}
 
+class Built(NamedTuple):
+    specs: set
+    records: dict
+
+def ref_key(ref): return [int(x) for x in ref[1:].split(".")]
+
+def commits_by_record(bm, entries):
+    found = bm.built_records(entries)
+    return {ref: [e["f"]["Commit"] for e in found[ref]] for ref in sorted(found, key=ref_key)}
+
+def cited(refs):
+    return ", ".join(f"{ref} ({', '.join(cs)})" for ref, cs in refs.items())
+
 def build_log(d):
     bm = load_script("build.py")
     hub_wt = os.path.dirname(os.path.dirname(d))
     _, repos = workspace(hub_wt)
-    lines, built = [], set()
+    lines, direct, built = [], [], Built(set(), {})
     try:
         for w in dict.fromkeys([hub_wt] + list(repos.values())):
             if not os.path.exists(bm.log_path(w)): continue
-            rows = bm.progress(w, bm.log_entries(w))
+            entries = bm.log_entries(w)
+            rows = bm.progress(w, entries)
             lines += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(rows)]
-            built |= built_specs(rows)
+            built.specs.update(built_specs(rows))
+            mine = commits_by_record(bm, entries)
+            if mine: direct.append(f"{this_repo(w, repos)}: records built directly: {cited(mine)}")
+            for ref, cs in mine.items(): built.records.setdefault(ref, []).extend(cs)
     except SystemExit as e:
         return [f"(build log unreadable: {e})"], None
+    lines += direct + plan_lines(d, built, this_repo(hub_wt, repos))
     return lines or ["nothing built yet"], built
+
+def step_built(bm, ref, text, built):
+    named = re.findall(r"\bR\d+\b(?!\.\d)", bm.step_piece(text))
+    return ref in built.records or (bool(named) and all(x in built.specs or x in built.records for x in named))
+
+def steps_built(r, built):
+    bm = load_script("build.py")
+    steps = plan_steps(r)
+    return [n for n, text in steps.items() if step_built(bm, f"{r['id']}.{n}", text, built)], len(steps)
+
+def plan_lines(d, built, repo):
+    out = []
+    for r in records(d):
+        if r.get("type") != "plan" or r.get("status") != "active": continue
+        done, _ = steps_built(r, built)
+        if done: out.append(f"{r.get('repo') or repo}: {r['id']} steps built: {', '.join(map(str, done))}")
+    return out
+
+def built_mark(r, built):
+    if r["type"] not in load_script("build.py").BUILDABLE: return ""
+    if built is None: return "; built: unknown"
+    if r["type"] == "spec": return f"; built: {'yes' if r['id'] in built.specs else 'no'}"
+    if r["type"] == "decision":
+        cs = built.records.get(r["id"])
+        return f"; built: yes ({', '.join(cs)})" if cs else "; built: no"
+    done, total = steps_built(r, built)
+    return f"; built: {len(done)} of {total} steps" + (f" ({', '.join(map(str, done))})" if done else "")
 
 def idea_status(i):
     outcome = re.sub(r"^\d{4}-\d{2}-\d{2} ", "", i["fields"].get("Outcome", ""))
@@ -539,8 +588,7 @@ def digest(d):
     lines, built = build_log(d)
     for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, int(r["id"][1:]))):
         _, body = parse(r["path"])
-        mark = f"; built: {'unknown' if built is None else 'yes' if r['id'] in built else 'no'}" if r["type"] == "spec" else ""
-        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'}{mark})", body.strip(), ""]
+        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'}{built_mark(r, built)})", body.strip(), ""]
     out += ["# Brainstorms (history; one line each)", ""]
     out += [f"- {r['id']} ({r.get('area') or 'feature-wide'}): {r.get('title', '')}. {gist(r)}" for r in rs if r.get("type") == "brainstorm"] + [""]
     out += ["# Superseded or discarded (ids only)", "", ", ".join(f"{r['id']} {r.get('status')}" for r in rs if r.get("status") in ("superseded", "discarded")) or "none", ""]

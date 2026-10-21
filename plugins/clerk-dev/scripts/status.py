@@ -224,10 +224,14 @@ class BuildLog(NamedTuple):
     path: str
     entries: list
     err: str | None
+    relinked: list
+    unlinked: list
 
 def read_build(wt, name=""):
-    try: return BuildLog(name, wt, load_script("build.py").log_entries(wt), None)
-    except SystemExit as e: return BuildLog(name, wt, [], str(e))
+    try:
+        found = load_script("build.py").log(wt)
+        return BuildLog(name, wt, found.entries, None, found.relinked, found.unlinked)
+    except SystemExit as e: return BuildLog(name, wt, [], str(e), [], [])
 
 def builder_logs(wt, rows):
     return [read_build(p, name) for name, p in builders(wt, rows)]
@@ -251,6 +255,17 @@ def as_bullets(lines, suffix=""):
 
 def progress_list(rows):
     return as_bullets(load_script("build.py").progress_lines(rows))
+
+def relink_lines(wt, log):
+    lines, steps = [], []
+    n = len(log.relinked)
+    if n: lines.append(f"- Build log: {n} entr{'y' if n == 1 else 'ies'} re-pointed after a rebase ({', '.join(log.relinked)})")
+    for e in log.unlinked:
+        subject = f"\"{e['f']['Subject']}\"" if e["f"].get("Subject") else "no subject to re-find it by"
+        lines.append(f"- Build log: {e['id']} unlinked, its commit {e['f']['Commit']} is not on the branch: {subject}")
+        steps.append(f"Re-link {e['id']} ({e['title']}) by hand to the commit that built it: \"re-link {e['id']} to <sha>\".")
+    if load_script("build.py").merged(wt): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
+    return lines, steps
 
 def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     bd = load_script("build.py")
@@ -276,6 +291,8 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     out.append("")
     out.append("**Implementation:**" + ("" if entries else " nothing built in this worktree yet."))
     out += lines
+    rlines, rsteps = relink_lines(wt, mine) if entries else ([], [])
+    out += rlines
     out += [f"- {o}" for o in others]
     mlines, msteps = bd.milestone_lines(wt, entries) if entries else ([], [])
     if mlines:
@@ -288,6 +305,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
             first.append(f"Answer {e['id']} ({e['title']})'s question, record the answer, then resend it: {q}")
         elif st == "briefed":
             first.append(f"Land {e['id']} ({e['title']}): briefed and not committed; finish it, resend it, or abandon it.")
+    first += rsteps
     built = [e for e in entries if e["f"].get("Status") == "done" and any(bd.names_commit(e, s) for s, _ in unreviewed)]
     if built:
         later.insert(0, f"Check the {len(built)} piece{plural(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass's narrow check, or \"re-review the branch\".")
@@ -385,7 +403,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     try: d = rc.fdir(wt)
     except SystemExit: d = None
     recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
-    logged = {e["f"].get("Spec") for e in entries}
+    logged = {e["f"].get("Spec") or e["f"].get("Record") for e in entries}
     specs = [r for r in recs if r.get("type") == "spec" and r.get("status") == "active" and (r.get("repo") in ("", None, me) or r["id"] in logged)]
     accounted = logged.union(*elsewhere.values())
     unlogged_specs = [r for r in specs if r["id"] not in accounted]
@@ -425,7 +443,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     steps = first + pass_steps
     if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
     if unlogged and specs:
-        steps.append(f"Log the {len(unlogged)} commit{plural(unlogged)} already built against the specs' requirements, so progress is counted: \"log the built work\".")
+        steps.append(f"Log the {len(unlogged)} commit{plural(unlogged)} already built, each against the requirements it covers or the record it built, so progress is counted: \"log the built work\".")
         later = [s for s in later if not s.startswith("Next piece")]
     steps += later
     if builds_elsewhere:
@@ -506,6 +524,10 @@ def area_states(recs):
         out.append((a or "feature-wide", decs, note))
     return out
 
+def built_without_spec(row):
+    m = re.match(r"built\b[\s,:;]*(.*)", row.get("built", ""), re.I)
+    return m.group(1).strip(" ()") if m else None
+
 def design_view(wt, out, logs):
     """Whether the feature is ready to build: readiness per piece, each area's
     decisions and design, open questions by area, and the overview's gaps and
@@ -528,6 +550,9 @@ def design_view(wt, out, logs):
     for row in ov["plan"]:
         piece = row.get("piece", "?"); sid = next(iter(re.findall(r"\bR\d+\b", row.get("spec", ""))), "")
         r = specs.get(sid)
+        built_by = built_without_spec(row)
+        if not r and built_by is not None:
+            out.append(f"- {piece}: built without a spec" + (f" ({built_by})" if built_by else "")); continue
         if not r:
             out.append(f"- {piece}: no spec"); nospec.append(piece); continue
         named.add(sid); f = spec_facts(d, r, cs, it)

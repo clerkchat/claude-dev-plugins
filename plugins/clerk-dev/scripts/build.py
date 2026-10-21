@@ -562,6 +562,8 @@ def branch_commits(wt):
     base = branch_base(wt)
     return [tuple(l.split("\t", 1)) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base else []
 
+def merged(wt): return bool(branch_base(wt)) and not branch_commits(wt)
+
 def names_commit(entry, sha):
     return bool(entry["f"].get("Commit")) and sha.startswith(entry["f"]["Commit"])
 
