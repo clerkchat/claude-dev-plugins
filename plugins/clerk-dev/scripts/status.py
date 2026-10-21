@@ -61,15 +61,11 @@ gone or whose plan was superseded or discarded. It changes nothing.
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
-from records import load_script
+from records import git, load_script
 
 sf = load_script("stale-findings.py")
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
-
-def git(repo, *args):
-    r = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
-    return r.stdout.strip() if r.returncode == 0 else ""
 
 def plural(x):
     n = x if isinstance(x, int) else len(x)
@@ -152,7 +148,7 @@ def milestone_drift(wt, d):
     rc, bd = load_script("records.py"), load_script("build.py")
     out = []
     try:
-        for m in bd.milestones(bd.read(os.path.join(wt, ".clerk-dev", "build.md"))):
+        for m in bd.milestones(bd.log_entries(wt)):
             ref = m["f"].get("Plan")
             if not ref or m["f"].get("Status") == "abandoned" or bd.milestone_view(wt, m)[2]: continue
             r, text = rc.plan_step(d, ref)
@@ -180,7 +176,7 @@ def setup_gaps(wt, rows):
     if d and not featured:
         elsewhere = hub_feature_elsewhere(wt, rows)
         passes, _ = read_passes(wt)
-        try: built = load_script("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
+        try: built = load_script("build.py").log_entries(wt)
         except SystemExit: built = []
         if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to .clerk-dev/review-workspace.md (skills/review/workspace-manifest.md)")
         elif built or passes: gaps.append("this worktree has a " + ("build log" if built else "pass log") + " but no feature; start one: records.py start <worktree> \"<name>\" (the feature skill)")
@@ -197,7 +193,7 @@ def setup_lines(gaps):
 
 def handoff_lines(wt, passes):
     """The Note of each open pass and open piece."""
-    try: pieces = load_script("build.py").read(os.path.join(wt, ".clerk-dev", "build.md"))
+    try: pieces = load_script("build.py").log_entries(wt)
     except SystemExit: pieces = []
     live = [e for e in passes if e["f"].get("Status") == "open"] + [e for e in pieces if e["f"].get("Status") in ("briefed", "stopped")]
     notes = [f"- {e['id']} {e['title']}: {e['f']['Note']}" for e in live if e["f"].get("Note")]
@@ -246,14 +242,14 @@ def build_block(wt, rows, out, unreviewed):
     bd = load_script("build.py")
     first, later = [], []
     try:
-        entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
+        entries = bd.log_entries(wt)
         lines = bd.progress_lines(wt) if entries else []
     except SystemExit as e:
         out.append(""); out.append(f"**Implementation:** the build log could not be read: {e}"); return first, later
     others = []
     for rname, other in builders(wt, rows):
         try:
-            if bd.read(os.path.join(other, ".clerk-dev", "build.md")):
+            if bd.log_entries(other):
                 others += [f"{rname}: {l.strip()}" for l in bd.progress_lines(other) if not l.startswith(" ")]
         except SystemExit: others.append(f"{rname}: build log unreadable")
     if not entries and not others: return first, later
@@ -272,8 +268,8 @@ def build_block(wt, rows, out, unreviewed):
             first.append(f"Answer {e['id']} ({e['title']})'s question, record the answer, then resend it: {q}")
         elif st == "briefed":
             first.append(f"Land {e['id']} ({e['title']}): briefed and not committed; finish it, resend it, or abandon it.")
-    shas = [s for s, _ in unreviewed]
-    built = [e for e in entries if e["f"].get("Status") == "done" and e["f"].get("Commit") and any(s.startswith(e["f"]["Commit"]) for s in shas)]
+    named = bd.commits_of([e for e in entries if e["f"].get("Status") == "done"], [s for s, _ in unreviewed])
+    built = [e for e in entries if any(e in es for es in named.values())]
     if built:
         later.insert(0, f"Check the {len(built)} piece{plural(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass's narrow check, or \"re-review the branch\".")
     for s, r, items, state, mine in bd.progress(wt) if entries else []:
@@ -358,11 +354,6 @@ def builders(wt, rows):
             out.append((f"{repo_name(p, [])} ({os.path.basename(p)})", p)); seen.add(p)
     return out
 
-def branch_base(wt):
-    """The merge base with the remote main branch, or "" when there is none."""
-    main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
-    return git(wt, "merge-base", "HEAD", main) if main else ""
-
 def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     """Where the building stands: progress per spec this worktree builds (from
     the build log, or the spec's size when nothing is logged), commits not in
@@ -370,7 +361,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     Returns the next steps, building only."""
     bd = load_script("build.py"); rc = load_script("records.py"); it = load_script("items.py")
     first, later = build_block(wt, rows, out, unreviewed)
-    try: entries = bd.read(os.path.join(wt, ".clerk-dev", "build.md"))
+    try: entries = bd.log_entries(wt)
     except SystemExit: entries = []
     if entries:
         i = next((k for k, l in enumerate(out) if l.startswith("**Implementation:**")), None)
@@ -392,11 +383,11 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
         for r in unlogged_specs:
             _, items = bd.spec_requirements(d, r["id"])
             out.append(f"- {r['id']} {short(r.get('title', ''), 60)}: {len(items or {})} requirements, none logged as built")
-    base = branch_base(wt)
-    done_shas = [e["f"]["Commit"] for e in entries if e["f"].get("Commit")]
-    builds_elsewhere = not entries and any(os.path.exists(os.path.join(p, ".clerk-dev", "build.md")) for _, p in builders(wt, rows))
+    base = bd.branch_base(wt)
+    builds_elsewhere = not entries and any(os.path.exists(bd.log_path(p)) for _, p in builders(wt, rows))
     commits = [l.split("\t", 1) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base and not builds_elsewhere else []
-    unlogged = [(s, subj) for s, subj in commits if not any(s.startswith(c) for c in done_shas)]
+    named = bd.commits_of(entries, [s for s, _ in commits])
+    unlogged = [(s, subj) for s, subj in commits if not named[s]]
     if commits:
         out.append(f"- Commits on the branch: {len(commits)}, {len(unlogged)} not in the build log" + (":" if unlogged else "."))
         for s, subj in unlogged[:5]: out.append(f"  - `{s[:9]}` {short(subj, 80)}")
@@ -429,7 +420,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
         later = [s for s in later if not s.startswith("Next piece")]
     steps += later
     if builds_elsewhere:
-        where = ", ".join(os.path.basename(p) for _, p in builders(wt, rows) if os.path.exists(os.path.join(p, ".clerk-dev", "build.md")))
+        where = ", ".join(os.path.basename(p) for _, p in builders(wt, rows) if os.path.exists(bd.log_path(p)))
         steps.append(f"The building happens in {where}; its next steps are in a status asked there.")
     elif not entries and not unlogged and unlogged_specs:
         steps.append(f"Start building {unlogged_specs[0]['id']}: cut its requirements into pieces and brief the first (the writing-code skill).")

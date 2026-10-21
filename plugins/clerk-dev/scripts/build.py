@@ -46,7 +46,7 @@ Entry format:
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 """
 import argparse, datetime, os, re, subprocess, sys, tempfile
-from records import load_script
+from records import exclude, git, load_script, record_id
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
@@ -62,15 +62,13 @@ edit with care.
 ENTRY_RE = re.compile(r"^- \[( |x)\] ([BM]\d+)\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
 
+def log_path(wt): return os.path.join(wt, ".clerk-dev", "build.md")
+
+def log_entries(wt): return read(log_path(wt))
+
 def path(wt):
-    d = os.path.join(wt, ".clerk-dev"); os.makedirs(d, exist_ok=True)
-    if subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"]).returncode != 0:
-        common = subprocess.run(["git", "-C", wt, "rev-parse", "--git-common-dir"], capture_output=True, text=True).stdout.strip()
-        if common:
-            exf = os.path.join(common if os.path.isabs(common) else os.path.join(wt, common), "info", "exclude")
-            os.makedirs(os.path.dirname(exf), exist_ok=True)
-            with open(exf, "a") as fh: fh.write(".clerk-dev/\n")
-    return os.path.join(d, "build.md")
+    exclude(wt)
+    return log_path(wt)
 
 def read(p):
     if not os.path.exists(p): return []
@@ -114,6 +112,9 @@ def reqs_of(e):
 def fmt_reqs(rs):
     return ", ".join(f"{n}" + (f" {st}" if st else "") + (f" ({note})" if note else "") for n, st, note in rs)
 
+def next_id(entries, prefix):
+    return prefix + str(max([int(e["id"][1:]) for e in entries if e["id"].startswith(prefix)] or [0]) + 1)
+
 def find(entries, bid):
     bid = bid.upper() if re.match(r"[BMbm]\d+$", bid) else f"B{bid}"
     e = next((e for e in entries if e["id"] == bid), None)
@@ -143,21 +144,24 @@ def progress(wt, spec=None):
     this worktree's log, for every spec the log names (or the one given)."""
     rc = load_script("records.py")
     d = rc.fdir(wt)
-    entries = pieces(read(os.path.join(wt, ".clerk-dev", "build.md")))
+    entries = pieces(log_entries(wt))
     specs = [spec] if spec else sorted({e["f"].get("Spec") for e in entries if e["f"].get("Spec")}, key=lambda s: int(s[1:]))
     out = []
     for s in specs:
         r, items = spec_requirements(d, s)
-        state = {}
         mine = [e for e in entries if e["f"].get("Spec") == s]
         items = {n: t for n, t in (items or {}).items() if n not in dropped_of(mine)}
-        for e in mine:
-            if e["f"].get("Status") != "done": continue
-            for n, st, note in reqs_of(e):
-                st = st or "done"
-                if state.get(n, ("",))[0] != "done": state[n] = (st, note, e["id"])
-        out.append((s, r, items, state, mine))
+        out.append((s, r, items, requirement_states(mine), mine))
     return out
+
+def requirement_states(mine):
+    state = {}
+    for e in mine:
+        if e["f"].get("Status") != "done": continue
+        for n, st, note in reqs_of(e):
+            st = st or "done"
+            if state.get(n, ("",))[0] != "done": state[n] = (st, note, e["id"])
+    return state
 
 def progress_lines(wt, spec=None):
     lines = []
@@ -303,7 +307,7 @@ def milestone_view(wt, m):
     return rows, nxt, ready
 
 def milestone_lines(wt):
-    entries = read(os.path.join(wt, ".clerk-dev", "build.md"))
+    entries = log_entries(wt)
     out, steps = [], []
     for m in milestones(entries):
         if m["f"].get("Status") == "abandoned": continue
@@ -335,45 +339,45 @@ def main():
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
     load_script("records.py").guard(a.wt)
-    p = path(a.wt); entries = read(p); today = datetime.date.today().isoformat()
+    p = path(a.wt); entries = log_entries(a.wt); today = datetime.date.today().isoformat()
 
     if a.cmd == "add":
-        spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
+        spec = record_id(a.spec)
         nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
         if not nums: sys.exit("--reqs names no requirement numbers")
-        n = max([int(e["id"][1:]) for e in pieces(entries)] or [0]) + 1
-        entries.append({"id": f"B{n}", "title": a.title.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
+        bid = next_id(entries, "B")
+        entries.append({"id": bid, "title": a.title.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
             "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Model": f"{a.model} {a.effort}",
             "Status": "briefed", "Attempts": "1", "Started": today}})
-        write(p, entries); print(f"B{n} briefed: {spec} requirements {', '.join(map(str, nums))}")
+        write(p, entries); print(f"{bid} briefed: {spec} requirements {', '.join(map(str, nums))}")
         return
     if a.cmd == "drop":
-        spec = a.spec.upper() if a.spec.upper().startswith("R") else f"R{a.spec}"
+        spec = record_id(a.spec)
         nums = sorted({int(x) for x in re.findall(r"\d+", a.reqs.replace(spec + ".", ""))})
         if not nums: sys.exit("--reqs names no requirement numbers")
         _, items = spec_requirements(load_script("records.py").fdir(a.wt), spec)
         if items is None: sys.exit(f"{spec} not found in the hub")
         unknown = [n for n in nums if n not in items]
         if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")
-        n = max([int(e["id"][1:]) for e in pieces(entries)] or [0]) + 1
-        entries.append({"id": f"B{n}", "title": f"Drop {compress(spec, nums)}", "multi": {k: [] for k in REPEATABLE}, "f": {
+        bid = next_id(entries, "B")
+        entries.append({"id": bid, "title": f"Drop {compress(spec, nums)}", "multi": {k: [] for k in REPEATABLE}, "f": {
             "Spec": spec, "Requirements": ", ".join(map(str, nums)), "Status": "dropped", "Started": today, "Note": a.why}})
-        write(p, entries); print(f"B{n} dropped: {compress(spec, nums)}")
+        write(p, entries); print(f"{bid} dropped: {compress(spec, nums)}")
         return
     if a.cmd == "milestone":
         step, text = plan_step_of(a.wt, a.step) if a.step else (None, "")
         spec, piece = a.spec or step_spec(text), a.piece or step_piece(text)
         if not spec or not piece: sys.exit(f"step {step} names no spec; add --spec" if step else "give --step, or --spec and --piece")
-        spec = spec.upper() if spec.upper().startswith("R") else f"R{spec}"
+        spec = record_id(spec)
         plan = [x.strip() for x in a.passes.split(",") if x.strip()]
         known = catalogue()
         bad = [x for x in plan if known and x not in known]
         if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
         req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
-        n = max([int(e["id"][1:]) for e in milestones(entries)] or [0]) + 1
-        entries.append({"id": f"M{n}", "title": piece.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
+        mid = next_id(entries, "M")
+        entries.append({"id": mid, "title": piece.rstrip("."), "multi": {k: [] for k in REPEATABLE}, "f": {
             "Spec": spec, "Plan": step, "Passes": ", ".join(plan), "Required": ", ".join(req), "Started": today}})
-        write(p, entries); print(f"M{n} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
+        write(p, entries); print(f"{mid} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
         return
     if a.cmd == "skip":
         m = find(entries, a.mid)
@@ -444,6 +448,14 @@ def catalogue():
         m = re.match(r"^\|\s*([a-z][a-z-]*)\s*\|", line)
         if m and m.group(1) not in ("pass", "category"): names.append(m.group(1))
     return names
+
+def branch_base(wt):
+    """The merge base with the remote main branch, or "" when there is none."""
+    main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
+    return git(wt, "merge-base", "HEAD", main) if main else ""
+
+def commits_of(entries, shas):
+    return {s: [e for e in entries if e["f"].get("Commit") and s.startswith(e["f"]["Commit"])] for s in shas}
 
 def git_short(wt, sha):
     return subprocess.run(["git", "-C", wt, "rev-parse", "--short", sha], capture_output=True, text=True).stdout.strip() or sha

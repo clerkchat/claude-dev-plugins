@@ -125,8 +125,11 @@ def records(d):
     out = [parse(os.path.join(rd, f))[0] for f in os.listdir(rd) if f.endswith(".md")]
     return sorted((r for r in out if re.fullmatch(r"R\d+", r.get("id", ""))), key=lambda r: int(r["id"][1:]))
 
+def record_id(text):
+    return text.upper() if text.upper().startswith("R") else f"R{text}"
+
 def find(d, rid):
-    rid = rid.upper() if rid.upper().startswith("R") else f"R{rid}"
+    rid = record_id(rid)
     r = next((r for r in records(d) if r["id"] == rid), None)
     if not r: sys.exit(f"{rid} not found in {d}/records")
     return r
@@ -430,7 +433,7 @@ def names(wt, ids):
                 it = next((i for i in ideas(d) if i["id"] == X), None)
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
             elif re.fullmatch(r"[BM]\d+", X):
-                e = next((e for e in load("build.py").read(os.path.join(here, ".clerk-dev", "build.md")) if e["id"] == X), None)
+                e = next((e for e in load("build.py").log_entries(here) if e["id"] == X), None)
                 if e: name = ("milestone: " if X[0] == "M" else "piece: ") + e["title"]
             elif re.fullmatch(r"P\d+", X):
                 e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if e["id"] == X), None)
@@ -502,6 +505,10 @@ def suggestions(d):
         if through is None or old != basis: out.append("The overview is missing or stale; refresh it.")
     return out
 
+def built_specs(wt):
+    bm = load_script("build.py")
+    return {s for s, _, items, state, mine in bm.progress(wt) if (items or bm.dropped_of(mine)) and all(state.get(n, ("",))[0] == "done" for n in items)}
+
 def build_log(d):
     bm = load_script("build.py")
     hub_wt = os.path.dirname(os.path.dirname(d))
@@ -509,9 +516,9 @@ def build_log(d):
     lines, built = [], set()
     try:
         for w in dict.fromkeys([hub_wt] + list(repos.values())):
-            if not os.path.exists(os.path.join(w, ".clerk-dev", "build.md")): continue
+            if not os.path.exists(bm.log_path(w)): continue
             lines += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(w)]
-            built |= {s for s, _, items, state, mine in bm.progress(w) if (items or bm.dropped_of(mine)) and all(state.get(n, ("",))[0] == "done" for n in items)}
+            built |= built_specs(w)
     except SystemExit as e:
         return [f"(build log unreadable: {e})"], None
     return lines or ["nothing built yet"], built
