@@ -324,7 +324,8 @@ def buildable(wt, ref):
     r = next((r for r in rc.records(rc.fdir(wt)) if r["id"] == ref), None)
     if not r: sys.exit(f"{ref} is not a record in the hub")
     if r.get("status") != "active": sys.exit(f"{ref} is {r.get('status')}" + (f" by {r['superseded_by']}; build that record instead" if r.get("superseded_by") else ""))
-    if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan, a plan step, or a spec")
+    if r.get("type") == "plan": sys.exit(f"{ref} is a plan; log its steps instead, such as {ref}.1")
+    if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan step, or a spec")
     return ref, r, r.get("title", "")
 
 def built_records(entries):
