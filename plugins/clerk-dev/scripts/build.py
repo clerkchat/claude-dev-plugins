@@ -454,8 +454,8 @@ def branch_base(wt):
     main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
     return git(wt, "merge-base", "HEAD", main) if main else ""
 
-def commits_of(entries, shas):
-    return {s: [e for e in entries if e["f"].get("Commit") and s.startswith(e["f"]["Commit"])] for s in shas}
+def names_commit(entry, sha):
+    return bool(entry["f"].get("Commit")) and sha.startswith(entry["f"]["Commit"])
 
 def git_short(wt, sha):
     return subprocess.run(["git", "-C", wt, "rev-parse", "--short", sha], capture_output=True, text=True).stdout.strip() or sha

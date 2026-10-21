@@ -268,8 +268,7 @@ def build_block(wt, rows, out, unreviewed):
             first.append(f"Answer {e['id']} ({e['title']})'s question, record the answer, then resend it: {q}")
         elif st == "briefed":
             first.append(f"Land {e['id']} ({e['title']}): briefed and not committed; finish it, resend it, or abandon it.")
-    named = bd.commits_of([e for e in entries if e["f"].get("Status") == "done"], [s for s, _ in unreviewed])
-    built = [e for e in entries if any(e in es for es in named.values())]
+    built = [e for e in entries if e["f"].get("Status") == "done" and any(bd.names_commit(e, s) for s, _ in unreviewed)]
     if built:
         later.insert(0, f"Check the {len(built)} piece{plural(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass's narrow check, or \"re-review the branch\".")
     for s, r, items, state, mine in bd.progress(wt) if entries else []:
@@ -386,8 +385,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     base = bd.branch_base(wt)
     builds_elsewhere = not entries and any(os.path.exists(bd.log_path(p)) for _, p in builders(wt, rows))
     commits = [l.split("\t", 1) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base and not builds_elsewhere else []
-    named = bd.commits_of(entries, [s for s, _ in commits])
-    unlogged = [(s, subj) for s, subj in commits if not named[s]]
+    unlogged = [(s, subj) for s, subj in commits if not any(bd.names_commit(e, s) for e in entries)]
     if commits:
         out.append(f"- Commits on the branch: {len(commits)}, {len(unlogged)} not in the build log" + (":" if unlogged else "."))
         for s, subj in unlogged[:5]: out.append(f"  - `{s[:9]}` {short(subj, 80)}")
