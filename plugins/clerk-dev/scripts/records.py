@@ -505,9 +505,8 @@ def suggestions(d):
         if through is None or old != basis: out.append("The overview is missing or stale; refresh it.")
     return out
 
-def built_specs(wt, entries):
-    bm = load_script("build.py")
-    return {s for s, _, items, state, mine in bm.progress(wt, entries) if (items or bm.dropped_of(mine)) and all(state.get(n, ("",))[0] == "done" for n in items)}
+def built_specs(rows):
+    return {r.spec for r in rows if (r.items or r.dropped) and all(r.state.get(n, ("",))[0] == "done" for n in r.items)}
 
 def build_log(d):
     bm = load_script("build.py")
@@ -517,9 +516,9 @@ def build_log(d):
     try:
         for w in dict.fromkeys([hub_wt] + list(repos.values())):
             if not os.path.exists(bm.log_path(w)): continue
-            entries = bm.log_entries(w)
-            lines += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(w, entries)]
-            built |= built_specs(w, entries)
+            rows = bm.progress(w, bm.log_entries(w))
+            lines += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(rows)]
+            built |= built_specs(rows)
     except SystemExit as e:
         return [f"(build log unreadable: {e})"], None
     return lines or ["nothing built yet"], built

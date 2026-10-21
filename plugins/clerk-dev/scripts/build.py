@@ -46,6 +46,7 @@ Entry format:
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 """
 import argparse, datetime, os, re, sys, tempfile
+from typing import NamedTuple
 from records import exclude, git, load_script, record_id
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -157,19 +158,27 @@ def spec_requirements(hub_dir, spec_id):
 def dropped_of(mine):
     return {n: e for e in mine if e["f"].get("Status") == "dropped" for n, _, _ in reqs_of(e)}
 
+class SpecProgress(NamedTuple):
+    spec: str
+    record: dict
+    items: dict
+    state: dict
+    pieces: list
+    dropped: dict
+
 def progress(wt, entries, spec=None):
-    """Per spec: (record, {n: text}, {n: (state, note, piece id)}, pieces) from
-    this worktree's log, for every spec the log names (or the one given)."""
     rc = load_script("records.py")
     d = rc.fdir(wt)
     entries = pieces(entries)
     specs = [spec] if spec else sorted({e["f"].get("Spec") for e in entries if e["f"].get("Spec")}, key=lambda s: int(s[1:]))
     out = []
     for s in specs:
-        r, items = spec_requirements(d, s)
+        r, texts = spec_requirements(d, s)
+        texts = texts or {}
         mine = [e for e in entries if e["f"].get("Spec") == s]
-        items = {n: t for n, t in (items or {}).items() if n not in dropped_of(mine)}
-        out.append((s, r, items, requirement_states(mine), mine))
+        gone = dropped_of(mine)
+        items = {n: t for n, t in texts.items() if n not in gone}
+        out.append(SpecProgress(s, r, items, requirement_states(mine), mine, {n: (e, texts.get(n, "")) for n, e in gone.items()}))
     return out
 
 def requirement_states(mine):
@@ -181,9 +190,9 @@ def requirement_states(mine):
             if state.get(n, ("",))[0] != "done": state[n] = (st, note, e["id"])
     return state
 
-def progress_lines(wt, entries, spec=None):
+def progress_lines(rows):
     lines = []
-    for s, r, items, state, mine in progress(wt, entries, spec):
+    for s, r, items, state, mine, dropped in rows:
         title = r.get("title", "") if r else "(not found in the hub)"
         total = len(items)
         done = [n for n, (st, _, _) in state.items() if st == "done"]
@@ -193,7 +202,7 @@ def progress_lines(wt, entries, spec=None):
         left = [n for n in sorted(items) if n not in state and n not in busy]
         head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the spec lists none)"
         if partial: head += f", {len(partial)} partial ({', '.join(f'{s}.{n}' for n in sorted(partial))})"
-        if dropped_of(mine): head += f", {len(dropped_of(mine))} dropped"
+        if dropped: head += f", {len(dropped)} dropped"
         lines.append(head)
         if busy - set(state): lines.append(f"  in progress: {compress(s, sorted(busy - set(state)))}")
         if left: lines.append(f"  not started: {compress(s, left)}")
@@ -217,22 +226,21 @@ def label(text, limit=72):
     if cut.count("(") > cut.count(")"): cut = cut[:cut.rfind("(")].rstrip()
     return cut.rstrip(",;:(") + "…"
 
-def checklist_lines(wt, entries, spec=None):
+def checklist_lines(rows):
     """Per spec: a heading line with the count, then one checkbox per
     requirement: [x] done (and the piece), [ ] partial, in progress, or not
     started, with what is missing or which piece is on it."""
     out = []
-    for s, r, items, state, mine in progress(wt, entries, spec):
+    for s, r, items, state, mine, gone in rows:
         title = r.get("title", "") if r else "(not found in the hub)"
         live = [e for e in mine if e["f"].get("Status") in ("briefed", "stopped")]
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
         done = sum(1 for v in state.values() if v[0] == "done")
         out.append(f"{s} {title}: {done} of {len(items)} done")
-        _, all_items = spec_requirements(load_script("records.py").fdir(wt), s)
-        gone = dropped_of(mine)
         for n in sorted(set(items) | set(gone)):
             if n in gone:
-                out.append(f"- [-] {n}. {label((all_items or {}).get(n, ''))} (dropped, {gone[n]['id']}: {gone[n]['f'].get('Note', '')})"); continue
+                e, text = gone[n]
+                out.append(f"- [-] {n}. {label(text)} (dropped, {e['id']}: {e['f'].get('Note', '')})"); continue
             st, note, by = state.get(n, (None, "", None))
             if st == "done": out.append(f"- [x] {n}. {label(items[n])} ({by})")
             elif n in busy:
@@ -395,7 +403,7 @@ def main():
         m["multi"]["Skipped"].append(f"{a.focus}: {a.why}"); write(p, entries); print(f"{m['id']}: {a.focus} skipped")
         return
     if a.cmd == "checklist":
-        print("\n".join(checklist_lines(a.wt, entries, a.spec.upper() if a.spec else None)) or "no pieces logged")
+        print("\n".join(checklist_lines(progress(a.wt, entries, a.spec.upper() if a.spec else None))) or "no pieces logged")
         return
     if a.cmd == "milestones":
         lines, steps = milestone_lines(a.wt, entries)
@@ -409,7 +417,7 @@ def main():
                 print(f"{e['id']} {e['title']}  [{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
                       + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
         else:
-            print("\n".join(progress_lines(a.wt, entries, a.spec.upper() if a.spec else None)) or "no pieces logged")
+            print("\n".join(progress_lines(progress(a.wt, entries, a.spec.upper() if a.spec else None))) or "no pieces logged")
         return
     e = find(entries, a.bid)
     if a.cmd == "done":

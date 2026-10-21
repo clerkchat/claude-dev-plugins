@@ -61,6 +61,7 @@ gone or whose plan was superseded or discarded. It changes nothing.
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
+from typing import NamedTuple
 from records import git, load_script
 
 sf = load_script("stale-findings.py")
@@ -218,12 +219,18 @@ def read_passes(wt):
     try: return load_script("passes.py").read(p), None
     except SystemExit as e: return [], str(e)
 
-def read_build(wt):
-    try: return load_script("build.py").log_entries(wt), None
-    except SystemExit as e: return [], str(e)
+class BuildLog(NamedTuple):
+    name: str
+    path: str
+    entries: list
+    err: str | None
+
+def read_build(wt, name=""):
+    try: return BuildLog(name, wt, load_script("build.py").log_entries(wt), None)
+    except SystemExit as e: return BuildLog(name, wt, [], str(e))
 
 def builder_logs(wt, rows):
-    return [(name, p, *read_build(p)) for name, p in builders(wt, rows)]
+    return [read_build(p, name) for name, p in builders(wt, rows)]
 
 def pass_word(e):
     """A pass's state in a few words: open, ended, or its check's result."""
@@ -242,21 +249,26 @@ def pass_line(e):
 def as_bullets(lines, suffix=""):
     return [f"- {l.strip()}{suffix}" if not l.startswith(" ") else f"  - {l.strip()}" for l in lines]
 
-def progress_list(wt, entries):
-    return as_bullets(load_script("build.py").progress_lines(wt, entries))
+def progress_list(rows):
+    return as_bullets(load_script("build.py").progress_lines(rows))
 
 def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     bd = load_script("build.py")
     first, later, elsewhere = [], [], {}
     others = []
-    for rname, other, es, err in theirs:
-        try: heads = [l for l in bd.progress_lines(other, es) if not l.startswith(" ")] if es else []
-        except SystemExit as e: heads, err = [], str(e)
-        if es: elsewhere[other] = {l.split(" ", 1)[0] for l in heads}
-        others += [f"{rname}: build log unreadable"] if err else [f"{rname}: {l.strip()}" for l in heads]
-    entries, err = mine
-    if not err:
-        try: lines = render(wt, entries) if entries else []
+    for log in theirs:
+        rows, err = [], log.err
+        if log.entries and not err:
+            try: rows = bd.progress(log.path, log.entries)
+            except SystemExit as e: err = str(e)
+        if err:
+            others.append(f"{log.name}: build log unreadable"); continue
+        if log.entries: elsewhere[log.path] = {r.spec for r in rows}
+        others += [f"{log.name}: {l.strip()}" for l in bd.progress_lines(rows) if not l.startswith(" ")]
+    entries, err = mine.entries, mine.err
+    rows, lines = [], []
+    if entries and not err:
+        try: rows = bd.progress(wt, entries); lines = render(rows)
         except SystemExit as e: err = str(e)
     if err:
         out.append(""); out.append(f"**Implementation:** the build log could not be read: {err}"); return first, later, elsewhere
@@ -279,7 +291,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     built = [e for e in entries if e["f"].get("Status") == "done" and any(bd.names_commit(e, s) for s, _ in unreviewed)]
     if built:
         later.insert(0, f"Check the {len(built)} piece{plural(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass's narrow check, or \"re-review the branch\".")
-    for s, r, items, state, mine in bd.progress(wt, entries) if entries else []:
+    for s, r, items, state, mine, _ in rows:
         busy = {n for e in mine if e["f"].get("Status") in ("briefed", "stopped") for n, _, _ in bd.reqs_of(e)}
         left = [n for n in sorted(items) if n not in state and n not in busy]
         partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
@@ -368,7 +380,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     Returns the next steps, building only."""
     bd = load_script("build.py"); rc = load_script("records.py"); it = load_script("items.py")
     first, later, elsewhere = build_block(wt, out, unreviewed, mine, theirs, render=bd.checklist_lines)
-    entries = mine[0]
+    entries = mine.entries
     me = repo_name(wt, rows)
     try: d = rc.fdir(wt)
     except SystemExit: d = None
@@ -505,10 +517,10 @@ def design_view(wt, out, logs):
     recs = rc.records(d); cs = rc.checks(d); ov = overview_parts(d)
     specs = {r["id"]: r for r in recs if r.get("type") == "spec" and r.get("status") == "active"}
     built = {}
-    for _, p, entries, _ in logs:
+    for log in logs:
         try:
-            for s, _, items, state, _ in bd.progress(p, entries):
-                built[s] = f"{sum(1 for v in state.values() if v[0] == 'done')} of {len(items)} built"
+            for row in bd.progress(log.path, log.entries):
+                built[row.spec] = f"{sum(1 for v in row.state.values() if v[0] == 'done')} of {len(row.items)} built"
         except SystemExit: pass
     steps, settle_all, nospec = [], [], []
     out += ["", "**Readiness:**" + ("" if ov["plan"] else " (no Plan table in the overview; by spec)")]
@@ -624,16 +636,14 @@ def area_view(wt, out, name, logs):
     if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['id']}: {short(i['text'], 90)}" + (f" When: {i['fields']['When']}." if i["fields"].get("When") else "") for i in parked]
     specs = [spec] if spec else [r for r in live if r.get("type") == "spec"]
     prog, pas = [], []
-    for wname, p, entries, _ in logs:
-        try:
-            for s, r, items, state, pieces in bd.progress(p, entries):
-                if s not in {x["id"] for x in specs}: continue
-                where = f" ({wname})" if wname else ""
-                prog += as_bullets(bd.progress_lines(p, entries, s), where)
-                for e in pieces:
-                    if e["f"].get("Status") == "stopped": steps.insert(0, f"Answer {e['id']}'s question{where}: {e['multi']['Question'][-1] if e['multi']['Question'] else ''}")
-        except SystemExit: pass
-        ps, _ = read_passes(p)
+    for log in logs:
+        where = f" ({log.name})" if log.name else ""
+        try: rows = [r for r in bd.progress(log.path, log.entries) if r.spec in {x["id"] for x in specs}]
+        except SystemExit: rows = []
+        prog += as_bullets(bd.progress_lines(rows), where)
+        for e in (e for r in rows for e in r.pieces):
+            if e["f"].get("Status") == "stopped": steps.insert(0, f"Answer {e['id']}'s question{where}: {e['multi']['Question'][-1] if e['multi']['Question'] else ''}")
+        ps, _ = read_passes(log.path)
         pas += [f"- {pass_line(e)}" for e in ps if e["f"].get("Piece") in {x["id"] for x in specs} and e["f"].get("Status") in ("open", "ended", "checked")]
     if specs:
         out += ["", "**Build:**"] + (prog or [f"- {x['id']}: nothing logged as built" for x in specs])
@@ -671,13 +681,14 @@ def main():
     out, steps = [], []
     rows = workspace_rows(wt)
     mine = read_build(wt)
-    gaps = setup_gaps(wt, rows, mine[0])
+    gaps = setup_gaps(wt, rows, mine.entries)
     if a.setup:
         emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
+    theirs = builder_logs(wt, rows)
     out.append(f"## Where {'the implementation in ' if a.focus == 'implementation' else 'the design of ' if a.focus == 'design' else ''}{repo_name(wt, rows)} stands ({branch})\n")
     out += setup_lines(gaps)
     if a.focus == "design" or a.area:
-        logs = [("", wt, *mine)] + builder_logs(wt, rows)
+        logs = [mine] + theirs
         steps = area_view(wt, out, a.area, logs) if a.area else design_view(wt, out, logs)
         out.append("")
         out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(dict.fromkeys(steps), 1)] if steps else ["**Next:** nothing pending."]
@@ -749,8 +760,8 @@ def main():
     rel = []
     for name, other in related_worktrees(wt, rows):
         its = [i for i in parse_followups(other) if not i["done"]]
-        mine = [i for i in its if re.split(r"[ @]", i["from"])[0] == me]
-        rel.append(f"{name} {len(its)} open" + (f" ({len(mine)} from {me})" if its else ""))
+        from_me = [i for i in its if re.split(r"[ @]", i["from"])[0] == me]
+        rel.append(f"{name} {len(its)} open" + (f" ({len(from_me)} from {me})" if its else ""))
     if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")
 
     # Passes here
@@ -773,17 +784,17 @@ def main():
                     pst, pin, pnum = sf.state(prun)
                     left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
                     if left: pass_steps.append(f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`.")
-    notes = handoff_lines(passes, mine[0])
+    notes = handoff_lines(passes, mine.entries)
     if a.focus == "implementation":
         out[:] = [out[0]] + setup_lines(gaps) + [l for l in out[1:] if l.startswith("**Working tree")]
-        steps = implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, builder_logs(wt, rows))
+        steps = implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, theirs)
         out += notes
         out.append("")
         out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else ["**Next:** nothing pending in the building."]
         emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
     out += notes
     if a.focus == "all":
-        bfirst, blater, _ = build_block(wt, out, unreviewed, mine, builder_logs(wt, rows))
+        bfirst, blater, _ = build_block(wt, out, unreviewed, mine, theirs)
         first, later = feature_block(wt, rows, out)
         out += rerouted_lines(wt)
         steps[0:0] = bfirst + pass_steps + first
