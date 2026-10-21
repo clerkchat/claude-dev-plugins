@@ -150,6 +150,17 @@ A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
 a brainstorm, a new brainstorm.
 
+### Recording defects
+
+A recording defect is a later record that changes an earlier active one
+without superseding it. The later record already settled the change, so fix
+it when you find it (an overview refresh, a roll-up, a design check, or
+reading records for any reason): write a record that supersedes the earlier
+one and restates it in full with the later change folded in, and tell the
+user in one line what was restated. When it is unclear what the change was,
+or the two records cannot both hold, it is a real conflict: put it to the
+user instead.
+
 ## Guidance
 
 Whenever the user answers a question or steers the work, in this skill or any
@@ -208,6 +219,8 @@ the path. Its report cites bare ids; run `records.py names` on them and gloss
 each one in what you tell the user (the gaps and disagreements it found
 especially), as "Talking to the user" requires. If the user wants something in it changed, that is a new or
 superseding record, then a refresh; never edit the overview itself.
+When it lists recording defects, fix them as "Recording defects" above
+describes, then refresh again so the overview no longer lists them.
 
 ## Rolling up
 
@@ -222,7 +235,8 @@ feature. A roll-up design or plan restates what the decisions settled, citing
 them; it does not decide anything new. Draft it with a `general-purpose`
 subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes), given the records it
 rolls up and the template, asked to cite every decision it draws on and to
-list, rather than resolve, any that do not fit together.
+list, rather than resolve, any that do not fit together. Fix the recording
+defects in that list as "Recording defects" above describes.
 
 ## Answering from the records
 
