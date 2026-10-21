@@ -16,6 +16,10 @@ Usage:
   build.py stop WORKTREE B3 --question "..."
   build.py resend WORKTREE B3 [--note "..."] [--model opus] [--effort high]
   build.py abandon WORKTREE B3 [--note "..."]
+  build.py built WORKTREE R27 --commit SHA [--title "..."]     (a decision, a plan step as R32.4, or a whole spec built by a commit)
+  build.py relink WORKTREE                           persist the commits re-found after a rebase, and list entries it could not follow
+  build.py relink WORKTREE B4 --commit SHA           point a done entry at a commit by hand
+  build.py records WORKTREE                          the records logged as built, with their commits
   build.py note WORKTREE B3 "what to do next"       (a briefed or stopped piece only; "" clears it)
   build.py drop WORKTREE --spec R18 --reqs 17 --why "R24 moved it to R23.3"
   build.py list WORKTREE [--open]
@@ -29,7 +33,10 @@ Usage:
 Without --covered, `done` marks every requirement of the piece done. Statuses:
 briefed (handed to an implementer), stopped (it stopped on a question),
 done (landed in a commit), abandoned, dropped (requirements a later decision
-took out of the spec; they leave its count). `resend` puts a stopped or rejected piece
+took out of the spec; they leave its count). `built` logs a record entry, done
+at once: it covers a decision, a plan step, or a spec with no pieces in the log,
+and carries no requirements. An entry's commit is followed across a rebase by
+its Subject, the commit's subject line; `relink` persists that or sets it by hand. `resend` puts a stopped or rejected piece
 back to briefed and counts the attempt.
 
 Entry format:
@@ -39,11 +46,19 @@ Entry format:
     - Model: sonnet medium
     - Status: done
     - Commit: 1a2b3c4
+    - Subject: feat: add the executor and record     (the commit's subject, used to re-find it after a rebase)
     - Attempts: 2
     - Question: does TurnContext carry the clock?
     - Deviation: kept the reference's retry count
     - Started: 2026-10-16
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
+
+  - [x] B4. Keep a feature's records in the hub worktree     (an entry from `built`: Record in place of Spec and Requirements)
+    - Record: R27
+    - Status: done
+    - Commit: 1a2b3c4
+    - Subject: feat: keep a feature's records in the hub worktree
+    - Started: 2026-10-16
 """
 import argparse, datetime, os, re, subprocess, sys, tempfile
 from typing import NamedTuple
