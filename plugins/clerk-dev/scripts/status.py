@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Where a worktree's review work stands, from files and git only.
 
-Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review] [--area NAME|R52]
+Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review] [--area NAME|BRIEF-52]
        status.py [WORKTREE] --setup
 
 --focus design prints whether the feature is ready to build: readiness per
@@ -404,7 +404,8 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     try: d = rc.fdir(wt)
     except SystemExit: d = None
     recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
-    logged = {e["f"].get("Spec") or e["f"].get("Record") for e in entries}
+    canon = rc.resolver(recs)
+    logged = {canon(x) for x in (e["f"].get("Spec") or e["f"].get("Record") for e in entries) if x}
     specs = [r for r in recs if r.get("type") == "spec" and r.get("status") == "active" and (r.get("repo") in ("", None, me) or r["id"] in logged)]
     accounted = logged.union(*elsewhere.values())
     unlogged_specs = [r for r in specs if r["id"] not in accounted]
@@ -441,8 +442,8 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
         m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
         n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
         if n: out.append(f"- {r['id']} open items: {n}")
-    mspecs = {m["f"].get("Spec") for m in bd.milestones(entries)}
-    pass_steps = [s for s in pass_steps if not any(e["id"] in s and e["f"].get("Piece") in mspecs for e in (passes or []))]
+    mspecs = {canon(x) for x in (m["f"].get("Spec") for m in bd.milestones(entries)) if x}
+    pass_steps = [s for s in pass_steps if not any(names_pass(s, e) and canon(e["f"].get("Piece") or "") in mspecs for e in (passes or []))]
     steps = first + pass_steps
     if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
     if unlogged and any(r.get("type") in bd.BUILDABLE and r.get("status") == "active" for r in recs):
@@ -455,6 +456,8 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     elif not entries and not unlogged and unlogged_specs:
         steps.append(f"Start building {unlogged_specs[0]['id']}: cut its requirements into pieces and brief the first (the writing-code skill).")
     return steps
+
+def names_pass(step, e): return ids.key(e["id"]) in {ids.key(x) for x in ids.mentions(step, ids.PASS)}
 
 def section(text, heading, level=2):
     m = re.search(rf"^{'#' * level} {re.escape(heading)}\n(.*?)(?=^#{{1,{level}}} |\Z)", text, re.S | re.M)
@@ -540,7 +543,7 @@ def design_view(wt, out, logs):
     d = rc.fdir(wt)
     if not os.path.exists(os.path.join(d, "feature.md")):
         out += ["", "**Design:** no feature records here or in a hub."]; return ["Start a feature: \"start a feature for <name>\"."]
-    recs = rc.records(d); cs = rc.checks(d); ov = overview_parts(d)
+    recs = rc.records(d); cs = rc.checks(d); ov = overview_parts(d); canon = rc.resolver(recs)
     specs = {r["id"]: r for r in recs if r.get("type") == "spec" and r.get("status") == "active"}
     built = {}
     for log in logs:
@@ -552,7 +555,7 @@ def design_view(wt, out, logs):
     out += ["", "**Readiness:**" + ("" if ov["plan"] else " (no Plan table in the overview; by spec)")]
     named = set()
     for row in ov["plan"]:
-        piece = row.get("piece", "?"); sid = next(iter(ids.records_in(row.get("spec", ""))), "")
+        piece = row.get("piece", "?"); sid = canon(next(iter(ids.records_in(row.get("spec", ""))), ""))
         r = specs.get(sid)
         built_by = built_without_spec(row)
         if not r and built_by is not None:
@@ -623,11 +626,11 @@ def area_view(wt, out, name, logs):
     it, its records, open questions, disagreements that name its records, build
     progress and passes on its specs. Returns the next steps for it."""
     rc = load_script("records.py"); it = load_script("items.py"); bd = load_script("build.py")
-    d = rc.fdir(wt); recs = rc.records(d)
+    d = rc.fdir(wt); recs = rc.records(d); canon = rc.resolver(recs)
     spec = None
-    if ids.kind_of(name.upper()) == ids.RECORD:
-        spec = next((r for r in recs if ids.same(r["id"], name.upper())), None)
-        if not spec: sys.exit(f"{name.upper()} is not a record of this feature")
+    if ids.kind_of(ids.normalize(name)) == ids.RECORD:
+        spec = next((r for r in recs if ids.same(r["id"], ids.normalize(name))), None)
+        if not spec: sys.exit(f"{ids.normalize(name)} is not a record of this feature")
         area = spec.get("area", "")
     else:
         area = rc.slug(name)
@@ -657,7 +660,7 @@ def area_view(wt, out, name, logs):
         qs_lines.append(f"- {c['name']}: {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else ""))
         settle += [ids.in_check(c["name"], q) for q in sfq]
     if qs_lines: out += ["", "**Open questions:**"] + qs_lines
-    dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(ids.records_in(x)) & mine_ids]
+    dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(map(canon, ids.records_in(x))) & mine_ids]
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
     gl = [(r, rule) for r, rule in rc.rules(d, area or None) if (r.get("area") or "") == area]
     if gl: out += ["", f"**Guidance:** {len(gl)}"] + [f"- {r['id']}: {short(rule, 110)}" for r, rule in gl]
@@ -673,7 +676,7 @@ def area_view(wt, out, name, logs):
         for e in (e for r in rows for e in r.pieces):
             if e["f"].get("Status") == "stopped": steps.insert(0, f"Answer {e['id']}'s question{where}: {e['multi']['Question'][-1] if e['multi']['Question'] else ''}")
         ps, _ = read_passes(log.path)
-        pas += [f"- {pass_line(e)}" for e in ps if e["f"].get("Piece") in {x["id"] for x in specs} and e["f"].get("Status") in ("open", "ended", "checked")]
+        pas += [f"- {pass_line(e)}" for e in ps if canon(e["f"].get("Piece") or "") in {x["id"] for x in specs} and e["f"].get("Status") in ("open", "ended", "checked")]
     if specs:
         out += ["", "**Build:**"] + (prog or [f"- {x['id']}: nothing logged as built" for x in specs])
     if pas: out += ["", "**Passes:**"] + pas

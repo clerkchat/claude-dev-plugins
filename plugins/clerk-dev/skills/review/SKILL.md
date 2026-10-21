@@ -1,7 +1,7 @@
 ---
 name: review
 description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", or /clerk-dev:review. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
-argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass P<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
+argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass PASS-<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
 allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash(python3 *), Bash(claude *), Bash(ln *), Bash(mkdir *), Read, Grep, Glob, Agent, Write, Monitor, TaskStop
 ---
 
@@ -149,7 +149,7 @@ reads it but never asks, offers, or records anything.
 
 ## How you talk to the user
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 When this session runs headless (started with `claude -p`, as feature mode does
 for each repository), there is no one to answer a question. Never ask: follow
@@ -355,8 +355,8 @@ need to read it unless debugging agent output.
   pass.
 - `--standalone` (with a narrow target): a separate run, not added to the
   branch's review, and `.clerk-dev/latest` is left where it is.
-- `--pass P<n>` (with a range target, `--standalone`, and `--lenses`): this run
-  is the narrow check of pass P<n> from `.clerk-dev/passes.md` (see the `pass`
+- `--pass PASS-<n>` (with a range target, `--standalone`, and `--lenses`): this run
+  is the narrow check of pass PASS-<n> from `.clerk-dev/passes.md` (see the `pass`
   skill). The lenses are exactly those given: no routing, triage, or quick-mode
   cap adds or drops one. `DOCS` is only the pass's piece (its spec record), not
   every active record, and every lens prompt gets a `PASS:` line naming the
@@ -900,7 +900,7 @@ GUIDANCE: <path of <run>/guidance.md>
 WORKSPACE: <path of .clerk-dev/review-workspace.md, or none>
 ```
 
-plus `BAR: final` on a final pass, and `PASS: <focus>; piece <R id or none>`
+plus `BAR: final` on a final pass, and `PASS: <focus>; piece <record id or none>`
 with `--pass`.
 
 Before the first wave, write the guidance file with `records.py guidance

@@ -8,12 +8,12 @@ it. The file is a Markdown checkbox list in the items format.
 Usage:
   deferred.py add WORKTREE "what" --from SRC --path "what was done for now" --open "what is left" [--revisit "when to look again"]
   deferred.py list WORKTREE [--open]
-  deferred.py close WORKTREE D3 [--ref <sha or reason>] [--status fixed|wont-fix]
-  deferred.py reopen WORKTREE D3
-  deferred.py set WORKTREE D3 "Refine" [--note "..."]
+  deferred.py close WORKTREE DEFER-3 [--ref <sha or reason>] [--status fixed|wont-fix]
+  deferred.py reopen WORKTREE DEFER-3
+  deferred.py set WORKTREE DEFER-3 "Refine" [--note "..."]
 
-SRC is a finding "<run> N", a question "R18-1.Q6", a pass item "P3.4", a piece
-"B9", or "this session".
+SRC is a finding "<run> N", a question "BRIEF-18-1.Q-6", a pass item "PASS-3.4",
+a piece "BUILD-9", or "this session".
 """
 from records import load_script
 import ids

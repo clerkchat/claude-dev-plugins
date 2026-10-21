@@ -73,7 +73,7 @@ class StatusCase(TempCase):
         self.repo.build_ok("built", "R4.2", "--commit", self.c2)
         self.repo.build_ok("built", "R6", "--commit", self.c3)
         self.repo.build_ok("add", "Five piece", "--spec", "R5", "--reqs", "1,2")
-        self.repo.build_ok("done", "B4", "--commit", self.c4)
+        self.repo.build_ok("done", "BUILD-4", "--commit", self.c4)
 
     def implementation(self, repo=None):
         code, out = (repo or self.repo).status("--focus", "implementation")
@@ -88,59 +88,59 @@ class StatusCase(TempCase):
 
 class DigestBuiltMarkTests(StatusCase):
     def test_a_decision_an_entry_names_reads_built_yes_with_its_commit(self):
-        self.assertTrue(digest_head(self.repo, "R1").endswith(f"; built: yes ({self.c1}))"))
+        self.assertTrue(digest_head(self.repo, "DEC-1").endswith(f"; built: yes ({self.c1}))"))
 
     def test_a_decision_no_entry_names_reads_built_no(self):
-        self.assertTrue(digest_head(self.repo, "R3").endswith("; built: no)"))
+        self.assertTrue(digest_head(self.repo, "DEC-3").endswith("; built: no)"))
 
     def test_a_spec_built_through_pieces_reads_built_yes(self):
-        self.assertTrue(digest_head(self.repo, "R5").endswith("; built: yes)"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-5").endswith("; built: yes)"))
 
     def test_a_spec_built_by_a_whole_spec_entry_reads_built_yes(self):
-        self.assertTrue(digest_head(self.repo, "R6").endswith("; built: yes)"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-6").endswith("; built: yes)"))
 
     def test_a_spec_with_nothing_logged_reads_built_no(self):
-        self.assertTrue(digest_head(self.repo, "R9").endswith("; built: no)"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-9").endswith("; built: no)"))
 
     def test_a_plan_reads_n_of_m_steps(self):
-        self.assertTrue(digest_head(self.repo, "R4").endswith("; built: 3 of 5 steps (1, 2, 4))"))
+        self.assertTrue(digest_head(self.repo, "PLAN-4").endswith("; built: 3 of 5 steps (1, 2, 4))"))
 
 
 class DigestProgressTests(StatusCase):
     def test_per_spec_lines_stay_first(self):
         lines = progress_section(self.repo).splitlines()
-        self.assertEqual(lines[2], "origin: R5 Spec five: 2 of 2 requirements done")
+        self.assertEqual(lines[2], "origin: BRIEF-5 Spec five: 2 of 2 requirements done")
 
     def test_records_built_directly_are_listed_per_repository(self):
         self.assertIn(
-            f"origin: records built directly: R1 ({self.c1}), R4.2 ({self.c2}), R6 ({self.c3})",
+            f"origin: records built directly: DEC-1 ({self.c1}), PLAN-4.2 ({self.c2}), BRIEF-6 ({self.c3})",
             progress_section(self.repo),
         )
 
     def test_each_plans_built_steps_come_after_the_records_line(self):
         section = progress_section(self.repo)
-        self.assertIn("origin: R4 steps built: 1, 2, 4", section)
+        self.assertIn("origin: PLAN-4 steps built: 1, 2, 4", section)
         self.assertGreater(section.index("steps built"), section.index("records built directly"))
 
 
 class NamesTests(StatusCase):
     def names(self):
-        return run_script("records", "names", self.repo.path, "B1", "B2", "B4", "R4.2", "R5.1", "R4.9", "R6.7")[1]
+        return run_script("records", "names", self.repo.path, "B1", "BUILD-2", "b4", "R4.2", "R5.1", "R4.9", "R6.7")[1]
 
     def test_a_record_entry_reads_as_a_piece_for_its_record(self):
-        self.assertIn("B1: piece for R1: Decision one", self.names())
+        self.assertIn("B1: piece for DEC-1: Decision one", self.names())
 
     def test_a_plan_step_entry_reads_as_a_piece_for_the_step(self):
-        self.assertIn("B2: piece for R4.2: Piece two, the second thing", self.names())
+        self.assertIn("BUILD-2: piece for PLAN-4.2: Piece two, the second thing", self.names())
 
     def test_a_spec_piece_reads_as_before(self):
-        self.assertIn("B4: piece: Five piece", self.names())
+        self.assertIn("b4: piece: Five piece", self.names())
 
     def test_a_plan_step_reference_reads_as_the_steps_piece(self):
-        self.assertIn("R4.2: step 2 of plan R4: Piece two, the second thing", self.names())
+        self.assertIn("R4.2: step 2 of plan PLAN-4: Piece two, the second thing", self.names())
 
     def test_a_spec_requirement_still_reads_as_a_requirement(self):
-        self.assertIn("R5.1: requirement of R5: Five one", self.names())
+        self.assertIn("R5.1: requirement of BRIEF-5: Five one", self.names())
 
     def test_a_missing_step_or_requirement_is_unknown(self):
         names = self.names()
@@ -180,8 +180,8 @@ class AuditTests(StatusCase):
 
     def test_a_whole_spec_entry_is_not_reported_as_none_logged(self):
         out = self.implementation()
-        self.assertNotIn("R6 Spec six: 2 requirements, none logged", out)
-        self.assertIn("R9 Spec nine: 2 requirements, none logged as built", out)
+        self.assertNotIn("BRIEF-6 Spec six: 2 requirements, none logged", out)
+        self.assertIn("BRIEF-9 Spec nine: 2 requirements, none logged as built", out)
 
     def test_the_log_the_built_work_step_names_requirements_or_records(self):
         self.assertIn(
@@ -198,7 +198,7 @@ class RebaseStatusTests(StatusCase):
         self.repo.main_moves()
         self.assertRegex(
             self.implementation(),
-            r"(?m)^- Build log: 4 entries re-pointed after a rebase \(B1 .*, B2 .*, B3, B4\)$",
+            r"(?m)^- Build log: 4 entries re-pointed after a rebase \(BUILD-1 .*, BUILD-2 .*, BUILD-3, BUILD-4\)$",
         )
 
     def test_re_pointed_commits_count_as_named_in_the_audit(self):
@@ -219,7 +219,7 @@ class RebaseStatusTests(StatusCase):
         sha = self.reword_logged_decision()
         self.assertRegex(
             self.implementation(),
-            rf'(?m)^- Build log: B5 .*unlinked, its commit {sha} is not on the branch: "feat: decision three"$',
+            rf'(?m)^- Build log: BUILD-5 .*unlinked, its commit {sha} is not on the branch: "feat: decision three"$',
         )
 
     def test_an_unlinked_entry_gets_a_re_link_step_before_the_log_step(self):
@@ -227,9 +227,9 @@ class RebaseStatusTests(StatusCase):
         out = self.implementation()
         self.assertRegex(
             out,
-            r'(?m)^[0-9]+\. Re-link B5 \(Decision three\) by hand to the commit that built it: "re-link B5 to <sha>"\.$',
+            r'(?m)^[0-9]+\. Re-link BUILD-5 \(Decision three\) by hand to the commit that built it: "re-link BUILD-5 to <sha>"\.$',
         )
-        self.assertLess(out.index("Re-link B5"), out.index("Log the 2 commits"))
+        self.assertLess(out.index("Re-link BUILD-5"), out.index("Log the 2 commits"))
 
     def test_the_old_commit_is_listed_as_not_in_the_log(self):
         self.reword_logged_decision()
@@ -241,11 +241,11 @@ class RebaseStatusTests(StatusCase):
         sha = self.reword_logged_decision()
         out = self.everything()
         self.assertIn(f"unlinked, its commit {sha} is not on the branch", out)
-        self.assertRegex(out, r"(?m)^[0-9]+\. Re-link B5")
+        self.assertRegex(out, r"(?m)^[0-9]+\. Re-link BUILD-5")
 
     def test_after_a_re_link_by_hand_nothing_is_unlinked(self):
         self.reword_logged_decision()
-        self.repo.build_ok("relink", "B5", "--commit", "HEAD")
+        self.repo.build_ok("relink", "BUILD-5", "--commit", "HEAD")
         out = self.implementation()
         self.assertNotIn("Build log:", out)
         self.assertIn("- Commits on the branch: 6, 1 not in the build log:", out)
@@ -280,18 +280,18 @@ class WorkspaceTests(StatusCase):
             f.write(self.workspace_table(other_path))
 
     def test_a_decision_built_in_another_worktree_reads_built(self):
-        head = digest_head(self.repo, "R3")
+        head = digest_head(self.repo, "DEC-3")
         self.assertIn("; built: yes (", head)
         self.assertIn(self.other_commit, head)
 
     def test_a_step_whose_records_are_built_across_worktrees_reads_built(self):
-        self.assertTrue(digest_head(self.repo, "R4").endswith("; built: 4 of 5 steps (1, 2, 3, 4))"))
+        self.assertTrue(digest_head(self.repo, "PLAN-4").endswith("; built: 4 of 5 steps (1, 2, 3, 4))"))
 
     def test_the_other_worktrees_records_line_names_its_repository(self):
-        self.assertIn(f"other: records built directly: R3 ({self.other_commit})", progress_section(self.repo))
+        self.assertIn(f"other: records built directly: DEC-3 ({self.other_commit})", progress_section(self.repo))
 
     def test_the_plan_line_uses_the_built_ness_of_every_worktree(self):
-        self.assertIn("hub: R4 steps built: 1, 2, 3, 4", progress_section(self.repo))
+        self.assertIn("hub: PLAN-4 steps built: 1, 2, 3, 4", progress_section(self.repo))
 
     def break_other_log(self):
         with open(os.path.join(self.other.path, ".clerk-dev", "build.md"), "a") as f:
@@ -299,33 +299,33 @@ class WorkspaceTests(StatusCase):
 
     def test_a_record_built_in_a_readable_worktree_keeps_its_mark_beside_an_unreadable_log(self):
         self.break_other_log()
-        self.assertIn("; built: yes (", digest_head(self.repo, "R1"))
-        self.assertTrue(digest_head(self.repo, "R5").endswith("; built: yes)"))
+        self.assertIn("; built: yes (", digest_head(self.repo, "DEC-1"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-5").endswith("; built: yes)"))
 
     def test_what_no_readable_log_proves_reads_unknown_not_no(self):
         self.break_other_log()
-        self.assertTrue(digest_head(self.repo, "R9").endswith("; built: unknown)"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-9").endswith("; built: unknown)"))
 
     def test_a_plan_keeps_the_steps_proven_built_marked_unknown(self):
         self.break_other_log()
         self.assertTrue(
-            digest_head(self.repo, "R4").endswith("; built: unknown (at least 3 of 5 steps: 1, 2, 4))")
+            digest_head(self.repo, "PLAN-4").endswith("; built: unknown (at least 3 of 5 steps: 1, 2, 4))")
         )
 
     def test_the_unreadable_log_is_reported_and_the_hubs_lines_stay(self):
         self.break_other_log()
         section = progress_section(self.repo)
         self.assertIn("other: (build log unreadable: ", section)
-        self.assertIn("hub: R5 Spec five: 2 of 2 requirements done", section)
-        self.assertIn("hub: records built directly: R1 (", section)
+        self.assertIn("hub: BRIEF-5 Spec five: 2 of 2 requirements done", section)
+        self.assertIn("hub: records built directly: DEC-1 (", section)
 
     def test_a_missing_worktree_is_reported_and_other_marks_stay(self):
         gone = self.path("gone")
         self.write_workspace(gone)
         section = progress_section(self.repo)
         self.assertIn(f"other: (worktree {gone} does not exist; its build log is not counted)", section)
-        self.assertIn("; built: yes (", digest_head(self.repo, "R1"))
-        self.assertTrue(digest_head(self.repo, "R9").endswith("; built: unknown)"))
+        self.assertIn("; built: yes (", digest_head(self.repo, "DEC-1"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-9").endswith("; built: unknown)"))
 
     @unittest.skipIf(os.geteuid() == 0, "root can read a mode 0 directory")
     def test_an_unreadable_worktree_is_reported_and_other_marks_stay(self):
@@ -333,10 +333,10 @@ class WorkspaceTests(StatusCase):
         self.addCleanup(os.chmod, self.other.path, stat.S_IRWXU)
         section = progress_section(self.repo)
         self.assertIn(f"other: (worktree {self.other.path} cannot be read; its build log is not counted)", section)
-        self.assertIn("hub: records built directly: R1 (", section)
+        self.assertIn("hub: records built directly: DEC-1 (", section)
 
     def test_with_every_worktree_readable_nothing_is_unknown(self):
-        self.assertTrue(digest_head(self.repo, "R9").endswith("; built: no)"))
+        self.assertTrue(digest_head(self.repo, "BRIEF-9").endswith("; built: no)"))
 
 
 class DecisionsOnlyCase(TempCase):
@@ -482,7 +482,7 @@ class SupersededStepTests(TempCase):
         )
 
     def plan_mark(self):
-        return digest_head(self.repo, "R12")
+        return digest_head(self.repo, "PLAN-12")
 
     def test_nothing_built_no_step_counts(self):
         self.assertTrue(self.plan_mark().endswith("; built: 0 of 4 steps)"))

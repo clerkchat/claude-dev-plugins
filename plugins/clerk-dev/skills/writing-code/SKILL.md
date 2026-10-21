@@ -5,7 +5,7 @@ description: How to write code: delegate the building of settled pieces to imple
 
 # Writing code
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -202,30 +202,30 @@ Log every delegated piece in `.clerk-dev/build.md` with
 `${CLAUDE_PLUGIN_ROOT}/scripts/build.py` (below, `build.py`); status reports
 progress from it, so a piece not logged is invisible there:
 
-- when briefing: `build.py add <worktree> "<piece>" --spec R52 --reqs 4,5
-  --model <model> --effort <effort>`, which gives the piece's id (B3);
-- when the agent stops on a question: `build.py stop <worktree> B3 --question
+- when briefing: `build.py add <worktree> "<piece>" --spec BRIEF-52 --reqs 4,5
+  --model <model> --effort <effort>`, which gives the piece's id (BUILD-3);
+- when the agent stops on a question: `build.py stop <worktree> BUILD-3 --question
   "<the question>"`; after it is settled and recorded, `build.py resend` with
   the new model or effort if they changed;
-- when it is sent back with a correction: `build.py resend <worktree> B3
+- when it is sent back with a correction: `build.py resend <worktree> BUILD-3
   --note "<what changed>"`;
-- after committing: `build.py done <worktree> B3 --commit <sha> --covered
+- after committing: `build.py done <worktree> BUILD-3 --commit <sha> --covered
   "<the report's requirements line, as 4:done,5:partial: what is missing>"`,
   adding `--deviation "..."` for each one accepted;
-- when dropped: `build.py abandon <worktree> B3 --note "<why>"`;
+- when dropped: `build.py abandon <worktree> BUILD-3 --note "<why>"`;
 - after committing work that builds a decision, a plan step, or a whole spec
-  rather than requirements: `build.py built <worktree> R27 --commit <sha>`
-  (`R32.4` for a plan step). Any skill that commits does this when its brief
+  rather than requirements: `build.py built <worktree> DEC-27 --commit <sha>`
+  (`PLAN-32.4` for a plan step). Any skill that commits does this when its brief
   names a record the commit builds, and never cites the record in the commit
   message. A rebase that changes the hash is followed by its `Subject:` line;
   `build.py relink <worktree>` persists the re-found commits and lists entries
-  it could not follow, and `build.py relink <worktree> B4 --commit <sha>`
+  it could not follow, and `build.py relink <worktree> BUILD-4 --commit <sha>`
   re-links one by hand. `build.py records <worktree>` lists the records logged
   as built.
 
 When a decision takes a requirement out of a spec (moved to another spec,
 or no longer wanted), do not supersede the spec to delete one line: run
-`build.py drop <worktree> --spec R18 --reqs 17 --why "<the decision that
+`build.py drop <worktree> --spec BRIEF-18 --reqs 17 --why "<the decision that
 dropped it, and where it went>"`. The requirement leaves the spec's count and
 shows as dropped in the checklist; the spec itself stays as written.
 
@@ -265,11 +265,11 @@ status lives only here; the spec is not edited for it.
    the record it builds with `built`, as "The build log" describes), and
    tick the spec's open items it closes.
 4. Say one line: the piece, the commit, the tests, anything accepted, and the
-   count it moves ("B15 done in 4c1e2ab, tests pass: R52 now 27 of 32").
+   count it moves ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
 
 Whenever you report progress against a spec at more length (the user asks,
 the draft ends, a milestone's passes are done), show `build.py checklist
-<worktree> --spec R52` as it prints it: one checkbox per requirement, ticked
+<worktree> --spec BRIEF-52` as it prints it: one checkbox per requirement, ticked
 when done, with partial and in-progress items marked. Never list requirement
 numbers in prose ("1 to 18, 20 to 24 done; 19, 25 to 28 open").
 
@@ -287,11 +287,11 @@ step a milestone suggests. Work it as a sequence of passes, with the `pass`
 skill:
 
 1. **Plan it** when its work starts: `build.py milestone <worktree> --step
-   R8.2 --passes <list>`, where R8.2 is step 2 of plan R8. The log takes the
+   PLAN-8.2 --passes <list>`, where PLAN-8.2 is step 2 of plan PLAN-8. The log takes the
    spec and the piece from the step and keeps the pointer, so it does not
    restate the plan; it stops when the plan or the step is missing, or the plan
    is not active. When the step names no spec, add `--spec`; a log with no plan
-   takes `--spec R52 --piece "<piece>"` instead. The list is prep, happy-path,
+   takes `--spec BRIEF-52 --piece "<piece>"` instead. The list is prep, happy-path,
    then the passes `skills/pass/passes.md` suggests for the milestone's spec,
    in the order it gives; security is required when it is in the list. Show the
    plan in one line and go on. When the plan is replaced, status flags a
@@ -305,7 +305,7 @@ skill:
 4. **The other passes**, in order, each as the `pass` skill runs one: its own
    implementer with its one lens's Pass mode text, then its narrow check.
 5. **Complete** when every planned pass has run or was skipped with a reason
-   (`build.py skip <worktree> M1 <pass> --why "..."`; never a required one)
+   (`build.py skip <worktree> MILE-1 <pass> --why "..."`; never a required one)
    and the required passes' findings are triaged. `build.py milestones` and
    status say where each milestone stands and what runs next; a complete
    milestone leads to the next one. When a milestone completes, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.

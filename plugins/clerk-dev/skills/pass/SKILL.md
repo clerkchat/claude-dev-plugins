@@ -1,13 +1,13 @@
 ---
 name: pass
 description: Write code in focused passes, one value at a time (edge cases, error handling, security, observability, DRY, and so on), each ended by a narrow check with only that pass's lenses. Use when the user says "do an edge-cases pass", "make a security pass on this", "pass for observability", "what passes does this need", "guide me through a tests pass", "check the pass", "abandon the pass", or "how are the passes doing". Not for reviewing a whole branch (that is /clerk-dev:review) or fixing review findings (review-fix).
-argument-hint: "[<pass> [on R<n> | on <paths>] [guide]] | suggest [R<n>] | check P<n> | abandon P<n> | list | stats"
+argument-hint: "[<pass> [on BRIEF-<n> | on <paths>] [guide]] | suggest [BRIEF-<n>] | check PASS-<n> | abandon PASS-<n> | list | stats"
 allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Write, Grep, Glob
 ---
 
 # Passes
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The catalogue of passes, their lenses, and how to suggest them for a piece is
 `passes.md` next to this file. The log is `.clerk-dev/passes.md`, managed only
@@ -42,13 +42,13 @@ commit rules below.
 
 1. **Start.** Resolve the focus to a catalogue pass and its lenses, keeping only
    those whose categories the piece touches. Run `passes.py start <worktree>
-   <pass> --lenses <a,b> --mode <claude|guide> [--piece R<n>]`. When it refuses
+   <pass> --lenses <a,b> --mode <claude|guide> [--piece BRIEF-<n>]`. When it refuses
    for uncommitted tracked files, show them and ask whether to commit them
    first or leave them out (`--leave-out`); when another pass is open, ask
    whether to end or abandon it.
 2. **List the work.** Print each lens's Pass mode text, read the piece's spec
    (if any) and the code the piece touches, and write what this pass will do in
-   this code as items: `passes.py item <worktree> P<n> "<what, with
+   this code as items: `passes.py item <worktree> PASS-<n> "<what, with
    path:line>"`, one per change, specific enough that someone else could do it.
    Leave out anything another pass in the catalogue owns. Show the items in a
    few lines.
@@ -61,22 +61,22 @@ commit rules below.
      prep refactors that reshape shared code, opus, high), review, run the
      tests, and commit each. Items of a few lines are done inline. Mark each
      item as it lands
-     (`passes.py done <worktree> P<n> <k>`, or `--na "<why>"` when it turns out
+     (`passes.py done <worktree> PASS-<n> <k>`, or `--na "<why>"` when it turns out
      not to apply). Stay inside the items: something outside them goes in a
      line to the user, not into this pass. An item the pass cannot finish is
      deferred as "Items" in `skills/review/tracking.md` describes, with the
-     pass item as the source (`P<n>.<k>`).
+     pass item as the source (`PASS-<n>.<k>`).
    - Guide mode: stop after the list. The engineer writes and commits; when
      they say they are done, mark the items they name and go on.
-4. **End.** `passes.py end <worktree> P<n>`. It refuses while tracked changes
+4. **End.** `passes.py end <worktree> PASS-<n>`. It refuses while tracked changes
    are uncommitted; it reports items not done and whether the pass made no
    commits (then there is nothing to check; say so and stop).
-5. **Check.** Get the range with `passes.py range <worktree> P<n>` (it refuses
+5. **Check.** Get the range with `passes.py range <worktree> PASS-<n>` (it refuses
    when the pass was rebased; offer to abandon it or re-anchor by hand). Then
    run the review headless, so its orchestration stays out of this session:
 
    ```
-   claude -p "/clerk-dev:review <start>..<end> --standalone --pass P<n> --lenses <lenses> --no-pr-comments"
+   claude -p "/clerk-dev:review <start>..<end> --standalone --pass PASS-<n> --lenses <lenses> --no-pr-comments"
      --allowedTools "Bash(git *)" "Bash(gh pr *)" "Bash(python3 *)" "Bash(ln *)" "Bash(mkdir *)" Read Grep Glob Agent Write
    ```
 
@@ -84,7 +84,7 @@ commit rules below.
    When it ends, take the run directory from its `RUN_DIR:` line (the run label
    is its last path segment), read only its `summary.md`, count the findings
    per lens from `merged.md` (`grep -c "lens: <lens>"`), and record the result:
-   `passes.py check <worktree> P<n> --run <label> --ran <lenses that ran>
+   `passes.py check <worktree> PASS-<n> --run <label> --ran <lenses that ran>
    --findings <lens>=<n>,...` (or `--result empty|error`). It exits non-zero
    when a requested lens did not run; say which.
 6. **Report** in a few lines: the commits, items done and not applicable, and
@@ -117,7 +117,7 @@ skill describes.
 ## Other requests
 
 - "Check the pass": steps 5 and 6 for an ended pass.
-- "Abandon the pass": `passes.py abandon <worktree> P<n> --note "<why>"`. Its
+- "Abandon the pass": `passes.py abandon <worktree> PASS-<n> --note "<why>"`. Its
   commits stay; say so.
 - "List the passes", "how are the passes doing": `passes.py list` or
   `passes.py stats`, shown as they are. `stats` counts findings per lens across

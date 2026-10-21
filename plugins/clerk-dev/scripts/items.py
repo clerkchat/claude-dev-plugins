@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and write item files: follow-ups (F3), deferred items (D3), and design-check questions (Q3).
+"""Read and write item files: follow-ups (F3), deferred items (DEFER-3), and design-check questions (Q-3).
 
 An item file is a Markdown checkbox list, one item per top-level checkbox with
 its fields as a nested bullet list, so a Markdown formatter keeps the layout.
@@ -104,7 +104,7 @@ def set_status(it, status, ref=None):
     elif status == "open": it["fields"].pop("Outcome", None)
 
 def find(items, iid):
-    it = next((i for i in items if ids.same(i["id"], iid.upper())), None)
+    it = next((i for i in items if ids.same(i["id"], ids.normalize(iid))), None)
     if not it: sys.exit(f"{iid} not found")
     return it
 

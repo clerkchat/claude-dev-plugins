@@ -1,12 +1,12 @@
 ---
 name: deliberate
-description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine F3" / "refine Q3"; and whenever a skill or the session has a recommendation the user may accept as is (a Discuss or Refine item, a design question, a stopped piece, a pass or follow-up item, a fix, suggested marks for unmarked findings). It sizes the work itself, so trivial items cost one line. Not for an item marked Fix as recommended; that is decided.
+description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine F3" / "refine Q-3"; and whenever a skill or the session has a recommendation the user may accept as is (a Discuss or Refine item, a design question, a stopped piece, a pass or follow-up item, a fix, suggested marks for unmarked findings). It sizes the work itself, so trivial items cost one line. Not for an item marked Fix as recommended; that is decided.
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Grep, Glob, Agent
 ---
 
 # Deliberate
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that

@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agen
 
 # Checkpoint
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The plugin keeps its state in files, so a cleared conversation loses only what
 was settled in it and never written down. A checkpoint finds that and writes
@@ -62,8 +62,8 @@ session.
   do with their results in the next session.
 - An open pass or a briefed piece: these are in the logs already and survive a
   clear. Write what the next session needs to finish it (what to log, what to
-  run next) as its note, replacing the old one: `passes.py note <worktree> P9
-  "<next steps>"` or `build.py note <worktree> B3 "<next steps>"`. Status shows
+  run next) as its note, replacing the old one: `passes.py note <worktree> PASS-9
+  "<next steps>"` or `build.py note <worktree> BUILD-3 "<next steps>"`. Status shows
   the note of every open pass and piece, so this is the only place in-flight
   next steps go; no other file takes them.
 
@@ -71,7 +71,7 @@ session.
 
 In a few lines:
 
-- what was written, one line each, with names ("decision R74, chunk C ships
+- what was written, one line each, with names ("decision DEC-74, chunk C ships
   the seams as PRs to main ahead of the core chunk");
 - what is still open and only in this conversation, if anything;
 - what is in flight, with the notes just written;

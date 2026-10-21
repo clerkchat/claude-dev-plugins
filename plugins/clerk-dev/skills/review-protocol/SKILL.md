@@ -402,7 +402,7 @@ Output one fenced block, then a `Coverage` section of one or two sentences:
 
 ```questions
 - lens: <your lens name>
-  record: <R<n> of the record the question is about>
+  record: <the id of the record the question is about, such as BRIEF-13>
   where: <the record's section heading, or "whole">
   weight: settle-first | worth-settling | note
   question: <one question, answerable by a decision>
@@ -415,5 +415,5 @@ Output one fenced block, then a `Coverage` section of one or two sentences:
 
 At most eight questions; fewer is fine and none is a valid answer. Paths in
 `evidence` are absolute, since the check file lives in the hub, which may be
-another repository; record ids stay as `R<n>`. Never edit files. Answer only in
+another repository; record ids stay as ids (BRIEF-13). Never edit files. Answer only in
 the `questions` block, never a `findings` block.

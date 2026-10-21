@@ -3,10 +3,11 @@
 
 A feature's records are point-in-time documents: brainstorms, designs,
 decisions, capabilities, plans, and specs. Each is one Markdown file under
-records/ with YAML-like frontmatter, numbered on one sequence (R1, R2, ...) so
-any record can be cited by id. A record is written once; afterwards only its
-status changes, and a revision is a new record that supersedes it. feature.md
-holds the feature's name and summary, and an index this script regenerates.
+records/ with YAML-like frontmatter, numbered on one sequence (IDEAS-1,
+DESIGN-2, DEC-3, ...) so any record can be cited by id. A record is written
+once; afterwards only its status changes, and a revision is a new record that
+supersedes it. feature.md holds the feature's name and summary, and an index
+this script regenerates.
 
 A record may carry an area, a short name for the part of the problem it is
 about (auth, delivery). There is no list of areas: they are whatever the records
@@ -19,48 +20,50 @@ The hub is the worktree that holds the records: the worktree named on the
 Usage:
   records.py hub WORKTREE
   records.py start WORKTREE "Feature name" [--summary "..."]
-  records.py new WORKTREE TYPE "title" [--area A] [--repo R] [--from R2,R4] [--supersedes R3]
+  records.py new WORKTREE TYPE "title" [--area A] [--repo R] [--from DEC-2,BRIEF-4] [--supersedes DEC-3]
   records.py list WORKTREE [--type T] [--active] [--repo R] [--area A | --area -]
   records.py areas WORKTREE
-  records.py tag WORKTREE R7 [--area A]       (no --area: feature-wide)
+  records.py tag WORKTREE DEC-7 [--area A]    (no --area: feature-wide)
   records.py rename-area WORKTREE OLD NEW
-  records.py path WORKTREE R7
-  records.py discard WORKTREE R7 [--note "..."]
-  records.py reactivate WORKTREE R7
+  records.py path WORKTREE DEC-7
+  records.py discard WORKTREE DEC-7 [--note "..."]
+  records.py reactivate WORKTREE DEC-7
   records.py index WORKTREE
   records.py digest WORKTREE            what an overview is written from
   records.py stamp-overview WORKTREE    after writing overview.md
   records.py overview-status WORKTREE
   records.py suggest WORKTREE           roll-up designs, plans, stale overview
-  records.py names WORKTREE R31 S C R52.19 B15 ...   a short name for each id or code
-  records.py guidance WORKTREE [--area A | --for R33|R33.4|R18-1.Q6] [--context REVIEW-CONTEXT.md] [--out FILE]
+  records.py names WORKTREE PLAN-31 S C BRIEF-52.19 BUILD-15 ...   a short name for each id or code
+  records.py guidance WORKTREE [--area A | --for BRIEF-33|BRIEF-33.4|BRIEF-18-1.Q-6] [--context REVIEW-CONTEXT.md] [--out FILE]
                                         branch scope, branch guidance, the feature's active guidance, and the repository's Known noise
-  records.py idea WORKTREE "text" [--area A] [--from R12|"this session"] [--why ...] [--when ...]
+  records.py idea WORKTREE "text" [--area A] [--from DEC-12|"this session"] [--why ...] [--when ...]
   records.py ideas WORKTREE [--all] [--area A | --area -]
-  records.py adopt WORKTREE I3 --by R60   the record the idea became
-  records.py drop WORKTREE I3 --why "..."
-  records.py unpark WORKTREE I3           back to parked
+  records.py adopt WORKTREE IDEA-3 --by DEC-60   the record the idea became
+  records.py drop WORKTREE IDEA-3 --why "..."
+  records.py unpark WORKTREE IDEA-3           back to parked
 
 Record frontmatter:
   ---
-  id: R7
+  id: DEC-7
   type: decision
   title: Poll export status instead of pushing it over the websocket
   date: 2026-10-16
   repo: api
   area: delivery
   status: active
-  from: R2, R5
-  supersedes: R3
+  from: DEC-2, BRIEF-5
+  supersedes: DEC-3
   ---
 """
 import argparse, datetime, importlib.util, os, re, subprocess, sys
 from typing import NamedTuple
 import ids
 
-TYPES = ("brainstorm", "design", "decision", "guidance", "capabilities", "plan", "spec")
+TYPES = ids.RECORD_TYPES
 STATUSES = ("active", "superseded", "discarded")
 FIELDS = ("id", "type", "title", "date", "repo", "area", "status", "from", "supersedes", "superseded_by", "note")
+CITING = ("from", "supersedes", "superseded_by")
+NO_RECORDS = "none"
 
 def git_run(wt, *args):
     return subprocess.run(["git", "-C", wt, *args], capture_output=True, text=True)
@@ -132,13 +135,28 @@ def records(d):
     rd = os.path.join(d, "records")
     if not os.path.isdir(rd): return []
     out = [parse(os.path.join(rd, f))[0] for f in os.listdir(rd) if f.endswith(".md")]
-    return sorted((r for r in out if ids.kind_of(r.get("id", "")) == ids.RECORD), key=lambda r: ids.number(r["id"]))
+    rs = sorted((r for r in out if ids.kind_of(r.get("id", "")) == ids.RECORD), key=lambda r: ids.number(r["id"]))
+    types = types_of(rs)
+    return [cited_as(r, types) for r in rs]
 
-def record_id(text): return ids.complete(text, ids.RECORD)
+def types_of(rs): return {ids.number(r["id"]): r["type"] for r in rs if r.get("type") in TYPES}
+
+def cited_as(r, types):
+    return {**r, "file_id": r["id"], "id": ids.canonical(r["id"], types), **{k: ids.rewrite(r[k], types) for k in CITING if r.get(k)}}
+
+def resolver(rs):
+    types = types_of(rs)
+    return lambda text: ids.canonical(text, types)
+
+def record_id(rs, text, rtype=None):
+    p = ids.read(text, ids.RECORD, ids.REF)
+    rtype = types_of(rs).get(p.n, rtype) if p else None
+    return ids.render(p, rtype) if rtype else ids.normalize(text)
 
 def find(d, rid):
-    rid = record_id(rid)
-    r = next((r for r in records(d) if ids.same(r["id"], rid)), None)
+    rs = records(d)
+    rid = record_id(rs, rid)
+    r = next((r for r in rs if ids.same(r["id"], rid)), None)
     if not r: sys.exit(f"{rid} not found in {d}/records")
     return r
 
@@ -153,18 +171,28 @@ def checks(d):
     """Design-check files in checks/: name, records covered (from the Checked line), open and closed counts."""
     cd = os.path.join(d, "checks")
     if not os.path.isdir(cd): return []
+    canon = resolver(records(d))
     out = []
-    for f in sorted(os.listdir(cd), key=lambda f: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f)]):
+    for f in sorted(check_files(cd), key=check_order):
         name = ids.check_from_file(f)
-        if name is None: continue
         text = open(os.path.join(cd, f), encoding="utf-8").read()
         m = re.search(r"^Checked [^:]*:\s*(.*?)(?:\.\s|\.$|$)", text, re.M)
-        recs = ids.records_in(m.group(1)) if m else []
-        out.append({"name": name, "records": recs, "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
+        recs = [canon(x) for x in ids.records_in(m.group(1))] if m else []
+        out.append({"name": canon(name), "records": recs, "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
                     "closed": len(re.findall(r"^[-*] \[[xX]\]", text, re.M))})
     return out
 
-def check_path(d, name): return os.path.join(d, "checks", ids.check_file(name))
+def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
+
+def check_order(f):
+    name = ids.check_from_file(f)
+    natural = [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f)]
+    return (0, ids.sort_key(name)) if ids.kind_of(name) == ids.CHECK else (1, natural)
+
+def check_path(d, name):
+    cd = os.path.join(d, "checks")
+    found = next((f for f in check_files(cd) if ids.check_from_file(f) == name or ids.same(ids.check_from_file(f), name)), None)
+    return os.path.join(cd, found or ids.check_file(name))
 
 def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
@@ -237,14 +265,14 @@ def overview_state(d):
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): return None, None, basis, [r["id"] for r in rs]
     head = open(p, encoding="utf-8").read(600)
-    m = re.search(rf"through ({ids.pattern(ids.RECORD)}) \(basis ([0-9a-f]+)\)", head)
+    m = re.search(rf"through ({ids.pattern(ids.RECORD)}|{NO_RECORDS}) \(basis ([0-9a-f]+)\)", head)
     if not m: return None, None, basis, [r["id"] for r in rs]
-    through = ids.number(m.group(1))
-    return m.group(1), m.group(2), basis, [r["id"] for r in rs if ids.number(r["id"]) > through]
+    through = 0 if m.group(1) == NO_RECORDS else ids.number(m.group(1))
+    return resolver(rs)(m.group(1)), m.group(2), basis, [r["id"] for r in rs if ids.number(r["id"]) > through]
 
 def basis_of(rs):
     import hashlib
-    key = "|".join(f"{r['id']}:{r.get('status', '')}:{r.get('area', '')}:{r.get('title', '')}" for r in rs)
+    key = "|".join(f"{r['file_id']}:{r.get('status', '')}:{r.get('area', '')}:{r.get('title', '')}" for r in rs)
     return hashlib.sha1(key.encode()).hexdigest()[:10]
 
 def overview_line(d):
@@ -285,7 +313,7 @@ def index(d):
     cs = checks(d)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
-        rows += [f"| [{c['name']}](checks/{c['name']}.md) | {', '.join(c['records'])} | {c['open']} | {c['closed']} |" for c in cs] + [""]
+        rows += [f"| [{c['name']}]({os.path.relpath(check_path(d, c['name']), d)}) | {', '.join(c['records'])} | {c['open']} | {c['closed']} |" for c in cs] + [""]
     if past:
         rows += ["## History", "", "Brainstorms, and records no longer active, oldest first.", ""]
         for r in past:
@@ -389,8 +417,7 @@ def plan_steps(r):
     return {int(re.match(r"\d+", t).group(0)): t.strip() for t in re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]}
 
 def plan_step(d, ref):
-    p = ids.parse(ref.strip().upper())
-    p = p if p and p.kind == ids.REF else None
+    p = ids.read(ref, ids.REF)
     r = next((r for r in records(d) if p and ids.number(r["id"]) == p.n and r.get("type") == "plan"), None)
     return r, plan_steps(r).get(p.sub) if r else None
 
@@ -424,7 +451,7 @@ def names(wt, wanted):
     out = []
     for raw in wanted:
         x = raw.strip().rstrip(",.;:")
-        X = x.upper()
+        X = ids.normalize(x)
         p = ids.parse(X)
         kind = p.kind if p else None
         name = None
@@ -433,17 +460,18 @@ def names(wt, wanted):
                 r = recs[p.n]; name = f"{r.get('type')}: {r.get('title')}" + ("" if r.get("status") in ("active", "") else f" ({r.get('status')})")
             elif kind == ids.REF:
                 bm = load("build.py")
-                _, items = bm.spec_requirements(d, p.record)
+                rid = recs[p.n]["id"] if p.n in recs else p.record
+                _, items = bm.spec_requirements(d, rid)
                 _, step = plan_step(d, X)
-                if items and p.sub in items: name = f"requirement of {p.record}: {bm.label(items[p.sub])}"
-                elif step is not None: name = f"step {p.sub} of plan {p.record}: {bm.step_piece(step)}"
+                if items and p.sub in items: name = f"requirement of {rid}: {bm.label(items[p.sub])}"
+                elif step is not None: name = f"step {p.sub} of plan {rid}: {bm.step_piece(step)}"
             elif kind == ids.CHECK:
                 cp = check_path(d, ids.check(p.record, p.sub))
                 if os.path.exists(cp):
                     if p.q is not None:
                         it = next((i for i in items_mod().read(cp) if ids.same(i["id"], ids.item(ids.QUESTION, p.q))), None)
                         if it: name = f"design question: {it['text']}"
-                    else: name = f"design check of {p.record}"
+                    else: name = f"design check of {recs[p.n]['id'] if p.n in recs else p.record}"
             elif kind == ids.IDEA:
                 it = next((i for i in ideas(d) if ids.same(i["id"], X)), None)
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
@@ -528,8 +556,8 @@ class Built(NamedTuple):
     records: dict
     unread: list
 
-def commits_by_record(bm, entries):
-    found = bm.built_records(entries)
+def commits_by_record(bm, entries, canon):
+    found = bm.built_records(entries, canon)
     return {ref: [bm.commit_of(e) for e in found[ref]] for ref in sorted(found, key=ids.sort_key)}
 
 def cited(refs):
@@ -540,6 +568,7 @@ def build_log(d):
     hub_wt = os.path.dirname(os.path.dirname(d))
     _, repos = workspace(hub_wt)
     lines, direct, built = [], [], Built(set(), {}, [])
+    canon = resolver(records(d))
     for w in dict.fromkeys([hub_wt] + list(repos.values())):
         repo = this_repo(w, repos)
         if not os.path.isdir(w) or not os.access(w, os.R_OK | os.X_OK):
@@ -552,7 +581,7 @@ def build_log(d):
             built.unread.append(repo); lines.append(f"{repo}: (build log unreadable: {e})"); continue
         lines += [f"{repo}: {l}" for l in bm.progress_lines(rows)]
         built.specs.update(built_specs(rows))
-        mine = commits_by_record(bm, entries)
+        mine = commits_by_record(bm, entries, canon)
         if mine: direct.append(f"{repo}: records built directly: {cited(mine)}")
         for ref, cs in mine.items(): built.records.setdefault(ref, []).extend(cs)
     lines += direct + plan_lines(d, built, this_repo(hub_wt, repos))
@@ -565,7 +594,8 @@ def successor(recs, rid):
     return rid
 
 def step_built(bm, ref, text, built, recs):
-    named = [successor(recs, x) for x in ids.records_in(bm.step_piece(text), refs=False)]
+    canon = resolver(recs.values())
+    named = [successor(recs, canon(x)) for x in ids.records_in(bm.step_piece(text), refs=False)]
     return ref in built.records or (bool(named) and all(x in built.specs or x in built.records for x in named))
 
 def steps_built(r, built):
@@ -635,7 +665,7 @@ def stamp_overview(d):
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
     rs = records(d)
-    last = rs[-1]["id"] if rs else ids.record(0)
+    last = rs[-1]["id"] if rs else NO_RECORDS
     text = open(p, encoding="utf-8").read()
     text = re.sub(r"^Generated .* \(basis [0-9a-f]+\)\..*\n+", "", text, flags=re.M)
     lines = text.split("\n", 1)
@@ -670,7 +700,7 @@ def write_ideas(d, its):
     items_mod().write(os.path.join(d, "ideas.md"), its, IDEAS_HEADER, order=IDEA_FIELDS)
 
 def area_for(wt, ref):
-    x = ref.strip().upper()
+    x = ids.normalize(ref)
     p = ids.parse(x)
     if not p or p.kind not in ids.RECORD_KINDS or names(wt, [x])[0].endswith(": unknown"): sys.exit(f"{ref} is not a record, requirement, or design question in this feature")
     return find(fdir(wt), p.record).get("area", "")
@@ -736,8 +766,9 @@ def main():
         rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
         _, repos = workspace(a.wt)
         old = find(d, a.supersedes) if a.supersedes else None
+        canon = resolver(rs)
         parts = [x.strip() for x in a.src.split(",") if x.strip()] if a.src else []
-        parts = [x.upper() if ids.kind_of(x.upper()) == ids.RECORD else x for x in parts]
+        parts = [canon(ids.normalize(x)) if ids.parse(ids.normalize(x)) else x for x in parts]
         src = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
         area = a.area if a.area is not None else (old.get("area", "") if old else area_of(d, src) if src else "")
         meta = {"id": ids.record(num, a.type), "type": a.type, "title": a.title.rstrip("."), "date": today,
@@ -794,7 +825,7 @@ def main():
         print("\n".join(names(a.wt, a.ids)))
     elif a.cmd == "idea":
         its = ideas(d); iid = ids.item(ids.IDEA, ids.next_number([i["id"] for i in its], ids.IDEA))
-        src = a.src or ""
+        src = ids.rewrite(a.src or "", types_of(records(d)))
         cited = ids.records_in(src)
         area = a.area if a.area is not None else (area_of(d, cited) if cited else "")
         f = {"Area": slug(area) if area else "", "From": src, "Why": (a.why or "").rstrip("."), "When": (a.when or "").rstrip("."),
@@ -811,7 +842,7 @@ def main():
     elif a.cmd in ("adopt", "drop", "unpark"):
         im = items_mod(); its = ideas(d); i = im.find(its, a.iid)
         if a.cmd == "adopt":
-            find(d, a.by); im.set_status(i, "fixed", f"adopted as {a.by.upper()}")
+            im.set_status(i, "fixed", f"adopted as {find(d, a.by)['id']}")
         elif a.cmd == "drop": im.set_status(i, "wont-fix", f"dropped: {a.why}")
         else: im.set_status(i, "open")
         write_ideas(d, its); index(d); print(f"{i['id']} {idea_word(i)}")

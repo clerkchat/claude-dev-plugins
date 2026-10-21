@@ -12,15 +12,15 @@ how it was broken down and planned. They live in the hub worktree, at
     002-decision-<slug>.md
     ...
   checks/
-    R13-1.md                  a design check of R13 (the design-check skill)
-    R13-1/raw/<lens>.md       each lens's reply, verbatim
+    BRIEF-13-1.md             a design check of BRIEF-13 (the design-check skill)
+    BRIEF-13-1/raw/<lens>.md  each lens's reply, verbatim
   overview.md                 generated from the active records; never edited
-  ideas.md                    parked ideas, I1, I2, ...; kept by records.py
+  ideas.md                    parked ideas, IDEA-1, IDEA-2, ...; kept by records.py
 ```
 
 `overview.md` is the feature's current state in one read, generated from the
 active records (below). `ideas.md` holds ideas set aside for later (below). Check files are not
-records: they have no R id, are never superseded, and are
+records: they have no record id, are never superseded, and are
 listed in the index under every record they checked.
 
 Manage files only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`: it
@@ -42,7 +42,7 @@ Record bodies and the overview carry diagrams as "Diagrams" in
   item or adding one is fine at any time.
 - **Restate in full.** A record that changes any part of an active record
   supersedes it and states the whole current version: what still holds, and the
-  change. No record amends another in part ("as R8, except ..."). When a change
+  change. No record amends another in part ("as PLAN-8, except ..."). When a change
   touches one part of a large design or capabilities record, restate that
   record, or first split the settled part into its own decision and supersede
   that. A spec whose piece is built (every requirement done or dropped in the
@@ -50,9 +50,12 @@ Record bodies and the overview carry diagrams as "Diagrams" in
   behavior names it and the change in its Approach. The procedure, including
   the check before writing, is "When a record changes another" in
   `skills/feature/SKILL.md`.
-- **Ids.** One sequence per feature: R1, R2, ... The id is the handle in
-  conversation ("R7"), in other records (`from:`), and in items that link to a
-  decision.
+- **Ids.** One sequence per feature, whatever the type, and each id is its
+  type's prefix and its number: IDEAS-1 (brainstorm), DESIGN-2, DEC-3
+  (decision), GUIDE-4 (guidance), PIECES-5 (capabilities), PLAN-6, BRIEF-7
+  (spec). The number alone finds the record, so older ids (R7) still resolve.
+  The id is the handle in conversation ("DEC-3"), in other records (`from:`),
+  and in items that link to a decision.
 - **Status.** `active`, `superseded` (by the record named in `superseded_by`),
   or `discarded` (with a `note`). Brainstorms have no status; they stay as
   history. "What is true now" is the code plus the active records.
@@ -87,7 +90,7 @@ area; never revise an old one, even when it turned out wrong. That is the point
 of keeping it.
 
 ```markdown
-# R1. Polling vs push for export status
+# IDEAS-1. Polling vs push for export status
 
 ## Context
 
@@ -117,7 +120,7 @@ rejected alternatives for each significant choice go in decisions, which the
 design cites.
 
 ```markdown
-# R4. Report exports: design
+# DESIGN-4. Report exports: design
 
 ## Problem
 
@@ -130,8 +133,8 @@ where each repository's part lies.
 
 ## Decisions
 
-- R5: poll export status with backoff
-- R6: exports are stored for 7 days
+- DEC-5: poll export status with backoff
+- DEC-6: exports are stored for 7 days
 
 ## Not doing
 
@@ -145,7 +148,7 @@ reviews, and fixes defer to active decisions. To refine one, write a new
 decision that supersedes it; to drop one, discard it with a note.
 
 ```markdown
-# R5. Poll export status with backoff
+# DEC-5. Poll export status with backoff
 
 ## Decision
 
@@ -181,7 +184,7 @@ full with its why and what it applies to. Superseded and discarded rules show
 in `records.py list`.
 
 ```markdown
-# R61. Capabilities wire in through explicit lists
+# GUIDE-61. Capabilities wire in through explicit lists
 
 ## Rule
 
@@ -200,7 +203,7 @@ codes; any new extension point.
 
 ## From
 
-R30-1.Q12, answered 2026-10-16.
+BRIEF-30-1.Q-12, answered 2026-10-16.
 ```
 
 ### capabilities
@@ -210,7 +213,7 @@ built, and reviewed on their own. Each piece names its repository and what it
 depends on.
 
 ```markdown
-# R7. Report exports: capabilities
+# PIECES-7. Report exports: capabilities
 
 1. **Export job** (api): create an export and run it in a worker. Depends on
    nothing.
@@ -228,12 +231,12 @@ done line, which may say "deferred items reviewed". Replanning writes a new
 plan that supersedes the old one.
 
 ```markdown
-# R8. Report exports: plan
+# PLAN-8. Report exports: plan
 
-1. api: pieces 1 and 2 (R7, spec R9), behind the `report-exports` flag.
+1. api: pieces 1 and 2 (PIECES-7, spec BRIEF-9), behind the `report-exports` flag.
    Done: an export can be started and polled with the flag on; api review;
    deferred items reviewed.
-2. web: piece 3 (spec R10); expect contract changes back to api from this
+2. web: piece 3 (spec BRIEF-10); expect contract changes back to api from this
    exploration. Done: the dialog exports a report end to end.
 3. Feature review across api and web.
 
@@ -250,7 +253,7 @@ change against Requirements, and the completeness lens checks Open items, so
 keep both sections and keep requirements checkable.
 
 ```markdown
-# R9. Export status endpoint
+# BRIEF-9. Export status endpoint
 
 ## Goal
 
@@ -289,15 +292,17 @@ being.
 ```
 
 Lists inside a spec other than Requirements and Open items use plain numbers,
-cited as R9.4 (spec, then number). Never prefix list items with a letter id (I,
-F, D, B, M, P, Q, R): those are the plugin's ids for ideas, follow-ups,
-deferred items, build pieces, milestones, passes, questions, and records.
+cited as BRIEF-9.4 (spec, then number). Never prefix list items with an id
+prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a record type's prefix such as
+DEC or BRIEF, or the older single letters I, D, B, M, P, R): those are the
+plugin's ids for ideas, follow-ups, deferred items, build pieces, milestones,
+passes, questions, and records.
 
 ## Ideas
 
 Good ideas come up all the time that are not for now. Parking one keeps it
 from being lost or from creeping into the current work. `ideas.md` is a
-checkbox list (I1, I2, ...) kept by `records.py idea`, `adopt`, `drop`, and
+checkbox list (IDEA-1, IDEA-2, ...) kept by `records.py idea`, `adopt`, `drop`, and
 `unpark`, in the item vocabulary of "Items" in `skills/review/tracking.md`:
 
 - **Parked** (status open): the idea, where it came from (a record, a check
@@ -340,13 +345,13 @@ designs).
 ## Guidance
 
 Each active guidance rule, one line, feature-wide first, then by area:
-"R61 (harness): capabilities wire in through explicit lists, never a
+"GUIDE-61 (harness): capabilities wire in through explicit lists, never a
 registry." Omitted when there is none.
 
 ## Shape
 
 How the solution works, in a few paragraphs, from the active designs, citing
-them and the decisions behind each part (R30; R21, R22).
+them and the decisions behind each part (DESIGN-30; DEC-21, DEC-22).
 
 ## Plan
 
@@ -365,10 +370,10 @@ main ──► [C] core ──┬──► [A] assertions ──► [CA] capture
 
 | Piece | Repo | Branch | From | Depends on | Spec | Built |
 |---|---|---|---|---|---|---|
-| C core harness | api | `feat/core` | main | nothing (R19, R29) | R32 | 9 of 32; B7 stopped |
-| B bisection | api | `feat/bisection` | C | C; adds `baselineTestRunId` (R22) | none | not started |
+| C core harness | api | `feat/core` | main | nothing (DEC-19, DEC-29) | BRIEF-32 | 9 of 32; BUILD-7 stopped |
+| B bisection | api | `feat/bisection` | C | C; adds `baselineTestRunId` (DEC-22) | none | not started |
 
-- Each PR targets the branch it starts from until that merges, then main (R31).
+- Each PR targets the branch it starts from until that merges, then main (DEC-31).
 
 ## By area
 
@@ -377,7 +382,7 @@ main ──► [C] core ──┬──► [A] assertions ──► [CA] capture
 Two or three sentences on where the area stands. Then each active decision,
 one line:
 
-- R22: `narrowing` is one result field, built by a ranked chain of localizers
+- DEC-22: `narrowing` is one result field, built by a ranked chain of localizers
   the core owns.
 
 ## Open
@@ -403,15 +408,15 @@ built, citing the commit, and fill the Plan table's Built cell as `built,
 Only two kinds, one bullet each naming both sides. A recording defect: a later
 record changes an earlier active one without superseding it, or relies on a
 superseded one; name the record that should supersede which, and say it is to
-be restated in full ("R28 changes R3's frozen-contract rule but does not
-supersede it; write a record superseding R3 that restates it in full (R3,
-R28)."). A real conflict for the user to decide: records, or a record and
+be restated in full ("DEC-28 changes DEC-3's frozen-contract rule but does not
+supersede it; write a record superseding DEC-3 that restates it in full (DEC-3,
+DEC-28)."). A real conflict for the user to decide: records, or a record and
 active guidance, that cannot both hold. A built spec and a later spec that
 names its change in Approach are consistent, not a disagreement.
 
 ## Parked
 
-One line per parked idea, by area, with when to look again (I4, harness:
+One line per parked idea, by area, with when to look again (IDEA-4, harness:
 streaming results; when a suite runs longer than a minute). "None." when there
 are none. The digest also lists adopted and dropped ideas; they are not
 parked, and an adopted idea is cited by the record it became wherever that
@@ -419,7 +424,7 @@ record is described, never reported as missing.
 
 ## Explored
 
-One line per brainstorm: what it explored (R1: how to split the harness branch
+One line per brainstorm: what it explored (IDEAS-1: how to split the harness branch
 into chunks).
 ````
 

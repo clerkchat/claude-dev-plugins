@@ -6,29 +6,29 @@ The build log records each delegated piece of implementation: the spec
 requirements it covers, the model and effort it ran at, where it stands, the
 commit it landed in, and the questions it stopped on. Requirement status lives
 here, not in the specs: a spec states intent, and "done" is what the log's
-landed pieces say. A requirement is cited as `R52.7`: spec record R52, item 7
-of its Requirements list. The log is read strictly: a line it does not
+landed pieces say. A requirement is cited as `BRIEF-52.7`: spec record BRIEF-52,
+item 7 of its Requirements list. The log is read strictly: a line it does not
 recognize stops the script rather than being dropped on the next write.
 
 Usage:
-  build.py add WORKTREE "title" --spec R52 --reqs 4,5 [--model sonnet] [--effort medium]
-  build.py done WORKTREE B3 --commit SHA [--covered "4:done,5:partial: no retry yet"] [--deviation "..."]
-  build.py stop WORKTREE B3 --question "..."
-  build.py resend WORKTREE B3 [--note "..."] [--model opus] [--effort high]
-  build.py abandon WORKTREE B3 [--note "..."]
-  build.py built WORKTREE R27 --commit SHA [--title "..."]     (a decision, a plan step as R32.4, or a whole spec built by a commit)
+  build.py add WORKTREE "title" --spec BRIEF-52 --reqs 4,5 [--model sonnet] [--effort medium]
+  build.py done WORKTREE BUILD-3 --commit SHA [--covered "4:done,5:partial: no retry yet"] [--deviation "..."]
+  build.py stop WORKTREE BUILD-3 --question "..."
+  build.py resend WORKTREE BUILD-3 [--note "..."] [--model opus] [--effort high]
+  build.py abandon WORKTREE BUILD-3 [--note "..."]
+  build.py built WORKTREE DEC-27 --commit SHA [--title "..."]     (a decision, a plan step as PLAN-32.4, or a whole spec built by a commit)
   build.py relink WORKTREE                           persist the commits re-found after a rebase, and list entries it could not follow
-  build.py relink WORKTREE B4 --commit SHA           point a done entry at a commit by hand
+  build.py relink WORKTREE BUILD-4 --commit SHA      point a done entry at a commit by hand
   build.py records WORKTREE                          the records logged as built, with their commits
-  build.py note WORKTREE B3 "what to do next"       (a briefed or stopped piece only; "" clears it)
-  build.py drop WORKTREE --spec R18 --reqs 17 --why "R24 moved it to R23.3"
+  build.py note WORKTREE BUILD-3 "what to do next"  (a briefed or stopped piece only; "" clears it)
+  build.py drop WORKTREE --spec BRIEF-18 --reqs 17 --why "DEC-24 moved it to BRIEF-23.3"
   build.py list WORKTREE [--open]
-  build.py progress WORKTREE [--spec R52]
-  build.py milestone WORKTREE --step R8.2 --passes prep,happy-path,security,edge-cases,tests [--required security]
-  build.py milestone WORKTREE --spec R52 --piece "C core harness" --passes ...     (a log with no plan)
-  build.py skip WORKTREE M1 edge-cases --why "..."     (never a required pass)
+  build.py progress WORKTREE [--spec BRIEF-52]
+  build.py milestone WORKTREE --step PLAN-8.2 --passes prep,happy-path,security,edge-cases,tests [--required security]
+  build.py milestone WORKTREE --spec BRIEF-52 --piece "C core harness" --passes ...     (a log with no plan)
+  build.py skip WORKTREE MILE-1 edge-cases --why "..."     (never a required pass)
   build.py milestones WORKTREE
-  build.py checklist WORKTREE [--spec R52]          progress as a checklist, one line per requirement
+  build.py checklist WORKTREE [--spec BRIEF-52]     progress as a checklist, one line per requirement
 
 Without --covered, `done` marks every requirement of the piece done. Statuses:
 briefed (handed to an implementer), stopped (it stopped on a question),
@@ -40,8 +40,8 @@ its Subject, the commit's subject line; `relink` persists that or sets it by han
 back to briefed and counts the attempt.
 
 Entry format:
-  - [ ] B3. Executor and record
-    - Spec: R52
+  - [ ] BUILD-3. Executor and record
+    - Spec: BRIEF-52
     - Requirements: 4 done, 5 partial (no retry yet), 6
     - Model: sonnet medium
     - Status: done
@@ -53,8 +53,8 @@ Entry format:
     - Started: 2026-10-16
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 
-  - [x] B4. Keep a feature's records in the hub worktree     (an entry from `built`: Record in place of Spec and Requirements)
-    - Record: R27
+  - [x] BUILD-4. Keep a feature's records in the hub worktree     (an entry from `built`: Record in place of Spec and Requirements)
+    - Record: DEC-27
     - Status: done
     - Commit: 1a2b3c4
     - Subject: feat: keep a feature's records in the hub worktree
@@ -180,7 +180,8 @@ def new_entry(entries, kind, title, **fields):
     return e
 
 def parse_reqs(spec, text):
-    nums = sorted({int(x) for x in re.findall(r"\d+", text.replace(ids.ref_prefix(spec), ""))})
+    own = re.sub(rf"\b{ids.pattern(ids.RECORD)}\.", lambda m: "" if ids.same(m.group(0)[:-1], spec) else m.group(0), text.upper())
+    nums = sorted({int(x) for x in re.findall(r"\d+", own)})
     if not nums: sys.exit("--reqs names no requirement numbers")
     return nums
 
@@ -225,25 +226,39 @@ class SpecProgress(NamedTuple):
     pieces: list
     dropped: dict
 
+def hub_records(wt):
+    rc = load_script("records.py")
+    return rc.records(rc.fdir(wt))
+
+def resolver(wt): return load_script("records.py").resolver(hub_records(wt))
+
+def spec_id(wt, text):
+    spec = record_id(hub_records(wt), text, "spec")
+    if ids.kind_of(spec) != ids.RECORD: sys.exit(f"--spec takes a spec record such as BRIEF-52, not {text!r}")
+    return spec
+
 def progress(wt, entries, spec=None):
     rc = load_script("records.py")
     d = rc.fdir(wt)
     entries = pieces(entries)
-    kinds = {r["id"]: r.get("type") for r in rc.records(d)}
-    specs = [spec] if spec else sorted({spec_of(e, kinds) for e in entries if spec_of(e, kinds)}, key=ids.number)
+    rs = rc.records(d)
+    canon, kinds = rc.resolver(rs), {r["id"]: r.get("type") for r in rs}
+    tagged = [(spec_of(e, canon, kinds), e) for e in entries]
+    specs = [spec_id(wt, spec)] if spec else sorted({s for s, _ in tagged if s}, key=ids.number)
     out = []
     for s in specs:
         r, texts = spec_requirements(d, s)
         texts = texts or {}
-        mine = [e for e in entries if spec_of(e, kinds) == s]
+        mine = [e for t, e in tagged if t == s]
         gone = dropped_of(mine)
         items = {n: t for n, t in texts.items() if n not in gone}
         out.append(SpecProgress(s, r, items, requirement_states(mine, items), mine, {n: (e, texts.get(n, "")) for n, e in gone.items()}))
     return out
 
-def spec_of(e, kinds):
-    record = e["f"].get("Record")
-    return e["f"].get("Spec") or (record if kinds.get(record) == "spec" else None)
+def spec_of(e, canon, kinds):
+    record = canon(e["f"].get("Record", ""))
+    spec = e["f"].get("Spec")
+    return canon(spec) if spec else (record if kinds.get(record) == "spec" else None)
 
 def covered(e, items):
     return [(n, "done", "") for n in items] if e["f"].get("Record") else reqs_of(e)
@@ -319,7 +334,6 @@ def checklist_lines(rows):
     return out[:-1] if out else out
 
 def compress(s, nums):
-    """R52.3, R52.5 to R52.9"""
     runs = []
     for n in nums:
         if runs and n == runs[-1][1] + 1: runs[-1][1] = n
@@ -335,35 +349,35 @@ def step_spec(text):
     return m.group(1) if m else None
 
 def plan_step_of(wt, ref):
-    ref = ref.strip().upper()
-    p = ids.parse(ref)
-    if not p or p.kind != ids.REF: sys.exit(f"--step takes a plan step such as R8.2, not {ref!r}")
+    p = ids.read(ref, ids.REF)
+    if not p: sys.exit(f"--step takes a plan step such as PLAN-8.2, not {ids.normalize(ref)!r}")
     rc = load_script("records.py")
     r, text = rc.plan_step(rc.fdir(wt), ref)
-    if not r: sys.exit(f"{p.record} is not a plan record in the hub")
+    if not r: sys.exit(f"{p.record or p.n} is not a plan record in the hub")
     if r.get("status") != "active": sys.exit(f"plan {r['id']} is {r.get('status')}" + (f" (by {r['superseded_by']})" if r.get("superseded_by") else "") + "; use a step of the active plan")
     if text is None: sys.exit(f"plan {r['id']} has no step {p.sub}")
-    return ref, text
+    return ids.ref(r["id"], p.sub), text
 
 BUILDABLE = ("decision", "plan", "spec")
 
 def buildable(wt, ref):
-    ref = record_id(ref.strip())
+    rs = hub_records(wt)
+    ref = record_id(rs, ref)
     if ids.kind_of(ref) == ids.REF:
         step, text = plan_step_of(wt, ref)
         return step, None, step_piece(text)
-    rc = load_script("records.py")
-    r = next((r for r in rc.records(rc.fdir(wt)) if ids.same(r["id"], ref)), None)
+    r = next((r for r in rs if ids.same(r["id"], ref)), None)
     if not r: sys.exit(f"{ref} is not a record in the hub")
+    ref = r["id"]
     if r.get("status") != "active": sys.exit(f"{ref} is {r.get('status')}" + (f" by {r['superseded_by']}; build that record instead" if r.get("superseded_by") else ""))
     if r.get("type") == "plan": sys.exit(f"{ref} is a plan; log its steps instead, such as {ids.ref(ref, 1)}")
     if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan step, or a spec")
     return ref, r, r.get("title", "")
 
-def built_records(entries):
+def built_records(entries, canon):
     out = {}
     for e in pieces(entries):
-        if e["f"].get("Record") and e["f"].get("Status") == "done": out.setdefault(e["f"]["Record"], []).append(e)
+        if e["f"].get("Record") and e["f"].get("Status") == "done": out.setdefault(canon(e["f"]["Record"]), []).append(e)
     return out
 
 def pieces(entries): return [e for e in entries if ids.kind_of(e["id"]) == ids.BUILD]
@@ -375,7 +389,8 @@ def pass_states(wt, spec):
     if not os.path.exists(p): return {}
     out = {}
     for e in load_script("passes.py").read(p):
-        if e["f"].get("Piece") != spec: continue
+        piece = e["f"].get("Piece")
+        if piece != spec and not ids.same(piece, spec): continue
         out[e["title"].split(" on ")[0].strip()] = e
     return out
 
@@ -459,7 +474,7 @@ def main():
     p = path(a.wt); found = log(a.wt); entries = found.entries; today = datetime.date.today().isoformat()
 
     if a.cmd == "add":
-        spec = record_id(a.spec)
+        spec = spec_id(a.wt, a.spec)
         nums = parse_reqs(spec, a.reqs)
         e = new_entry(entries, ids.BUILD, a.title.rstrip("."), Spec=spec, Requirements=", ".join(map(str, nums)),
                       Model=f"{a.model} {a.effort}", Status="briefed", Attempts="1", Started=today)
@@ -469,9 +484,9 @@ def main():
         ref, r, title = buildable(a.wt, a.record)
         full = full_sha(a.wt, a.commit)
         if r and r.get("type") == "spec":
-            has = [e["id"] for e in pieces(entries) if e["f"].get("Spec") == ref and e["f"].get("Status") != "abandoned"]
+            has = [e["id"] for e in pieces(entries) if ids.same(e["f"].get("Spec"), ref) and e["f"].get("Status") != "abandoned"]
             if has: sys.exit(f"{ref} already has pieces in the build log ({', '.join(has)}); log its remaining requirements as pieces instead")
-        first = next((e for e in built_records(entries).get(ref, []) if names_commit(e, full)), None)
+        first = next((e for e in built_records(entries, resolver(a.wt)).get(ref, []) if names_commit(e, full)), None)
         if first: sys.exit(f"{first['id']} already logs {ref} as built in {first['f']['Commit']}")
         e = new_entry(entries, ids.BUILD, (a.title or title).rstrip("."), Record=ref, Status="done", Started=today, **commit_fields(a.wt, full))
         why = off_branch(a.wt, full)
@@ -491,11 +506,11 @@ def main():
         if not found.relinked and not found.unlinked: print("nothing to re-point")
         return
     if a.cmd == "records":
-        built = [(ref, e) for ref, es in built_records(entries).items() for e in es]
+        built = [(ref, e) for ref, es in built_records(entries, resolver(a.wt)).items() for e in es]
         print("\n".join(f"{ref} built in {commit_of(e)} ({e['id']})" for ref, e in built) or "no records built directly")
         return
     if a.cmd == "drop":
-        spec = record_id(a.spec)
+        spec = spec_id(a.wt, a.spec)
         nums = parse_reqs(spec, a.reqs)
         _, items = spec_requirements(load_script("records.py").fdir(a.wt), spec)
         if items is None: sys.exit(f"{spec} not found in the hub")
@@ -509,7 +524,7 @@ def main():
         step, text = plan_step_of(a.wt, a.step) if a.step else (None, "")
         spec, piece = a.spec or step_spec(text), a.piece or step_piece(text)
         if not spec or not piece: sys.exit(f"step {step} names no spec; add --spec" if step else "give --step, or --spec and --piece")
-        spec = record_id(spec)
+        spec = spec_id(a.wt, spec)
         plan = [x.strip() for x in a.passes.split(",") if x.strip()]
         known = catalogue()
         bad = [x for x in plan if known and x not in known]
@@ -524,7 +539,7 @@ def main():
         m["multi"]["Skipped"].append(f"{a.focus}: {a.why}"); write(p, entries); print(f"{m['id']}: {a.focus} skipped")
         return
     if a.cmd == "checklist":
-        print("\n".join(checklist_lines(progress(a.wt, entries, a.spec.upper() if a.spec else None))) or "no pieces logged")
+        print("\n".join(checklist_lines(progress(a.wt, entries, a.spec))) or "no pieces logged")
         return
     if a.cmd == "milestones":
         lines, steps = milestone_lines(a.wt, entries)
@@ -538,7 +553,7 @@ def main():
                 what = f"{e['f']['Record']}; {st}" if e["f"].get("Record") else f"{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
                 print(f"{e['id']} {e['title']}  [{what}" + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
         else:
-            print("\n".join(progress_lines(progress(a.wt, entries, a.spec.upper() if a.spec else None))) or "no pieces logged")
+            print("\n".join(progress_lines(progress(a.wt, entries, a.spec))) or "no pieces logged")
         return
     e = find(entries, a.bid)
     if a.cmd == "done":

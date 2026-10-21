@@ -123,8 +123,9 @@ with "where are we?".
 >
 > Capture this. / Park that idea. / What did we decide about polling?
 
-- A feature keeps its thinking as numbered records (R1, R2, ...): brainstorms,
-  designs, decisions, capabilities, plans, and specs.
+- A feature keeps its thinking as numbered records, each id naming its type
+  (IDEAS-1, DESIGN-2, DEC-3, ...): brainstorms, designs, decisions,
+  capabilities, plans, and specs.
 - Records are history. Each says what was true on its date; a change of mind is
   a new record that supersedes the old one.
 - On a bigger feature, records carry an area (`auth`, `delivery`), named as the
@@ -202,7 +203,7 @@ reaches a choice no record settles, it stops and asks you rather than guessing.
 
 > What passes does this need?
 >
-> Do an edge-cases pass on R9.
+> Do an edge-cases pass on BRIEF-9.
 >
 > Guide me through a security pass.
 

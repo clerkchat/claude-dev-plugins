@@ -1,13 +1,13 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede R3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
 argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | spec <piece> | list | import <file>]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 ---
 
 # Feature records
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -88,8 +88,8 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
 - **design**: when brainstorming settles. `--from` the brainstorms it settles.
   Write a decision record for each significant choice first, and cite them.
 - **decision**: one choice per record, with what was rejected and why. When a
-  new choice changes an earlier one, `--supersedes R<n>` and restate it ("When
-  a record changes another" below); never edit the old one. When the user drops one, `records.py discard <worktree> R<n> --note
+  new choice changes an earlier one, `--supersedes DEC-<n>` and restate it ("When
+  a record changes another" below); never edit the old one. When the user drops one, `records.py discard <worktree> DEC-<n> --note
   "<why>"`.
 - **capabilities**: `--from` the design. Each piece names its repository and its
   dependencies.
@@ -107,8 +107,9 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   read both. When the piece changes the behavior of a spec that is already
   built, Approach names that spec and what changes ("When a record changes
   another" below). Any other list in a spec uses plain numbers, cited as
-  R33.4, never letter-prefixed ids (I, F, D, B, M, P, Q, R), which clash with
-  the plugin's ids. Every implementer works from the spec, so draft it with a
+  BRIEF-33.4, never with an id prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a
+  record type's prefix such as DEC, or the older letters I, D, B, M, P, R),
+  which clash with the plugin's ids. Every implementer works from the spec, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
   give it the spec template in `records.md`, the records the piece builds on
   (its capabilities or plan row, the design, the decisions of its area, and
@@ -123,7 +124,7 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
 
 A record that changes any part of an active record supersedes it and states the
 whole current version: what still holds, and the change. No record amends
-another in part ("as R8, except ..."), because that moves the merge to read
+another in part ("as PLAN-8, except ..."), because that moves the merge to read
 time, when the context is gone and each reader merges differently. The writer
 has the most context.
 
@@ -133,8 +134,8 @@ its `from` cites. Supersede each one it changes with `--supersedes`, and write
 the body as the complete current version, so a reader never needs the old
 record to understand it. `--supersedes` takes one record: when the new record
 changes several, give it the one it mostly restates, restate the others in the
-body, and discard each of them with `records.py discard <worktree> R<n> --note
-"restated in R<new>"`.
+body, and discard each of them with `records.py discard <worktree> <id> --note
+"restated in <new id>"`.
 
 When the change touches one part of a large design or capabilities record,
 either restate that whole record, or first split the settled part into its own
@@ -182,17 +183,17 @@ describes, before the next step starts.
 
 When an idea comes up that is not for now ("cool, but later", "let's skip that
 for now", "park that"), or when you set one aside yourself while scoping, park
-it: `records.py idea <worktree> "<the idea>" --from <R-id, check question, or
+it: `records.py idea <worktree> "<the idea>" --from <record id, check question, or
 "this session"> --why "<what it would buy>" --when "<what would make it worth
 doing>"`, with `--area` when it belongs to one. One line to the user ("parked
-as I7"). Offer to park ideas the conversation drops without deciding, at most
+as IDEA-7"). Offer to park ideas the conversation drops without deciding, at most
 once per pause, listing them in a line each.
 
 "What ideas did we park", "anything parked for the harness": `records.py ideas
 <worktree> [--area <area>]`. When the work reaches an idea's trigger, mention
 it in a line. When an idea is taken up, write the record it becomes and
-`records.py adopt <worktree> I7 --by R<n>`; when it is ruled out, `records.py
-drop <worktree> I7 --why "<why>"`.
+`records.py adopt <worktree> IDEA-7 --by <record id>`; when it is ruled out, `records.py
+drop <worktree> IDEA-7 --why "<why>"`.
 
 ## The overview
 

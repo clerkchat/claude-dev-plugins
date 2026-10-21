@@ -8,23 +8,23 @@ range, checklist, and check result. It is read strictly: a line it does not
 recognize stops the script rather than being dropped on the next write.
 
 Usage:
-  passes.py start WORKTREE FOCUS --lenses a,b [--mode claude|guide] [--piece R9] [--leave-out FILE ...]
-  passes.py item WORKTREE P3 "what to do, with path:line"
-  passes.py done WORKTREE P3 N [--na "why not applicable"]
-  passes.py end WORKTREE P3
-  passes.py note WORKTREE P3 "what to do next"      (an open pass only; "" clears it)
-  passes.py range WORKTREE P3
-  passes.py check WORKTREE P3 --run LABEL --ran a,b (--findings a=2,b=0 | --result empty|error) [--note "..."]
-  passes.py abandon WORKTREE P3 [--note "..."]
-  passes.py show WORKTREE P3
+  passes.py start WORKTREE FOCUS --lenses a,b [--mode claude|guide] [--piece BRIEF-9] [--leave-out FILE ...]
+  passes.py item WORKTREE PASS-3 "what to do, with path:line"
+  passes.py done WORKTREE PASS-3 N [--na "why not applicable"]
+  passes.py end WORKTREE PASS-3
+  passes.py note WORKTREE PASS-3 "what to do next"      (an open pass only; "" clears it)
+  passes.py range WORKTREE PASS-3
+  passes.py check WORKTREE PASS-3 --run LABEL --ran a,b (--findings a=2,b=0 | --result empty|error) [--note "..."]
+  passes.py abandon WORKTREE PASS-3 [--note "..."]
+  passes.py show WORKTREE PASS-3
   passes.py list WORKTREE [--open]
   passes.py stats WORKTREE
 
 Entry format:
-  - [ ] P3. edge-cases on R9
+  - [ ] PASS-3. edge-cases on BRIEF-9
     - Mode: claude
     - Lenses: edge-cases, error-handling
-    - Piece: R9
+    - Piece: BRIEF-9
     - Status: ended
     - Start: 1a2b3c4
     - End: 5d6e7f8

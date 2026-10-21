@@ -29,56 +29,56 @@ def block_keys(repo, entry_id):
 
 class BuiltTests(FeatureRepoCase):
     def test_built_on_a_decision(self):
-        out = self.repo.build_ok("built", "R1", "--commit", self.c1)
-        self.assertEqual(out, f"B1 built: R1 in {self.c1}")
-        self.assertEqual(self.repo.field("B1", "Record"), "R1")
-        self.assertEqual(self.repo.field("B1", "Spec"), "")
-        self.assertEqual(self.repo.field("B1", "Status"), "done")
-        self.assertEqual(self.repo.field("B1", "Commit"), self.c1)
+        out = self.repo.build_ok("built", "DEC-1", "--commit", self.c1)
+        self.assertEqual(out, f"BUILD-1 built: DEC-1 in {self.c1}")
+        self.assertEqual(self.repo.field("BUILD-1", "Record"), "DEC-1")
+        self.assertEqual(self.repo.field("BUILD-1", "Spec"), "")
+        self.assertEqual(self.repo.field("BUILD-1", "Status"), "done")
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.c1)
 
     def test_built_takes_the_record_title(self):
-        self.repo.build_ok("built", "R1", "--commit", self.c1)
-        self.assertIn("- [x] B1. Decision one\n", self.repo.log_text())
+        self.repo.build_ok("built", "DEC-1", "--commit", self.c1)
+        self.assertIn("- [x] BUILD-1. Decision one\n", self.repo.log_text())
 
     def test_built_on_a_plan_step_is_titled_with_its_piece(self):
-        self.repo.build_ok("built", "r4.2", "--commit", self.c2)
-        self.assertEqual(self.repo.field("B1", "Record"), "R4.2")
-        self.assertIn("- [x] B1. Piece two, the second thing\n", self.repo.log_text())
+        self.repo.build_ok("built", "plan4.2", "--commit", self.c2)
+        self.assertEqual(self.repo.field("BUILD-1", "Record"), "PLAN-4.2")
+        self.assertIn("- [x] BUILD-1. Piece two, the second thing\n", self.repo.log_text())
 
     def test_built_on_a_whole_spec_takes_a_given_title(self):
-        self.repo.build_ok("built", "R6", "--commit", self.c3, "--title", "Spec six whole.")
-        self.assertEqual(self.repo.field("B1", "Record"), "R6")
-        self.assertIn("- [x] B1. Spec six whole\n", self.repo.log_text())
+        self.repo.build_ok("built", "BRIEF-6", "--commit", self.c3, "--title", "Spec six whole.")
+        self.assertEqual(self.repo.field("BUILD-1", "Record"), "BRIEF-6")
+        self.assertIn("- [x] BUILD-1. Spec six whole\n", self.repo.log_text())
 
     def test_built_writes_the_subject(self):
-        self.repo.build_ok("built", "R1", "--commit", self.c1)
-        self.repo.build_ok("built", "R6", "--commit", self.c3)
-        self.assertEqual(self.repo.field("B1", "Subject"), "feat: decision one")
-        self.assertEqual(self.repo.field("B2", "Subject"), "feat: spec six")
+        self.repo.build_ok("built", "DEC-1", "--commit", self.c1)
+        self.repo.build_ok("built", "BRIEF-6", "--commit", self.c3)
+        self.assertEqual(self.repo.field("BUILD-1", "Subject"), "feat: decision one")
+        self.assertEqual(self.repo.field("BUILD-2", "Subject"), "feat: spec six")
 
     def test_record_and_subject_sit_in_field_order(self):
-        self.repo.build_ok("built", "R1", "--commit", self.c1)
+        self.repo.build_ok("built", "DEC-1", "--commit", self.c1)
         self.assertEqual(
-            block_keys(self.repo, "B1"),
+            block_keys(self.repo, "BUILD-1"),
             ["Record", "Status", "Commit", "Subject", "Started"],
         )
 
     def test_one_entry_per_commit_for_a_record(self):
-        self.repo.build_ok("built", "R1", "--commit", self.c1)
-        out = self.repo.build_ok("built", "R1", "--commit", self.c2)
-        self.assertEqual(out, f"B2 built: R1 in {self.c2}")
+        self.repo.build_ok("built", "DEC-1", "--commit", self.c1)
+        out = self.repo.build_ok("built", "DEC-1", "--commit", self.c2)
+        self.assertEqual(out, f"BUILD-2 built: DEC-1 in {self.c2}")
 
     def test_done_writes_the_subject(self):
-        self.repo.build_ok("add", "Five piece", "--spec", "R5", "--reqs", "1")
-        self.repo.build_ok("done", "B1", "--commit", self.c4)
-        self.assertEqual(self.repo.field("B1", "Subject"), "feat: spec five piece")
-        self.assertEqual(self.repo.field("B1", "Commit"), self.c4)
+        self.repo.build_ok("add", "Five piece", "--spec", "BRIEF-5", "--reqs", "1")
+        self.repo.build_ok("done", "BUILD-1", "--commit", self.c4)
+        self.assertEqual(self.repo.field("BUILD-1", "Subject"), "feat: spec five piece")
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.c4)
 
     def test_a_whole_spec_is_one_entry_per_commit(self):
-        self.repo.build_ok("built", "R6", "--commit", self.c3)
-        self.repo.build_ok("built", "R6", "--commit", self.c4)
-        self.assertIn("R6 Spec six: 2 of 2", self.repo.build_ok("progress"))
-        self.assertEqual(self.repo.field("B2", "Record"), "R6")
+        self.repo.build_ok("built", "BRIEF-6", "--commit", self.c3)
+        self.repo.build_ok("built", "BRIEF-6", "--commit", self.c4)
+        self.assertIn("BRIEF-6 Spec six: 2 of 2", self.repo.build_ok("progress"))
+        self.assertEqual(self.repo.field("BUILD-2", "Record"), "BRIEF-6")
 
 
 class BuiltRefusalTests(FeatureRepoCase):
@@ -92,44 +92,44 @@ class BuiltRefusalTests(FeatureRepoCase):
         self.refuses("R99 is not a record in the hub", "R99", "--commit", self.c1)
 
     def test_an_inactive_record_names_its_successor(self):
-        self.refuses("R2 is superseded by R3", "R2", "--commit", self.c1)
+        self.refuses("DEC-2 is superseded by DEC-3", "R2", "--commit", self.c1)
 
     def test_a_step_of_an_inactive_plan(self):
-        self.refuses("plan R8 is superseded (by R4)", "R8.1", "--commit", self.c1)
+        self.refuses("plan PLAN-8 is superseded (by PLAN-4)", "R8.1", "--commit", self.c1)
 
     def test_a_missing_plan_step(self):
-        self.refuses("plan R4 has no step 9", "R4.9", "--commit", self.c1)
+        self.refuses("plan PLAN-4 has no step 9", "R4.9", "--commit", self.c1)
 
     def test_a_step_of_a_record_that_is_not_a_plan(self):
-        self.refuses("R5 is not a plan record", "R5.1", "--commit", self.c1)
+        self.refuses("BRIEF-5 is not a plan record", "R5.1", "--commit", self.c1)
 
     def test_a_type_that_is_not_decision_plan_or_spec(self):
-        self.refuses("R7 is a brainstorm", "R7", "--commit", self.c1)
+        self.refuses("IDEAS-7 is a brainstorm", "R7", "--commit", self.c1)
 
     def test_a_commit_that_does_not_exist(self):
         self.refuses("is not a commit here", "R3", "--commit", "deadbeef")
 
     def test_a_bare_plan_points_at_its_steps(self):
-        self.refuses("R4 is a plan; log its steps instead, such as R4.1", "R4", "--commit", "HEAD")
+        self.refuses("PLAN-4 is a plan; log its steps instead, such as PLAN-4.1", "R4", "--commit", "HEAD")
 
     def test_a_second_entry_for_the_same_record_and_commit(self):
         self.repo.build_ok("built", "R1", "--commit", self.c1)
         before = self.repo.log_text()
         code, out = self.repo.build("built", "R1", "--commit", self.c1)
         self.assertNotEqual(code, 0)
-        self.assertIn(f"B1 already logs R1 as built in {self.c1}", out)
+        self.assertIn(f"BUILD-1 already logs DEC-1 as built in {self.c1}", out)
         self.assertEqual(self.repo.log_text(), before)
 
     def test_a_whole_spec_that_already_has_pieces(self):
         self.repo.build_ok("add", "Five piece", "--spec", "R5", "--reqs", "1")
-        self.repo.build_ok("done", "B1", "--commit", self.c4)
+        self.repo.build_ok("done", "BUILD-1", "--commit", self.c4)
         code, out = self.repo.build("built", "R5", "--commit", self.c4)
         self.assertNotEqual(code, 0)
         self.assertIn(
-            "R5 already has pieces in the build log (B1); log its remaining requirements as pieces instead",
+            "BRIEF-5 already has pieces in the build log (BUILD-1); log its remaining requirements as pieces instead",
             out,
         )
-        self.assertNotIn("Record: R5", self.repo.log_text())
+        self.assertNotIn("Record:", self.repo.log_text())
 
     def test_a_whole_plan_is_never_logged(self):
         code, out = self.repo.build("built", "R4", "--commit", self.c1)
@@ -144,41 +144,41 @@ class BuiltRefusalTests(FeatureRepoCase):
 class ReaderTests(FeatureRepoCase):
     def setUp(self):
         super().setUp()
-        self.repo.build_ok("built", "R1", "--commit", self.c1)
-        self.repo.build_ok("built", "R4.2", "--commit", self.c2)
-        self.repo.build_ok("built", "R6", "--commit", self.c3, "--title", "Spec six whole.")
-        self.repo.build_ok("built", "R1", "--commit", self.c2)
-        self.repo.build_ok("add", "Five piece", "--spec", "R5", "--reqs", "1")
-        self.repo.build_ok("done", "B5", "--commit", self.c4)
+        self.repo.build_ok("built", "DEC-1", "--commit", self.c1)
+        self.repo.build_ok("built", "PLAN-4.2", "--commit", self.c2)
+        self.repo.build_ok("built", "BRIEF-6", "--commit", self.c3, "--title", "Spec six whole.")
+        self.repo.build_ok("built", "DEC-1", "--commit", self.c2)
+        self.repo.build_ok("add", "Five piece", "--spec", "BRIEF-5", "--reqs", "1")
+        self.repo.build_ok("done", "BUILD-5", "--commit", self.c4)
 
     def test_a_whole_spec_entry_counts_every_requirement(self):
-        self.assertIn("R6 Spec six: 2 of 2 requirements done", self.repo.build_ok("progress"))
+        self.assertIn("BRIEF-6 Spec six: 2 of 2 requirements done", self.repo.build_ok("progress"))
 
     def test_decision_and_step_entries_appear_under_no_spec(self):
         out = self.repo.build_ok("progress")
-        self.assertNotRegex(out, r"(?m)^R(1|4)")
-        self.assertIn("R5 Spec five: 1 of 2", out)
+        self.assertNotRegex(out, r"(?m)^(DEC-1|PLAN-4)")
+        self.assertIn("BRIEF-5 Spec five: 1 of 2", out)
 
     def test_checklist_attributes_a_whole_spec_to_its_entry(self):
-        out = self.repo.build_ok("checklist", "--spec", "R6")
-        self.assertEqual(sum(l.startswith("- [x] ") and l.endswith(" (B3)") for l in out.splitlines()), 2)
+        out = self.repo.build_ok("checklist", "--spec", "BRIEF-6")
+        self.assertEqual(sum(l.startswith("- [x] ") and l.endswith(" (BUILD-3)") for l in out.splitlines()), 2)
 
     def test_list_prints_a_record_entry_with_its_record(self):
         lines = self.repo.build_ok("list").splitlines()
-        self.assertIn(f"B1 Decision one  [R1; done; {self.c1}]", lines)
-        self.assertIn(f"B2 Piece two, the second thing  [R4.2; done; {self.c2}]", lines)
+        self.assertIn(f"BUILD-1 Decision one  [DEC-1; done; {self.c1}]", lines)
+        self.assertIn(f"BUILD-2 Piece two, the second thing  [PLAN-4.2; done; {self.c2}]", lines)
 
     def test_list_prints_a_spec_piece_as_before(self):
         lines = self.repo.build_ok("list").splitlines()
-        self.assertIn(f"B5 Five piece  [R5: 1 done; done; sonnet medium; {self.c4}]", lines)
+        self.assertIn(f"BUILD-5 Five piece  [BRIEF-5: 1 done; done; sonnet medium; {self.c4}]", lines)
 
     def test_records_prints_one_line_per_record_entry(self):
         expected = "\n".join(
             [
-                f"R1 built in {self.c1} (B1)",
-                f"R1 built in {self.c2} (B4)",
-                f"R4.2 built in {self.c2} (B2)",
-                f"R6 built in {self.c3} (B3)",
+                f"DEC-1 built in {self.c1} (BUILD-1)",
+                f"DEC-1 built in {self.c2} (BUILD-4)",
+                f"PLAN-4.2 built in {self.c2} (BUILD-2)",
+                f"BRIEF-6 built in {self.c3} (BUILD-3)",
             ]
         )
         self.assertEqual(self.repo.build_ok("records"), expected)
@@ -192,8 +192,8 @@ class RelinkTests(FeatureRepoCase):
         self.repo.build_ok("built", "R6", "--commit", self.c3)
         self.repo.build_ok("built", "R1", "--commit", self.c2)
         self.repo.build_ok("add", "Five piece", "--spec", "R5", "--reqs", "1")
-        self.repo.build_ok("done", "B5", "--commit", self.c4)
-        self.all = ["B1", "B2", "B3", "B4", "B5"]
+        self.repo.build_ok("done", "BUILD-5", "--commit", self.c4)
+        self.all = ["BUILD-1", "BUILD-2", "BUILD-3", "BUILD-4", "BUILD-5"]
 
     def test_nothing_is_re_pointed_before_a_rebase(self):
         self.assertEqual(self.repo.state(), ([], []))
@@ -212,65 +212,65 @@ class RelinkTests(FeatureRepoCase):
     def test_list_shows_the_re_found_hash(self):
         self.repo.main_moves()
         lines = self.repo.build_ok("list").splitlines()
-        self.assertIn(f"B1 Decision one  [R1; done; {self.repo.find('feat: decision one')}]", lines)
+        self.assertIn(f"BUILD-1 Decision one  [DEC-1; done; {self.repo.find('feat: decision one')}]", lines)
 
     def test_an_entry_on_a_moved_commit_is_re_pointed_by_its_own_subject(self):
         self.repo.main_moves()
         out = self.repo.build_ok("list")
-        self.assertRegex(out, rf"B4 .*\[R1; done; {self.repo.find('feat: plan step two')}\]")
+        self.assertRegex(out, rf"BUILD-4 .*\[DEC-1; done; {self.repo.find('feat: plan step two')}\]")
 
     def test_relink_persists_the_re_found_hashes(self):
         self.repo.main_moves()
         out = self.repo.build_ok("relink")
-        self.assertEqual(self.repo.field("B1", "Commit"), self.repo.find("feat: decision one"))
-        self.assertEqual(self.repo.field("B3", "Commit"), self.repo.find("feat: spec six"))
-        self.assertIn("re-pointed: B1, B2, B3, B4, B5", out)
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.repo.find("feat: decision one"))
+        self.assertEqual(self.repo.field("BUILD-3", "Commit"), self.repo.find("feat: spec six"))
+        self.assertIn("re-pointed: BUILD-1, BUILD-2, BUILD-3, BUILD-4, BUILD-5", out)
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_progress_is_unchanged_by_the_re_find(self):
         self.repo.main_moves()
-        self.assertIn("R6 Spec six: 2 of 2 requirements done", self.repo.build_ok("progress"))
+        self.assertIn("BRIEF-6 Spec six: 2 of 2 requirements done", self.repo.build_ok("progress"))
 
     def test_a_writer_persists_re_found_hashes(self):
         self.repo.main_moves()
         self.repo.build_ok("add", "Five two", "--spec", "R5", "--reqs", "2")
-        self.assertEqual(self.repo.field("B1", "Commit"), self.repo.find("feat: decision one"))
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.repo.find("feat: decision one"))
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_a_reworded_subject_is_unlinked_and_keeps_its_commit(self):
         self.repo.commit("feat: new decision")
         self.repo.build_ok("built", "R3", "--commit", "HEAD")
-        old = self.repo.field("B6", "Commit")
+        old = self.repo.field("BUILD-6", "Commit")
         self.repo.git("commit", "-q", "--amend", "-m", "feat: reworded")
-        self.assertEqual(self.repo.state(), ([], ["B6"]))
-        self.assertEqual(log_unlinked_commit(self.repo.path, "B6"), old)
+        self.assertEqual(self.repo.state(), ([], ["BUILD-6"]))
+        self.assertEqual(log_unlinked_commit(self.repo.path, "BUILD-6"), old)
         out = self.repo.build_ok("relink")
-        self.assertIn(f'unlinked: B6 {old} "feat: new decision"', out)
+        self.assertIn(f'unlinked: BUILD-6 {old} "feat: new decision"', out)
 
     def test_relink_by_hand_re_points_and_refreshes_the_subject(self):
         self.repo.commit("feat: new decision")
         self.repo.build_ok("built", "R3", "--commit", "HEAD")
         self.repo.git("commit", "-q", "--amend", "-m", "feat: reworded")
-        self.repo.build_ok("relink", "B6", "--commit", "HEAD")
-        self.assertEqual(self.repo.field("B6", "Commit"), self.repo.head())
-        self.assertEqual(self.repo.field("B6", "Subject"), "feat: reworded")
+        self.repo.build_ok("relink", "BUILD-6", "--commit", "HEAD")
+        self.assertEqual(self.repo.field("BUILD-6", "Commit"), self.repo.head())
+        self.assertEqual(self.repo.field("BUILD-6", "Subject"), "feat: reworded")
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_relink_by_hand_needs_both_an_entry_and_a_commit(self):
-        self.assertRefusesRelink("give both an entry and --commit", "B1")
+        self.assertRefusesRelink("give both an entry and --commit", "BUILD-1")
 
     def test_relink_by_hand_refuses_an_open_piece(self):
         self.repo.build_ok("add", "Open piece", "--spec", "R5", "--reqs", "2")
-        self.assertRefusesRelink("B6 is briefed, not done", "B6", "--commit", "HEAD")
+        self.assertRefusesRelink("BUILD-6 is briefed, not done", "BUILD-6", "--commit", "HEAD")
 
     def test_relink_by_hand_refuses_an_unknown_entry(self):
-        code, out = self.repo.build("relink", "B99", "--commit", "HEAD")
+        code, out = self.repo.build("relink", "BUILD-99", "--commit", "HEAD")
         self.assertNotEqual(code, 0, out)
 
     def test_relink_by_hand_refuses_a_commit_that_does_not_exist(self):
-        code, out = self.repo.build("relink", "B1", "--commit", "deadbeef")
+        code, out = self.repo.build("relink", "BUILD-1", "--commit", "deadbeef")
         self.assertNotEqual(code, 0, out)
-        self.assertEqual(self.repo.field("B1", "Commit"), self.c1)
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.c1)
 
     def assertRefusesRelink(self, want, *args):
         code, out = self.repo.build("relink", *args)
@@ -285,26 +285,26 @@ class RelinkTests(FeatureRepoCase):
             f.write("more\n")
         self.repo.git("add", "file.txt")
         self.repo.git("commit", "-q", "--amend", "--no-edit")
-        self.assertEqual(self.repo.state(), ([], ["B6"]))
-        self.repo.build_ok("relink", "B6", "--commit", "HEAD")
+        self.assertEqual(self.repo.state(), ([], ["BUILD-6"]))
+        self.repo.build_ok("relink", "BUILD-6", "--commit", "HEAD")
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_an_entry_on_an_ancestor_of_the_base_is_never_touched(self):
         self.repo.commit("base")
         self.repo.build_ok("built", "R3", "--commit", self.base)
         self.assertEqual(self.repo.state(), ([], []))
-        self.assertEqual(self.repo.field("B6", "Commit"), self.base)
+        self.assertEqual(self.repo.field("BUILD-6", "Commit"), self.base)
 
     def test_a_moved_entry_with_no_subject_is_unlinked(self):
         self.repo.build_ok("built", "R3", "--commit", self.c4)
         text = self.repo.log_text()
-        marker = "- [x] B6."
+        marker = "- [x] BUILD-6."
         head, tail = text.split(marker)
         tail = "\n".join(l for l in tail.split("\n") if not l.startswith("  - Subject: "))
         write_log(self.repo.path, head + marker + tail)
         self.repo.main_moves()
-        self.assertEqual(self.repo.state(), (self.all, ["B6"]))
-        self.assertEqual(self.repo.field("B6", "Subject"), "")
+        self.assertEqual(self.repo.state(), (self.all, ["BUILD-6"]))
+        self.assertEqual(self.repo.field("BUILD-6", "Subject"), "")
 
     def test_a_squash_merged_branch_is_not_re_pointed(self):
         self.repo.main_moves()
@@ -318,11 +318,11 @@ class RelinkTests(FeatureRepoCase):
     def test_a_merged_branch_reset_onto_main_is_not_re_pointed(self):
         self.repo.main_moves()
         self.repo.build_ok("relink")
-        kept = self.repo.field("B1", "Commit")
+        kept = self.repo.field("BUILD-1", "Commit")
         self.repo.squash_merge()
         self.repo.reset_to_origin()
         self.assertEqual(self.repo.state(), ([], []))
-        self.assertEqual(self.repo.field("B1", "Commit"), kept)
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), kept)
 
     def test_an_old_entry_with_no_subject_still_reads(self):
         old = init_repo(self.path("old"))
@@ -349,7 +349,7 @@ class EdgeTests(FeatureRepoCase):
 
     def test_a_commit_on_the_branch_is_logged_with_no_note(self):
         out = self.repo.build_ok("built", "R1", "--commit", self.own)
-        self.assertEqual(out, f"B1 built: R1 in {self.own}")
+        self.assertEqual(out, f"BUILD-1 built: DEC-1 in {self.own}")
 
     def test_a_commit_on_main_is_noted_and_still_logged(self):
         out = self.repo.build_ok("built", "R1", "--commit", self.base)
@@ -357,30 +357,30 @@ class EdgeTests(FeatureRepoCase):
             f"note: {self.base} is not on this branch: it is on the main branch, older than this branch's base; logged anyway",
             out,
         )
-        self.assertEqual(self.repo.field("B1", "Commit"), self.base)
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.base)
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_a_commit_head_does_not_reach_is_noted_and_unlinked(self):
         out = self.repo.build_ok("built", "R1", "--commit", self.other)
         self.assertIn(f"note: {self.other} is not on this branch: HEAD does not reach it", out)
-        self.assertEqual(self.repo.field("B1", "Commit"), self.other)
-        self.assertEqual(self.repo.state(), ([], ["B1"]))
-        self.repo.build_ok("relink", "B1", "--commit", self.own)
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.other)
+        self.assertEqual(self.repo.state(), ([], ["BUILD-1"]))
+        self.repo.build_ok("relink", "BUILD-1", "--commit", self.own)
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_an_odd_subject_is_stored_whole_on_one_line(self):
         sha = self.odd_commit()
         self.repo.build_ok("built", "R3", "--commit", sha)
-        self.assertEqual(self.repo.field("B1", "Subject"), self.stored_subject)
+        self.assertEqual(self.repo.field("BUILD-1", "Subject"), self.stored_subject)
         self.assertEqual(self.repo.state(), ([], []))
 
     def test_an_odd_subject_is_re_found_exactly_after_a_rebase(self):
         sha = self.odd_commit()
         self.repo.build_ok("built", "R3", "--commit", sha)
         self.repo.main_moves("main moves")
-        self.assertEqual(self.repo.state(), (["B1"], []))
+        self.assertEqual(self.repo.state(), (["BUILD-1"], []))
         self.repo.build_ok("relink")
-        self.assertEqual(self.repo.field("B1", "Commit"), self.repo.head())
+        self.assertEqual(self.repo.field("BUILD-1", "Commit"), self.repo.head())
 
     def odd_commit(self):
         subject = "  feat: lead\ttab   sep \x1c fs"
@@ -412,7 +412,7 @@ class EdgeTests(FeatureRepoCase):
         self.add_legacy_entries()
         code, out = self.repo.build("records")
         self.assertEqual(code, 0, out)
-        self.assertIn("R1 built in no commit logged (B2)", out)
+        self.assertIn("DEC-1 built in no commit logged (B2)", out)
 
     def test_list_reads_the_legacy_entries(self):
         self.add_legacy_entries()

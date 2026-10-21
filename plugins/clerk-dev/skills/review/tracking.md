@@ -59,8 +59,8 @@ old, or names code that no longer exists, ask whether it still applies before
 relying on it. Never record anything the user did not say.
 
 Agents get these rules through one file, not this one:
-`records.py guidance <worktree> [--area <area> | --for <R33, R33.4, or
-R18-1.Q6>] [--context <review-context SKILL.md>] --out <file>` writes Purpose,
+`records.py guidance <worktree> [--area <area> | --for <BRIEF-33, BRIEF-33.4, or
+BRIEF-18-1.Q-6>] [--context <review-context SKILL.md>] --out <file>` writes Purpose,
 these rules, the feature's active guidance, and the review context's Known noise
 into it, and that file is what lenses, verifiers, fixers, and implementer briefs
 get as `GUIDANCE`. `--for` takes the area of the record it names; `--context`
@@ -237,7 +237,7 @@ Promoting a rule to a wider scope (a branch rule the user wants for the whole
 feature, a feature rule for all their work) supersedes the narrower copy,
 saying "promoted to <where>". A guidance record is superseded by the new
 record when the wider place is one, and otherwise discarded with that note
-(`records.py discard <worktree> R61 --note "promoted to <where>"`). A promoted
+(`records.py discard <worktree> GUIDE-61 --note "promoted to <where>"`). A promoted
 branch rule is deleted from the branch notes.
 
 Nothing the plugin records goes to Claude's memory. Memory is for preferences
@@ -247,7 +247,7 @@ When new guidance refines or contradicts an active one, supersede it rather
 than add a second, restated in full as "When a record changes another" in
 `skills/feature/SKILL.md` describes. When it contradicts an active decision, record the guidance
 and say which decision it bears on; the user decides whether that decision
-changes. The line to the user: "Recorded as guidance R61 (harness):
+changes. The line to the user: "Recorded as guidance GUIDE-61 (harness):
 capabilities wire in through explicit lists. Say if it is narrower than
 that." For a branch rule: "Added to this branch's guidance: do not report
 naming findings in generated files. Say if it reaches the whole feature."
@@ -303,7 +303,7 @@ inventory stays out of it unless they ask.
 - Lead with the substance: what changed in the feature or the code, what was
   decided, what is open, and what you need from them. Say it in the feature's
   own words ("the voice runtime now hangs up cleanly when the caller drops"),
-  not the plugin's ("P10 done, B17 closed, R40 stamped").
+  not the plugin's ("PASS-10 done, BUILD-17 closed, DEC-40 stamped").
 - Bookkeeping gets at most one short closing line, and only when the user
   might want to correct it: a rule recorded from their answer, a decision
   written down, an idea parked. Say what it says and its reach, not the
@@ -313,7 +313,7 @@ inventory stays out of it unless they ask.
   the conversation) go unmentioned.
 - Use the plugin's vocabulary (pass, piece, milestone, record, item, lens,
   area, overview) only when the user needs it to steer the work, and then in
-  plain words ("the edge-cases work on the voice runtime", not "P10"). If the
+  plain words ("the edge-cases work on the voice runtime", not "PASS-10"). If the
   user has to ask what a label means, the message should not have needed it.
 - Drop an id whenever it adds nothing to what the user will do next. Keep it
   when they are likely to refer back to it ("fix 3"), and then name it as
@@ -342,15 +342,20 @@ passes between them, the order things happen in, how options differ.
 
 When an id does appear, it names what it stands for. On its first
 mention in a message, an id is never bare: lead with what it is and give the
-id after it ("the chunk plan (R31) allows independent improvements as PRs
+id after it ("the chunk plan (PLAN-31) allows independent improvements as PRs
 ahead of the core chunk (C)"), or follow the id with a gloss of two to six
-words ("R31 (the chunk plan)"). Later mentions in the same message may be
-bare. This covers record ids (R31), requirements (R52.19), checks and their
-questions (R30-1.Q12), plan pieces (S, C), build pieces and milestones (B15,
-M1), passes (P3), follow-ups (F3), ideas (I7), and finding numbers ("finding
-12 (the unbounded export query)").
+words ("PLAN-31 (the chunk plan)"). Later mentions in the same message may be
+bare. This covers record ids (PLAN-31, DEC-19), requirements (BRIEF-52.19),
+checks and their questions (BRIEF-30-1.Q-12), plan pieces (S, C), build pieces
+and milestones (BUILD-15, MILE-1), passes (PASS-3), follow-ups (F3), ideas
+(IDEA-7), deferred items (DEFER-6), and finding numbers ("finding 12 (the
+unbounded export query)"). A record's prefix names its type (IDEAS brainstorm,
+DESIGN, DEC decision, GUIDE guidance, PIECES capabilities, PLAN, BRIEF spec)
+but is not a gloss: it still needs one. Older ids (R31, B15, M1, P3, I7, D6,
+Q3, R52.19) still appear in files and resolve to the same things; cite them
+in the new form.
 
-Get the names with `records.py names <worktree> R31 S C B15 ...` rather than
+Get the names with `records.py names <worktree> PLAN-31 S C BUILD-15 ...` rather than
 opening files. A gloss says what the thing is, not all it says.
 
 The rule holds in every case, the ones where it slips most included:
@@ -360,10 +365,10 @@ The rule holds in every case, the ones where it slips most included:
 - Relayed text counts. A subagent's report (an overview refresh, a design
   check, an implementer, a lens) cites bare ids by design; rewrite it with
   glosses before passing it on, never paste it through.
-- Ids used as labels count. A bullet or heading that leads with "R19 vs R21:"
-  or "B15:" is a first mention; gloss it there ("R19 (production edits only
-  without runtime effect) vs R21 (small, safe changes allowed):").
-- Lists and counts count ("guidance R15 and R19 to R22"): gloss each id, or
+- Ids used as labels count. A bullet or heading that leads with "DEC-19 vs DEC-21:"
+  or "BUILD-15:" is a first mention; gloss it there ("DEC-19 (production edits only
+  without runtime effect) vs DEC-21 (small, safe changes allowed):").
+- Lists and counts count ("guidance GUIDE-15 and GUIDE-19 to GUIDE-22"): gloss each id, or
   replace the list with what the records are about when the ids add nothing.
 
 Scripts whose output is shown to the user (`status.py`) gloss ids themselves
@@ -379,12 +384,12 @@ ids by design, and commit messages carry none. The rule is for conversation.
 
 So rather than:
 
-> Seams 1 and 2 don't need a chunk. R31 already allows "independent
+> Seams 1 and 2 don't need a chunk. PLAN-31 already allows "independent
 > improvements may become PRs ahead of C", so they're main PRs, like S.
 
 say:
 
-> Seams 1 and 2 don't need a chunk. The chunk plan (R31) already allows
+> Seams 1 and 2 don't need a chunk. The chunk plan (PLAN-31) already allows
 > "independent improvements may become PRs ahead of" the core harness chunk
 > (C), so they're PRs to main, like the sandbox change (S).
 
@@ -392,7 +397,7 @@ say:
 
 Review findings, follow-ups, and design-check questions are all items, and use
 one vocabulary in two layers. Findings keep their cards and `status.tsv`;
-follow-ups (`F3`), deferred items (`D3`), and design questions (`Q3`) are
+follow-ups (`F3`), deferred items (`DEFER-3`), and design questions (`Q-3`) are
 checkbox lists read and written by `scripts/items.py` (`followups.py` and
 `deferred.py` build on it).
 
@@ -406,12 +411,12 @@ done as written):
 - `Defer`: not now. Add a deferred item with `deferred.py add <worktree>
   "<what>" --from <source> --path "<what was done for now>" --open "<what is
   left>" [--revisit "<when to look again>"]`, where the source is the finding
-  (`<run> N`), question (`R18-1.Q6`), follow-up (`F3`), pass item (`P3.4`),
-  piece (`B9`), or "this session". Then set the source's status to `deferred`
-  with its Outcome naming the new D id: `render-report.py --set N=deferred:D3`
-  for a finding, `items.py status <file> Q3 deferred --ref D3` for a design
-  question, `followups.py close <worktree> F3 --status deferred --ref D3` for a
-  follow-up, `passes.py done <worktree> P3 4 --na "deferred, D3"` for a pass
+  (`<run> N`), question (`BRIEF-18-1.Q-6`), follow-up (`F3`), pass item (`PASS-3.4`),
+  piece (`BUILD-9`), or "this session". Then set the source's status to `deferred`
+  with its Outcome naming the new DEFER id: `render-report.py --set N=deferred:DEFER-3`
+  for a finding, `items.py status <file> Q-3 deferred --ref DEFER-3` for a design
+  question, `followups.py close <worktree> F3 --status deferred --ref DEFER-3` for a
+  follow-up, `passes.py done <worktree> PASS-3 4 --na "deferred, DEFER-3"` for a pass
   item. "Deferred items" below says what they are.
 - `Ignore`: not at all; the status becomes `wont-fix`, with why.
 - `Refine`: investigate first (read the source change and the local code),
@@ -422,19 +427,19 @@ done as written):
 Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
 `deferred`. The box is ticked exactly when the status is one of the last three.
 `Outcome` holds what closed it: a commit (`in 1a2b3c4`), a decision record
-(`R18`), or a reason. A design question is `fixed` when its answer is recorded.
+(`DEC-18`), or a reason. A design question is `fixed` when its answer is recorded.
 
 ## Deferred items
 
-A deferred item (`D3`, in `.clerk-dev/deferred.md`, kept by `deferred.py`) is a
+A deferred item (`DEFER-3`, in `.clerk-dev/deferred.md`, kept by `deferred.py`) is a
 known gap with a path chosen for now, not an idea: ideas are good things for
 later, a deferred item is something this work already knows is missing. Its
 fields are From (the source), Path (what was done for now), Open (what is left
-to decide or do), Revisit (a trigger, such as "after the R13 draft"), Added,
+to decide or do), Revisit (a trigger, such as "after the BRIEF-13 draft"), Added,
 Instruction, Status, and Outcome.
 
 It closes in one of two ways: `fixed`, with the commit that closed the gap
-(`deferred.py close <worktree> D3 --ref <sha>`), or `wont-fix`, with the reason
+(`deferred.py close <worktree> DEFER-3 --ref <sha>`), or `wont-fix`, with the reason
 (`--status wont-fix --ref "<why>"`). `deferred.py reopen` puts one back. A plan
 step's done line may say "deferred items reviewed", meaning every open item was
 looked at when the step ended: closed, or revisited with a new trigger.

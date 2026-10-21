@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 *), Bash(git *), Read
 
 # Where the work stands
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (R19, B15, M1, F3, Q3, P3, I7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -32,7 +32,7 @@ progress per spec, unlogged commits, passes, the questions and open items of
 the specs being built, and building steps. About the design ("where are we on the
 design", "are we ready to build", "what's unsettled", "what specs are
 missing"): `--focus design`. About one area or piece ("where are we on the
-harness", "on bisection", "on R52"): `--area <area>` or `--area R<n>`, with
+harness", "on bisection", "on BRIEF-52"): `--area <area>` or `--area BRIEF-<n>`, with
 the area name as the records use it (the script lists them when the name is
 not one). About the review only ("status of the review", "what's left in the
 review"): `--focus review`. Anything broader

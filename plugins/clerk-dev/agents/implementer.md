@@ -65,8 +65,8 @@ status: <done | stopped: one-sentence reason>
 files: <paths changed, one per line>
 tests: <command run> -> <pass | fail: what failed>
 summary: <two or three sentences: what the piece now does and how, suitable as a commit body>
-requirements: <each requirement covered, as "R52.7: done" or "R52.7: partial: what is missing">
-decisions: <each decision applied and where, as "R21: Target in harness/target.ts", or "none">
+requirements: <each requirement covered, as "BRIEF-52.7: done" or "BRIEF-52.7: partial: what is missing">
+decisions: <each decision applied and where, as "DEC-21: Target in harness/target.ts", or "none">
 choices: <local choices you made that the records did not settle, one line each, or "none">
 questions: <shape-setting choices you stopped on, each with the options you see, or "none">
 deviations: <where the result departs from the brief, the reference, or a test, and why, or "none">
