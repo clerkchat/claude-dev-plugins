@@ -464,6 +464,10 @@ def branch_base(wt):
     main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
     return git(wt, "merge-base", "HEAD", main) if main else ""
 
+def branch_commits(wt):
+    base = branch_base(wt)
+    return [tuple(l.split("\t", 1)) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base else []
+
 def names_commit(entry, sha):
     return bool(entry["f"].get("Commit")) and sha.startswith(entry["f"]["Commit"])
 

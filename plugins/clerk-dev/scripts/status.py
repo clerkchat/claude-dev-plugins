@@ -382,9 +382,8 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
         for r in unlogged_specs:
             _, items = bd.spec_requirements(d, r["id"])
             out.append(f"- {r['id']} {short(r.get('title', ''), 60)}: {len(items or {})} requirements, none logged as built")
-    base = bd.branch_base(wt)
     builds_elsewhere = not entries and bool(elsewhere)
-    commits = [l.split("\t", 1) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base and not builds_elsewhere else []
+    commits = bd.branch_commits(wt) if not builds_elsewhere else []
     unlogged = [(s, subj) for s, subj in commits if not any(bd.names_commit(e, s) for e in entries)]
     if commits:
         out.append(f"- Commits on the branch: {len(commits)}, {len(unlogged)} not in the build log" + (":" if unlogged else "."))
