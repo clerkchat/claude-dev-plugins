@@ -127,7 +127,8 @@ def path(wt):
 def read(p):
     if not os.path.exists(p): return []
     out, cur = [], None
-    for n, raw in enumerate(open(p, encoding="utf-8"), 1):
+    with open(p, encoding="utf-8") as fh: lines = fh.readlines()
+    for n, raw in enumerate(lines, 1):
         line = raw.rstrip("\n")
         if not line.strip(): continue
         m = ENTRY_RE.match(line)
