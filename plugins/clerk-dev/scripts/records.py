@@ -61,8 +61,15 @@ TYPES = ("brainstorm", "design", "decision", "guidance", "capabilities", "plan",
 STATUSES = ("active", "superseded", "discarded")
 FIELDS = ("id", "type", "title", "date", "repo", "area", "status", "from", "supersedes", "superseded_by", "note")
 
-def git(wt, *args):
-    r = subprocess.run(["git", "-C", wt, *args], capture_output=True, text=True)
+def git_run(wt, *args):
+    return subprocess.run(["git", "-C", wt, *args], capture_output=True, text=True)
+
+def git_failure(wt, args, r):
+    return f"git {' '.join(args)} failed in {wt}: {'; '.join(r.stderr.strip().splitlines())}"
+
+def git(wt, *args, check=False):
+    r = git_run(wt, *args)
+    if check and r.returncode != 0: sys.exit(git_failure(wt, args, r))
     return r.stdout.strip() if r.returncode == 0 else ""
 
 def exclude(wt):
@@ -515,12 +522,13 @@ def built_specs(rows):
 class Built(NamedTuple):
     specs: set
     records: dict
+    unread: list
 
 def ref_key(ref): return [int(x) for x in ref[1:].split(".")]
 
 def commits_by_record(bm, entries):
     found = bm.built_records(entries)
-    return {ref: [e["f"]["Commit"] for e in found[ref]] for ref in sorted(found, key=ref_key)}
+    return {ref: [bm.commit_of(e) for e in found[ref]] for ref in sorted(found, key=ref_key)}
 
 def cited(refs):
     return ", ".join(f"{ref} ({', '.join(cs)})" for ref, cs in refs.items())
@@ -529,30 +537,40 @@ def build_log(d):
     bm = load_script("build.py")
     hub_wt = os.path.dirname(os.path.dirname(d))
     _, repos = workspace(hub_wt)
-    lines, direct, built = [], [], Built(set(), {})
-    try:
-        for w in dict.fromkeys([hub_wt] + list(repos.values())):
-            if not os.path.exists(bm.log_path(w)): continue
+    lines, direct, built = [], [], Built(set(), {}, [])
+    for w in dict.fromkeys([hub_wt] + list(repos.values())):
+        repo = this_repo(w, repos)
+        if not os.path.isdir(w) or not os.access(w, os.R_OK | os.X_OK):
+            built.unread.append(repo); lines.append(f"{repo}: (worktree {w} {'cannot be read' if os.path.isdir(w) else 'does not exist'}; its build log is not counted)"); continue
+        if not os.path.exists(bm.log_path(w)): continue
+        try:
             entries = bm.log_entries(w)
             rows = bm.progress(w, entries)
-            lines += [f"{this_repo(w, repos)}: {l}" for l in bm.progress_lines(rows)]
-            built.specs.update(built_specs(rows))
-            mine = commits_by_record(bm, entries)
-            if mine: direct.append(f"{this_repo(w, repos)}: records built directly: {cited(mine)}")
-            for ref, cs in mine.items(): built.records.setdefault(ref, []).extend(cs)
-    except SystemExit as e:
-        return [f"(build log unreadable: {e})"], None
+        except (SystemExit, OSError) as e:
+            built.unread.append(repo); lines.append(f"{repo}: (build log unreadable: {e})"); continue
+        lines += [f"{repo}: {l}" for l in bm.progress_lines(rows)]
+        built.specs.update(built_specs(rows))
+        mine = commits_by_record(bm, entries)
+        if mine: direct.append(f"{repo}: records built directly: {cited(mine)}")
+        for ref, cs in mine.items(): built.records.setdefault(ref, []).extend(cs)
     lines += direct + plan_lines(d, built, this_repo(hub_wt, repos))
     return lines or ["nothing built yet"], built
 
-def step_built(bm, ref, text, built):
-    named = re.findall(r"\bR\d+\b(?!\.\d)", bm.step_piece(text))
+def successor(recs, rid):
+    seen = set()
+    while rid not in seen and recs.get(rid, {}).get("status") == "superseded" and recs[rid].get("superseded_by"):
+        seen.add(rid); rid = recs[rid]["superseded_by"]
+    return rid
+
+def step_built(bm, ref, text, built, recs):
+    named = [successor(recs, x) for x in re.findall(r"\bR\d+\b(?!\.\d)", bm.step_piece(text))]
     return ref in built.records or (bool(named) and all(x in built.specs or x in built.records for x in named))
 
 def steps_built(r, built):
     bm = load_script("build.py")
+    recs = {x["id"]: x for x in records(os.path.dirname(os.path.dirname(r["path"])))}
     steps = plan_steps(r)
-    return [n for n, text in steps.items() if step_built(bm, f"{r['id']}.{n}", text, built)], len(steps)
+    return [n for n, text in steps.items() if step_built(bm, f"{r['id']}.{n}", text, built, recs)], len(steps)
 
 def plan_lines(d, built, repo):
     out = []
@@ -564,13 +582,15 @@ def plan_lines(d, built, repo):
 
 def built_mark(r, built):
     if r["type"] not in load_script("build.py").BUILDABLE: return ""
-    if built is None: return "; built: unknown"
-    if r["type"] == "spec": return f"; built: {'yes' if r['id'] in built.specs else 'no'}"
+    unproven = "unknown" if built.unread else "no"
+    if r["type"] == "spec": return f"; built: {'yes' if r['id'] in built.specs else unproven}"
     if r["type"] == "decision":
         cs = built.records.get(r["id"])
-        return f"; built: yes ({', '.join(cs)})" if cs else "; built: no"
+        return f"; built: yes ({', '.join(cs)})" if cs else f"; built: {unproven}"
     done, total = steps_built(r, built)
-    return f"; built: {len(done)} of {total} steps" + (f" ({', '.join(map(str, done))})" if done else "")
+    count, which = f"{len(done)} of {total} steps", ", ".join(map(str, done))
+    if built.unread and len(done) < total: return f"; built: unknown (at least {count}" + (f": {which})" if done else ")")
+    return f"; built: {count}" + (f" ({which})" if done else "")
 
 def idea_status(i):
     outcome = re.sub(r"^\d{4}-\d{2}-\d{2} ", "", i["fields"].get("Outcome", ""))

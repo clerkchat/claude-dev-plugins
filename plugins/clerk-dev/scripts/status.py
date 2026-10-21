@@ -257,14 +257,14 @@ def progress_list(rows):
     return as_bullets(load_script("build.py").progress_lines(rows))
 
 def relink_lines(wt, log):
+    bd = load_script("build.py")
     lines, steps = [], []
     n = len(log.relinked)
     if n: lines.append(f"- Build log: {n} entr{'y' if n == 1 else 'ies'} re-pointed after a rebase ({', '.join(log.relinked)})")
     for e in log.unlinked:
-        subject = f"\"{e['f']['Subject']}\"" if e["f"].get("Subject") else "no subject to re-find it by"
-        lines.append(f"- Build log: {e['id']} unlinked, its commit {e['f']['Commit']} is not on the branch: {subject}")
+        lines.append(f"- Build log: {e['id']} unlinked, its commit {e['f']['Commit']} is not on the branch: {bd.unlinked_reason(e)}")
         steps.append(f"Re-link {e['id']} ({e['title']}) by hand to the commit that built it: \"re-link {e['id']} to <sha>\".")
-    if load_script("build.py").merged(wt): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
+    if bd.linked(log.entries) and bd.merged(wt): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
     return lines, steps
 
 def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
@@ -413,7 +413,9 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
             _, items = bd.spec_requirements(d, r["id"])
             out.append(f"- {r['id']} {short(r.get('title', ''), 60)}: {len(items or {})} requirements, none logged as built")
     builds_elsewhere = not entries and bool(elsewhere)
-    commits = bd.branch_commits(wt) if not builds_elsewhere else []
+    try: commits = bd.branch_commits(wt) if not builds_elsewhere and not mine.err else []
+    except SystemExit as e:
+        commits = []; out.append(f"- Commits on the branch: could not be read: {e}")
     unlogged = [(s, subj) for s, subj in commits if not any(bd.names_commit(e, s) for e in entries)]
     if commits:
         out.append(f"- Commits on the branch: {len(commits)}, {len(unlogged)} not in the build log" + (":" if unlogged else "."))

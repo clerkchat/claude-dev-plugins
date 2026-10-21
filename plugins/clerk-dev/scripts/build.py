@@ -35,7 +35,7 @@ briefed (handed to an implementer), stopped (it stopped on a question),
 done (landed in a commit), abandoned, dropped (requirements a later decision
 took out of the spec; they leave its count). `built` logs a record entry, done
 at once: it covers a decision, a plan step, or a spec with no pieces in the log,
-and carries no requirements. An entry's commit is followed across a rebase by
+and carries no requirements; a commit not on this branch is noted and logged anyway. An entry's commit is followed across a rebase by
 its Subject, the commit's subject line; `relink` persists that or sets it by hand. `resend` puts a stopped or rejected piece
 back to briefed and counts the attempt.
 
@@ -60,9 +60,9 @@ Entry format:
     - Subject: feat: keep a feature's records in the hub worktree
     - Started: 2026-10-16
 """
-import argparse, datetime, os, re, subprocess, sys, tempfile
+import argparse, datetime, os, re, sys, tempfile
 from typing import NamedTuple
-from records import exclude, git, load_script, record_id
+from records import exclude, git, git_failure, git_run, load_script, record_id
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
@@ -91,10 +91,12 @@ def log(wt):
 
 def log_entries(wt): return log(wt).entries
 
+def linked(entries): return [e for e in entries if e["f"].get("Status") == "done" and e["f"].get("Commit")]
+
 def refind(wt, entries):
-    linked = [e for e in entries if e["f"].get("Status") == "done" and e["f"].get("Commit")]
-    own = branch_commits(wt) if linked else []
-    moved = [e for e in linked if own and not any(names_commit(e, sha) for sha, _ in own) and not is_ancestor(wt, e["f"]["Commit"])]
+    done = linked(entries)
+    own = branch_commits(wt) if done else []
+    moved = [e for e in done if own and not any(names_commit(e, sha) for sha, _ in own) and not is_ancestor(wt, e["f"]["Commit"])]
     relinked, unlinked = [], []
     for e in moved:
         hits = [sha for sha, subject in own if e["f"].get("Subject") and subject == e["f"]["Subject"]]
@@ -104,7 +106,15 @@ def refind(wt, entries):
     return relinked, unlinked
 
 def is_ancestor(wt, sha):
-    return subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", sha, "HEAD"], capture_output=True).returncode == 0
+    return git_run(wt, "merge-base", "--is-ancestor", sha, "HEAD").returncode == 0
+
+def unlinked_reason(e):
+    return f"\"{e['f']['Subject']}\"" if e["f"].get("Subject") else "no subject to re-find it by"
+
+def off_branch(wt, full):
+    if any(sha == full for sha, _ in branch_commits(wt)): return ""
+    if not is_ancestor(wt, full): return "HEAD does not reach it, so status lists the entry as unlinked until HEAD does or it is re-linked"
+    return "it is on the main branch, older than this branch's base" if branch_base(wt) else ""
 
 def path(wt):
     exclude(wt)
@@ -457,7 +467,9 @@ def main():
         first = next((e for e in built_records(entries).get(ref, []) if names_commit(e, full)), None)
         if first: sys.exit(f"{first['id']} already logs {ref} as built in {first['f']['Commit']}")
         e = new_entry(entries, "B", (a.title or title).rstrip("."), Record=ref, Status="done", Started=today, **commit_fields(a.wt, full))
+        why = off_branch(a.wt, full)
         write(p, entries); print(f"{e['id']} built: {ref} in {e['f']['Commit']}")
+        if why: print(f"note: {e['f']['Commit']} is not on this branch: {why}; logged anyway", file=sys.stderr)
         return
     if a.cmd == "relink":
         if bool(a.bid) != bool(a.commit): sys.exit("give both an entry and --commit to re-link one by hand, or neither to persist the re-found commits")
@@ -468,12 +480,12 @@ def main():
             write(p, entries); print(f"{e['id']} re-linked to {e['f']['Commit']}")
             return
         if found.relinked: write(p, entries); print(f"re-pointed: {', '.join(found.relinked)}")
-        for e in found.unlinked: print(f"unlinked: {e['id']} {e['f'].get('Commit')} " + (f"\"{e['f']['Subject']}\"" if e["f"].get("Subject") else "(no subject)"))
+        for e in found.unlinked: print(f"unlinked: {e['id']} {e['f']['Commit']} {unlinked_reason(e)}")
         if not found.relinked and not found.unlinked: print("nothing to re-point")
         return
     if a.cmd == "records":
         built = [(ref, e) for ref, es in built_records(entries).items() for e in es]
-        print("\n".join(f"{ref} built in {e['f']['Commit']} ({e['id']})" for ref, e in built) or "no records built directly")
+        print("\n".join(f"{ref} built in {commit_of(e)} ({e['id']})" for ref, e in built) or "no records built directly")
         return
     if a.cmd == "drop":
         spec = record_id(a.spec)
@@ -571,14 +583,23 @@ def catalogue():
 
 def branch_base(wt):
     """The merge base with the remote main branch, or "" when there is none."""
+    git(wt, "rev-parse", "--git-dir", check=True)
     main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
-    return git(wt, "merge-base", "HEAD", main) if main else ""
+    if not main or not git(wt, "rev-parse", "--verify", "-q", "HEAD"): return ""
+    args = ("merge-base", "HEAD", main)
+    r = git_run(wt, *args)
+    if r.returncode > 1: sys.exit(git_failure(wt, args, r))
+    return r.stdout.strip()
 
 def branch_commits(wt):
     base = branch_base(wt)
-    return [tuple(l.split("\t", 1)) for l in git(wt, "log", "--no-merges", "--format=%H\t%s", f"{base}..HEAD").splitlines()] if base else []
+    if not base: return []
+    out = git(wt, "log", "--no-merges", "--format=%H%x09%s", f"{base}..HEAD", check=True)
+    return [(sha, subject.strip()) for sha, _, subject in (line.partition("\t") for line in out.split("\n") if line)]
 
 def merged(wt): return bool(branch_base(wt)) and not branch_commits(wt)
+
+def commit_of(e): return e["f"].get("Commit") or "no commit logged"
 
 def names_commit(entry, sha):
     return bool(entry["f"].get("Commit")) and sha.startswith(entry["f"]["Commit"])
