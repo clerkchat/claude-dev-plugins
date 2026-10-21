@@ -45,13 +45,13 @@ Entry format:
     - Started: 2026-10-16
     - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
 """
-import argparse, datetime, os, re, sys, tempfile
+import argparse, datetime, os, re, subprocess, sys, tempfile
 from typing import NamedTuple
 from records import exclude, git, load_script, record_id
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
-FIELDS = ("Spec", "Piece", "Plan", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
+FIELDS = ("Spec", "Record", "Piece", "Plan", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Subject", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
 REPEATABLE = ("Question", "Deviation", "Skipped")
 HEADER = """# Build log
 
@@ -65,7 +65,31 @@ FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
 
 def log_path(wt): return os.path.join(wt, ".clerk-dev", "build.md")
 
-def log_entries(wt): return read(log_path(wt))
+class Log(NamedTuple):
+    entries: list
+    relinked: list
+    unlinked: list
+
+def log(wt):
+    entries = read(log_path(wt))
+    return Log(entries, *refind(wt, entries))
+
+def log_entries(wt): return log(wt).entries
+
+def refind(wt, entries):
+    linked = [e for e in entries if e["f"].get("Status") == "done" and e["f"].get("Commit")]
+    own = branch_commits(wt) if linked else []
+    moved = [e for e in linked if own and not any(names_commit(e, sha) for sha, _ in own) and not is_ancestor(wt, e["f"]["Commit"])]
+    relinked, unlinked = [], []
+    for e in moved:
+        hits = [sha for sha, subject in own if e["f"].get("Subject") and subject == e["f"]["Subject"]]
+        if len(hits) == 1:
+            e["f"].update(commit_fields(wt, hits[0])); relinked.append(e["id"])
+        else: unlinked.append(e)
+    return relinked, unlinked
+
+def is_ancestor(wt, sha):
+    return subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", sha, "HEAD"], capture_output=True).returncode == 0
 
 def path(wt):
     exclude(wt)
@@ -129,10 +153,14 @@ def parse_reqs(spec, text):
     if not nums: sys.exit("--reqs names no requirement numbers")
     return nums
 
-def commit_fields(wt, sha):
+def full_sha(wt, sha):
     full = git(wt, "rev-parse", "--verify", "-q", sha + "^{commit}")
     if not full: sys.exit(f"{sha} is not a commit here")
-    return {"Commit": git(wt, "rev-parse", "--short", full)}
+    return full
+
+def commit_fields(wt, sha):
+    full = full_sha(wt, sha)
+    return {"Commit": git(wt, "rev-parse", "--short", full), "Subject": git(wt, "log", "-1", "--format=%s", full)}
 
 def find(entries, bid):
     bid = bid.upper() if re.match(r"[BMbm]\d+$", bid) else f"B{bid}"
@@ -170,22 +198,30 @@ def progress(wt, entries, spec=None):
     rc = load_script("records.py")
     d = rc.fdir(wt)
     entries = pieces(entries)
-    specs = [spec] if spec else sorted({e["f"].get("Spec") for e in entries if e["f"].get("Spec")}, key=lambda s: int(s[1:]))
+    kinds = {r["id"]: r.get("type") for r in rc.records(d)}
+    specs = [spec] if spec else sorted({spec_of(e, kinds) for e in entries if spec_of(e, kinds)}, key=lambda s: int(s[1:]))
     out = []
     for s in specs:
         r, texts = spec_requirements(d, s)
         texts = texts or {}
-        mine = [e for e in entries if e["f"].get("Spec") == s]
+        mine = [e for e in entries if spec_of(e, kinds) == s]
         gone = dropped_of(mine)
         items = {n: t for n, t in texts.items() if n not in gone}
-        out.append(SpecProgress(s, r, items, requirement_states(mine), mine, {n: (e, texts.get(n, "")) for n, e in gone.items()}))
+        out.append(SpecProgress(s, r, items, requirement_states(mine, items), mine, {n: (e, texts.get(n, "")) for n, e in gone.items()}))
     return out
 
-def requirement_states(mine):
+def spec_of(e, kinds):
+    record = e["f"].get("Record")
+    return e["f"].get("Spec") or (record if kinds.get(record) == "spec" else None)
+
+def covered(e, items):
+    return [(n, "done", "") for n in items] if e["f"].get("Record") else reqs_of(e)
+
+def requirement_states(mine, items):
     state = {}
     for e in mine:
         if e["f"].get("Status") != "done": continue
-        for n, st, note in reqs_of(e):
+        for n, st, note in covered(e, items):
             st = st or "done"
             if state.get(n, ("",))[0] != "done": state[n] = (st, note, e["id"])
     return state
@@ -277,6 +313,26 @@ def plan_step_of(wt, ref):
     if text is None: sys.exit(f"plan {r['id']} has no step {ref.split('.')[1]}")
     return ref, text
 
+BUILDABLE = ("decision", "plan", "spec")
+
+def buildable(wt, ref):
+    ref = record_id(ref.strip())
+    if re.fullmatch(r"R\d+\.\d+", ref):
+        step, text = plan_step_of(wt, ref)
+        return step, None, step_piece(text)
+    rc = load_script("records.py")
+    r = next((r for r in rc.records(rc.fdir(wt)) if r["id"] == ref), None)
+    if not r: sys.exit(f"{ref} is not a record in the hub")
+    if r.get("status") != "active": sys.exit(f"{ref} is {r.get('status')}" + (f" by {r['superseded_by']}; build that record instead" if r.get("superseded_by") else ""))
+    if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan, a plan step, or a spec")
+    return ref, r, r.get("title", "")
+
+def built_records(entries):
+    out = {}
+    for e in pieces(entries):
+        if e["f"].get("Record") and e["f"].get("Status") == "done": out.setdefault(e["f"]["Record"], []).append(e)
+    return out
+
 def pieces(entries): return [e for e in entries if e["id"].startswith("B")]
 def milestones(entries): return [e for e in entries if e["id"].startswith("M")]
 
@@ -352,6 +408,9 @@ def main():
     d_.add_argument("--covered"); d_.add_argument("--deviation", action="append", default=[])
     s_ = sp.add_parser("stop"); s_.add_argument("wt"); s_.add_argument("bid"); s_.add_argument("--question", required=True)
     r_ = sp.add_parser("resend"); r_.add_argument("wt"); r_.add_argument("bid"); r_.add_argument("--note"); r_.add_argument("--model"); r_.add_argument("--effort")
+    bu = sp.add_parser("built"); bu.add_argument("wt"); bu.add_argument("record"); bu.add_argument("--commit", required=True); bu.add_argument("--title")
+    rl = sp.add_parser("relink"); rl.add_argument("wt"); rl.add_argument("bid", nargs="?"); rl.add_argument("--commit")
+    rr = sp.add_parser("records"); rr.add_argument("wt")
     dr = sp.add_parser("drop"); dr.add_argument("wt"); dr.add_argument("--spec", required=True); dr.add_argument("--reqs", required=True); dr.add_argument("--why", required=True)
     ab = sp.add_parser("abandon"); ab.add_argument("wt"); ab.add_argument("bid"); ab.add_argument("--note")
     nt = sp.add_parser("note"); nt.add_argument("wt"); nt.add_argument("bid"); nt.add_argument("text")
@@ -364,7 +423,7 @@ def main():
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
     load_script("records.py").guard(a.wt)
-    p = path(a.wt); entries = log_entries(a.wt); today = datetime.date.today().isoformat()
+    p = path(a.wt); found = log(a.wt); entries = found.entries; today = datetime.date.today().isoformat()
 
     if a.cmd == "add":
         spec = record_id(a.spec)
@@ -372,6 +431,33 @@ def main():
         e = new_entry(entries, "B", a.title.rstrip("."), Spec=spec, Requirements=", ".join(map(str, nums)),
                       Model=f"{a.model} {a.effort}", Status="briefed", Attempts="1", Started=today)
         write(p, entries); print(f"{e['id']} briefed: {spec} requirements {', '.join(map(str, nums))}")
+        return
+    if a.cmd == "built":
+        ref, r, title = buildable(a.wt, a.record)
+        full = full_sha(a.wt, a.commit)
+        if r and r.get("type") == "spec":
+            has = [e["id"] for e in pieces(entries) if e["f"].get("Spec") == ref and e["f"].get("Status") != "abandoned"]
+            if has: sys.exit(f"{ref} already has pieces in the build log ({', '.join(has)}); log its remaining requirements as pieces instead")
+        first = next((e for e in built_records(entries).get(ref, []) if names_commit(e, full)), None)
+        if first: sys.exit(f"{first['id']} already logs {ref} as built in {first['f']['Commit']}")
+        e = new_entry(entries, "B", (a.title or title).rstrip("."), Record=ref, Status="done", Started=today, **commit_fields(a.wt, full))
+        write(p, entries); print(f"{e['id']} built: {ref} in {e['f']['Commit']}")
+        return
+    if a.cmd == "relink":
+        if bool(a.bid) != bool(a.commit): sys.exit("give both an entry and --commit to re-link one by hand, or neither to persist the re-found commits")
+        if a.bid:
+            e = find(entries, a.bid)
+            if e["f"].get("Status") != "done": sys.exit(f"{e['id']} is {e['f'].get('Status') or 'a milestone'}, not done")
+            e["f"].update(commit_fields(a.wt, a.commit))
+            write(p, entries); print(f"{e['id']} re-linked to {e['f']['Commit']}")
+            return
+        if found.relinked: write(p, entries); print(f"re-pointed: {', '.join(found.relinked)}")
+        for e in found.unlinked: print(f"unlinked: {e['id']} {e['f'].get('Commit')} " + (f"\"{e['f']['Subject']}\"" if e["f"].get("Subject") else "(no subject)"))
+        if not found.relinked and not found.unlinked: print("nothing to re-point")
+        return
+    if a.cmd == "records":
+        built = [(ref, e) for ref, es in built_records(entries).items() for e in es]
+        print("\n".join(f"{ref} built in {e['f']['Commit']} ({e['id']})" for ref, e in built) or "no records built directly")
         return
     if a.cmd == "drop":
         spec = record_id(a.spec)
@@ -414,8 +500,8 @@ def main():
             for e in pieces(entries):
                 st = e["f"].get("Status")
                 if a.open and st in ("done", "abandoned", "dropped"): continue
-                print(f"{e['id']} {e['title']}  [{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
-                      + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
+                what = f"{e['f']['Record']}; {st}" if e["f"].get("Record") else f"{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
+                print(f"{e['id']} {e['title']}  [{what}" + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
         else:
             print("\n".join(progress_lines(progress(a.wt, entries, a.spec.upper() if a.spec else None))) or "no pieces logged")
         return
