@@ -306,3 +306,7 @@ edit and commit.
   shorten a skill's instructions mid-task.
 
 </details>
+
+## Development
+
+Run the tests from the repository root with `python3 -m unittest discover tests -v` (Python 3 standard library only).
