@@ -236,26 +236,29 @@ def pass_word(e):
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
 
-def build_block(wt, rows, out, unreviewed):
-    """Implementation progress from the build log here, and a line per other
-    worktree of the workspace. Returns (first, later) next steps."""
+def progress_list(wt):
+    return [f"- {l.strip()}" if not l.startswith(" ") else f"  - {l.strip()}" for l in load_script("build.py").progress_lines(wt)]
+
+def build_block(wt, rows, out, unreviewed, render=progress_list):
     bd = load_script("build.py")
-    first, later = [], []
+    first, later, elsewhere = [], [], set()
     try:
         entries = bd.log_entries(wt)
-        lines = bd.progress_lines(wt) if entries else []
+        lines = render(wt) if entries else []
     except SystemExit as e:
-        out.append(""); out.append(f"**Implementation:** the build log could not be read: {e}"); return first, later
+        out.append(""); out.append(f"**Implementation:** the build log could not be read: {e}"); return first, later, elsewhere
     others = []
     for rname, other in builders(wt, rows):
         try:
             if bd.log_entries(other):
-                others += [f"{rname}: {l.strip()}" for l in bd.progress_lines(other) if not l.startswith(" ")]
+                heads = [l for l in bd.progress_lines(other) if not l.startswith(" ")]
+                elsewhere |= {l.split(" ", 1)[0] for l in heads}
+                others += [f"{rname}: {l.strip()}" for l in heads]
         except SystemExit: others.append(f"{rname}: build log unreadable")
-    if not entries and not others: return first, later
+    if not entries and not others: return first, later, elsewhere
     out.append("")
     out.append("**Implementation:**" + ("" if entries else " nothing built in this worktree yet."))
-    out += [f"- {l.strip()}" if not l.startswith(" ") else f"  - {l.strip()}" for l in lines]
+    out += lines
     out += [f"- {o}" for o in others]
     mlines, msteps = bd.milestone_lines(wt) if entries else ([], [])
     if mlines:
@@ -279,7 +282,7 @@ def build_block(wt, rows, out, unreviewed):
         if left and not busy:
             nxt = "; ".join(f"{s}.{n} {short(items[n], 70).rstrip('.')}" for n in left[:3])
             later.append(f"Next piece for {s}, from what is not started ({len(left)} requirement{plural(left)}; the plan and the spec's order decide): {nxt}.")
-    return first, later
+    return first, later, elsewhere
 
 def feature_block(wt, rows, out):
     """Feature records, open design questions, spec open items, and passes in
@@ -359,15 +362,9 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     the log, passes, and the design questions and open items of those specs.
     Returns the next steps, building only."""
     bd = load_script("build.py"); rc = load_script("records.py"); it = load_script("items.py")
-    first, later = build_block(wt, rows, out, unreviewed)
+    first, later, elsewhere = build_block(wt, rows, out, unreviewed, render=bd.checklist_lines)
     try: entries = bd.log_entries(wt)
     except SystemExit: entries = []
-    if entries:
-        i = next((k for k, l in enumerate(out) if l.startswith("**Implementation:**")), None)
-        if i is not None:
-            j = i + 1
-            while j < len(out) and (out[j].startswith("- R") or out[j].startswith("  - ")): j += 1
-            out[i + 1:j] = bd.checklist_lines(wt)
     me = repo_name(wt, rows)
     try: d = rc.fdir(wt)
     except SystemExit: d = None
@@ -375,7 +372,6 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes):
     logged = {e["f"].get("Spec") for e in entries}
     specs = [r for r in recs if r.get("type") == "spec" and r.get("status") == "active" and (r.get("repo") in ("", None, me) or r["id"] in logged)]
     unlogged_specs = [r for r in specs if r["id"] not in logged]
-    elsewhere = {l.split(": ", 1)[1].split(" ", 1)[0] for l in out if l.startswith("- ") and ": R" in l}
     unlogged_specs = [r for r in unlogged_specs if r["id"] not in elsewhere]
     if unlogged_specs:
         if not entries and not any(l.startswith("**Implementation:**") for l in out): out += ["", "**Implementation:** no pieces logged in this worktree."]
@@ -782,7 +778,7 @@ def main():
         emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
     out += notes
     if a.focus == "all":
-        bfirst, blater = build_block(wt, rows, out, unreviewed)
+        bfirst, blater, _ = build_block(wt, rows, out, unreviewed)
         first, later = feature_block(wt, rows, out)
         out += rerouted_lines(wt)
         steps[0:0] = bfirst + pass_steps + first
