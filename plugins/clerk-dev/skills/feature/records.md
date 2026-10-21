@@ -28,6 +28,9 @@ assigns ids, writes the frontmatter, marks superseded records, and regenerates
 the index. Write the body with Edit or Write after `records.py new` creates the
 file.
 
+Record bodies and the overview carry diagrams as "Diagrams" in
+`skills/review/tracking.md` describes.
+
 ## Rules
 
 - **Point in time.** A record says what was true or intended on its date. It is

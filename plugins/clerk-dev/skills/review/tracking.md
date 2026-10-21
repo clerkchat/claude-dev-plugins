@@ -321,6 +321,23 @@ inventory stays out of it unless they ask.
 - Short and in prose. No tables or headings for a short answer; a list only
   for things the user will pick from or tick off.
 
+### Diagrams
+
+Whatever is written for a person (a message, a record, the overview, a review
+report, a PR description) carries diagrams beside the prose they illustrate,
+wherever a picture shows something faster than words: how parts connect, what
+passes between them, the order things happen in, how options differ.
+
+- Draw them yourself from what you understand now. They are snapshots, like
+  the prose around them: never maintained, and replaced along with the document
+  that holds them. Nothing cites a diagram as evidence.
+- Keep each one focused on a single idea. Several small diagrams beat one that
+  covers everything.
+- In files, use mermaid. In the conversation, draw ASCII, since mermaid source
+  is not rendered there.
+- Lay mermaid out top to bottom unless the diagram is only a few nodes wide:
+  renderers shrink a wide diagram to the page width until it is unreadable.
+
 ### Naming ids
 
 When an id does appear, it names what it stands for. On its first
