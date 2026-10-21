@@ -217,8 +217,11 @@ progress from it, so a piece not logged is invisible there:
   rather than requirements: `build.py built <worktree> R27 --commit <sha>`
   (`R32.4` for a plan step). Any skill that commits does this when its brief
   names a record the commit builds, and never cites the record in the commit
-  message. A rebase that changes the hash is followed by its subject; status
-  says when an entry needs re-linking by hand (`build.py relink`).
+  message. A rebase that changes the hash is followed by its `Subject:` line;
+  `build.py relink <worktree>` persists the re-found commits and lists entries
+  it could not follow, and `build.py relink <worktree> B4 --commit <sha>`
+  re-links one by hand. `build.py records <worktree>` lists the records logged
+  as built.
 
 When a decision takes a requirement out of a spec (moved to another spec,
 or no longer wanted), do not supersede the spec to delete one line: run
