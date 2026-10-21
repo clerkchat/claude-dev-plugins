@@ -157,12 +157,12 @@ def spec_requirements(hub_dir, spec_id):
 def dropped_of(mine):
     return {n: e for e in mine if e["f"].get("Status") == "dropped" for n, _, _ in reqs_of(e)}
 
-def progress(wt, spec=None):
+def progress(wt, entries, spec=None):
     """Per spec: (record, {n: text}, {n: (state, note, piece id)}, pieces) from
     this worktree's log, for every spec the log names (or the one given)."""
     rc = load_script("records.py")
     d = rc.fdir(wt)
-    entries = pieces(log_entries(wt))
+    entries = pieces(entries)
     specs = [spec] if spec else sorted({e["f"].get("Spec") for e in entries if e["f"].get("Spec")}, key=lambda s: int(s[1:]))
     out = []
     for s in specs:
@@ -181,9 +181,9 @@ def requirement_states(mine):
             if state.get(n, ("",))[0] != "done": state[n] = (st, note, e["id"])
     return state
 
-def progress_lines(wt, spec=None):
+def progress_lines(wt, entries, spec=None):
     lines = []
-    for s, r, items, state, mine in progress(wt, spec):
+    for s, r, items, state, mine in progress(wt, entries, spec):
         title = r.get("title", "") if r else "(not found in the hub)"
         total = len(items)
         done = [n for n, (st, _, _) in state.items() if st == "done"]
@@ -217,12 +217,12 @@ def label(text, limit=72):
     if cut.count("(") > cut.count(")"): cut = cut[:cut.rfind("(")].rstrip()
     return cut.rstrip(",;:(") + "…"
 
-def checklist_lines(wt, spec=None):
+def checklist_lines(wt, entries, spec=None):
     """Per spec: a heading line with the count, then one checkbox per
     requirement: [x] done (and the piece), [ ] partial, in progress, or not
     started, with what is missing or which piece is on it."""
     out = []
-    for s, r, items, state, mine in progress(wt, spec):
+    for s, r, items, state, mine in progress(wt, entries, spec):
         title = r.get("title", "") if r else "(not found in the hub)"
         live = [e for e in mine if e["f"].get("Status") in ("briefed", "stopped")]
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
@@ -324,8 +324,7 @@ def milestone_view(wt, m):
             rows.append((f, word, f in req))
     return rows, nxt, ready
 
-def milestone_lines(wt):
-    entries = log_entries(wt)
+def milestone_lines(wt, entries):
     out, steps = [], []
     for m in milestones(entries):
         if m["f"].get("Status") == "abandoned": continue
@@ -396,10 +395,10 @@ def main():
         m["multi"]["Skipped"].append(f"{a.focus}: {a.why}"); write(p, entries); print(f"{m['id']}: {a.focus} skipped")
         return
     if a.cmd == "checklist":
-        print("\n".join(checklist_lines(a.wt, a.spec.upper() if a.spec else None)) or "no pieces logged")
+        print("\n".join(checklist_lines(a.wt, entries, a.spec.upper() if a.spec else None)) or "no pieces logged")
         return
     if a.cmd == "milestones":
-        lines, steps = milestone_lines(a.wt)
+        lines, steps = milestone_lines(a.wt, entries)
         print("\n".join(lines + [""] + steps) if lines else "no milestones")
         return
     if a.cmd in ("list", "progress"):
@@ -410,7 +409,7 @@ def main():
                 print(f"{e['id']} {e['title']}  [{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
                       + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
         else:
-            print("\n".join(progress_lines(a.wt, a.spec.upper() if a.spec else None)) or "no pieces logged")
+            print("\n".join(progress_lines(a.wt, entries, a.spec.upper() if a.spec else None)) or "no pieces logged")
         return
     e = find(entries, a.bid)
     if a.cmd == "done":
