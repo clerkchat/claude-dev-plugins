@@ -134,7 +134,6 @@ with "where are we?".
 - They live in `.clerk-dev/feature/` in the worktree you started in (the hub),
   where other repositories of the feature find them. Reviews check the code
   against the active specs.
-- An existing `Notes-*.md` or `Spec-*.md` can be imported.
 
 #### Design checks
 
