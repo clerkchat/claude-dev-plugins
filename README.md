@@ -38,15 +38,11 @@ passes, and reviewing it. The same set of focuses (security, tenant isolation,
 rollout, edge cases, and the rest) drives all four: as questions about a
 design, as what to do while writing, and as what to check in a review.
 
-The review is the most mature part; the design records, design checks, and
-passes are a first draft, being refined on real features.
-
-A multi-focus code review for Claude Code. It reviews your branch the way a
-senior reviewer would, looking at multiple concerns (security, tenant isolation,
-rollout, edge cases, tests, tech debt, and more), and writes a report you can
-work through: fix findings one at a time, discuss the ones that need a decision,
-and keep track of what is done. It can also review a feature that spans several
-repositories at once, and keeps track of the work one repository owes another.
+The review reads your branch the way a senior reviewer would and gives you a
+report to work through. It can cover a feature that spans several repositories,
+and keeps track of the work one repository owes another. The review is the most
+mature part; the design records, design checks, and passes are a first draft,
+being refined on real features.
 
 ```
 /plugin install clerk-dev@clerk-dev
@@ -55,6 +51,115 @@ repositories at once, and keeps track of the work one repository owes another.
 It needs `git` and `python3`. The GitHub CLI (`gh`) is optional: when it is
 installed and signed in, reviews also read the pull request's description and
 its review comments.
+
+#### The cycle
+
+You work through a feature in a conversation, in your branch's worktree. You
+say what you want in plain words; it does the legwork, shows you what it found,
+and asks you only for the decisions that are yours. You can join anywhere: a
+small fix can go straight to building and review, a big feature starts by
+thinking out loud.
+
+```
+  1. Think it through   "let's brainstorm X"          you talk, it keeps notes
+       |
+  2. Poke holes         "check the design"            it asks, you answer
+       |
+  3. Build              "build the plan"              it writes, you weigh in
+       |
+  4. Harden             "do an edge-cases pass"       one concern at a time
+       |
+  5. Review             "review the branch"           you mark, it fixes
+       |
+  6. Wrap up            "do a final review pass"      pass or not pass
+
+  Any time:  "where are we?"   "help me decide"   "checkpoint"
+```
+
+1. **Think it through.** Talk the feature over as you would with a colleague.
+   When something is settled, say "we decided" or "capture this", and it is
+   written down with its reason. Good ideas that are not for now: "park that
+   idea". Weeks later, "what did we decide about polling?" has an answer.
+2. **Poke holes.** Before any code exists, "check the design" comes back with
+   the questions a security, rollout, or scaling reviewer would ask, the
+   important ones first. You go through them together; each answer is kept.
+3. **Build.** Say which part to build. Code appears as small commits you can
+   read, each with its tests run. When it hits a choice nobody made yet, it
+   stops and asks you rather than guessing.
+4. **Harden.** Go over the code one concern at a time ("what passes does this
+   need?"), each ending with a short check of just that concern. Or ask to be
+   guided and write it yourself.
+5. **Review.** "Review the branch" gives you a report to read, one card per
+   finding. You tick what to do with each (fix, discuss, defer, ignore), say
+   "triage the review findings", and it fixes the ones you marked and talks
+   through the rest with you.
+6. **Wrap up.** "Do a final review pass" raises only what would hold the merge,
+   so the review can end.
+
+Three things work at any step. "Where are we?" says what is done and what to
+say next. "Help me decide" lays out the options for a choice you are stuck on,
+with a recommendation. "Checkpoint" saves what the conversation settled, so you
+can `/clear` and pick up later by asking "where are we?". Nothing is pushed and
+no pull request is opened for you.
+
+#### How skilled engineers work, and how it helps
+
+Iterations improve iterations. Each round of thinking, building, and reviewing
+leaves the next one sharper. The plugin is built around the habits that make
+that happen.
+
+**One thing at a time.** A strong engineer does not write the happy path, the
+edge cases, the logging, and the security checks all at once. They get it
+working, then go over it once per concern until it is ready for review. The
+plugin keeps that order for you: it suggests which concerns this code needs,
+works through them one by one, and checks each on its own before the next.
+
+**Small loops inside big ones.** Every piece of code gets a quick look of its
+own the moment it is written. Each pass gets a short check of just its
+concern. The branch gets a full review, and the merge gets a final one. Problems
+are caught in the smallest loop that can see them, so the big reviews find
+less.
+
+**Seeing the pattern, not just the lines.** Reviewing a change, and writing
+one, has a blind spot: you see the lines being added, not the duplication
+building up across them, or the abstraction trying to emerge. The third similar
+handler looks fine on its own. Because the plugin comes back to the same code
+in several rounds, it looks past the new lines into the code they touch and
+the helpers that already exist, and says when it is time to pull the shared
+shape out.
+
+**Guidance over triage.** Early in a feature, you decide finding by finding.
+As it goes on, you state rules instead ("from now on, log with the tenant id",
+"we don't retry webhooks"), and they are kept and followed in every later
+step. Decisions get made once, and the questions that reach you get fewer and
+better aimed.
+
+**Weighing options, deliberately.** When a choice is hard, "help me decide"
+lays it out: what is already settled, what matters most here, each option in
+its smallest form, the facts checked, a recommendation, and what would change
+it. Deciding becomes a skill you can see, question, and improve, not a hunch.
+
+**Decisions keep their reasons.** Every decision is written down with why. A
+change of mind is a new record, not an edit, so months later "why polling?"
+still has an answer.
+
+**Clean up first, then build.** The building, passes, and reviews all lean the
+same way: reuse what exists, keep one source of truth, and tidy the code before
+adding to it.
+
+**Saying "not now" on purpose.** Good ideas that are not for this branch are
+parked with why they matter and when to look again. The branch's stated purpose
+keeps the work in scope, and work another repository owes becomes a follow-up
+there instead of being forgotten.
+
+**Knowing when to stop.** The final review raises only what would hold the
+merge and does not reopen what you already decided, so a review can end.
+
+Along the way, choices nobody has made come back to you instead of being
+guessed, so you stay at the level of the feature. Everything is kept in files,
+so you can stop mid-feature and pick up days later with "where are we?".
+
+The sections below go through each step in more detail.
 
 #### Before the code: feature records and design checks
 
@@ -92,15 +197,41 @@ and writes the questions worth settling before building, marked settle-first,
 worth settling, or note. "Walk the design questions" goes through them with
 you, recording each answer as a decision.
 
-#### Building: delegated pieces
+#### Guidance
 
-With the choices settled in records, building is delegated. The session you
-talk to cuts the work into pieces (a requirement or a few, a port of reference
-code), hands each to an implementer agent with a brief that cites the spec and
-decisions, on Opus for code others build on and Sonnet for the rest, reviews
-the result, runs its tests, and commits it. Choices no record settles come back
-to you before they are built. Your session keeps its context for the whole
-feature instead of one file's details.
+> As a rule, every new endpoint logs the tenant id.
+>
+> From now on, we don't retry webhooks.
+>
+> What guidance have I given?
+
+When an answer you give holds beyond the case at hand, it is kept as guidance:
+for this branch only, or for the whole feature or one area of it. Every later
+step follows it, from design checks to building to review, so you make the call
+once. It also picks up rules from your answers without being told, and says in
+one line what it recorded.
+
+#### Weighing options
+
+> Help me decide how the export status reaches the browser.
+>
+> Weigh the options for finding 7.
+
+For a choice that is hard to call, you get: what is already decided, the
+questions that would change the answer, what matters most here, each option in
+its smallest form, the facts it checked in the code, a ranking with a
+recommendation, and what would flip it. It also starts on its own when a design
+question, a review discussion, or a piece being built needs a real choice.
+Your pick is recorded as a decision.
+
+#### Building
+
+> Build the next step of the plan.
+
+With the choices settled, you say what to build and read the result as small
+commits, each with its tests run. When the work reaches a choice no record
+settles, it stops and asks you rather than guessing. You stay at the level of
+the feature; the details are handled and brought back for you to look at.
 
 #### While writing: passes
 
@@ -128,6 +259,13 @@ other repository's suggestion needs a look at this code first: "refine F3",
 "ignore F2, that screen is gone".
 
 #### How it works
+
+Building is delegated. The session you talk to cuts the work into pieces (a
+requirement or a few, a port of reference code) and hands each to an
+implementer agent with a brief that cites the spec and decisions, on Opus for
+code others build on and Sonnet for the rest. It reviews the result, runs its
+tests, and commits it, so your session keeps its context for the whole feature
+instead of one file's details.
 
 A review splits the work among many small agents, and each job goes to the
 cheapest model that does it well: Haiku for sizing up the change and matching
