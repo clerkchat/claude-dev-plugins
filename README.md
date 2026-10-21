@@ -135,8 +135,9 @@ step. Decisions get made once, and the questions that reach you get fewer and
 better aimed.
 
 **Weighing options, deliberately.** When a choice is hard, "help me decide"
-lays it out: what is already settled, what matters most here, each option in
-its smallest form, the facts checked, a recommendation, and what would change
+lays it out: what is already settled, what matters most here (which depends on
+where the code is, new or live, hot path or not), each option in its smallest
+form, the facts checked, a recommendation, and what would change
 it. Deciding becomes a skill you can see, question, and improve, not a hunch.
 
 **Decisions keep their reasons.** Every decision is written down with why. A
@@ -154,9 +155,11 @@ and deployed code it should leave alone. New code is changed freely, with no
 compatibility shims or follow-up migrations, since nothing depends on it yet.
 Deployed code it means to change is changed minimally, with the rollout
 spelled out: old and new code side by side, jobs in flight, existing data.
-Anything else live is not touched without asking you first. Reviews judge
-the change the same way, so they don't ask for backward compatibility in code
-that has never shipped.
+Anything else live is not touched without asking you first. Weighing options
+starts from the same question, so the same choice can rightly come out
+differently in new code and on a live path. Reviews judge the change the same
+way, so they don't ask for backward compatibility in code that has never
+shipped.
 
 **Saying "not now" on purpose.** Good ideas that are not for this branch are
 parked with why they matter and when to look again. The branch's stated purpose
@@ -229,7 +232,9 @@ one line what it recorded.
 > Weigh the options for finding 7.
 
 For a choice that is hard to call, you get: what is already decided, the
-questions that would change the answer, what matters most here, each option in
+questions that would change the answer (is the code new or live, on a hot path,
+in this branch's scope, shared with another repository), what matters most
+given those answers, each option in
 its smallest form, the facts it checked in the code, a ranking with a
 recommendation, and what would flip it. It also starts on its own when a design
 question, a review discussion, or a piece being built needs a real choice.
