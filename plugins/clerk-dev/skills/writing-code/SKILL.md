@@ -248,8 +248,7 @@ status lives only here; the spec is not edited for it.
 
 1. Read the report. `stopped` or `questions:` go back to the user (or are
    settled from the records and guidance) before anything else. Before asking,
-   when a question is not already settled by a record or guidance, weigh it
-   with the `deliberate` skill, with the piece's brief and the code and
+   weigh each question with the `deliberate` skill, with the piece's brief and the code and
    records it touches as its facts, and put its decision brief to the user
    rather than the bare question. When the
    user's answer carries guidance (a rule beyond this case), or says

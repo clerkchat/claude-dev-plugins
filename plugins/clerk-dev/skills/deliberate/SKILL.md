@@ -1,6 +1,6 @@
 ---
 name: deliberate
-description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine F3" / "refine Q3"; and when review-triage (a contested Discuss), design-check (a question that needs a choice, or Refine), writing-code (a stopped piece's question), pass (an item that needs a choice), review-followups (Refine, or a choice the item leaves open), or review-fix (a fix that changes a contract or product behavior) runs it. Not for an item marked Fix as recommended; that is decided.
+description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine F3" / "refine Q3"; and whenever a skill or the session has a recommendation the user may accept as is (a Discuss or Refine item, a design question, a stopped piece, a pass or follow-up item, a fix, suggested marks for unmarked findings). It sizes the work itself, so trivial items cost one line. Not for an item marked Fix as recommended; that is decided.
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Grep, Glob, Agent
 ---
 
@@ -23,23 +23,14 @@ it.
 
 ## When it runs
 
-- a finding marked Discuss that is contested (`review-triage`);
-- a design question that needs a choice, or one marked Refine
-  (`design-check`);
-- the question a delegated piece stopped on, or a choice to settle before
-  delegating (`writing-code`);
-- a pass item that needs a choice nothing settles (`pass`);
-- a follow-up marked Refine, or one that leaves a choice open
-  (`review-followups`);
-- a fix that changes a contract or product behavior (`review-fix`);
-- the user asking directly.
+Every recommendation the user may accept as is: a Discuss or Refine item, a
+design question, a stopped piece's question or a choice to settle before
+delegating, a pass item, a follow-up, a fix, marks a session suggests for
+findings the user has not marked, and the user asking directly. Calling skills
+send each such item here without judging whether it needs weighing; step 0
+judges that.
 
 Fix as recommended never runs it: the user has already chosen.
-
-An item is too small for it when it has one realistic option, when a record or
-a guidance rule already settles it, or when a wrong pick costs minutes to
-undo. Then say so in one line, give the recommendation and why, and go to
-step 7.
 
 ## Inputs
 
@@ -51,6 +42,12 @@ step 7.
 
 ## Steps
 
+0. **Size.** Before anything else, decide how much the item needs:
+   - trivial: one realistic option, a record or guidance rule already settles
+     it, or a wrong pick costs minutes to undo. Say so in one line, with the
+     recommendation and the facts you checked, and go to step 7;
+   - several items at once: sort them as "Several items waiting" describes;
+   - a single real choice: steps 1 to 7.
 1. **Frame.** Say in one sentence what is decided, and what a wrong choice
    costs: rework, a migration, a contract another repository depends on,
    behavior users see.
@@ -115,16 +112,21 @@ never set it.
 ## Several items waiting
 
 When several items wait for a choice (a discussion queue, a check's open
-questions, more than one stopped piece), prepare their briefs in parallel and
-walk them one at a time:
+questions, more than one stopped piece, a set of suggested marks), sort them
+first, then brief only the borderline ones:
 
-1. Launch one `general-purpose` subagent per item, all in one message, with
+1. Sort in one pass. Gather the facts the items share (the files the next
+   piece touches, the branch's scope, the guidance file) once, and judge each
+   item against them as step 0 does. Settle the obvious ones in a line each,
+   with the recommendation and its reason, and take them through step 7 with
+   the user together. The rest are borderline.
+2. For the borderline items, launch one `general-purpose` subagent per item, all in one message, with
    `model: opus`. Give each the item by path, the guidance file, and steps 1,
    2, 4, and 5 above as its task, and have it write
    `<scratchpad>/deliberate/<item>.md`: the frame, the facts with their
    sources, the options in smallest form, and the decisive questions it could
    not answer. It does not recommend, and edits no code or records.
-2. Walk the items in the calling skill's order. For each, read only its brief
+3. Walk the borderline items in the calling skill's order. For each, read only its brief
    file and ask the decisive questions it left open. Then pick the profile
    (step 3), verify any fact an answer changed (step 5), rank (step 6), show
    the decision brief, and take the decision through step 7. Drop the item's

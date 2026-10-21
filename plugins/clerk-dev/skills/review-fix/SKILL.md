@@ -112,9 +112,9 @@ for nothing wider.
    suits mechanical fixes where the recommendation is the whole design (add an
    index, reject a path segment, add a filter). For fixes that touch structure,
    concurrency, or more than two files, pass `model: opus` on the invocation. A
-   fix that changes a contract or product behavior pauses first: weigh it with
-   the `deliberate` skill, wait for the user's choice, then delegate with that
-   choice in the brief. Several findings in one request get one fixer each, run one after
+   fix not marked Fix as recommended pauses first: weigh it with the
+   `deliberate` skill, whose first step settles most in a line, wait for the
+   user's choice, then delegate with that choice in the brief. Several findings in one request get one fixer each, run one after
    another so their commits do not interleave.
 4. The fixer changes the code, adds or updates the test the card's scenario
    implies, runs the touched tests, and reports the files changed and the test
