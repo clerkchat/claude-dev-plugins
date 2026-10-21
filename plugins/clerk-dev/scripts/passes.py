@@ -40,6 +40,7 @@ Entry format:
 """
 import argparse, datetime, json, os, re, subprocess, sys, tempfile
 from records import load_script
+import ids
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -49,7 +50,7 @@ Each pass is one focus on one piece of work, checked with only its own lenses.
 Kept by passes.py; it reads this file strictly, so edit with care.
 
 """
-ENTRY_RE = re.compile(r"^- \[( |x)\] (P\d+)\. (.+)$")
+ENTRY_RE = re.compile(rf"^- \[( |x)\] ({ids.pattern(ids.PASS)})\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
 ITEMS_RE = re.compile(r"^  - Items:\s*$")
 ITEM_RE = re.compile(r"^    - \[( |x|-)\] (\d+)\. (.+)$")
@@ -105,8 +106,8 @@ def write(p, passes):
     os.replace(tmp, p)
 
 def find(passes, pid):
-    pid = pid.upper() if pid.upper().startswith("P") else f"P{pid}"
-    e = next((e for e in passes if e["id"] == pid), None)
+    pid = ids.complete(pid, ids.PASS)
+    e = next((e for e in passes if ids.same(e["id"], pid)), None)
     if not e: sys.exit(f"{pid} not found")
     return e
 
@@ -156,14 +157,14 @@ def main():
         if op: sys.exit(f"{', '.join(op)} still open; end or abandon it first")
         dl = dirty(a.wt, a.leave_out)
         if dl: sys.exit("tracked files have uncommitted changes: " + ", ".join(dl) + "\ncommit them, or name them with --leave-out to keep them out of this pass")
-        n = max([int(e["id"][1:]) for e in passes] or [0]) + 1
+        pid = ids.item(ids.PASS, ids.next_number([e["id"] for e in passes], ids.PASS))
         lenses = ", ".join(x.strip() for x in a.lenses.split(",") if x.strip())
         title = f"{a.focus} on {a.piece}" if a.piece else a.focus
-        passes.append({"id": f"P{n}", "title": title, "items": [], "f": {
+        passes.append({"id": pid, "title": title, "items": [], "f": {
             "Mode": a.mode, "Lenses": lenses, "Piece": a.piece or "", "Status": "open",
             "Start": git(a.wt, "rev-parse", "--short", "HEAD"), "Plugin": plugin_version(),
             "Left out": ", ".join(a.leave_out), "Started": today}})
-        write(p, passes); print(f"P{n} started at {passes[-1]['f']['Start']}")
+        write(p, passes); print(f"{pid} started at {passes[-1]['f']['Start']}")
         return
     e = find(passes, a.pid) if a.cmd not in ("list", "stats") else {"f": {}, "items": []}
     if a.cmd == "item":

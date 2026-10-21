@@ -56,6 +56,7 @@ Record frontmatter:
 """
 import argparse, datetime, importlib.util, os, re, subprocess, sys
 from typing import NamedTuple
+import ids
 
 TYPES = ("brainstorm", "design", "decision", "guidance", "capabilities", "plan", "spec")
 STATUSES = ("active", "superseded", "discarded")
@@ -131,14 +132,13 @@ def records(d):
     rd = os.path.join(d, "records")
     if not os.path.isdir(rd): return []
     out = [parse(os.path.join(rd, f))[0] for f in os.listdir(rd) if f.endswith(".md")]
-    return sorted((r for r in out if re.fullmatch(r"R\d+", r.get("id", ""))), key=lambda r: int(r["id"][1:]))
+    return sorted((r for r in out if ids.kind_of(r.get("id", "")) == ids.RECORD), key=lambda r: ids.number(r["id"]))
 
-def record_id(text):
-    return text.upper() if text.upper().startswith("R") else f"R{text}"
+def record_id(text): return ids.complete(text, ids.RECORD)
 
 def find(d, rid):
     rid = record_id(rid)
-    r = next((r for r in records(d) if r["id"] == rid), None)
+    r = next((r for r in records(d) if ids.same(r["id"], rid)), None)
     if not r: sys.exit(f"{rid} not found in {d}/records")
     return r
 
@@ -155,13 +155,16 @@ def checks(d):
     if not os.path.isdir(cd): return []
     out = []
     for f in sorted(os.listdir(cd), key=lambda f: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f)]):
-        if not f.endswith(".md"): continue
+        name = ids.check_from_file(f)
+        if name is None: continue
         text = open(os.path.join(cd, f), encoding="utf-8").read()
         m = re.search(r"^Checked [^:]*:\s*(.*?)(?:\.\s|\.$|$)", text, re.M)
-        recs = re.findall(r"\bR\d+\b", m.group(1)) if m else []
-        out.append({"name": f[:-3], "records": recs, "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
+        recs = ids.records_in(m.group(1)) if m else []
+        out.append({"name": name, "records": recs, "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
                     "closed": len(re.findall(r"^[-*] \[[xX]\]", text, re.M))})
     return out
+
+def check_path(d, name): return os.path.join(d, "checks", ids.check_file(name))
 
 def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
@@ -219,7 +222,7 @@ def gist(r, limit=220):
     return para
 
 def ordered(rs):
-    return sorted(rs, key=lambda r: (TYPE_ORDER.index(r.get("type")) if r.get("type") in TYPE_ORDER else 9, int(r["id"][1:])))
+    return sorted(rs, key=lambda r: (TYPE_ORDER.index(r.get("type")) if r.get("type") in TYPE_ORDER else 9, ids.number(r["id"])))
 
 def entry(r, d, repos):
     where = f" ({r.get('repo')})" if repos else ""
@@ -234,10 +237,10 @@ def overview_state(d):
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): return None, None, basis, [r["id"] for r in rs]
     head = open(p, encoding="utf-8").read(600)
-    m = re.search(r"through (R\d+) \(basis ([0-9a-f]+)\)", head)
+    m = re.search(rf"through ({ids.pattern(ids.RECORD)}) \(basis ([0-9a-f]+)\)", head)
     if not m: return None, None, basis, [r["id"] for r in rs]
-    through = int(m.group(1)[1:])
-    return m.group(1), m.group(2), basis, [r["id"] for r in rs if int(r["id"][1:]) > through]
+    through = ids.number(m.group(1))
+    return m.group(1), m.group(2), basis, [r["id"] for r in rs if ids.number(r["id"]) > through]
 
 def basis_of(rs):
     import hashlib
@@ -302,7 +305,7 @@ def rules(d, area=None):
     to an area plus the feature-wide ones when one is given."""
     rs = [r for r in records(d) if r.get("type") == "guidance" and r.get("status") == "active"]
     if area is not None: rs = [r for r in rs if not r.get("area") or r.get("area") == area]
-    return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), int(r["id"][1:])))]
+    return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), ids.number(r["id"])))]
 
 def body_section(body, heading):
     m = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", body, re.S | re.M)
@@ -386,9 +389,10 @@ def plan_steps(r):
     return {int(re.match(r"\d+", t).group(0)): t.strip() for t in re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]}
 
 def plan_step(d, ref):
-    m = re.fullmatch(r"(R\d+)\.(\d+)", ref.strip().upper())
-    r = next((r for r in records(d) if m and r["id"] == m.group(1) and r.get("type") == "plan"), None)
-    return r, plan_steps(r).get(int(m.group(2))) if r else None
+    p = ids.parse(ref.strip().upper())
+    p = p if p and p.kind == ids.REF else None
+    r = next((r for r in records(d) if p and ids.number(r["id"]) == p.n and r.get("type") == "plan"), None)
+    return r, plan_steps(r).get(p.sub) if r else None
 
 def plan_pieces(d):
     """{code: name} of the plan's pieces, from the overview's Plan table, whose
@@ -408,58 +412,58 @@ def load_script(name):
     m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
     return m
 
-def names(wt, ids):
+def names(wt, wanted):
     """A short name for each id or code, for glossing it in conversation:
     records (R31), requirements (R52.19), checks and their questions
     (R30-1, R30-1.Q12), plan pieces (C), ideas (I7), pieces and milestones
     of the build log (B15, M1), passes (P3), and follow-ups (F3)."""
-    d = fdir(wt); recs = {r["id"]: r for r in records(d)}
+    d = fdir(wt); recs = {ids.number(r["id"]): r for r in records(d)}
     pieces = plan_pieces(d)
     here = os.path.abspath(wt)
     load = load_script
     out = []
-    for raw in ids:
+    for raw in wanted:
         x = raw.strip().rstrip(",.;:")
         X = x.upper()
+        p = ids.parse(X)
+        kind = p.kind if p else None
         name = None
         try:
-            if re.fullmatch(r"R\d+", X) and X in recs:
-                r = recs[X]; name = f"{r.get('type')}: {r.get('title')}" + ("" if r.get("status") in ("active", "") else f" ({r.get('status')})")
-            elif re.fullmatch(r"R\d+\.\d+", X):
-                s, n = X.split(".")
+            if kind == ids.RECORD and p.n in recs:
+                r = recs[p.n]; name = f"{r.get('type')}: {r.get('title')}" + ("" if r.get("status") in ("active", "") else f" ({r.get('status')})")
+            elif kind == ids.REF:
                 bm = load("build.py")
-                _, items = bm.spec_requirements(d, s)
+                _, items = bm.spec_requirements(d, p.record)
                 _, step = plan_step(d, X)
-                if items and int(n) in items: name = f"requirement of {s}: {bm.label(items[int(n)])}"
-                elif step is not None: name = f"step {n} of plan {s}: {bm.step_piece(step)}"
-            elif re.fullmatch(r"R\d+-\d+(\.Q\d+)?", X):
-                c, _, q = X.partition(".")
-                cp = os.path.join(d, "checks", c + ".md")
+                if items and p.sub in items: name = f"requirement of {p.record}: {bm.label(items[p.sub])}"
+                elif step is not None: name = f"step {p.sub} of plan {p.record}: {bm.step_piece(step)}"
+            elif kind == ids.CHECK:
+                cp = check_path(d, ids.check(p.record, p.sub))
                 if os.path.exists(cp):
-                    if q:
-                        it = next((i for i in items_mod().read(cp) if i["id"] == q), None)
+                    if p.q is not None:
+                        it = next((i for i in items_mod().read(cp) if ids.same(i["id"], ids.item(ids.QUESTION, p.q))), None)
                         if it: name = f"design question: {it['text']}"
-                    else: name = f"design check of {c.split('-')[0]}"
-            elif re.fullmatch(r"I\d+", X):
-                it = next((i for i in ideas(d) if i["id"] == X), None)
+                    else: name = f"design check of {p.record}"
+            elif kind == ids.IDEA:
+                it = next((i for i in ideas(d) if ids.same(i["id"], X)), None)
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
-            elif re.fullmatch(r"[BM]\d+", X):
-                e = next((e for e in load("build.py").log_entries(here) if e["id"] == X), None)
-                if e: name = ("milestone: " if X[0] == "M" else f"piece for {e['f']['Record']}: " if e["f"].get("Record") else "piece: ") + e["title"]
-            elif re.fullmatch(r"P\d+", X):
-                e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if e["id"] == X), None)
+            elif kind in (ids.BUILD, ids.MILESTONE):
+                e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
+                if e: name = ("milestone: " if kind == ids.MILESTONE else f"piece for {e['f']['Record']}: " if e["f"].get("Record") else "piece: ") + e["title"]
+            elif kind == ids.PASS:
+                e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if ids.same(e["id"], X)), None)
                 if e: name = f"pass: {e['title']}"
-            elif re.fullmatch(r"[FD]\d+", X):
-                kind, file = ("follow-up", "followups") if X[0] == "F" else ("deferred item", "deferred")
-                e = next((i for i in load(f"{file}.py").read(os.path.join(here, ".clerk-dev", f"{file}.md")) if i["id"] == X), None)
-                if e: name = f"{kind}: {e['text']}"
+            elif kind in (ids.FOLLOWUP, ids.DEFERRED):
+                what, file = ("follow-up", "followups") if kind == ids.FOLLOWUP else ("deferred item", "deferred")
+                e = next((i for i in load(f"{file}.py").read(os.path.join(here, ".clerk-dev", f"{file}.md")) if ids.same(i["id"], X)), None)
+                if e: name = f"{what}: {e['text']}"
             if name is None and x in pieces: name = f"plan piece: {pieces[x]}"
         except SystemExit:
             pass
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
-ID_RE = re.compile(r"(?<!\w)(R\d+(?:\.\d+)?|[BMPFID]\d+)(?![\w.]?\d)('s)?")
+ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
 
 def gloss(wt, text, n=50):
     """The text with each id's first plain mention followed by its short name,
@@ -467,9 +471,9 @@ def gloss(wt, text, n=50):
     ("R31 (the chunk plan)", "the chunk plan (R31)") stays as it is, and so do
     its later mentions and ids inside quotes, which are things to type."""
     found = list(ID_RE.finditer(text))
-    ids = list(dict.fromkeys(m.group(1) for m in found))
+    mentioned = list(dict.fromkeys(m.group(1) for m in found))
     known, titles = {}, {}
-    for line in names(wt, ids) if ids else []:
+    for line in names(wt, mentioned) if mentioned else []:
         x, _, name = line.partition(": ")
         if name == "unknown": continue
         known[x] = name if len(name) <= n else name[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
@@ -500,15 +504,15 @@ def suggestions(d):
         if len(decs) >= 3 and not des:
             out.append(f"{name}: {len(decs)} active decisions and no design; roll them up into a design that cites them.")
         elif des:
-            newest = max(int(x["id"][1:]) for x in des)
-            later = [x["id"] for x in decs if int(x["id"][1:]) > newest]
-            if len(later) >= 3: out.append(f"{name}: design R{newest} predates {len(later)} active decisions ({', '.join(later)}); supersede it with one that includes them.")
+            newest = max(des, key=lambda x: ids.number(x["id"]))
+            later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"])]
+            if len(later) >= 3: out.append(f"{name}: design {newest['id']} predates {len(later)} active decisions ({', '.join(later)}); supersede it with one that includes them.")
     plans = [r for r in live if r.get("type") in ("plan", "capabilities")]
     planlike = [r for r in live if r.get("type") == "decision" and re.search(r"\b(chunks|ordering|order of|sequenc\w*|dependencies|phases|milestones|pieces|plan|roadmap|breakdown)\b", r.get("title", ""), re.I)]
     if not plans:
         if planlike:
-            ids = ", ".join(r["id"] for r in planlike)
-            out.append(f"No plan yet, but {ids} set pieces or their order; file a plan (or capabilities) record from {'them' if len(planlike) > 1 else 'it'}, so the order of work has one home.")
+            cited = ", ".join(r["id"] for r in planlike)
+            out.append(f"No plan yet, but {cited} set pieces or their order; file a plan (or capabilities) record from {'them' if len(planlike) > 1 else 'it'}, so the order of work has one home.")
         if not planlike and (len({r.get('area', '') for r in live}) > 2 or len(live) >= 10):
             out.append("No plan or capabilities record yet; write one for the order of work.")
     if len(rs) >= 5:
@@ -524,11 +528,9 @@ class Built(NamedTuple):
     records: dict
     unread: list
 
-def ref_key(ref): return [int(x) for x in ref[1:].split(".")]
-
 def commits_by_record(bm, entries):
     found = bm.built_records(entries)
-    return {ref: [bm.commit_of(e) for e in found[ref]] for ref in sorted(found, key=ref_key)}
+    return {ref: [bm.commit_of(e) for e in found[ref]] for ref in sorted(found, key=ids.sort_key)}
 
 def cited(refs):
     return ", ".join(f"{ref} ({', '.join(cs)})" for ref, cs in refs.items())
@@ -563,14 +565,14 @@ def successor(recs, rid):
     return rid
 
 def step_built(bm, ref, text, built, recs):
-    named = [successor(recs, x) for x in re.findall(r"\bR\d+\b(?!\.\d)", bm.step_piece(text))]
+    named = [successor(recs, x) for x in ids.records_in(bm.step_piece(text), refs=False)]
     return ref in built.records or (bool(named) and all(x in built.specs or x in built.records for x in named))
 
 def steps_built(r, built):
     bm = load_script("build.py")
     recs = {x["id"]: x for x in records(os.path.dirname(os.path.dirname(r["path"])))}
     steps = plan_steps(r)
-    return [n for n, text in steps.items() if step_built(bm, f"{r['id']}.{n}", text, built, recs)], len(steps)
+    return [n for n, text in steps.items() if step_built(bm, ids.ref(r["id"], n), text, built, recs)], len(steps)
 
 def plan_lines(d, built, repo):
     out = []
@@ -606,7 +608,7 @@ def digest(d):
     out += ["# Summary", "", (m.group(1).strip() if m else "(none)"), ""]
     live = [r for r in rs if r.get("status") == "active" and r.get("type") != "brainstorm"]
     lines, built = build_log(d)
-    for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, int(r["id"][1:]))):
+    for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, ids.number(r["id"]))):
         _, body = parse(r["path"])
         out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'}{built_mark(r, built)})", body.strip(), ""]
     out += ["# Brainstorms (history; one line each)", ""]
@@ -614,10 +616,10 @@ def digest(d):
     out += ["# Superseded or discarded (ids only)", "", ", ".join(f"{r['id']} {r.get('status')}" for r in rs if r.get("status") in ("superseded", "discarded")) or "none", ""]
     out += ["# Open design questions", ""]
     for c in checks(d):
-        text = open(os.path.join(d, "checks", c["name"] + ".md"), encoding="utf-8").read()
-        for q in re.finditer(r"^- \[ \] (Q\d+)\. (.*)$", text, re.M):
+        text = open(check_path(d, c["name"]), encoding="utf-8").read()
+        for q in re.finditer(rf"^- \[ \] ({ids.pattern(ids.QUESTION)})\. (.*)$", text, re.M):
             w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
-            out.append(f"- {c['name']}.{q.group(1)} ({w.group(1) if w else '?'}): {q.group(2)}")
+            out.append(f"- {ids.in_check(c['name'], q.group(1))} ({w.group(1) if w else '?'}): {q.group(2)}")
     out += ["", "# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
     out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} {idea_status(i)}" for i in ideas(d)] or ["none"]
@@ -633,7 +635,7 @@ def stamp_overview(d):
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
     rs = records(d)
-    last = rs[-1]["id"] if rs else "R0"
+    last = rs[-1]["id"] if rs else ids.record(0)
     text = open(p, encoding="utf-8").read()
     text = re.sub(r"^Generated .* \(basis [0-9a-f]+\)\..*\n+", "", text, flags=re.M)
     lines = text.split("\n", 1)
@@ -667,16 +669,15 @@ def idea_word(i):
 def write_ideas(d, its):
     items_mod().write(os.path.join(d, "ideas.md"), its, IDEAS_HEADER, order=IDEA_FIELDS)
 
-REF_RE = re.compile(r"R(\d+)(?:\.\d+|-\d+(?:\.Q\d+)?)?")
-
 def area_for(wt, ref):
     x = ref.strip().upper()
-    if not REF_RE.fullmatch(x) or names(wt, [x])[0].endswith(": unknown"): sys.exit(f"{ref} is not a record, requirement, or design question in this feature")
-    return find(fdir(wt), "R" + REF_RE.fullmatch(x).group(1)).get("area", "")
+    p = ids.parse(x)
+    if not p or p.kind not in ids.RECORD_KINDS or names(wt, [x])[0].endswith(": unknown"): sys.exit(f"{ref} is not a record, requirement, or design question in this feature")
+    return find(fdir(wt), p.record).get("area", "")
 
-def area_of(d, ids):
+def area_of(d, rids):
     """The area records share, or "" when they have none or differ."""
-    got = {find(d, i).get("area", "") for i in ids}
+    got = {find(d, i).get("area", "") for i in rids}
     return got.pop() if len(got) == 1 else ""
 
 def main():
@@ -732,19 +733,19 @@ def main():
         sys.exit(f"no feature in {d}; start one with: records.py start {a.wt} \"name\"")
 
     if a.cmd == "new":
-        rs = records(d); num = max([int(r["id"][1:]) for r in rs] or [0]) + 1
+        rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
         _, repos = workspace(a.wt)
         old = find(d, a.supersedes) if a.supersedes else None
         parts = [x.strip() for x in a.src.split(",") if x.strip()] if a.src else []
-        parts = [x.upper() if re.fullmatch(r"[rR]\d+", x) else x for x in parts]
-        src = [x for x in parts if re.fullmatch(r"R\d+", x) and any(r["id"] == x for r in rs)]
+        parts = [x.upper() if ids.kind_of(x.upper()) == ids.RECORD else x for x in parts]
+        src = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
         area = a.area if a.area is not None else (old.get("area", "") if old else area_of(d, src) if src else "")
-        meta = {"id": f"R{num}", "type": a.type, "title": a.title.rstrip("."), "date": today,
+        meta = {"id": ids.record(num, a.type), "type": a.type, "title": a.title.rstrip("."), "date": today,
                 "repo": a.repo or this_repo(a.wt, repos), "area": slug(area) if area else "",
                 "status": "" if a.type == "brainstorm" else "active",
                 "from": ", ".join(parts),
                 "supersedes": old["id"] if old else ""}
-        p = os.path.join(d, "records", f"{num:03d}-{a.type}-{slug(a.title)}.md")
+        p = os.path.join(d, "records", ids.record_file(num, a.type, slug(a.title)))
         open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
         if old: set_fields(old, status="superseded", superseded_by=meta["id"])
         index(d); print(f"{meta['id']} {p}" + (f" (area {meta['area']})" if meta["area"] else "") + (f" (supersedes {old['id']})" if old else ""))
@@ -792,13 +793,14 @@ def main():
     elif a.cmd == "names":
         print("\n".join(names(a.wt, a.ids)))
     elif a.cmd == "idea":
-        its = ideas(d); n = max([int(i["id"][1:]) for i in its] or [0]) + 1
+        its = ideas(d); iid = ids.item(ids.IDEA, ids.next_number([i["id"] for i in its], ids.IDEA))
         src = a.src or ""
-        area = a.area if a.area is not None else (area_of(d, [x.strip() for x in re.findall(r"\bR\d+\b", src)]) if re.search(r"\bR\d+\b", src) else "")
+        cited = ids.records_in(src)
+        area = a.area if a.area is not None else (area_of(d, cited) if cited else "")
         f = {"Area": slug(area) if area else "", "From": src, "Why": (a.why or "").rstrip("."), "When": (a.when or "").rstrip("."),
              "Added": today, "Status": "open"}
-        its.append({"done": False, "id": f"I{n}", "text": a.text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
-        write_ideas(d, its); index(d); print(f"I{n} parked" + (f" (area {f['Area']})" if f.get("Area") else ""))
+        its.append({"done": False, "id": iid, "text": a.text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
+        write_ideas(d, its); index(d); print(f"{iid} parked" + (f" (area {f['Area']})" if f.get("Area") else ""))
     elif a.cmd == "ideas":
         for i in ideas(d):
             if not a.all and i["done"]: continue

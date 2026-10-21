@@ -25,6 +25,7 @@ Entry format:
     - Outcome: 2026-10-09 in 1a2b3c4   (once closed)
 """
 from records import load_script
+import ids
 
 items = load_script("items.py")
 
@@ -37,7 +38,7 @@ the plugin's tracking.md "Items"; a blank instruction means do as written.
 
 """
 
-LIST = items.WorktreeList("followups.md", "F", HEADER, extras=("Contract", "Finding"), legacy_outcome="Done")
+LIST = items.WorktreeList("followups.md", ids.FOLLOWUP, HEADER, extras=("Contract", "Finding"), legacy_outcome="Done")
 read = LIST.read
 
 if __name__ == "__main__": LIST.main("followups.py")

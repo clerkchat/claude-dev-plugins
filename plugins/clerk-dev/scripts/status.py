@@ -63,6 +63,7 @@ gone or whose plan was superseded or discarded. It changes nothing.
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
 from records import git, load_script
+import ids
 
 sf = load_script("stale-findings.py")
 
@@ -83,7 +84,7 @@ def short(text, n=90):
 
 def parse_followups(wt):
     fu = load_script("followups.py")
-    return [{"id": int(it["id"][1:]), "done": it["done"], "text": it["text"],
+    return [{"id": ids.number(it["id"]), "done": it["done"], "text": it["text"],
              "from": it["fields"].get("From", ""), "added": it["fields"].get("Added", "")}
             for it in fu.read(os.path.join(wt, ".clerk-dev", "followups.md"))]
 
@@ -206,11 +207,11 @@ def rerouted_lines(wt):
     rc = load_script("records.py")
     try: recs = rc.records(rc.fdir(wt))
     except SystemExit: recs = []
-    ids = [r["id"] for r in recs if REROUTED_RE.match(r.get("note", "")) or any(REROUTED_RE.match(l) for l in rc.parse(r["path"])[1].splitlines())]
+    rerouted = [r["id"] for r in recs if REROUTED_RE.match(r.get("note", "")) or any(REROUTED_RE.match(l) for l in rc.parse(r["path"])[1].splitlines())]
     p = rc.notes_path(wt)
     in_notes = sum(1 for l in open(p, encoding="utf-8").read().splitlines() if REROUTED_RE.match(l)) if os.path.exists(p) else 0
-    where = ids + ([f"{in_notes} in the branch notes"] if in_notes else [])
-    return ["", f"**Rerouted:** {len(ids) + in_notes}: {', '.join(where)}."] if where else []
+    where = rerouted + ([f"{in_notes} in the branch notes"] if in_notes else [])
+    return ["", f"**Rerouted:** {len(rerouted) + in_notes}: {', '.join(where)}."] if where else []
 
 def read_passes(wt):
     """The pass log's entries, or None with the reason when it cannot be read."""
@@ -315,7 +316,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
         partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
         if partial: later.append(f"Finish the partial requirement{plural(partial)} of {s}: {bd.compress(s, partial)}.")
         if left and not busy:
-            nxt = "; ".join(f"{s}.{n} {short(items[n], 70).rstrip('.')}" for n in left[:3])
+            nxt = "; ".join(f"{ids.ref(s, n)} {short(items[n], 70).rstrip('.')}" for n in left[:3])
             later.append(f"Next piece for {s}, from what is not started ({len(left)} requirement{plural(left)}; the plan and the spec's order decide): {nxt}.")
     return first, later, elsewhere
 
@@ -344,7 +345,7 @@ def feature_block(wt, rows, out):
     settle, open_q = [], 0
     for c in rc.checks(d):
         if not c["open"]: continue
-        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
         sf_ = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
         open_q += len(qs)
         ar = next((r.get("area") for r in recs if c["records"] and r["id"] == c["records"][0] and r.get("area")), "")
@@ -431,7 +432,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     settle = []
     for c in rc.checks(d) if d else []:
         if not c["open"] or not (set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas): continue
-        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
         sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
         out.append(f"- Design questions open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
         if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
@@ -500,11 +501,12 @@ def overview_parts(d):
 def spec_facts(d, r, cs, it):
     """Readiness facts of one spec: its checks, open settle-first questions in
     them, whether its Baseline is filled, and its open items."""
+    rc = load_script("records.py")
     body = open(r["path"], encoding="utf-8").read()
     mine = [c for c in cs if r["id"] in c["records"]]
     settle = []
     for c in mine:
-        settle += [f"{c['name']}.{q['id']}" for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"] and q["fields"].get("Weight", "").startswith("settle-first")]
+        settle += [ids.in_check(c["name"], q["id"]) for q in it.read(rc.check_path(d, c["name"])) if not q["done"] and q["fields"].get("Weight", "").startswith("settle-first")]
     base = section(body, "Baseline").strip()
     m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
     items = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
@@ -519,9 +521,9 @@ def area_states(recs):
         decs = [r for r in live if r.get("area", "") == a and r.get("type") == "decision"]
         des = [r for r in live if r.get("area", "") == a and r.get("type") == "design"]
         if des:
-            newest = max(int(x["id"][1:]) for x in des)
-            later = [x["id"] for x in decs if int(x["id"][1:]) > newest]
-            note = f"design R{newest}" + (f", older than {len(later)} decision{plural(later)}" if later else ", current")
+            newest = max(des, key=lambda x: ids.number(x["id"]))
+            later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"])]
+            note = f"design {newest['id']}" + (f", older than {len(later)} decision{plural(later)}" if later else ", current")
         else: note = "no design"
         out.append((a or "feature-wide", decs, note))
     return out
@@ -550,7 +552,7 @@ def design_view(wt, out, logs):
     out += ["", "**Readiness:**" + ("" if ov["plan"] else " (no Plan table in the overview; by spec)")]
     named = set()
     for row in ov["plan"]:
-        piece = row.get("piece", "?"); sid = next(iter(re.findall(r"\bR\d+\b", row.get("spec", ""))), "")
+        piece = row.get("piece", "?"); sid = next(iter(ids.records_in(row.get("spec", ""))), "")
         r = specs.get(sid)
         built_by = built_without_spec(row)
         if not r and built_by is not None:
@@ -580,14 +582,14 @@ def design_view(wt, out, logs):
     qlines, other = [], 0
     for c in cs:
         if not c["open"]: continue
-        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
         sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
         other += len(qs) - len(sfq)
         status_of = {r["id"]: r for r in recs}
         gone = [x for x in c["records"] if status_of.get(x, {}).get("status") == "superseded"]
         note = "; on " + ", ".join(f"superseded {x} (now {status_of[x].get('superseded_by')})" for x in gone) if gone else ""
         qlines.append(f"- {area_of.get(c['records'][0], '?') if c['records'] else '?'}: {c['name']}, {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else "") + note)
-        settle_all += [f"{c['name']}.{q}" for q in sfq]
+        settle_all += [ids.in_check(c["name"], q) for q in sfq]
     if qlines: out += ["", "**Open questions:**"] + qlines
     mixed = ov.get("mixed", [])
     if ov["gaps"] or ov["disagreements"] or mixed:
@@ -623,8 +625,8 @@ def area_view(wt, out, name, logs):
     rc = load_script("records.py"); it = load_script("items.py"); bd = load_script("build.py")
     d = rc.fdir(wt); recs = rc.records(d)
     spec = None
-    if re.fullmatch(r"[Rr]\d+", name):
-        spec = next((r for r in recs if r["id"] == name.upper()), None)
+    if ids.kind_of(name.upper()) == ids.RECORD:
+        spec = next((r for r in recs if ids.same(r["id"], name.upper())), None)
         if not spec: sys.exit(f"{name.upper()} is not a record of this feature")
         area = spec.get("area", "")
     else:
@@ -635,7 +637,7 @@ def area_view(wt, out, name, logs):
     label = (f"{spec['id']} {spec.get('title', '')}" if spec else "") + (f" (area {area or 'feature-wide'})" if spec else area or "feature-wide")
     out[0] = f"## Where {label} stands\n"
     mine = [r for r in recs if r.get("area", "") == area]
-    ids = {r["id"] for r in mine}
+    mine_ids = {r["id"] for r in mine}
     ov = overview_parts(d)
     summ = ov["areas"].get((area or "feature-wide").lower())
     if summ: out += [summ, ""]
@@ -649,13 +651,13 @@ def area_view(wt, out, name, logs):
     steps, settle = [], []
     qs_lines = []
     for c in rc.checks(d):
-        if not c["open"] or not set(c["records"]) & ids: continue
-        qs = [q for q in it.read(os.path.join(d, "checks", c["name"] + ".md")) if not q["done"]]
+        if not c["open"] or not set(c["records"]) & mine_ids: continue
+        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
         sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
         qs_lines.append(f"- {c['name']}: {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else ""))
-        settle += [f"{c['name']}.{q}" for q in sfq]
+        settle += [ids.in_check(c["name"], q) for q in sfq]
     if qs_lines: out += ["", "**Open questions:**"] + qs_lines
-    dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(re.findall(r"\bR\d+\b", x)) & ids]
+    dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(ids.records_in(x)) & mine_ids]
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
     gl = [(r, rule) for r, rule in rc.rules(d, area or None) if (r.get("area") or "") == area]
     if gl: out += ["", f"**Guidance:** {len(gl)}"] + [f"- {r['id']}: {short(rule, 110)}" for r, rule in gl]
@@ -774,7 +776,7 @@ def main():
         out.append(f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if seen and new else "") + ".")
         for i in open_items:
             tag = " (new)" if seen and i["id"] > seen else ""
-            out.append(f"- F{i['id']}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
+            out.append(f"- {ids.item(ids.FOLLOWUP, i['id'])}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
     else:
         out.append(f"**Follow-ups owed here:** none open ({len(items)} done)." if items else "**Follow-ups owed here:** none.")
     if items and not a.no_mark:

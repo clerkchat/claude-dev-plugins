@@ -63,6 +63,7 @@ Entry format:
 import argparse, datetime, os, re, sys, tempfile
 from typing import NamedTuple
 from records import exclude, git, git_failure, git_run, load_script, record_id
+import ids
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
@@ -75,7 +76,7 @@ covers and where it stands. Kept by build.py; it reads this file strictly, so
 edit with care.
 
 """
-ENTRY_RE = re.compile(r"^- \[( |x)\] ([BM]\d+)\. (.+)$")
+ENTRY_RE = re.compile(rf"^- \[( |x)\] ({ids.pattern(ids.BUILD, ids.MILESTONE)})\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
 
 def log_path(wt): return os.path.join(wt, ".clerk-dev", "build.md")
@@ -167,19 +168,19 @@ def reqs_of(e):
 def fmt_reqs(rs):
     return ", ".join(f"{n}" + (f" {st}" if st else "") + (f" ({note})" if note else "") for n, st, note in rs)
 
-def next_id(entries, prefix):
-    return prefix + str(max([int(e["id"][1:]) for e in entries if e["id"].startswith(prefix)] or [0]) + 1)
+def next_id(entries, kind):
+    return ids.item(kind, ids.next_number([e["id"] for e in entries], kind))
 
 def blank_entry(eid, title, **fields):
     return {"id": eid, "title": title, "f": fields, "multi": {k: [] for k in REPEATABLE}}
 
-def new_entry(entries, prefix, title, **fields):
-    e = blank_entry(next_id(entries, prefix), title, **fields)
+def new_entry(entries, kind, title, **fields):
+    e = blank_entry(next_id(entries, kind), title, **fields)
     entries.append(e)
     return e
 
 def parse_reqs(spec, text):
-    nums = sorted({int(x) for x in re.findall(r"\d+", text.replace(spec + ".", ""))})
+    nums = sorted({int(x) for x in re.findall(r"\d+", text.replace(ids.ref_prefix(spec), ""))})
     if not nums: sys.exit("--reqs names no requirement numbers")
     return nums
 
@@ -193,8 +194,8 @@ def commit_fields(wt, sha):
     return {"Commit": git(wt, "rev-parse", "--short", full), "Subject": git(wt, "log", "-1", "--format=%s", full)}
 
 def find(entries, bid):
-    bid = bid.upper() if re.match(r"[BMbm]\d+$", bid) else f"B{bid}"
-    e = next((e for e in entries if e["id"] == bid), None)
+    bid = ids.complete(bid, ids.BUILD, ids.MILESTONE)
+    e = next((e for e in entries if ids.same(e["id"], bid)), None)
     if not e: sys.exit(f"{bid} not found")
     return e
 
@@ -202,7 +203,7 @@ def spec_requirements(hub_dir, spec_id):
     """{number: text} of a spec's top-level numbered Requirements, or None
     when the spec is not found."""
     rc = load_script("records.py")
-    r = next((r for r in rc.records(hub_dir) if r["id"] == spec_id), None)
+    r = next((r for r in rc.records(hub_dir) if ids.same(r["id"], spec_id)), None)
     if not r: return None, None
     _, body = rc.parse(r["path"])
     m = re.search(r"^## Requirements\n(.*?)(?=^## |\Z)", body, re.S | re.M)
@@ -229,7 +230,7 @@ def progress(wt, entries, spec=None):
     d = rc.fdir(wt)
     entries = pieces(entries)
     kinds = {r["id"]: r.get("type") for r in rc.records(d)}
-    specs = [spec] if spec else sorted({spec_of(e, kinds) for e in entries if spec_of(e, kinds)}, key=lambda s: int(s[1:]))
+    specs = [spec] if spec else sorted({spec_of(e, kinds) for e in entries if spec_of(e, kinds)}, key=ids.number)
     out = []
     for s in specs:
         r, texts = spec_requirements(d, s)
@@ -267,7 +268,7 @@ def progress_lines(rows):
         busy = {n for e in live for n, _, _ in reqs_of(e)}
         left = [n for n in sorted(items) if n not in state and n not in busy]
         head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the spec lists none)"
-        if partial: head += f", {len(partial)} partial ({', '.join(f'{s}.{n}' for n in sorted(partial))})"
+        if partial: head += f", {len(partial)} partial ({', '.join(ids.ref(s, n) for n in sorted(partial))})"
         if dropped: head += f", {len(dropped)} dropped"
         lines.append(head)
         if busy - set(state): lines.append(f"  in progress: {compress(s, sorted(busy - set(state)))}")
@@ -323,38 +324,39 @@ def compress(s, nums):
     for n in nums:
         if runs and n == runs[-1][1] + 1: runs[-1][1] = n
         else: runs.append([n, n])
-    return ", ".join(f"{s}.{a}" if a == b else f"{s}.{a}, {s}.{b}" if b == a + 1 else f"{s}.{a} to {s}.{b}" for a, b in runs)
+    return ", ".join(ids.ref(s, a) if a == b else f"{ids.ref(s, a)}, {ids.ref(s, b)}" if b == a + 1 else f"{ids.ref(s, a)} to {ids.ref(s, b)}" for a, b in runs)
 
 def step_piece(text):
     text = re.sub(r"^\d+\.\s+", "", text)
     return re.sub(r"\s+", " ", re.split(r"\bDone:", text, maxsplit=1, flags=re.I)[0]).strip(" .;,:")
 
 def step_spec(text):
-    m = re.search(r"\bspecs? (R\d+)", text)
+    m = re.search(rf"\bspecs? ({ids.pattern(ids.RECORD)})", text)
     return m.group(1) if m else None
 
 def plan_step_of(wt, ref):
     ref = ref.strip().upper()
-    if not re.fullmatch(r"R\d+\.\d+", ref): sys.exit(f"--step takes a plan step such as R8.2, not {ref!r}")
+    p = ids.parse(ref)
+    if not p or p.kind != ids.REF: sys.exit(f"--step takes a plan step such as R8.2, not {ref!r}")
     rc = load_script("records.py")
     r, text = rc.plan_step(rc.fdir(wt), ref)
-    if not r: sys.exit(f"{ref.split('.')[0]} is not a plan record in the hub")
+    if not r: sys.exit(f"{p.record} is not a plan record in the hub")
     if r.get("status") != "active": sys.exit(f"plan {r['id']} is {r.get('status')}" + (f" (by {r['superseded_by']})" if r.get("superseded_by") else "") + "; use a step of the active plan")
-    if text is None: sys.exit(f"plan {r['id']} has no step {ref.split('.')[1]}")
+    if text is None: sys.exit(f"plan {r['id']} has no step {p.sub}")
     return ref, text
 
 BUILDABLE = ("decision", "plan", "spec")
 
 def buildable(wt, ref):
     ref = record_id(ref.strip())
-    if re.fullmatch(r"R\d+\.\d+", ref):
+    if ids.kind_of(ref) == ids.REF:
         step, text = plan_step_of(wt, ref)
         return step, None, step_piece(text)
     rc = load_script("records.py")
-    r = next((r for r in rc.records(rc.fdir(wt)) if r["id"] == ref), None)
+    r = next((r for r in rc.records(rc.fdir(wt)) if ids.same(r["id"], ref)), None)
     if not r: sys.exit(f"{ref} is not a record in the hub")
     if r.get("status") != "active": sys.exit(f"{ref} is {r.get('status')}" + (f" by {r['superseded_by']}; build that record instead" if r.get("superseded_by") else ""))
-    if r.get("type") == "plan": sys.exit(f"{ref} is a plan; log its steps instead, such as {ref}.1")
+    if r.get("type") == "plan": sys.exit(f"{ref} is a plan; log its steps instead, such as {ids.ref(ref, 1)}")
     if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan step, or a spec")
     return ref, r, r.get("title", "")
 
@@ -364,8 +366,8 @@ def built_records(entries):
         if e["f"].get("Record") and e["f"].get("Status") == "done": out.setdefault(e["f"]["Record"], []).append(e)
     return out
 
-def pieces(entries): return [e for e in entries if e["id"].startswith("B")]
-def milestones(entries): return [e for e in entries if e["id"].startswith("M")]
+def pieces(entries): return [e for e in entries if ids.kind_of(e["id"]) == ids.BUILD]
+def milestones(entries): return [e for e in entries if ids.kind_of(e["id"]) == ids.MILESTONE]
 
 def pass_states(wt, spec):
     """{focus: latest pass entry} for passes on this spec in the pass log."""
@@ -459,7 +461,7 @@ def main():
     if a.cmd == "add":
         spec = record_id(a.spec)
         nums = parse_reqs(spec, a.reqs)
-        e = new_entry(entries, "B", a.title.rstrip("."), Spec=spec, Requirements=", ".join(map(str, nums)),
+        e = new_entry(entries, ids.BUILD, a.title.rstrip("."), Spec=spec, Requirements=", ".join(map(str, nums)),
                       Model=f"{a.model} {a.effort}", Status="briefed", Attempts="1", Started=today)
         write(p, entries); print(f"{e['id']} briefed: {spec} requirements {', '.join(map(str, nums))}")
         return
@@ -471,7 +473,7 @@ def main():
             if has: sys.exit(f"{ref} already has pieces in the build log ({', '.join(has)}); log its remaining requirements as pieces instead")
         first = next((e for e in built_records(entries).get(ref, []) if names_commit(e, full)), None)
         if first: sys.exit(f"{first['id']} already logs {ref} as built in {first['f']['Commit']}")
-        e = new_entry(entries, "B", (a.title or title).rstrip("."), Record=ref, Status="done", Started=today, **commit_fields(a.wt, full))
+        e = new_entry(entries, ids.BUILD, (a.title or title).rstrip("."), Record=ref, Status="done", Started=today, **commit_fields(a.wt, full))
         why = off_branch(a.wt, full)
         write(p, entries); print(f"{e['id']} built: {ref} in {e['f']['Commit']}")
         if why: print(f"note: {e['f']['Commit']} is not on this branch: {why}; logged anyway", file=sys.stderr)
@@ -499,7 +501,7 @@ def main():
         if items is None: sys.exit(f"{spec} not found in the hub")
         unknown = [n for n in nums if n not in items]
         if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")
-        e = new_entry(entries, "B", f"Drop {compress(spec, nums)}", Spec=spec, Requirements=", ".join(map(str, nums)),
+        e = new_entry(entries, ids.BUILD, f"Drop {compress(spec, nums)}", Spec=spec, Requirements=", ".join(map(str, nums)),
                       Status="dropped", Started=today, Note=a.why)
         write(p, entries); print(f"{e['id']} dropped: {compress(spec, nums)}")
         return
@@ -513,7 +515,7 @@ def main():
         bad = [x for x in plan if known and x not in known]
         if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
         req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
-        m = new_entry(entries, "M", piece.rstrip("."), Spec=spec, Plan=step, Passes=", ".join(plan), Required=", ".join(req), Started=today)
+        m = new_entry(entries, ids.MILESTONE, piece.rstrip("."), Spec=spec, Plan=step, Passes=", ".join(plan), Required=", ".join(req), Started=today)
         write(p, entries); print(f"{m['id']} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
         return
     if a.cmd == "skip":
@@ -545,8 +547,8 @@ def main():
         planned = {n for n, _, _ in reqs_of(e)}
         cov = {}
         if a.covered:
-            for part in re.split(r",(?=\s*(?:R\d+\.)?\d+\s*:)", a.covered):
-                m = re.match(r"\s*(?:R\d+\.)?(\d+)\s*:\s*(done|partial)\s*(?::\s*(.*))?$", part.strip())
+            for part in re.split(rf",(?=\s*(?:{ids.pattern(ids.RECORD)}\.)?\d+\s*:)", a.covered):
+                m = re.match(rf"\s*(?:{ids.pattern(ids.RECORD)}\.)?(\d+)\s*:\s*(done|partial)\s*(?::\s*(.*))?$", part.strip())
                 if not m: sys.exit(f"cannot read {part!r} in --covered; use \"4:done,5:partial: what is missing\"")
                 cov[int(m.group(1))] = (m.group(2), (m.group(3) or "").strip())
         rs = [(n, *cov.get(n, ("done", ""))) for n in sorted(planned | set(cov))]

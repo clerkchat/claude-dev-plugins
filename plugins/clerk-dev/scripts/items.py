@@ -20,11 +20,13 @@ close, reopen, and set on `<worktree>/.clerk-dev/<file>`.
 """
 import argparse, datetime, os, re, sys, tempfile
 from records import load_script
+import ids
 
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")
 DONE = ("fixed", "wont-fix", "deferred")
-ITEM_RE = re.compile(r"^[-*+] \[( |x|X)\] ([A-Z]\d+)\.\s+(.*)$")
+ITEM_ID = ids.pattern(*ids.ITEMS)
+ITEM_RE = re.compile(rf"^[-*+] \[( |x|X)\] ({ITEM_ID})\.\s+(.*)$")
 
 def labels_in(path):
     """Field labels used in a file: every `  - Label:` under an item."""
@@ -83,7 +85,7 @@ def write(path, items, header, order=()):
 def header_of(path):
     """Everything before the first item, kept as it is on rewrite."""
     text = open(path, encoding="utf-8").read()
-    m = re.search(r"^[-*+] \[[ xX]\] [A-Z]\d+\.", text, re.M)
+    m = re.search(rf"^[-*+] \[[ xX]\] {ITEM_ID}\.", text, re.M)
     return text[:m.start()] if m else text.rstrip("\n") + "\n\n"
 
 def instruction(value):
@@ -102,7 +104,7 @@ def set_status(it, status, ref=None):
     elif status == "open": it["fields"].pop("Outcome", None)
 
 def find(items, iid):
-    it = next((i for i in items if i["id"].upper() == iid.upper()), None)
+    it = next((i for i in items if ids.same(i["id"], iid.upper())), None)
     if not it: sys.exit(f"{iid} not found")
     return it
 
@@ -117,8 +119,8 @@ def set_instruction(it, value, note=None):
     it["fields"]["Instruction"] = instruction(value) + (f": {note}" if note else "")
 
 class WorktreeList:
-    def __init__(self, filename, prefix, header, extras=(), required=(), closes=DONE, legacy_outcome=None):
-        self.filename, self.prefix, self.header, self.required, self.closes, self.legacy_outcome = filename, prefix, header, tuple(required), closes, legacy_outcome
+    def __init__(self, filename, kind, header, extras=(), required=(), closes=DONE, legacy_outcome=None):
+        self.filename, self.kind, self.header, self.required, self.closes, self.legacy_outcome = filename, kind, header, tuple(required), closes, legacy_outcome
         self.extras = tuple(extras)
         self.fields = ("From", *self.extras, "Added", "Instruction", "Status", "Outcome")
 
@@ -138,11 +140,11 @@ class WorktreeList:
     def write(self, p, its): write(p, its, self.header, order=self.fields)
 
     def add(self, its, text, source, instruction_value=None, **extra):
-        n = max([int(i["id"][1:]) for i in its] or [0]) + 1
+        iid = ids.item(self.kind, ids.next_number([i["id"] for i in its], self.kind))
         f = {"From": source, **{k: extra.get(k) or "" for k in self.extras}, "Added": datetime.date.today().isoformat(),
              "Instruction": instruction(instruction_value) if instruction_value else "", "Status": "open"}
-        its.append({"done": False, "id": f"{self.prefix}{n}", "text": text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
-        return its[-1]["id"]
+        its.append({"done": False, "id": iid, "text": text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
+        return iid
 
     def main(self, prog, usage=None):
         ap = argparse.ArgumentParser(prog=prog, description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)

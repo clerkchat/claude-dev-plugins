@@ -16,6 +16,7 @@ SRC is a finding "<run> N", a question "R18-1.Q6", a pass item "P3.4", a piece
 "B9", or "this session".
 """
 from records import load_script
+import ids
 
 items = load_script("items.py")
 
@@ -28,7 +29,7 @@ commit, or wont-fix with a reason.
 
 """
 
-LIST = items.WorktreeList("deferred.md", "D", HEADER, extras=("Path", "Open", "Revisit"), required=("Path", "Open"), closes=("fixed", "wont-fix"))
+LIST = items.WorktreeList("deferred.md", ids.DEFERRED, HEADER, extras=("Path", "Open", "Revisit"), required=("Path", "Open"), closes=("fixed", "wont-fix"))
 read = LIST.read
 
 if __name__ == "__main__": LIST.main("deferred.py", USAGE)
