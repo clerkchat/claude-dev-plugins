@@ -1,6 +1,6 @@
 ---
 name: design-check
-description: Check a feature's design, plan, capabilities, or spec record against the review lenses before the code exists, and work through the questions that come back. Use when the user says "check the design", "design-check R10", "run the lenses on the spec", "what should we settle before building this", "review the plan", or "go through the design questions". Not for reviewing code; that is /clerk-dev:review.
+description: Check a feature's design, plan, capabilities, or spec record against the review lenses before the code exists, and work through the questions that come back. Use when the user says "check the design", "design-check R10", "run the lenses on the spec", "what should we settle before building this", "poke holes in this", "review the plan", or "go through the design questions". Not for reviewing code; that is /clerk-dev:review.
 argument-hint: "[R<n>[,R<m>...]] [--lenses a,b | +a | -a] [walk]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
 ---
