@@ -1,6 +1,6 @@
 ---
 name: review-tech-debt
-description: Tech debt lens for /clerk-dev:review. Looks past the changed lines into the functions, classes, and modules the change touches, and proposes cleanups, simplifications, and refactors that cut lines and make the code easier to change next time: long functions, deep nesting, duplication, dead code, hand-rolled logic the codebase or a library already provides. Labels each finding cleanup, simplify, or refactor. Invoked by the review orchestrator, and by the design-check skill on feature records.
+description: Tech debt lens for /clerk-dev:review. Looks past the changed lines into the functions, classes, and modules the change touches, and proposes cleanups, simplifications, and refactors that cut lines and make the code easier to change next time: long functions, large files, crowded directories, deep nesting, duplication, dead code, hand-rolled logic the codebase or a library already provides. Labels each finding cleanup, simplify, or refactor. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash
@@ -93,6 +93,16 @@ out of scope" at most.
    stringly-typed values that want an enum or a type, maps used as structs.
 11. Tests of the touched code: setup duplicated across tests that a helper or
     fixture would remove.
+12. Crowded directories: a directory the change adds files to that now holds
+    many code files (fifteen or more, or clearly more than its neighbors).
+    List the directory and count how many of its files this branch added.
+    Look for the groups already there: shared filename prefixes or suffixes,
+    files that mostly import each other, one cluster per entity or layer. When
+    they cluster, propose the subdirectories by name, using the domain's
+    vocabulary, and which files move into each; say how strong the evidence
+    is. A flat directory of parallel, independent files that readers browse as
+    a list (handlers, migrations, fixtures) is not a finding, and neither is a
+    long directory whose files do not cluster.
 
 ## Labeling
 
@@ -160,6 +170,9 @@ the review protocol):
   reuse or extend, instead of building alongside it?
 - Is there duplication, dead code, or a tangled module in that area that the
   feature would make worse?
+- Where will the feature's new files live, and is that directory already
+  crowded enough that its files should be grouped into named subdirectories
+  first?
 - Which cleanup should be its own commit before the feature, and which can
   wait?
 
@@ -173,6 +186,9 @@ this section; reviewers ignore it):
   fix shapes it would convert between, delete dead code, in its own commits.
   Then build on that baseline; the feature commits should read as small
   additions.
+- When the piece adds files to a directory that is already crowded, group its
+  existing files into named subdirectories first, in a prep commit, and add
+  the new files where they belong.
 - Search the codebase and its shared libraries before writing any helper;
   extend an existing one rather than add a near-copy.
 - Replace hand-rolled logic with the codebase's or a library's existing one.
