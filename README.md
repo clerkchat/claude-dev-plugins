@@ -59,14 +59,15 @@ what you want in plain words; it does the legwork and asks you only for the
 decisions that are yours. Join at any step: a small fix can go straight to
 building, a big feature starts by thinking out loud.
 
-| Step                 | You say                   | What happens                                                  |
-| -------------------- | ------------------------- | ------------------------------------------------------------- |
-| 1. Think it through  | "let's brainstorm X"      | You talk; settled points are written down with their reasons |
-| 2. Poke holes        | "check the design"        | It asks what a security or rollout reviewer would; you answer |
-| 3. Build             | "build the plan"          | Small commits with tests run; it asks when a choice is open   |
-| 4. Harden            | "do an edge-cases pass"   | One concern at a time, each with its own short check          |
-| 5. Review            | "review the branch"       | A report; you mark each finding, it fixes what you marked     |
-| 6. Wrap up           | "do a final review pass"  | Only what would hold the merge; pass or not pass              |
+| Step                 | You say                        | What happens                                                  |
+| -------------------- | ------------------------------ | ------------------------------------------------------------- |
+| 1. Think it through  | "let's brainstorm X"           | You talk; settled points are written down with their reasons |
+| 2. Poke holes        | "check the design"             | It asks what a security or rollout reviewer would; you answer |
+| 3. Build             | "build the plan"               | Small commits with tests run; it asks when a choice is open   |
+| 4. Harden            | "do an edge-cases pass"        | One concern at a time, each with its own short check          |
+| 5. Review            | "review the branch"            | A report; you mark each finding, it fixes what you marked     |
+| 6. Wrap up           | "do a final review pass"       | Only what would hold the merge; pass or not pass              |
+| 7. Describe          | "draft the PR description"     | A description per repository, with a walkthrough, to post     |
 
 At any step:
 

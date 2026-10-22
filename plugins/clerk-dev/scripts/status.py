@@ -69,6 +69,7 @@ import ids
 sf = load_script("stale-findings.py")
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
+DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
 
 def plural(x):
     n = x if isinstance(x, int) else len(x)
@@ -677,6 +678,12 @@ def area_view(wt, out, name, logs):
         steps.append(f"Roll its {len(decs)} decisions into a design that cites them.")
     return steps
 
+def final_pass_stands(run):
+    report, target = os.path.join(run, "final-review-report.md"), os.path.join(run, "target.txt")
+    if not os.path.exists(report): return False
+    with open(report, encoding="utf-8") as f: passed = f.readline().strip() == "# Final review: PASSED"
+    return passed and os.path.getmtime(report) >= os.path.getmtime(target)
+
 def related_worktrees(wt, rows):
     real = os.path.realpath(wt)
     return [(name, path) for name, path in rows if path != real and os.path.isdir(path)]
@@ -871,8 +878,13 @@ def main():
         # Fixes are rechecked one finding at a time, never re-reviewed as a
         # branch; once triage is done, the final pass reads them all together.
         triage_left = sum(len(v) for v in unmarked.values()) + len(queue) + len(discuss) + len(inprog)
-        if counts_fix and not triage_left and not unreviewed and not open_items:
+        settled = not triage_left and not unreviewed and not open_items
+        if counts_fix and settled:
             steps.append(f"Triage is done and {counts_fix} fix{'es' if counts_fix != 1 else ''} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")
+        elif settled and final_pass_stands(run):
+            steps.append(DRAFT_PR_STEP)
+    else:
+        steps.append(DRAFT_PR_STEP)
 
     out.append("")
     if steps:
