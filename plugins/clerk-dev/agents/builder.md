@@ -76,8 +76,9 @@ On any stop before editing, the report says `files: none` and
    you added that nothing tests, extending the nearest existing test file.
 4. Run the handoff's test command, and only that command's scope; tests in
    this repository may share databases and must not run in parallel with
-   others. If tests fail because of your change, fix it; if they fail for an
-   unrelated reason, or you cannot fix it, stop.
+   others. If tests fail because of your change, fix it, in at most two
+   attempts at the same failure; if they still fail, or fail for an unrelated
+   reason, stop with `tests:` saying what failed.
 5. Do not commit, push, or stage. Write nothing under `.clerk-dev/` (reading
    it is fine). Touch no untracked file you did not create, and no file
    outside the handoff except as the writing-code skill allows within it.
