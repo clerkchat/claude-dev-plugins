@@ -283,7 +283,10 @@ status lives only here; the brief is not edited for it.
 ### After each handoff
 
 1. Read the report by its `status`, `questions:`, `deviations:`, and
-   `requirements:` lines. `status: stopped` or `questions:` go back to the user (or are
+   `requirements:` lines. A report that is empty, misses a line of the
+   builder's report, or has them out of order is sent back once asking for the
+   report alone; a second such report is handled as `status: stopped` with
+   that as its reason. `status: stopped` or `questions:` go back to the user (or are
    settled from the records and guidance) before anything else. Before asking,
    weigh each question with the `deliberate` skill, with the handoff and the code and
    records it touches as its facts, and put its decision summary to the user

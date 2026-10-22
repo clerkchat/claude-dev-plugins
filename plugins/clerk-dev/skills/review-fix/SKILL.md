@@ -111,7 +111,8 @@ for nothing wider.
 4. The fixer changes the code, adds or updates the test the card's scenario
    implies, runs the touched tests, and reports the files changed and the test
    result. It does not touch the run directory and does not commit.
-5. Read the report's `status` first. On `status: stopped`, make no commit, and
+5. Check the report's shape as writing-code's "After each handoff" step 1
+   does, then read its `status`. On `status: stopped`, make no commit, and
    take the first that applies:
    - `scope: out`: record `--instruct N=discuss:<the scope reason>`, tell the
      user why, and change nothing. When the reason is deployed code that

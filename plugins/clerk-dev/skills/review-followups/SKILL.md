@@ -99,7 +99,8 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    answers" in `skills/review/tracking.md` describes.
 3. Delegate to `clerk-dev:builder`, at the model and effort the Model and
    effort table in the `writing-code` skill gives for the item.
-4. Read the report's `status` first. On `status: stopped`, commit nothing and
+4. Check the report's shape as writing-code's "After each handoff" step 1
+   does, then read its `status`. On `status: stopped`, commit nothing and
    take the first that applies; the item stays open until a handoff for it
    lands:
    - `scope: out`: the work is owed, so ask the user once, with the proposal
