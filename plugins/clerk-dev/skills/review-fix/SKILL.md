@@ -125,7 +125,7 @@ for nothing wider.
    - The tests failed: record `in-progress` with the files touched, show the
      failure, and ask how to proceed.
    - Any other reason (`questions:` is not "none", or a guidance rule cannot
-     hold): weigh it with the `deliberate` skill as step 1 of "After each
+     hold): weigh it with the `deliberate` skill as step 2 of "After each
      handoff" in the `writing-code` skill does, then run the fix again with
      the answer in the handoff.
    A stopped report whose `files:` is not "none" left edits: show the files and

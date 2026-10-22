@@ -287,7 +287,8 @@ status lives only here; the brief is not edited for it.
    builder's report, or has them out of order is sent back once, to the same
    builder with SendMessage, asking for the report alone; a second such report
    is handled as `status: stopped` with that as its reason, and its `files:`
-   are taken from `git status --short`. `status: stopped` or `questions:` go back to the user (or are
+   are taken from `git status --short`.
+2. `status: stopped` or `questions:` go back to the user (or are
    settled from the records and guidance) before anything else. Before asking,
    weigh each question with the `deliberate` skill, with the handoff and the code and
    records it touches as its facts, and put its decision summary to the user
@@ -295,16 +296,16 @@ status lives only here; the brief is not edited for it.
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
    `skills/review/tracking.md` describes, and say so in one line.
-   On `scope: out`, ask the user once, since the record that sent the work
+3. On `scope: out`, ask the user once, since the record that sent the work
    already put it in scope; on yes, add the area to Purpose under "Deployed
    code it changes on purpose" with a dated line, write the guidance file
    again, and re-send the handoff.
-   `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
+4. `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
    a line, and record it when it changes a decision) or sent back with a
    correction.
-2. Read the diff (`git diff --stat`, then the parts that carry the handoff's
+5. Read the diff (`git diff --stat`, then the parts that carry the handoff's
    shape), and run the handoff's tests yourself.
-3. Commit as step 6 of the `review-fix` skill describes: only the handoff's
+6. Commit as step 6 of the `review-fix` skill describes: only the handoff's
    files (the report's `files:`), a message that stands alone and describes the change, never
    `.clerk-dev/` paths or record ids. Mark the handoff done in the build log (or log
    the record it builds with `built`, as "The build log" describes), with
@@ -312,7 +313,7 @@ status lives only here; the brief is not edited for it.
    (`BRIEF-52.7: done` becomes `7:done`), and `--covered` passed only when
    the line names a brief; and
    tick the brief's open items it closes.
-4. Say one line: the handoff, the commit, the tests, anything accepted, and the
+7. Say one line: the handoff, the commit, the tests, anything accepted, and the
    count it moves ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
 
 Whenever you report progress against a brief at more length (the user asks,

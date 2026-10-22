@@ -113,7 +113,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
      go on to the next item.
    - The tests failed: show the failure and ask how to proceed.
    - Any other reason (`questions:` is not "none", or a guidance rule cannot
-     hold): weigh it with the `deliberate` skill as step 1 of "After each
+     hold): weigh it with the `deliberate` skill as step 2 of "After each
      handoff" in the `writing-code` skill does, then re-send the handoff with
      the answer in it.
    A stopped report whose `files:` is not "none" left edits: show the files and
