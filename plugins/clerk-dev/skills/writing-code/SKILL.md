@@ -97,7 +97,7 @@ agent that preloads this skill skips it: it is the one receiving the handoff.
 The feature records exist so that design choices are settled outside the code.
 Once they are, building is delegated: the session that owns the branch keeps
 the judgment (what to build, in what order, whether the result is right) and
-the commits, and hands each part of a piece to a `clerk-dev:implementer` agent
+the commits, and hands each part of a piece to a `clerk-dev:builder` agent
 in a handoff. This keeps the session's context for the whole feature instead of
 filling it with one file's details, and gives every handoff a check before it
 lands.
@@ -168,27 +168,61 @@ the review skill describes.
 
 ### The handoff
 
-Give paths, not contents. Include:
+Give paths, not contents, for code and records. Every handoff gives:
 
-- the goal, in a sentence or two;
-- the requirements it covers, by brief id and number, and the brief's path;
-- the decisions it must follow, by id and path;
-- the reference code to port or follow (`git show <ref>:<path>` for another
-  branch);
-- the files expected to change, and any it must not touch;
-- the later handoffs and pieces that will touch the same code, by name and
-  brief id, so the agent shapes this handoff's code for them without building
-  them;
-- the tests to write or port, and the exact command to run them;
-- the guidance file's path: `records.py guidance <worktree> --for <the
-  piece's brief> [--context <the repository's review-context SKILL.md>] --out
-  <scratchpad>/guidance-<area>.md` writes the branch's Purpose, its guidance,
-  the feature's active guidance for the brief's area, and the repository's Known
-  noise (`--area <area>` names the area directly);
-- the rules that apply beyond the repository's conventions: the user's
-  instructions that bear on code (for example a no-comments rule). Do not
-  assume the agent sees the user's own instructions; restate the ones that
-  apply.
+1. `Source: <piece | pass | finding | follow-up | request>` as its first
+   line, and `Reference: <path or git ref>` when porting.
+2. The goal in a sentence or two.
+3. The decisions to follow, by id and path, and the guidance file's path:
+   `records.py guidance <worktree> --for <the piece's brief> [--context <the
+   repository's review-context SKILL.md>] --out <scratchpad>/guidance-<area>.md`
+   writes the Branch scope rule, the branch's Purpose, its guidance, the
+   feature's active guidance for the brief's area, and the repository's Known
+   noise (`--area <area>` names the area directly).
+4. The files expected to change, and any it must not touch.
+5. The tests to write or port, and the exact command to run them.
+6. The user's rules that bear on code, restated: the user's instructions
+   beyond the repository's conventions (for example a no-comments rule). Do
+   not assume the agent sees the user's own instructions; restate the ones
+   that apply.
+7. Model and effort, on the invocation, from Model and effort above.
+
+After the `Source:` line, paste its source's entry from By kind below word for
+word as its own block, and the Reference entry too when porting. These are
+instructions, not code or records, so they go in whole. A piece's handoff is
+`Source: piece`; a change the user asked for with no brief behind it is
+`Source: request`.
+
+#### By kind
+
+What each handoff adds, pasted word for word:
+
+1. Piece: the requirements by brief id and number with the brief's path,
+   and the later handoffs and pieces that touch the same code.
+2. Pass: the one lens's Pass mode text and the items as the goal; stay
+   inside the items.
+3. Finding: the run files to read (the merged entry's claim, scenario,
+   steps, evidence, fix, and snippet; the verifier's note; the notes file;
+   the guidance file), the review context sections for the finding's lens,
+   a pull request comment and its replies when they stand in for claim and
+   scenario, the text of a linked comment, and the user's own words quoted,
+   which override the recommendation; read the code the evidence names at
+   its current state, since line numbers may be off and function names are
+   reliable; make the smallest change that makes the scenario impossible,
+   covering the sibling paths the evidence names; add or update a test that
+   reproduces the scenario and passes with the fix.
+4. Follow-up: the item's text is the recommendation and its contract what
+   this repository must match; read the source change with
+   `git -C <path> show <sha>` and check the contract against it, not the
+   item's wording alone; when the handoff gives the `stale-findings.py <run>
+   --open-in <files>` command, list those findings before editing and treat
+   them as context, not work; where one's recommendation conflicts with the
+   contract, the contract wins and `findings:` says so.
+5. Request: the user's words as the goal, and the files it reaches.
+6. Reference (with any source): the reference by path or
+   `git show <ref>:<path>`; keep its behavior and tests, changing only what
+   the new structure, the decisions, or this repository's patterns require;
+   a test weakened or dropped to make the port pass is a deviation.
 
 ### Order and parallelism
 
@@ -248,7 +282,8 @@ status lives only here; the brief is not edited for it.
 
 ### After each handoff
 
-1. Read the report. `stopped` or `questions:` go back to the user (or are
+1. Read the report by its `status`, `questions:`, `deviations:`, and
+   `requirements:` lines. `status: stopped` or `questions:` go back to the user (or are
    settled from the records and guidance) before anything else. Before asking,
    weigh each question with the `deliberate` skill, with the handoff and the code and
    records it touches as its facts, and put its decision summary to the user
@@ -256,15 +291,22 @@ status lives only here; the brief is not edited for it.
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
    `skills/review/tracking.md` describes, and say so in one line.
+   On `scope: out`, ask the user once, since the record that sent the work
+   already put it in scope; on yes, add the area to Purpose under "Deployed
+   code it changes on purpose" with a dated line, write the guidance file
+   again, and re-send the handoff.
    `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
    a line, and record it when it changes a decision) or sent back with a
    correction.
 2. Read the diff (`git diff --stat`, then the parts that carry the handoff's
    shape), and run the handoff's tests yourself.
 3. Commit as step 6 of the `review-fix` skill describes: only the handoff's
-   files, a message that stands alone and describes the change, never
+   files (the report's `files:`), a message that stands alone and describes the change, never
    `.clerk-dev/` paths or record ids. Mark the handoff done in the build log (or log
-   the record it builds with `built`, as "The build log" describes), and
+   the record it builds with `built`, as "The build log" describes), with
+   the `requirements:` ids turned to bare numbers for `--covered`
+   (`BRIEF-52.7: done` becomes `7:done`), and `--covered` passed only when
+   the line names a brief; and
    tick the brief's open items it closes.
 4. Say one line: the handoff, the commit, the tests, anything accepted, and the
    count it moves ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").

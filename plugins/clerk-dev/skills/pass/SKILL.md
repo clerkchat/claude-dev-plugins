@@ -55,12 +55,14 @@ commit rules below.
 3. **Write.** Follow the `writing-code` skill throughout.
    - Claude mode: do the items, one coherent change per commit, delegated as
      the skill's Delegating section describes: group items that change the
-     same code into one handoff, send a `clerk-dev:implementer` per handoff with
-     the lens's Pass mode text and the items as its goal, at the model and
-     effort the handoff calls for (a pass's items are usually sonnet, medium;
-     prep refactors that reshape shared code, opus, high), review, run the
-     tests, and commit each. Items of a few lines are done inline. Mark each
-     item as it lands
+     same code into one handoff, send a `clerk-dev:builder` per handoff whose
+     first line is `Source: pass`, with the skill's Pass entry from By kind
+     pasted word for word, the lens's Pass mode text, and the items as its
+     goal, at the model and effort the handoff calls for (a pass's items are
+     usually sonnet, medium; prep refactors that reshape shared code, opus,
+     high), read each report as the skill's "After each handoff" describes
+     (a `scope: out` included), review, run the tests, and commit each.
+     Items of a few lines are done inline. Mark each item as it lands
      (`passes.py done <worktree> PASS-<n> <k>`, or `--na "<why>"` when it turns out
      not to apply). Stay inside the items: something outside them goes in a
      line to the user, not into this pass. An item the pass cannot finish is

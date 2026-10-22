@@ -15,7 +15,7 @@ repository. The file and its format are in `skills/review/tracking.md` of this
 plugin; manage it only through `${CLAUDE_PLUGIN_ROOT}/scripts/followups.py`.
 
 You coordinate; you never edit code in this session. Every item goes through its
-own `clerk-dev:review-fixer` agent, gets its own commit, and is closed before
+own `clerk-dev:builder` agent, gets its own commit, and is closed before
 the next one starts. Never implement several items in one change.
 
 The request ("go through the follow-ups", "do F3") is the user's go-ahead to
@@ -74,9 +74,11 @@ report is the only thing an item should add here.
 Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 (this one included)."
 
-1. Build the handoff from the item: its text (what to do), `Contract:` (what the
-   other side now sends or accepts, which the change must match), `From:`
-   (repository and commit), and `Finding:`. Find the source repository's
+1. Build the handoff as "The handoff" in the `writing-code` skill describes:
+   its first line is `Source: follow-up`, and it pastes the Follow-up entry
+   from By kind word for word. Then fill it from the item: its text (what to
+   do), `Contract:` (what the other side now sends or accepts, which the
+   change must match), `From:` (repository and commit), and `Finding:`. Find the source repository's
    worktree by its name in `.clerk-dev/review-workspace.md`, and pass its path
    and the commit so the fixer can read the change with
    `git -C <path> show <sha>`. When the item names a
@@ -95,14 +97,28 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    the user's choice before delegating; put the choice in the handoff. A choice
    that would settle later items the same way is recorded as "Guidance from
    answers" in `skills/review/tracking.md` describes.
-3. Delegate to `clerk-dev:review-fixer`, saying that the handoff is a follow-up,
-   not a finding. It defaults to sonnet; pass `model: opus` when the item
-   touches structure or more than two files.
-4. If the fixer reports `scope: out`, commit nothing, leave the item open, tell
-   the user why in one line (with the proposal and its rollout considerations
-   when the reason is deployed code Purpose does not cover, as Branch scope in
-   `tracking.md` describes), and go on to the next. If the touched tests fail,
-   commit nothing, show the failure, and ask how to proceed.
+3. Delegate to `clerk-dev:builder`, at the model and effort the Model and
+   effort table in the `writing-code` skill gives for the item.
+4. Read the report's `status` first. On `status: stopped`, commit nothing and
+   take the first that applies; the item stays open until a handoff for it
+   lands:
+   - `scope: out`: the work is owed, so ask the user once, with the proposal
+     and its rollout considerations, as Branch scope in `tracking.md`
+     describes. On yes, add the area to Purpose under "Deployed code it
+     changes on purpose" with a dated line, write the guidance file again,
+     and re-send the handoff; on no, go on to the next item.
+   - `size: too big`: tell the user the reason in one line, record it with
+     `followups.py set <worktree> F3 Discuss --note "<the size reason>"`, and
+     go on to the next item.
+   - The tests failed: show the failure and ask how to proceed.
+   - Any other reason (`questions:` is not "none", or a guidance rule cannot
+     hold): weigh it with the `deliberate` skill as step 1 of "After each
+     handoff" in the `writing-code` skill does, then re-send the handoff with
+     the answer in it.
+   A stopped report whose `files:` is not "none" left edits: show the files and
+   ask whether to keep them (the item stays open with the edits in the tree,
+   as when the tests fail) or discard them (revert the listed files and
+   delete those marked "(new)").
 5. Commit: `git add` only the files the fixer changed, then commit. The message
    stands alone, since the follow-ups file and review runs are local: no
    follow-up ids, finding numbers, run labels, or `.clerk-dev/` paths. The subject

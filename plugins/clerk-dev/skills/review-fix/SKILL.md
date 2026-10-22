@@ -10,7 +10,7 @@ allowed-tools: Bash(git *), Bash(python3 *), Bash(gh *), Read, Grep, Glob, Agent
 When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 You coordinate; you do not edit code in this session. Every code change goes
-through the `clerk-dev:review-fixer` agent. The review run's files are the
+through the `clerk-dev:builder` agent. The review run's files are the
 source of truth; see the `review` skill in this plugin for the run directory
 layout, the finding anchors, and `numbers.tsv`.
 
@@ -81,24 +81,18 @@ for nothing wider.
    finding in the `debt` section (the report's "Cleanup and refactoring")
    whose recommendation starts "In a separate pull request:"; one that starts
    "In this pull request:" is fixed as usual.
-2. Build the handoff from the run files, never from the rendered report alone. The
-   handoff names the files and the fixer reads them; quote into it only the user's
-   own words (the instruction note, an adjustment given in conversation, the
-   picked alternatives), which are short and must not be paraphrased. Point it
-   at: the merged entry `- id: <merged id>` in `<run>/merged.md`,
-   `<run>/verify/<merged id>.md`, `<run>/notes/<merged id>.md` when it exists,
-   `<run>/guidance.md`, and `.claude/skills/review-context/SKILL.md` when
-   it exists. What the fixer must take from them: the card text; the merged
-   entry's `claim`, `scenario`, `evidence`, and `fix` (for a pull request
-   comment, its text, replies, and the verifier's note stand in for these; when
-   a comment is linked to the finding, include its text too, since the
-   reviewer's point may add to the finding's); the verifier's note from
-   `verify/<id>.md`; the `snippet` range; the repo review-context sections the
-   finding's lens would have read; the branch scope and the guidance rules in
-   `<run>/guidance.md` that bear on this finding; the finding's
-   instruction note and its free-text notes (`notes/<merged id>.md`), which are
-   the user's words about this finding; and any adjustment the user asked for.
-   When the instruction picks labeled alternatives ("Fix as recommended (a)",
+2. Build the handoff from the run files, never from the rendered report alone,
+   as "The handoff" in the `writing-code` skill describes: its first line is
+   `Source: finding`, and it pastes the Finding entry from By kind word for
+   word. The handoff names the files and the builder reads them; quote into it
+   only the user's own words (the instruction note, an adjustment given in
+   conversation, the picked alternatives), which are short and must not be
+   paraphrased. Point it at: the merged entry `- id: <merged id>` in
+   `<run>/merged.md`, `<run>/verify/<merged id>.md`, `<run>/notes/<merged
+   id>.md` when it exists, `<run>/guidance.md`, and
+   `.claude/skills/review-context/SKILL.md` when it exists; for a pull request
+   comment, its text and replies; and the text of a comment linked to the
+   finding. When the instruction picks labeled alternatives ("Fix as recommended (a)",
    `option` in `instructions.tsv`, or "fix 4 as recommended, option a"), the
    handoff gives only the picked alternatives as the recommendation and says the
    others were not chosen. When the instruction is "Fix as noted", the Notes are
@@ -108,25 +102,35 @@ for nothing wider.
    finding's files yourself only when you must decide something in this session
    (a product choice to lay out for the user, step 3).
 3. Delegate. You never edit code in this session; you coordinate. Launch the
-   `clerk-dev:review-fixer` agent with the handoff. It defaults to `sonnet`, which
-   suits mechanical fixes where the recommendation is the whole design (add an
-   index, reject a path segment, add a filter). For fixes that touch structure,
-   concurrency, or more than two files, pass `model: opus` on the invocation. A
+   `clerk-dev:builder` agent with the handoff, at the model and effort the
+   Model and effort table in the `writing-code` skill gives for it. A
    fix not marked Fix as recommended pauses first: weigh it with the
    `deliberate` skill, whose first step settles most in a line, wait for the
-   user's choice, then delegate with that choice in the handoff. Several findings in one request get one fixer each, run one after
+   user's choice, then delegate with that choice in the handoff. Several findings in one request get one builder each, run one after
    another so their commits do not interleave.
 4. The fixer changes the code, adds or updates the test the card's scenario
    implies, runs the touched tests, and reports the files changed and the test
    result. It does not touch the run directory and does not commit.
-5. If the fixer reports `scope: out`, make no commit: record
-   `--instruct N=discuss:<reason>` and tell the user why. When the reason is
-   deployed code that Purpose does not cover, propose the change and its rollout
-   considerations, as Branch scope in `tracking.md` describes; if the user
-   approves, add the area to Purpose, write the guidance file again, and run
-   the fix again. If the tests fail,
-   stop: record `in-progress` with the files touched, show the failure, and ask
-   how to proceed. Nothing is committed. (Queue mode differs; see below.)
+5. Read the report's `status` first. On `status: stopped`, make no commit, and
+   take the first that applies:
+   - `scope: out`: record `--instruct N=discuss:<the scope reason>`, tell the
+     user why, and change nothing. When the reason is deployed code that
+     Purpose does not cover, propose the change and its rollout
+     considerations, as Branch scope in `tracking.md` describes; if the user
+     approves, add the area to Purpose, write the guidance file again, and
+     run the fix again.
+   - `size: too big`: record `--instruct N=discuss:<the size reason>` and tell
+     the user why.
+   - The tests failed: record `in-progress` with the files touched, show the
+     failure, and ask how to proceed.
+   - Any other reason (`questions:` is not "none", or a guidance rule cannot
+     hold): weigh it with the `deliberate` skill as step 1 of "After each
+     handoff" in the `writing-code` skill does, then run the fix again with
+     the answer in the handoff.
+   A stopped report whose `files:` is not "none" left edits: show the files and
+   ask whether to keep them (record `in-progress` with those files, as for
+   failed tests) or discard them (revert the listed files and delete those
+   marked "(new)"). (Queue mode differs; see below.)
 6. Commit, one commit per finding: `git add` only the files the fix changed
    or created (never `.clerk-dev/` or other untracked files), then commit. The message must
    stand alone, because the review files are local and never committed: no
@@ -143,11 +147,13 @@ for nothing wider.
 8. Write `<run>/resolution/<merged id>.md`, plain prose of a few short
    paragraphs, each standing alone:
    - What was done, in one or two sentences, with the commit hash.
-   - Differences from the recommendation and why, from the fixer's `differences`
-     and the user's adjustment; "Implemented as recommended." when there are
-     none.
+   - Differences from the recommendation and why, from the `departs:` items
+     of the report's `deviations:` and the user's adjustment; "Implemented as
+     recommended." when there are none.
    - The fixer's `rollout:` text, when it is not "none".
-   - The recheck verdict and, when not resolved, what remains.
+   - The recheck verdict and, when not resolved, what remains, with the
+     `not addressed:` items of `deviations:` as why the finding is partly
+     resolved.
    - Follow-ups the fixer listed, each in a sentence naming the follow-up id and
      the repository that owes it; omit when none. For each follow-up, first add
      it with `followups.py add` to the consuming repository's worktree, per
@@ -198,17 +204,21 @@ Say in the progress line which worktrees got a follow-up.
 ## Queue mode
 
 The triage skill works its fix queue in its own session by following these steps
-for each finding in turn, in queue mode. The same steps apply with three
+for each finding in turn, in queue mode. The same steps apply with these
 changes:
 
 - The queue keeps moving. Never ask; a fix that would need the user's choice
   moves to discussion instead, where the user decides it.
-- When the fixer reports `scope: out`, make no commit, record
-  `--instruct N=discuss:<the fixer's reason>`, and stop.
-- When the touched tests fail, discard nothing and commit nothing: record
-  `--set N=in-progress:<files>` and
-  `--instruct N=discuss:tests failed:
-  <one line>`, and stop.
+- Before each finding, check that the tree is clean: `git status --short
+  --untracked-files=no` prints nothing. When it prints anything, stop the
+  queue and show those files, since no finding owns them.
+- On `status: stopped`, make no commit, record `--instruct N=discuss:<reason>`,
+  and go to the next finding. The reason is the `scope:` reason for
+  `scope: out`, the `size:` reason for `size: too big`, `tests failed: <one
+  line>` when the tests failed, and otherwise the question from `questions:`
+  or the guidance rule that cannot hold. When `files:` is not "none", revert
+  the listed files, delete those marked "(new)", and end the reason with
+  "; its edits were reverted".
 
 Instead of step 10, print one line per finding and go to the next:
 
