@@ -368,3 +368,4 @@ Run the sequence without pausing between passes. Stop and bring to the user:
 a question a builder stopped on, a check that found anything rated major
 or blocker (triage it before the next pass, since later passes build on the
 code), or any finding in a required pass's check. Minor findings collect in
+their pass's run for triage at the end.

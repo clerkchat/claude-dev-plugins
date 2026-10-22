@@ -496,11 +496,6 @@ class SupersededStepTests(TempCase):
         self.repo.build_ok("built", "R15", "--commit", "HEAD")
         self.assertTrue(self.plan_mark().endswith("; built: 3 of 4 steps (1, 2, 4))"))
 
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class StartBuildingTests(TempCase):
     def test_a_brief_with_nothing_built_points_at_the_building_skill(self):
         repo = init_repo(self.path("fresh"))
@@ -510,3 +505,7 @@ class StartBuildingTests(TempCase):
         code, out = repo.status("--focus", "implementation")
         self.assertEqual(code, 0, out)
         self.assertIn("Start building BRIEF-5: cut its requirements into handoffs and send the first (the building skill).", out)
+
+
+if __name__ == "__main__":
+    unittest.main()
