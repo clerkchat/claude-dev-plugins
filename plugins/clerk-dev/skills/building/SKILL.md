@@ -291,8 +291,8 @@ status lives only here; the brief is not edited for it.
 4. On `size: too big`, act by source. For a piece or pass handoff, cut the
    handoff smaller and re-send it (`build.py resend` with a note on the cut),
    telling the user in one line; stop it (`build.py stop`) and weigh the cut
-   with the `deliberate` skill only when the cut needs a choice the brief did
-   not make. For a finding, follow-up, or request, the report means the item
+   with the `deliberate` skill when the cut needs a choice the brief did
+   not make, or when a handoff already cut once comes back too big again. For a finding, follow-up, or request, the report means the item
    is large and intake sized it small: take Intake's large route, proposing a
    piece and waiting for the user's yes.
 5. `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
