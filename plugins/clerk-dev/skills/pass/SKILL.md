@@ -109,11 +109,10 @@ When the user's answer carries guidance (a rule beyond this case), or says
 
 ## Commit rules
 
-Follow step 6 of the `review-fix` skill for staging and messages: add only the
-files this pass changed, never anything under `.clerk-dev/` or files left out,
-and write messages that stand alone, describing the change ("Return early when
-the import has no contacts"), never the pass or its id. Never push or amend; a
-pass's range depends on its commits staying put. A commit that builds a record
+Commit as the Commit step of "After each handoff" in the `building` skill
+describes, adding only the files this pass changed and never files left out.
+A message never names the pass or its id. Never push or amend; a pass's range
+depends on its commits staying put. A commit that builds a record
 the pass's handoff names is logged as "The build log" in the `building`
 skill describes.
 

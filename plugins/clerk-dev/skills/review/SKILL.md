@@ -458,8 +458,8 @@ Incremental run:
    usual; the plan says it is incremental, since when, and what it leaves out,
    from the `--delta` counts: "16 commits since a86f57469: 3 new, read here; 12
    fixes and 1 merge are left for the final pass."
-4. Merge into `<run>/merged-new.md`, then fold it in, after step 5's rechecks so
-   their outcomes are known:
+4. **Merge and fold in.** Merge into `<run>/merged-new.md`, then fold it in,
+   after step 5's rechecks so their outcomes are known:
    - `reconcile.py --append <run>/merged-new.md <run>` proposes candidate
      matches in `reconcile/append-candidates.tsv` and changes nothing (with no
      candidates, it appends everything at once).

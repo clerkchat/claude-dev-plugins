@@ -81,8 +81,9 @@ for nothing wider.
    finding in the `debt` section (the report's "Cleanup and refactoring")
    whose recommendation starts "In a separate pull request:"; one that starts
    "In this pull request:" is fixed as usual.
-2. Build the handoff from the run files, never from the rendered report alone,
-   as "The handoff" in the `building` skill describes: its first line is
+2. **Build the handoff.** Build it from the run files, never from the
+   rendered report alone, as "The handoff" in the `building` skill describes:
+   its first line is
    `Source: finding`, and it pastes the Finding entry from By kind word for
    word. The handoff names the files and the builder reads them; quote into it
    only the user's own words (the instruction note, an adjustment given in
@@ -111,9 +112,9 @@ for nothing wider.
 4. The fixer changes the code, adds or updates the test the card's scenario
    implies, runs the touched tests, and reports the files changed and the test
    result. It does not touch the run directory and does not commit.
-5. Check the report's shape as the `building` skill's "After each handoff" step 1
-   does, then read its `status`. On `status: stopped`, make no commit, and
-   take the first that applies:
+5. Check the report's shape as the Read the report step of "After each
+   handoff" in the `building` skill does, then read its `status`. On
+   `status: stopped`, make no commit, and take the first that applies:
    - `scope: out`: record `--instruct N=discuss:<the scope reason>`, tell the
      user why, and change nothing. When the reason is deployed code that
      Purpose does not cover, propose the change and its rollout
@@ -125,28 +126,18 @@ for nothing wider.
    - The tests failed: record `in-progress` with the files touched, show the
      failure, and ask how to proceed.
    - Any other reason (`questions:` is not "none", or a guidance rule cannot
-     hold): weigh it with the `deliberate` skill as step 2 of "After each
-     handoff" in the `building` skill does, then run the fix again with
-     the answer in the handoff.
-   A stopped report whose `files:` is not "none" left edits: show the files and
-   ask whether to keep them (record `in-progress` with those files, as for
-   failed tests) or discard them (revert the listed files and delete those
-   marked "(new)"). (Queue mode differs; see below.)
-6. Commit, one commit per finding: `git add` only the files the fix changed
-   or created (never `.clerk-dev/` or other untracked files), then commit. The message must
-   stand alone, because the review files are local and never committed: no
-   finding numbers, run labels, `.clerk-dev/` paths, or mention of the review.
-   Subject `fix(<area>): <what the fix does>` in the repo's usual style; a body
-   of two or three sentences saying what was wrong, what can go wrong because of
-   it, and what the change does, written for a reader of `git
-   log` who has
-   never seen the report. The fixer's `summary` line is the starting point for
-   the body. No push, no amend. Several findings in one request get one commit
-   each, in number order. When the handoff names a record the fix builds, log it
-   after the commit as "The build log" in the `building` skill describes.
+     hold): as the Questions step of "After each handoff" in the `building`
+     skill describes.
+   A stopped report whose `files:` is not "none" left edits: handle them as
+   Leftover edits in the `building` skill describes, recording kept edits as
+   `in-progress` with those files, as for failed tests.
+6. Commit, one commit per finding, as the Commit step of "After each handoff"
+   in the `building` skill describes. When the handoff names a record the fix
+   builds, log it after the commit as "The build log" in the `building` skill
+   describes.
 7. Recheck immediately, as under Rechecking, against that commit.
-8. Write `<run>/resolution/<merged id>.md`, plain prose of a few short
-   paragraphs, each standing alone:
+8. **Resolution.** Write `<run>/resolution/<merged id>.md`, plain prose of a
+   few short paragraphs, each standing alone:
    - What was done, in one or two sentences, with the commit hash.
    - Differences from the recommendation and why, from the `departs:` items
      of the report's `deviations:` and the user's adjustment; "Implemented as
@@ -160,8 +151,8 @@ for nothing wider.
      it with `followups.py add` to the consuming repository's worktree, per
      `skills/review/tracking.md` in this plugin, and then write its id into the
      resolution text. Beyond the ones the fixer listed, check every client, as
-     under Clients of a changed contract. The renderer shows it as a
-     "Resolution" subsection at the end of the card. On a later fix of the same
+     Clients of a changed contract in the `building` skill describes. The
+     renderer shows it as a "Resolution" subsection at the end of the card. On a later fix of the same
      finding, append a paragraph rather than rewriting the earlier ones.
 9. If the recheck says partly resolved or unresolved, make one second attempt
    before recording: launch the fixer again with `model: fable`, the original
@@ -181,30 +172,6 @@ for nothing wider.
     progress line. Do not suggest running `--recheck`
     yourself; it already ran.
 
-## Clients of a changed contract
-
-The fixer sees only this repository, so its `follow-ups:` covers the clients it
-happens to know about. When its `contract:` line is not "none", check every
-related worktree yourself, without a model:
-
-1. The worktrees: every other row of `.clerk-dev/review-workspace.md`
-   (`skills/review/workspace-manifest.md`). When the file is missing, check
-   nothing elsewhere: say in one line that no other repositories are known for
-   this branch, so their clients were not checked, and that a feature review
-   sets them up.
-2. Search each: `git -C <worktree> grep -l -F -e <term> -e <term> ...` with the
-   terms after `search:`. Print only the count of files per worktree.
-3. A worktree with hits and no follow-up yet for this change gets one, through
-   `followups.py add`, with the fixer's contract sentence in the `changed:` form
-   as `--contract`, this commit as `--from`, the finding as `--finding`, and as
-   text the need: the part after `needs:` of the fixer's `follow-ups:` line for
-   that repository, or, when it has none, the behavior the `contract:` sentence
-   implies for a reader of the old shape. Name the files that matched as where
-   the old contract is relied on, not as the change to make. A worktree with no
-   hits gets nothing.
-
-Say in the progress line which worktrees got a follow-up.
-
 ## Queue mode
 
 The triage skill works its fix queue in its own session by following these steps
@@ -213,16 +180,15 @@ changes:
 
 - The queue keeps moving. Never ask; a fix that would need the user's choice
   moves to discussion instead, where the user decides it.
-- Before each finding, check that the tree is clean: `git status --short
-  --untracked-files=no` prints nothing. When it prints anything, stop the
-  queue and show those files, since no finding owns them.
+- Before each finding, check that the tree is clean, as Queues in the
+  `building` skill describes.
 - On `status: stopped`, make no commit, record `--instruct N=discuss:<reason>`,
   and go to the next finding. The reason is the `scope:` reason for
   `scope: out`, the `size:` reason for `size: too big`, `tests failed: <one
   line>` when the tests failed, and otherwise the question from `questions:`
   or the guidance rule that cannot hold. When `files:` is not "none", revert
-  the listed files, delete those marked "(new)", and end the reason with
-  "; its edits were reverted".
+  them as Leftover edits in the `building` skill describes for a queue, and
+  end the reason with "; its edits were reverted".
 
 Instead of step 10, print one line per finding and go to the next:
 
@@ -267,7 +233,8 @@ finding's lens; give the recheck agent the comment's text as the claim.
    step. A new finding goes through merge and verify as a small addendum: write
    it to a file and add it with `reconcile.py --append
    <file> <run>`, judging
-   any candidates it proposes as the review skill's incremental step 4 describes
+   any candidates it proposes as the review skill's Merge and fold in step of
+   Incremental review describes
    (never by editing `merged.md`), verify it, and re-render. When the fix is
    useful context for reading it, add
    `surfaced_by: <merged id of the fixed finding>` to the entry; the card then

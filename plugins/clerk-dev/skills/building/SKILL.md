@@ -78,10 +78,12 @@ Items reach intake in these ways:
 - a pass item, from the `pass` skill;
 - a finding the user hands to this skill directly ("build finding 4"): its
   handoff is `Source: finding` with the Finding entry of By kind pasted,
-  pointed at the run files as step 2 of the `review-fix` skill lists them;
+  pointed at the run files as the `review-fix` skill's Build the handoff step
+  lists them;
 - a follow-up the user hands to this skill directly ("build F3"): its handoff
   is `Source: follow-up` with the Follow-up entry of By kind pasted, filled
-  from the item as step 1 of the `review-followups` skill lists;
+  from the item as the `review-followups` skill's Build the handoff step
+  lists;
 - several of these handed over together, a queue, sorted as "Queues"
   describes.
 
@@ -124,7 +126,7 @@ the item's size. On the user's yes:
 4. Say its intake line, routed `grown into BRIEF-<n>` with its milestone and
    when it runs: after the milestone under way, since passes cannot nest,
    unless the user says now; then end or abandon the open pass first, as the
-   `pass` skill's step 1 asks.
+   `pass` skill's Start step asks.
 
 The piece is built like any other: its handoffs are `Source: piece`, logged
 with `build.py add` and `done`, and its source items close when it is built
@@ -170,8 +172,9 @@ persists.
 ### Queues
 
 A queue is several items handed to intake together ("build F2, F3, F5",
-"build findings 4, 7, 9"). Sort it in one pass before any handoff, as step 1
-of "Several items waiting" in the `deliberate` skill sorts choices:
+"build findings 4, 7, 9"). Sort it in one pass before any handoff, as "Sort in
+one pass" under "Several items waiting" in the `deliberate` skill sorts
+choices:
 
 1. Gather the files each item reaches, once, and size the items that share
    files together; a group that shares files and sizes large grows into one
@@ -182,7 +185,9 @@ of "Several items waiting" in the `deliberate` skill sorts choices:
    each is grown as "Growing an item" describes and leaves the queue with its
    line; on no, it stays open at its source with the proposal as its note.
 4. Run the small ones, one handoff and one commit each, in the queue's order,
-   with no further question.
+   with no further question. Before each item, check that the tree is clean:
+   `git status --short --untracked-files=no` prints nothing. When it prints
+   anything, stop the queue and show those files, since no item owns them.
 
 ## What stays in the session
 
@@ -357,22 +362,24 @@ status lives only here; the brief is not edited for it.
 
 ## After each handoff
 
-1. Read the report by its `status`, `size`, `scope`, `files:`,
+1. **Read the report.** Read it by its `status`, `size`, `scope`, `files:`,
    `requirements:`, `questions:`, `deviations:`, `rollout:`, `follow-ups:`,
    and `contract:` lines. A report that is empty, misses a line of the
    builder's report, or has them out of order is sent back once, to the same
    builder with SendMessage, asking for the report alone; a second such report
    is handled as `status: stopped` with that as its reason, and its `files:`
    are taken from `git status --short`.
-2. `questions:`, and a `status: stopped` that steps 3 and 4 do not cover, go
-   back to the user (or are settled from the records and guidance) before
-   anything else. Before asking,
+2. **Questions.** `questions:`, and a `status: stopped` that steps 3 and 4 do
+   not cover, go back to the user (or are settled from the records and
+   guidance) before anything else. Before asking,
    weigh each question with the `deliberate` skill, with the handoff and the code and
    records it touches as its facts, and put its decision summary to the user
    rather than the bare question. When the
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
-   `skills/review/tracking.md` describes, and say so in one line.
+   `skills/review/tracking.md` describes, and say so in one line. For a
+   question, or a guidance rule that cannot hold, re-send the handoff with
+   the answer in it.
 3. On `scope: out`, act on the source's row of the table in Intake's Scope:
    for a finding, propose the fix and change nothing; for any other source,
    ask the user once, and on yes add the dated Purpose line, write the
@@ -389,10 +396,20 @@ status lives only here; the brief is not edited for it.
    correction.
 6. Read the diff (`git diff --stat`, then the parts that carry the handoff's
    shape), and run the handoff's tests yourself.
-7. Commit as step 6 of the `review-fix` skill describes: only the handoff's
-   files (the report's `files:`), a message that stands alone and describes the change, never
-   `.clerk-dev/` paths or record ids, with the `rollout:` text in its body when
-   it is not "none". When the route builds a record, mark the handoff done in
+7. **Commit.** `git add` only the handoff's files (the report's `files:`),
+   never anything under `.clerk-dev/` or an untracked file the handoff did
+   not create, then commit. The message stands alone, because review runs,
+   the follow-ups file, and the records are local and never committed: no
+   finding numbers, run labels, follow-up ids, record ids, `.clerk-dev/`
+   paths, or mention of the review. The subject follows the repository's
+   usual style and says what the change does (`fix(<area>): <what the fix
+   does>` for a finding). The body, two or three sentences starting from the
+   builder's `summary` and written for a reader of `git log` who has never
+   seen the source, says what was wrong and what can go wrong because of it,
+   or for a follow-up what changed on the other side (the contract, in plain
+   words), and what the change does, with the `rollout:` text when it is not
+   "none". No push, no amend. Several items get one commit each, in the
+   queue's order. When the route builds a record, mark the handoff done in
    the build log (or log the record it builds with `built`, as "The build
    log" describes), with
    the `requirements:` ids turned to bare numbers for `--covered`
@@ -404,26 +421,54 @@ status lives only here; the brief is not edited for it.
    or dropped (`build.py checklist <worktree> --brief BRIEF-<n>` all ticked),
    close its source items, naming the brief: a finding with
    `render-report.py --set "N=fixed:<sha> (BRIEF-<n>)"`, and
-   `<run>/resolution/<merged id>.md` written as step 8 of the `review-fix`
-   skill describes, its first paragraph naming the brief and saying that the milestone's pass review and the next
+   `<run>/resolution/<merged id>.md` written as the `review-fix` skill's
+   Resolution step describes, its first paragraph naming the brief and saying that the milestone's pass review and the next
    triage's moved-code check stand in for a recheck, so no recheck runs; a
    follow-up with `followups.py close <worktree> F3 --ref "in <sha>
    (BRIEF-<n>)"`. A request has nothing to close.
 8. Add each `follow-ups:` line with `followups.py add` to the owing
    repository's worktree, as Follow-ups in `skills/review/tracking.md`
    describes, with the commit as `--from`. When `contract:` is not "none",
-   check every related worktree as "Clients of a changed contract" in the
-   `review-fix` skill describes.
+   check every related worktree as "Clients of a changed contract" below
+   describes.
 9. Say one line: the handoff, the commit, the tests, anything accepted, the
    rollout considerations when `rollout:` is not "none", the worktrees that
    got a follow-up, the source items step 7 closed, and the count it moves
    ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
+
+**Leftover edits.** A stopped report whose `files:` is not "none" left edits.
+Interactively, show the files and ask whether to keep them (the source item
+records them as `in-progress`, as its skill closes one) or discard them
+(revert the listed files and delete those marked "(new)"). In a queue, revert
+and delete them without asking, note it on the item, and go on.
 
 Whenever you report progress against a brief at more length (the user asks,
 the draft ends, a milestone's passes are done), show `build.py checklist
 <worktree> --brief BRIEF-52` as it prints it: one checkbox per requirement, ticked
 when done, with partial and in-progress items marked. Never list requirement
 numbers in prose ("1 to 18, 20 to 24 done; 19, 25 to 28 open").
+
+### Clients of a changed contract
+
+The builder sees only this repository, so its `follow-ups:` covers the clients
+it happens to know about. When its `contract:` line is not "none", check every
+related worktree yourself, without a model:
+
+1. The worktrees: every other row of `.clerk-dev/review-workspace.md`
+   (`skills/review/workspace-manifest.md`). When the file is missing, check
+   nothing elsewhere: say in one line that no other repositories are known for
+   this branch, so their clients were not checked, and that a feature review
+   sets them up.
+2. Search each: `git -C <worktree> grep -l -F -e <term> -e <term> ...` with the
+   terms after `search:`. Print only the count of files per worktree.
+3. A worktree with hits and no follow-up yet for this change gets one, through
+   `followups.py add`, with the builder's contract sentence in the `changed:`
+   form as `--contract`, this commit as `--from`, the finding as `--finding`
+   when the item is one, and as text the need: the part after `needs:` of the
+   builder's `follow-ups:` line for that repository, or, when it has none, the
+   behavior the `contract:` sentence implies for a reader of the old shape.
+   Name the files that matched as where the old contract is relied on, not as
+   the change to make. A worktree with no hits gets nothing.
 
 ## Milestones
 

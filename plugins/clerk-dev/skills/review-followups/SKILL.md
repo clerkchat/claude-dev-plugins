@@ -61,11 +61,10 @@ report is the only thing an item should add here.
    <worktree>/.claude/skills/review-context/SKILL.md --out
    <scratchpad>/guidance.md`.
    Write it again whenever a rule is recorded during the run.
-3. Check the working tree with `git status --short`. Each commit must hold only
-   its item's change, so uncommitted edits to tracked files get in the way. If
-   there are any, stop and ask the user whether to commit or set them aside
-   first, or to go ahead and leave those files out of every commit. Untracked
-   files are fine; they stay out of every commit.
+3. Check that the tree is clean, as Queues in the `building` skill describes.
+   Each commit must hold only its item's change, so uncommitted edits to
+   tracked files get in the way. Untracked files are fine; they stay out of
+   every commit.
 4. Say in one line how many items there are and roughly how long (about five
    minutes each).
 
@@ -74,7 +73,8 @@ report is the only thing an item should add here.
 Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 (this one included)."
 
-1. Build the handoff as "The handoff" in the `building` skill describes:
+1. **Build the handoff.** Build it as "The handoff" in the `building` skill
+   describes:
    its first line is `Source: follow-up`, and it pastes the Follow-up entry
    from By kind word for word. Then fill it from the item: its text (what to
    do), `Contract:` (what the other side now sends or accepts, which the
@@ -99,10 +99,10 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    answers" in `skills/review/tracking.md` describes.
 3. Delegate to `clerk-dev:builder`, at the model and effort the Model and
    effort table in the `building` skill gives for the item.
-4. Check the report's shape as the `building` skill's "After each handoff" step 1
-   does, then read its `status`. On `status: stopped`, commit nothing and
-   take the first that applies; the item stays open until a handoff for it
-   lands:
+4. Check the report's shape as the Read the report step of "After each
+   handoff" in the `building` skill does, then read its `status`. On
+   `status: stopped`, commit nothing and take the first that applies; the item
+   stays open until a handoff for it lands:
    - `scope: out`: the work is owed, so ask the user once, with the proposal
      and its rollout considerations, as Branch scope in `tracking.md`
      describes. On yes, add the area to Purpose under "Deployed code it
@@ -113,27 +113,20 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
      go on to the next item.
    - The tests failed: show the failure and ask how to proceed.
    - Any other reason (`questions:` is not "none", or a guidance rule cannot
-     hold): weigh it with the `deliberate` skill as step 2 of "After each
-     handoff" in the `building` skill does, then re-send the handoff with
-     the answer in it.
-   A stopped report whose `files:` is not "none" left edits: show the files and
-   ask whether to keep them (the item stays open with the edits in the tree,
-   as when the tests fail) or discard them (revert the listed files and
-   delete those marked "(new)").
-5. Commit: `git add` only the files the fixer changed, then commit. The message
-   stands alone, since the follow-ups file and review runs are local: no
-   follow-up ids, finding numbers, run labels, or `.clerk-dev/` paths. The subject
-   follows the repository's usual style and says what the client now does; the
-   body, two or three sentences from the fixer's `summary`, says what changed on
-   the other side (the contract, in plain words) and what this change does about
-   it. When the handoff names a record the follow-up builds, log it after the
-   commit as "The build log" in the `building` skill describes.
+     hold): as the Questions step of "After each handoff" in the `building`
+     skill describes.
+   A stopped report whose `files:` is not "none" left edits: handle them as
+   Leftover edits in the `building` skill describes; kept edits leave the
+   item open with the edits in the tree, as when the tests fail.
+5. Commit as the Commit step of "After each handoff" in the `building` skill
+   describes. When the handoff names a record the follow-up builds, log it
+   after the commit as "The build log" in the `building` skill describes.
 6. Close the item: `followups.py close <worktree> F3 --ref <sha>`. Any
    follow-ups the fixer listed for yet another repository are added with
    `followups.py add` to that repository's worktree, and its `contract:` line is
-   checked against every related worktree, both as the `review-fix` skill
-   describes under Clients of a changed contract. For each line under the
-   fixer's `findings:`, add a note to that finding with the renderer's
+   checked against every related worktree, both as "After each handoff" in the
+   `building` skill describes, the check under Clients of a changed contract.
+   For each line under the fixer's `findings:`, add a note to that finding with the renderer's
    `--note N=<file>`, as the `review-triage` skill describes under Recording a
    decision: "<date>, after <sha> (a follow-up): <why>". Do not change its
    instruction or status; the next triage judges it against the commit.
