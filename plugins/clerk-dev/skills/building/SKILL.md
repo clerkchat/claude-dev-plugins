@@ -190,13 +190,18 @@ What each handoff adds, pasted word for word:
    reliable; make the smallest change that makes the scenario impossible,
    covering the sibling paths the evidence names; add or update a test that
    reproduces the scenario and passes with the fix.
-4. Follow-up: the item's text is the recommendation and its contract what
-   this repository must match; read the source change with
-   `git -C <path> show <sha>` and check the contract against it, not the
-   item's wording alone; when the handoff gives the `stale-findings.py <run>
-   --open-in <files>` command, list those findings before editing and treat
-   them as context, not work; where one's recommendation conflicts with the
-   contract, the contract wins and `findings:` says so.
+4. Follow-up: the item's text is the need and its `Contract:` the contract,
+   changed (old to new) or wanted (the shape another repository needs, and how
+   it differs from today's); read the source change with
+   `git -C <path> show <sha>` and check both against it; the item does not
+   say how to change this repository, so shape the change from the local
+   code, and for a wanted contract this repository is the provider and builds
+   the shape asked for; an older item whose text prescribes a change is the
+   sender's guess, and the contract wins; when the handoff gives the
+   `stale-findings.py <run> --open-in <files>` command, list those findings
+   before editing and treat them as context, not work; where one's
+   recommendation conflicts with the contract, the contract wins and
+   `findings:` says so.
 5. Request: the user's words as the goal, and the files it reaches.
 6. Reference (with any source): the reference by path or
    `git show <ref>:<path>`; keep its behavior and tests, changing only what

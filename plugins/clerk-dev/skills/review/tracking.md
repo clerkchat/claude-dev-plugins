@@ -132,31 +132,57 @@ if still unsure.
 ## Follow-ups
 
 A follow-up is created where the work has to happen, not where it was caused.
+It states a contract and a need, never the change to make in the receiving
+repository or its size, since the sender cannot see the receiving code. The
+contract takes one of two forms:
+
+- `changed: <old to new>`, from a provider to its consumers: the endpoint,
+  event, or schema as it was and as it is now. The need is the behavior the
+  consumer must now handle. Contract `changed: GET /reports/:id/download: took
+  no parameters, now requires the exportId that POST /reports/:id/exports
+  returns`; need "a download poll without exportId is now refused with 400".
+- `wanted: <shape, and how it differs from today>`, from a consumer to its
+  provider: the shape it needs. The need is what the consumer is building
+  against. Contract `wanted: GET /contacts?q= matches phoneNumber too; today it
+  matches name only`; need "contact search sends phone digits as q and expects
+  the matching contacts".
+
+The need is never the receiver's action: "show the number on the contact card"
+is the receiving repository's call. The receiving session sizes the item and
+routes it through intake (the `building` skill).
+
 When a fix in the api changes a contract the frontend consumes, the item goes
-into the frontend worktree's `.clerk-dev/followups.md`:
+into the frontend worktree's `.clerk-dev/followups.md`, with the need as the
+text and the contract as `--contract`:
 
 ```
-followups.py add <consuming worktree> "Send exportId back when polling report downloads" \
-  --from "api 7c1e2ab" --contract "POST /reports/:id/exports accepts and returns exportId" \
+followups.py add <owing worktree> "A download poll without exportId is now refused with 400" \
+  --from "api 7c1e2ab" \
+  --contract "changed: GET /reports/:id/download: took no parameters, now requires the exportId that POST /reports/:id/exports returns" \
   --finding "api 8"
 ```
 
-Find the consuming worktree in `.clerk-dev/review-workspace.md` (see
+A builder's `follow-ups:` line and a finding's `follow_up` field carry one
+follow-up per line as `<repo>: changed|wanted: <contract>; needs: <behavior>`:
+the item goes to `<repo>`'s worktree, the part after `; needs:` is its text,
+and the part between `<repo>: ` and `; needs:` is its `--contract`.
+
+Find the owing worktree in `.clerk-dev/review-workspace.md` (see
 `workspace-manifest.md`). When the file is missing or does not list the
-consuming repository, add the item to the current worktree's file with the text
+owing repository, add the item to the current worktree's file with the text
 starting `[<repo>]`, and say so.
 
 The item's id (`F3`) is the handle in conversation. Each item has an
-Instruction and a Status (see Items below); the author of a follow-up was in
-another repository, so its recommendation is a hypothesis, and Refine is the
-usual instruction when it may not fit here. The user sets one by saying so
+Instruction and a Status (see Items below). For a follow-up, "done as written"
+and `Fix as recommended` mean meeting the need as intake sizes it. Refine
+(investigate, then set one of the others) is the instruction for an item whose
+need is unclear against the local code. The user sets one by saying so
 ("refine F3", "ignore F2, the web app dropped that screen"), which is recorded
-with `followups.py set <worktree> F3 "Refine" [--note "..."]`. The
-`review-followups` skill works the open items by their instructions, one fixer
-and one commit each, and closes each with `followups.py close <worktree> F3
---ref <sha>` (or `--status wont-fix|deferred --ref "<reason>"`). Close one by
-hand the same way when the user says it is done. Hand-ticked boxes are honored
-as fixed.
+with `followups.py set <worktree> F3 "Refine" [--note "..."]`. The `review-followups` skill works the open items by their
+instructions, one fixer and one commit each, and closes each with
+`followups.py close <worktree> F3 --ref <sha>` (or `--status
+wont-fix|deferred --ref "<reason>"`). Close one by hand the same way when the
+user says it is done. Hand-ticked boxes are honored as fixed.
 
 Readers:
 

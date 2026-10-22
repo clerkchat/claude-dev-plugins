@@ -268,8 +268,21 @@ class ItemListTests(TempCase):
                 self.assertIn("- [x] D3. An old gap.", read_file(os.path.join(self.root, ".clerk-dev", "deferred.md")))
 
     def test_follow_ups_keep_their_form(self):
-        out = run_ok("followups", "add", self.root, "Owed work", "--from", "api abc1234")
+        out = run_ok("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", "changed: GET /a: x to y")
         self.assertTrue(out.startswith("F1 added"), out)
+
+    def test_a_follow_up_takes_either_form_of_contract(self):
+        for n, contract in enumerate(("changed: GET /a: x to y", "wanted: GET /a?q= matches z; today it does not"), 1):
+            with self.subTest(contract=contract):
+                out = run_ok("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", contract)
+                self.assertTrue(out.startswith(f"F{n} added"), out)
+                self.assertIn(f"  - Contract: {contract}\n", read_file(os.path.join(self.root, ".clerk-dev", "followups.md")))
+
+    def test_a_follow_up_without_a_contract_is_refused(self):
+        code, out = run_script("followups", "add", self.root, "Owed work", "--from", "api abc1234")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("--contract", out)
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".clerk-dev", "followups.md")))
 
 
 class PassStepTests(TempCase):

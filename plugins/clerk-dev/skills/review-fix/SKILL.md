@@ -195,10 +195,13 @@ related worktree yourself, without a model:
 2. Search each: `git -C <worktree> grep -l -F -e <term> -e <term> ...` with the
    terms after `search:`. Print only the count of files per worktree.
 3. A worktree with hits and no follow-up yet for this change gets one, through
-   `followups.py add`, with the fixer's contract sentence as `--contract`, this
-   commit as `--from`, the finding as `--finding`, and as text what that client
-   must change, naming the files that matched. A worktree with no hits gets
-   nothing.
+   `followups.py add`, with the fixer's contract sentence in the `changed:` form
+   as `--contract`, this commit as `--from`, the finding as `--finding`, and as
+   text the need: the part after `needs:` of the fixer's `follow-ups:` line for
+   that repository, or, when it has none, the behavior the `contract:` sentence
+   implies for a reader of the old shape. Name the files that matched as where
+   the old contract is relied on, not as the change to make. A worktree with no
+   hits gets nothing.
 
 Say in the progress line which worktrees got a follow-up.
 

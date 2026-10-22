@@ -110,7 +110,7 @@ questions: <shape-setting choices stopped on, each with the options seen; or "no
 deviations: <"departs: ..." for where the result departs from the handoff, its recommendation, the reference, or a test, and why; "not addressed: ..." for anything in the handoff left undone, and why; or "none">
 refactor: <a refactor outside the handoff that would have made it smaller; or "none">
 rollout: <"none" when only code new in this branch changed; else one or two sentences on old and new code side by side, in-flight jobs, existing data, and clients not redeployed with this change>
-follow-ups: <one line per item another repository or component owes: the repository, what it must do, and the contract involved; or "none">
+follow-ups: <one line per repository that owes work, as "<repo>: changed|wanted: <contract>; needs: <behavior>": the contract as it changed (old to new) or the shape wanted (and how it differs from today's), and the behavior that repository must now handle or that this one builds against; no change to make there and no size; or "none">
 contract: <"none", or what changed for clients of this repository in one sentence, then "search:" and the terms a client's code would contain if it relies on the old contract, separated by " | ">
 findings: <one line per open finding the handoff listed whose recommendation the change conflicts with or makes obsolete, as "<number>: <why>"; or "none">
 ```

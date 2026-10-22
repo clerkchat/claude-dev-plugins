@@ -36,7 +36,8 @@ list each thing that was settled but has no file yet:
   `building` skill describes. A handoff sent and still running is not
   pending; see step 3.
 - **Follow-ups** another repository now owes because of a change here:
-  `followups.py add` in its worktree.
+  `followups.py add` in its worktree, with its contract and need as Follow-ups
+  in `skills/review/tracking.md` describes.
 - **Scope**: the branch's purpose widened or narrowed in conversation: a
   dated line in `.clerk-dev/branch-notes.md` Purpose.
 - **Brief open items** settled or raised: tick or add them in the brief.
