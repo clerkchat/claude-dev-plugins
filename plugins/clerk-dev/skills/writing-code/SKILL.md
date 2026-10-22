@@ -1,6 +1,6 @@
 ---
 name: writing-code
-description: How to write code: delegate the building of settled pieces to implementer subagents at the right model and effort, while the session that owns the branch settles choices, reviews, and commits; and how to shape the code itself (refactor first to a clean baseline, reuse and extend what exists, one source of truth, clean abstractions). Use before writing or changing code of any size - implementing a feature, a spec, a chunk, a port, a pass, a fix, a follow-up, or a small edit - and when planning how a change will be built. Preloaded by the implementer and the review fixer.
+description: How to write code: hand off the building of settled pieces to implementer subagents at the right model and effort, while the session that owns the branch settles choices, reviews, and commits; and how to shape the code itself (refactor first to a clean baseline, reuse and extend what exists, one source of truth, clean abstractions). Use before writing or changing code of any size - implementing a feature, a brief or spec, a piece, a handoff, a chunk, a port, a pass, a fix, a follow-up, or a small edit - and when planning how a change will be built. Preloaded by the implementer and the review fixer.
 ---
 
 # Writing code
@@ -31,11 +31,12 @@ If so, do that refactor first, in its own commits, with the tests passing and
 behavior unchanged, and build the change on it; the change's own commits should
 read as small additions. If not, say in one line that the baseline is clean.
 
-When the change is one piece of several (a plan's milestones, a spec's
-pieces), look ahead too: read what the later pieces will touch, and prefer the
-refactor that makes this piece and those smaller or plainer. Keep the look
-short. When nothing is clear yet, say so in one line and look again at the next
-piece, when more of the shape is known; do not refactor for a guess.
+When the change is one part of several (a plan's milestones, a feature's
+pieces, a brief's handoffs), look ahead too: read what the later parts will
+touch, and prefer the refactor that makes this part and those smaller or
+plainer. Keep the look short. When nothing is clear yet, say so in one line and
+look again at the next part, when more of the shape is known; do not refactor
+for a guess.
 
 This holds at every scale: a feature's first piece, a one-function fix, a
 follow-up. Refactoring deployed code still follows the branch's scope (Branch
@@ -91,19 +92,19 @@ riskier than it is.
 ## Delegating
 
 This section is for the session that owns the branch. An implementer or fixer
-agent that preloads this skill skips it: it is the piece being delegated.
+agent that preloads this skill skips it: it is the one receiving the handoff.
 
 The feature records exist so that design choices are settled outside the code.
 Once they are, building is delegated: the session that owns the branch keeps
 the judgment (what to build, in what order, whether the result is right) and
-the commits, and hands each piece to a `clerk-dev:implementer` agent with a
-brief. This keeps the session's context for the whole feature instead of
-filling it with one file's details, and gives every piece a check before it
+the commits, and hands each part of a piece to a `clerk-dev:implementer` agent
+in a handoff. This keeps the session's context for the whole feature instead of
+filling it with one file's details, and gives every handoff a check before it
 lands.
 
-### Before the first piece
+### Before the first handoff
 
-Before delegating or writing the first piece on a branch, run
+Before handing off or writing the first code on a branch, run
 `${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --setup` and settle each
 gap it prints with the user before building. Two of its gaps are this skill's
 own:
@@ -111,7 +112,7 @@ own:
 - No Purpose in `.clerk-dev/branch-notes.md`: draft it as
   `skills/review/tracking.md` describes and say in one line where.
 - The work is not cut into milestones: the feature's active plan names, for
-  each step, its pieces, its spec, and what is done when it ends. If there is
+  each step, its pieces, its brief, and what is done when it ends. If there is
   no plan, or its steps have no done line, propose the milestones to the user
   (a short numbered list) and record them as a plan, or a new plan superseding
   the old one, with the `feature` skill. Small changes with no feature records
@@ -122,66 +123,67 @@ worktree is missing) are settled as the output says.
 
 ### What stays in the session
 
-- Settling choices. When a piece needs a choice no record settles and it
+- Settling choices. When a handoff needs a choice no record settles and it
   shapes code others build on, settle it with the user first (the
   `deliberate` skill) and record it (a decision, or an open item resolved in
-  the spec), then delegate. An agent that stops on a `questions:` line is
+  the brief), then hand it off. An agent that stops on a `questions:` line is
   handled the same way.
-- Cutting the work into pieces and ordering them.
+- Cutting each piece's work into handoffs and ordering them.
 - Reviewing each result, running its tests, and committing it.
-- Changes small enough that the brief would be longer than the change: a few
+- Changes small enough that the handoff would be longer than the change: a few
   lines, one obvious edit. Do those inline.
 
-### Pieces
+### Handoffs
 
-A piece is one requirement or a few that belong together, or one port of
+A handoff is one requirement or a few that belong together, or one port of
 reference code, with tests that prove it, small enough to review in a few
 minutes: usually a module, an entity with its migration, a set of DTOs, an
-executor step. Cut along the spec's requirements, and order pieces so each
+executor step. Cut along the brief's requirements, and order handoffs so each
 builds on committed ones.
 
 ### Model and effort
 
 Pass `model` and `effort` on each implementer call:
 
-| Piece | Model | Effort |
+| Handoff | Model | Effort |
 | --- | --- | --- |
-| Foundation pieces, where a mistake is expensive to undo: the feature's central types and extension-point interfaces that every later piece builds on; schema changes to tables that are already deployed; concurrency or state-machine code with no settled pattern to follow | fable | high |
+| Foundation work, where a mistake is expensive to undo: the feature's central types and extension-point interfaces that every later handoff builds on; schema changes to tables that are already deployed; concurrency or state-machine code with no settled pattern to follow | fable | high |
 | Other shape-setting code others build on: types, interfaces, cross-module wiring, new schema and migration design, concurrency-sensitive code | opus | high |
-| Implementing to a settled spec inside established patterns; ports of reference code; their tests | sonnet | medium |
+| Implementing to a settled brief inside established patterns; ports of reference code; their tests | sonnet | medium |
 | Mechanical edits: moves and renames with their import updates, regenerated files, applying one pattern across files | sonnet | low |
 
-Fable is for the few pieces in the first row, not a default: it costs about
-two and a half times Opus. Most features have a handful of such pieces, near
+Fable is for the few handoffs in the first row, not a default: it costs about
+two and a half times Opus. Most features have a handful of such handoffs, near
 the start.
 
-Raise a piece a row when its first attempt comes back with deviations or
-failing tests that point at reasoning, not at the brief; a piece that fails
+Raise a handoff a row when its first attempt comes back with deviations or
+failing tests that point at reasoning, not at the handoff; a handoff that fails
 that way at Opus goes to Fable.
 
 Not every account has Fable, and it may have its own usage limits. When an
 implementer on Fable fails because the model is unavailable or a limit is
-reached, run the same brief on Opus at the same effort, say so once in a line,
-and use Opus for the rest of the session's Fable pieces, as Model fallback in
+reached, run the same handoff on Opus at the same effort, say so once in a line,
+and use Opus for the rest of the session's Fable handoffs, as Model fallback in
 the review skill describes.
 
-### The brief
+### The handoff
 
 Give paths, not contents. Include:
 
 - the goal, in a sentence or two;
-- the requirements it covers, by spec id and number, and the spec's path;
+- the requirements it covers, by brief id and number, and the brief's path;
 - the decisions it must follow, by id and path;
 - the reference code to port or follow (`git show <ref>:<path>` for another
   branch);
 - the files expected to change, and any it must not touch;
-- the later pieces that will touch the same code, by name and spec id, so the
-  agent shapes this piece's code for them without building them;
+- the later handoffs and pieces that will touch the same code, by name and
+  brief id, so the agent shapes this handoff's code for them without building
+  them;
 - the tests to write or port, and the exact command to run them;
 - the guidance file's path: `records.py guidance <worktree> --for <the
-  piece's spec> [--context <the repository's review-context SKILL.md>] --out
+  piece's brief> [--context <the repository's review-context SKILL.md>] --out
   <scratchpad>/guidance-<area>.md` writes the branch's Purpose, its guidance,
-  the feature's active guidance for the spec's area, and the repository's Known
+  the feature's active guidance for the brief's area, and the repository's Known
   noise (`--area <area>` names the area directly);
 - the rules that apply beyond the repository's conventions: the user's
   instructions that bear on code (for example a no-comments rule). Do not
@@ -190,7 +192,7 @@ Give paths, not contents. Include:
 
 ### Order and parallelism
 
-Run pieces one at a time by default. Run two at once only when they change
+Run handoffs one at a time by default. Run two at once only when they change
 disjoint files and their tests share no resources (databases, ports, fixtures);
 many repositories' integration tests share databases and must never run
 concurrently. A larger fan-out is a multi-agent workflow, which runs only when
@@ -198,12 +200,12 @@ the user asks for one.
 
 ### The build log
 
-Log every delegated piece in `.clerk-dev/build.md` with
+Log every handoff in `.clerk-dev/build.md` with
 `${CLAUDE_PLUGIN_ROOT}/scripts/build.py` (below, `build.py`); status reports
-progress from it, so a piece not logged is invisible there:
+progress from it, so a handoff not logged is invisible there:
 
-- when briefing: `build.py add <worktree> "<piece>" --spec BRIEF-52 --reqs 4,5
-  --model <model> --effort <effort>`, which gives the piece's id (BUILD-3);
+- when handing off: `build.py add <worktree> "<title>" --brief BRIEF-52 --reqs 4,5
+  --model <model> --effort <effort>`, which gives the handoff's id (BUILD-3);
 - when the agent stops on a question: `build.py stop <worktree> BUILD-3 --question
   "<the question>"`; after it is settled and recorded, `build.py resend` with
   the new model or effort if they changed;
@@ -213,9 +215,9 @@ progress from it, so a piece not logged is invisible there:
   "<the report's requirements line, as 4:done,5:partial: what is missing>"`,
   adding `--deviation "..."` for each one accepted;
 - when dropped: `build.py abandon <worktree> BUILD-3 --note "<why>"`;
-- after committing work that builds a decision, a plan step, or a whole spec
+- after committing work that builds a decision, a plan step, or a whole brief
   rather than requirements: `build.py built <worktree> DEC-27 --commit <sha>`
-  (`PLAN-32.4` for a plan step). Any skill that commits does this when its brief
+  (`PLAN-32.4` for a plan step). Any skill that commits does this when its handoff
   names a record the commit builds, and never cites the record in the commit
   message. A rebase that changes the hash is followed by its `Subject:` line;
   `build.py relink <worktree>` persists the re-found commits and lists entries
@@ -223,61 +225,61 @@ progress from it, so a piece not logged is invisible there:
   re-links one by hand. `build.py records <worktree>` lists the records logged
   as built.
 
-When a decision takes a requirement out of a spec (moved to another spec,
-or no longer wanted), do not supersede the spec to delete one line: run
-`build.py drop <worktree> --spec BRIEF-18 --reqs 17 --why "<the decision that
-dropped it, and where it went>"`. The requirement leaves the spec's count and
-shows as dropped in the checklist; the spec itself stays as written.
+When a decision takes a requirement out of a brief (moved to another brief,
+or no longer wanted), do not supersede the brief to delete one line: run
+`build.py drop <worktree> --brief BRIEF-18 --reqs 17 --why "<the decision that
+dropped it, and where it went>"`. The requirement leaves the brief's count and
+shows as dropped in the checklist; the brief itself stays as written.
 
-A change done inline that covers spec requirements is logged too, as a piece
-added and marked done in one go, so the progress stays whole.
+A change done inline that covers brief requirements is logged too, as a
+handoff added and marked done in one go, so the progress stays whole.
 
 "Log the built work" (status suggests it when the branch has commits the log
 does not name): list the branch's commits since its base, read each one's
 message and the files it changed (`git show --stat`, and the diff only where
-the message does not say), match it to the spec's requirements or to the
+the message does not say), match it to the brief's requirements or to the
 decision or plan step it built, and log each group of commits that make one
-piece as a piece added and marked done, with the last commit and the
+handoff as a handoff added and marked done, with the last commit and the
 requirements it covers, partial where the commit leaves part of a requirement
 for later; a commit that built a record goes in with `built`. Show the mapping in a few lines
 before writing it. Commits that cover no requirement (merges, unrelated
 fixes) are left out, and say so in one line. Requirement
-status lives only here; the spec is not edited for it.
+status lives only here; the brief is not edited for it.
 
-### After each piece
+### After each handoff
 
 1. Read the report. `stopped` or `questions:` go back to the user (or are
    settled from the records and guidance) before anything else. Before asking,
-   weigh each question with the `deliberate` skill, with the piece's brief and the code and
-   records it touches as its facts, and put its decision brief to the user
+   weigh each question with the `deliberate` skill, with the handoff and the code and
+   records it touches as its facts, and put its decision summary to the user
    rather than the bare question. When the
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
    `skills/review/tracking.md` describes, and say so in one line.
-   `deviations:` are judged against the spec, decisions, and guidance, and either accepted (say so to the user in
+   `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
    a line, and record it when it changes a decision) or sent back with a
    correction.
-2. Read the diff (`git diff --stat`, then the parts that carry the piece's
-   shape), and run the brief's tests yourself.
-3. Commit as step 6 of the `review-fix` skill describes: only the piece's
+2. Read the diff (`git diff --stat`, then the parts that carry the handoff's
+   shape), and run the handoff's tests yourself.
+3. Commit as step 6 of the `review-fix` skill describes: only the handoff's
    files, a message that stands alone and describes the change, never
-   `.clerk-dev/` paths or record ids. Mark the piece done in the build log (or log
+   `.clerk-dev/` paths or record ids. Mark the handoff done in the build log (or log
    the record it builds with `built`, as "The build log" describes), and
-   tick the spec's open items it closes.
-4. Say one line: the piece, the commit, the tests, anything accepted, and the
+   tick the brief's open items it closes.
+4. Say one line: the handoff, the commit, the tests, anything accepted, and the
    count it moves ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
 
-Whenever you report progress against a spec at more length (the user asks,
+Whenever you report progress against a brief at more length (the user asks,
 the draft ends, a milestone's passes are done), show `build.py checklist
-<worktree> --spec BRIEF-52` as it prints it: one checkbox per requirement, ticked
+<worktree> --brief BRIEF-52` as it prints it: one checkbox per requirement, ticked
 when done, with partial and in-progress items marked. Never list requirement
 numbers in prose ("1 to 18, 20 to 24 done; 19, 25 to 28 open").
 
 ### Milestones
 
 An implementer holds one focus at a time: the draft, or one pass. The focuses
-are applied by orchestrating passes, not by adding checklists to a brief. A
-brief never quotes a lens's text, except the one lens of the pass it belongs
+are applied by orchestrating passes, not by adding checklists to a handoff. A
+handoff never quotes a lens's text, except the one lens of the pass it belongs
 to.
 
 A milestone is a numbered step of the feature's active plan: a checkpoint
@@ -288,22 +290,22 @@ skill:
 
 1. **Plan it** when its work starts: `build.py milestone <worktree> --step
    PLAN-8.2 --passes <list>`, where PLAN-8.2 is step 2 of plan PLAN-8. The log takes the
-   spec and the piece from the step and keeps the pointer, so it does not
+   brief and the piece from the step and keeps the pointer, so it does not
    restate the plan; it stops when the plan or the step is missing, or the plan
-   is not active. When the step names no spec, add `--spec`; a log with no plan
-   takes `--spec BRIEF-52 --piece "<piece>"` instead. The list is prep, happy-path,
-   then the passes `skills/pass/passes.md` suggests for the milestone's spec,
+   is not active. When the step names no brief, add `--brief`; a log with no plan
+   takes `--brief BRIEF-52 --piece "<piece>"` instead. The list is prep, happy-path,
+   then the passes `skills/pass/passes.md` suggests for the milestone's brief,
    in the order it gives; security is required when it is in the list. Show the
    plan in one line and go on. When the plan is replaced, status flags a
    milestone under way that points at a step that is gone or a superseded plan;
    edit its Plan line in the build log to the new plan's step.
 2. **Prep**, the refactor-first pass, looking ahead to the milestone's later
-   pieces and the plan's later milestones; it may end with no changes.
-3. **The draft** is the happy-path pass: start it, build its pieces as above
-   (delegated, logged in the build log, committed one by one), end it when the
-   draft is whole, and run its narrow check.
+   handoffs and the plan's later milestones; it may end with no changes.
+3. **The draft** is the happy-path pass: start it, build it in handoffs as
+   above (logged in the build log, committed one by one), end it when the
+   draft is whole, and run its pass review.
 4. **The other passes**, in order, each as the `pass` skill runs one: its own
-   implementer with its one lens's Pass mode text, then its narrow check.
+   implementer with its one lens's Pass mode text, then its pass review.
 5. **Complete** when every planned pass has run or was skipped with a reason
    (`build.py skip <worktree> MILE-1 <pass> --why "..."`; never a required one)
    and the required passes' findings are triaged. `build.py milestones` and

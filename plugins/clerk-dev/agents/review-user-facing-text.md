@@ -70,7 +70,7 @@ no precedent in the product.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What will users read: labels, empty states, errors, notifications, message

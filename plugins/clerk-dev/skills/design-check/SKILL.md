@@ -1,6 +1,6 @@
 ---
 name: design-check
-description: Check a feature's design, plan, capabilities, or spec record against the review lenses before the code exists, and work through the questions that come back. Use when the user says "check the design", "design-check BRIEF-10", "run the lenses on the spec", "what should we settle before building this", "poke holes in this", "review the plan", or "go through the design questions". Not for reviewing code; that is /clerk-dev:review.
+description: Check a feature's design, plan, pieces, or brief record against the review lenses before the code exists, and work through the questions that come back. Use when the user says "check the design", "design-check BRIEF-10", "run the lenses on the brief", "run the lenses on the spec", "what should we settle before building this", "poke holes in this", "review the plan", or "go through the design questions". Not for reviewing code; that is /clerk-dev:review.
 argument-hint: "[<record id>[,<record id>...]] [--lenses a,b | +a | -a] [walk]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
 ---
@@ -24,7 +24,7 @@ user through them and records each answer.
 ## Running a check
 
 1. **Records.** With ids given, check those. Otherwise take the record the
-   conversation is about; failing that, the newest active spec, plan, or design
+   conversation is about; failing that, the newest active brief, plan, or design
    in the area the conversation is about (`records.py list <worktree> --active
    --area <area>`), or feature-wide when it is about the whole feature; ask
    when that is unclear and several areas have candidates. Say in one line which records you
@@ -49,7 +49,7 @@ user through them and records each answer.
 
    Run the lenses whose questions are most often settle-first, `contracts`,
    `cross-repo`, `rollout`, `tenancy`, and `security`, with `model: fable`
-   when they are in the set, on every spec, design, and plan, falling back to Opus at the same effort as Model fallback in the `review` skill describes; every
+   when they are in the set, on every brief, design, and plan, falling back to Opus at the same effort as Model fallback in the `review` skill describes; every
    other lens uses the agent's own model. A question settled before building
    costs far less than the rework it saves.
 
@@ -57,7 +57,7 @@ user through them and records each answer.
    the workspace file, defaulting to this worktree. Records **span
    repositories** when the workspace lists more than one repository and either
    the checked records have different `repo` values, or a checked plan, design,
-   or capabilities record assigns work to more than one of them. Then replace
+   or pieces record assigns work to more than one of them. Then replace
    `REPO`, `CONTEXT`, and `GUIDANCE` with one block per repository involved:
 
    ```
@@ -151,7 +151,7 @@ follow-ups. `Instruction` is empty until the user decides; `Status` and
 
 When the user asks to go through them ("walk the design questions", "go
 through Q-3"), take the open questions in order, settle-first first, one at a
-time. Sort them and brief the borderline ones first, as "Several items
+time. Sort them and prepare the borderline ones first, as "Several items
 waiting" in the `deliberate` skill describes.
 
 1. Show the question with its why and suggestion, briefly, and the code or
@@ -166,8 +166,8 @@ waiting" in the `deliberate` skill describes.
      --from <the checked record's id>`, with `--supersedes` when it changes an active decision,
      restating it in full as "When a record changes another" in
      `skills/feature/SKILL.md` describes);
-   - a gap in a spec: an open item added to the spec (allowed at any time),
-     or, when the gap changes the requirements or approach, a new spec that
+   - a gap in a brief: an open item added to the brief (allowed at any time),
+     or, when the gap changes the requirements or approach, a new brief that
      supersedes it;
    - nothing to change: the reason, in one line.
 4. Close it: `items.py status <check file> Q-3 fixed --ref "<record id or

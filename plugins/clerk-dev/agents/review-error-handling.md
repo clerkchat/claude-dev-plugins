@@ -68,7 +68,7 @@ error type, is correct. Do not report catches in test code.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - For each outbound call and each step that can fail, does the design say what

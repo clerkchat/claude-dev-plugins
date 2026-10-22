@@ -1,47 +1,47 @@
 #!/usr/bin/env python3
 """Keep a worktree's build log, <worktree>/.clerk-dev/build.md, and report
-progress against the feature's specs.
+progress against the feature's briefs.
 
-The build log records each delegated piece of implementation: the spec
-requirements it covers, the model and effort it ran at, where it stands, the
-commit it landed in, and the questions it stopped on. Requirement status lives
-here, not in the specs: a spec states intent, and "done" is what the log's
-landed pieces say. A requirement is cited as `BRIEF-52.7`: spec record BRIEF-52,
-item 7 of its Requirements list. The log is read strictly: a line it does not
-recognize stops the script rather than being dropped on the next write.
+The build log records each handoff, one delegation of implementation work: the
+brief requirements it covers, the model and effort it ran at, where it stands,
+the commit it landed in, and the questions it stopped on. Requirement status
+lives here, not in the briefs: a brief states intent, and "done" is what the
+log's landed handoffs say. A requirement is cited as `BRIEF-52.7`: brief record
+BRIEF-52, item 7 of its Requirements list. The log is read strictly: a line it
+does not recognize stops the script rather than being dropped on the next write.
 
 Usage:
-  build.py add WORKTREE "title" --spec BRIEF-52 --reqs 4,5 [--model sonnet] [--effort medium]
+  build.py add WORKTREE "title" --brief BRIEF-52 --reqs 4,5 [--model sonnet] [--effort medium]
   build.py done WORKTREE BUILD-3 --commit SHA [--covered "4:done,5:partial: no retry yet"] [--deviation "..."]
   build.py stop WORKTREE BUILD-3 --question "..."
   build.py resend WORKTREE BUILD-3 [--note "..."] [--model opus] [--effort high]
   build.py abandon WORKTREE BUILD-3 [--note "..."]
-  build.py built WORKTREE DEC-27 --commit SHA [--title "..."]     (a decision, a plan step as PLAN-32.4, or a whole spec built by a commit)
+  build.py built WORKTREE DEC-27 --commit SHA [--title "..."]     (a decision, a plan step as PLAN-32.4, or a whole brief built by a commit)
   build.py relink WORKTREE                           persist the commits re-found after a rebase, and list entries it could not follow
   build.py relink WORKTREE BUILD-4 --commit SHA      point a done entry at a commit by hand
   build.py records WORKTREE                          the records logged as built, with their commits
-  build.py note WORKTREE BUILD-3 "what to do next"  (a briefed or stopped piece only; "" clears it)
-  build.py drop WORKTREE --spec BRIEF-18 --reqs 17 --why "DEC-24 moved it to BRIEF-23.3"
+  build.py note WORKTREE BUILD-3 "what to do next"  (a handed-off or stopped handoff only; "" clears it)
+  build.py drop WORKTREE --brief BRIEF-18 --reqs 17 --why "DEC-24 moved it to BRIEF-23.3"
   build.py list WORKTREE [--open]
-  build.py progress WORKTREE [--spec BRIEF-52]
+  build.py progress WORKTREE [--brief BRIEF-52]
   build.py milestone WORKTREE --step PLAN-8.2 --passes prep,happy-path,security,edge-cases,tests [--required security]
-  build.py milestone WORKTREE --spec BRIEF-52 --piece "C core harness" --passes ...     (a log with no plan)
+  build.py milestone WORKTREE --brief BRIEF-52 --piece "C core harness" --passes ...     (a log with no plan)
   build.py skip WORKTREE MILE-1 edge-cases --why "..."     (never a required pass)
   build.py milestones WORKTREE
-  build.py checklist WORKTREE [--spec BRIEF-52]     progress as a checklist, one line per requirement
+  build.py checklist WORKTREE [--brief BRIEF-52]     progress as a checklist, one line per requirement
 
-Without --covered, `done` marks every requirement of the piece done. Statuses:
-briefed (handed to an implementer), stopped (it stopped on a question),
+Without --covered, `done` marks every requirement of the handoff done. Statuses:
+handed-off (sent to an implementer), stopped (it stopped on a question),
 done (landed in a commit), abandoned, dropped (requirements a later decision
-took out of the spec; they leave its count). `built` logs a record entry, done
-at once: it covers a decision, a plan step, or a spec with no pieces in the log,
+took out of the brief; they leave its count). `built` logs a record entry, done
+at once: it covers a decision, a plan step, or a brief with no handoffs in the log,
 and carries no requirements; a commit not on this branch is noted and logged anyway. An entry's commit is followed across a rebase by
-its Subject, the commit's subject line; `relink` persists that or sets it by hand. `resend` puts a stopped or rejected piece
-back to briefed and counts the attempt.
+its Subject, the commit's subject line; `relink` persists that or sets it by hand. `resend` puts a stopped or rejected handoff
+back to handed-off and counts the attempt.
 
 Entry format:
   - [ ] BUILD-3. Executor and record
-    - Spec: BRIEF-52
+    - Brief: BRIEF-52
     - Requirements: 4 done, 5 partial (no retry yet), 6
     - Model: sonnet medium
     - Status: done
@@ -51,9 +51,9 @@ Entry format:
     - Question: does TurnContext carry the clock?
     - Deviation: kept the reference's retry count
     - Started: 2026-10-16
-    - Note: log it with --covered 4:done once the retry test passes   (the handoff of an open piece; status shows it)
+    - Note: log it with --covered 4:done once the retry test passes   (the next-step note of an open handoff; status shows it)
 
-  - [x] BUILD-4. Keep a feature's records in the hub worktree     (an entry from `built`: Record in place of Spec and Requirements)
+  - [x] BUILD-4. Keep a feature's records in the hub worktree     (an entry from `built`: Record in place of Brief and Requirements)
     - Record: DEC-27
     - Status: done
     - Commit: 1a2b3c4
@@ -66,18 +66,21 @@ from records import exclude, git, git_failure, git_run, load_script, record_id
 import ids
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STATES = ("briefed", "stopped", "done", "abandoned", "dropped")
-FIELDS = ("Spec", "Record", "Piece", "Plan", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Subject", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
+STATES = ("handed-off", "stopped", "done", "abandoned", "dropped")
+OPEN = ("handed-off", "stopped")
+OLD_STATES = {"briefed": "handed-off"}
+OLD_FIELDS = {"Spec": "Brief"}
+FIELDS = ("Brief", "Record", "Piece", "Plan", "Requirements", "Passes", "Required", "Model", "Status", "Commit", "Subject", "Attempts", "Question", "Deviation", "Skipped", "Started", "Note")
 REPEATABLE = ("Question", "Deviation", "Skipped")
 HEADER = """# Build log
 
-Each piece of implementation delegated on this branch: the spec requirements it
+Each handoff of implementation work on this branch: the brief requirements it
 covers and where it stands. Kept by build.py; it reads this file strictly, so
 edit with care.
 
 """
 ENTRY_RE = re.compile(rf"^- \[( |x)\] ({ids.pattern(ids.BUILD, ids.MILESTONE)})\. (.+)$")
-FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS) + r"): ?(.*)$")
+FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS + tuple(OLD_FIELDS)) + r"): ?(.*)$")
 
 def log_path(wt): return os.path.join(wt, ".clerk-dev", "build.md")
 
@@ -137,11 +140,12 @@ def read(p):
             cur = blank_entry(m.group(2), m.group(3)); out.append(cur); continue
         if cur is None:
             if line.startswith("#") or not line.startswith((" ", "-")): continue
-            sys.exit(f"{p}:{n}: unrecognized line before the first piece: {line!r}")
+            sys.exit(f"{p}:{n}: unrecognized line before the first entry: {line!r}")
         m = FIELD_RE.match(line)
         if not m: sys.exit(f"{p}:{n}: unrecognized line in {cur['id']}: {line!r}; fix it by hand, nothing was written")
-        if m.group(1) in REPEATABLE: cur["multi"][m.group(1)].append(m.group(2).strip())
-        else: cur["f"][m.group(1)] = m.group(2).strip()
+        name, value = OLD_FIELDS.get(m.group(1), m.group(1)), m.group(2).strip()
+        if name in REPEATABLE: cur["multi"][name].append(value)
+        else: cur["f"][name] = OLD_STATES.get(value, value) if name == "Status" else value
     return out
 
 def write(p, entries):
@@ -223,7 +227,7 @@ class SpecProgress(NamedTuple):
     record: dict
     items: dict
     state: dict
-    pieces: list
+    handoffs: list
     dropped: dict
 
 def hub_records(wt):
@@ -233,14 +237,14 @@ def hub_records(wt):
 def resolver(wt): return load_script("records.py").resolver(hub_records(wt))
 
 def spec_id(wt, text):
-    spec = record_id(hub_records(wt), text, "spec")
-    if ids.kind_of(spec) != ids.RECORD: sys.exit(f"--spec takes a spec record such as BRIEF-52, not {text!r}")
+    spec = record_id(hub_records(wt), text, "brief")
+    if ids.kind_of(spec) != ids.RECORD: sys.exit(f"--brief takes a brief record such as BRIEF-52, not {text!r}")
     return spec
 
 def progress(wt, entries, spec=None):
     rc = load_script("records.py")
     d = rc.fdir(wt)
-    entries = pieces(entries)
+    entries = handoffs(entries)
     rs = rc.records(d)
     canon, kinds = rc.resolver(rs), {r["id"]: r.get("type") for r in rs}
     tagged = [(spec_of(e, canon, kinds), e) for e in entries]
@@ -257,8 +261,8 @@ def progress(wt, entries, spec=None):
 
 def spec_of(e, canon, kinds):
     record = canon(e["f"].get("Record", ""))
-    spec = e["f"].get("Spec")
-    return canon(spec) if spec else (record if kinds.get(record) == "spec" else None)
+    spec = e["f"].get("Brief")
+    return canon(spec) if spec else (record if kinds.get(record) == "brief" else None)
 
 def covered(e, items):
     return [(n, "done", "") for n in items] if e["f"].get("Record") else reqs_of(e)
@@ -279,10 +283,10 @@ def progress_lines(rows):
         total = len(items)
         done = [n for n, (st, _, _) in state.items() if st == "done"]
         partial = [n for n, (st, _, _) in state.items() if st == "partial"]
-        live = [e for e in mine if e["f"].get("Status") in ("briefed", "stopped")]
+        live = [e for e in mine if e["f"].get("Status") in OPEN]
         busy = {n for e in live for n, _, _ in reqs_of(e)}
         left = [n for n in sorted(items) if n not in state and n not in busy]
-        head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the spec lists none)"
+        head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the brief lists none)"
         if partial: head += f", {len(partial)} partial ({', '.join(ids.ref(s, n) for n in sorted(partial))})"
         if dropped: head += f", {len(dropped)} dropped"
         lines.append(head)
@@ -309,13 +313,10 @@ def label(text, limit=72):
     return cut.rstrip(",;:(") + "…"
 
 def checklist_lines(rows):
-    """Per spec: a heading line with the count, then one checkbox per
-    requirement: [x] done (and the piece), [ ] partial, in progress, or not
-    started, with what is missing or which piece is on it."""
     out = []
     for s, r, items, state, mine, gone in rows:
         title = r.get("title", "") if r else "(not found in the hub)"
-        live = [e for e in mine if e["f"].get("Status") in ("briefed", "stopped")]
+        live = [e for e in mine if e["f"].get("Status") in OPEN]
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
         done = sum(1 for v in state.values() if v[0] == "done")
         out.append(f"{s} {title}: {done} of {len(items)} done")
@@ -345,7 +346,7 @@ def step_piece(text):
     return re.sub(r"\s+", " ", re.split(r"\bDone:", text, maxsplit=1, flags=re.I)[0]).strip(" .;,:")
 
 def step_spec(text):
-    m = re.search(rf"\bspecs? ({ids.pattern(ids.RECORD)})", text)
+    m = re.search(rf"\b(?:brief|spec)s? ({ids.pattern(ids.RECORD)})", text)
     return m.group(1) if m else None
 
 def plan_step_of(wt, ref):
@@ -358,7 +359,7 @@ def plan_step_of(wt, ref):
     if text is None: sys.exit(f"plan {r['id']} has no step {p.sub}")
     return ids.ref(r["id"], p.sub), text
 
-BUILDABLE = ("decision", "plan", "spec")
+BUILDABLE = ("decision", "plan", "brief")
 
 def buildable(wt, ref):
     rs = hub_records(wt)
@@ -371,16 +372,16 @@ def buildable(wt, ref):
     ref = r["id"]
     if r.get("status") != "active": sys.exit(f"{ref} is {r.get('status')}" + (f" by {r['superseded_by']}; build that record instead" if r.get("superseded_by") else ""))
     if r.get("type") == "plan": sys.exit(f"{ref} is a plan; log its steps instead, such as {ids.ref(ref, 1)}")
-    if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan step, or a spec")
+    if r.get("type") not in BUILDABLE: sys.exit(f"{ref} is a {r.get('type')}; built takes a decision, a plan step, or a brief")
     return ref, r, r.get("title", "")
 
 def built_records(entries, canon):
     out = {}
-    for e in pieces(entries):
+    for e in handoffs(entries):
         if e["f"].get("Record") and e["f"].get("Status") == "done": out.setdefault(canon(e["f"]["Record"]), []).append(e)
     return out
 
-def pieces(entries): return [e for e in entries if ids.kind_of(e["id"]) == ids.BUILD]
+def handoffs(entries): return [e for e in entries if ids.kind_of(e["id"]) == ids.BUILD]
 def milestones(entries): return [e for e in entries if ids.kind_of(e["id"]) == ids.MILESTONE]
 
 def pass_states(wt, spec):
@@ -408,7 +409,7 @@ def milestone_view(wt, m):
     plan = [x.strip() for x in m["f"].get("Passes", "").split(",") if x.strip()]
     req = {x.strip() for x in m["f"].get("Required", "").split(",") if x.strip()}
     skipped = {s.split(":", 1)[0].strip(): s.split(":", 1)[1].strip() if ":" in s else "" for s in m["multi"]["Skipped"]}
-    states = pass_states(wt, m["f"].get("Spec"))
+    states = pass_states(wt, m["f"].get("Brief"))
     rows, nxt, ready = [], None, True
     for f in plan:
         e = states.get(f)
@@ -416,7 +417,7 @@ def milestone_view(wt, m):
             rows.append((f, f"skipped: {skipped[f]}", f in req)); continue
         if not e or e["f"].get("Status") == "abandoned":
             rows.append((f, "not run" if not e else "abandoned", f in req)); ready = False
-            nxt = nxt or (f"draft {m['title']}: start the happy-path pass and build its pieces" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Spec')}" + (" (required)" if f in req else ""))
+            nxt = nxt or (f"draft {m['title']}: start the happy-path pass and send its handoffs" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Brief')}" + (" (required)" if f in req else ""))
             continue
         st = e["f"].get("Status")
         if st == "open":
@@ -441,7 +442,7 @@ def milestone_lines(wt, entries):
     for m in milestones(entries):
         if m["f"].get("Status") == "abandoned": continue
         rows, nxt, ready = milestone_view(wt, m)
-        out.append(f"{m['id']} {m['title']} ({m['f'].get('Spec')}): " + ("complete" if ready else "in progress"))
+        out.append(f"{m['id']} {m['title']} ({m['f'].get('Brief')}): " + ("complete" if ready else "in progress"))
         out.append("  " + "; ".join(f"{f}{' (required)' if r else ''}: {w}" for f, w, r in rows))
         if nxt: steps.append(f"{m['id']} {m['title']}: {nxt}.")
         elif ready: steps.append(f"{m['id']} {m['title']} is complete: its planned passes ran and required findings are triaged; go on to the plan's next milestone.")
@@ -450,7 +451,7 @@ def milestone_lines(wt, entries):
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
-    a_ = sp.add_parser("add"); a_.add_argument("wt"); a_.add_argument("title"); a_.add_argument("--spec", required=True)
+    a_ = sp.add_parser("add"); a_.add_argument("wt"); a_.add_argument("title"); a_.add_argument("--brief", "--spec", dest="brief", required=True)
     a_.add_argument("--reqs", required=True); a_.add_argument("--model", default="sonnet"); a_.add_argument("--effort", default="medium")
     d_ = sp.add_parser("done"); d_.add_argument("wt"); d_.add_argument("bid"); d_.add_argument("--commit", required=True)
     d_.add_argument("--covered"); d_.add_argument("--deviation", action="append", default=[])
@@ -459,13 +460,13 @@ def main():
     bu = sp.add_parser("built"); bu.add_argument("wt"); bu.add_argument("record"); bu.add_argument("--commit", required=True); bu.add_argument("--title")
     rl = sp.add_parser("relink"); rl.add_argument("wt"); rl.add_argument("bid", nargs="?"); rl.add_argument("--commit")
     rr = sp.add_parser("records"); rr.add_argument("wt")
-    dr = sp.add_parser("drop"); dr.add_argument("wt"); dr.add_argument("--spec", required=True); dr.add_argument("--reqs", required=True); dr.add_argument("--why", required=True)
+    dr = sp.add_parser("drop"); dr.add_argument("wt"); dr.add_argument("--brief", "--spec", dest="brief", required=True); dr.add_argument("--reqs", required=True); dr.add_argument("--why", required=True)
     ab = sp.add_parser("abandon"); ab.add_argument("wt"); ab.add_argument("bid"); ab.add_argument("--note")
     nt = sp.add_parser("note"); nt.add_argument("wt"); nt.add_argument("bid"); nt.add_argument("text")
     l_ = sp.add_parser("list"); l_.add_argument("wt"); l_.add_argument("--open", action="store_true")
-    pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--spec")
-    cl = sp.add_parser("checklist"); cl.add_argument("wt"); cl.add_argument("--spec")
-    ms = sp.add_parser("milestone"); ms.add_argument("wt"); ms.add_argument("--step"); ms.add_argument("--spec"); ms.add_argument("--piece")
+    pr = sp.add_parser("progress"); pr.add_argument("wt"); pr.add_argument("--brief", "--spec", dest="brief")
+    cl = sp.add_parser("checklist"); cl.add_argument("wt"); cl.add_argument("--brief", "--spec", dest="brief")
+    ms = sp.add_parser("milestone"); ms.add_argument("wt"); ms.add_argument("--step"); ms.add_argument("--brief", "--spec", dest="brief"); ms.add_argument("--piece")
     ms.add_argument("--passes", required=True); ms.add_argument("--required")
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
@@ -474,18 +475,18 @@ def main():
     p = path(a.wt); found = log(a.wt); entries = found.entries; today = datetime.date.today().isoformat()
 
     if a.cmd == "add":
-        spec = spec_id(a.wt, a.spec)
+        spec = spec_id(a.wt, a.brief)
         nums = parse_reqs(spec, a.reqs)
-        e = new_entry(entries, ids.BUILD, a.title.rstrip("."), Spec=spec, Requirements=", ".join(map(str, nums)),
-                      Model=f"{a.model} {a.effort}", Status="briefed", Attempts="1", Started=today)
-        write(p, entries); print(f"{e['id']} briefed: {spec} requirements {', '.join(map(str, nums))}")
+        e = new_entry(entries, ids.BUILD, a.title.rstrip("."), Brief=spec, Requirements=", ".join(map(str, nums)),
+                      Model=f"{a.model} {a.effort}", Status="handed-off", Attempts="1", Started=today)
+        write(p, entries); print(f"{e['id']} handed off: {spec} requirements {', '.join(map(str, nums))}")
         return
     if a.cmd == "built":
         ref, r, title = buildable(a.wt, a.record)
         full = full_sha(a.wt, a.commit)
-        if r and r.get("type") == "spec":
-            has = [e["id"] for e in pieces(entries) if ids.same(e["f"].get("Spec"), ref) and e["f"].get("Status") != "abandoned"]
-            if has: sys.exit(f"{ref} already has pieces in the build log ({', '.join(has)}); log its remaining requirements as pieces instead")
+        if r and r.get("type") == "brief":
+            has = [e["id"] for e in handoffs(entries) if ids.same(e["f"].get("Brief"), ref) and e["f"].get("Status") != "abandoned"]
+            if has: sys.exit(f"{ref} already has handoffs in the build log ({', '.join(has)}); log its remaining requirements as handoffs instead")
         first = next((e for e in built_records(entries, resolver(a.wt)).get(ref, []) if names_commit(e, full)), None)
         if first: sys.exit(f"{first['id']} already logs {ref} as built in {first['f']['Commit']}")
         e = new_entry(entries, ids.BUILD, (a.title or title).rstrip("."), Record=ref, Status="done", Started=today, **commit_fields(a.wt, full))
@@ -510,27 +511,27 @@ def main():
         print("\n".join(f"{ref} built in {commit_of(e)} ({e['id']})" for ref, e in built) or "no records built directly")
         return
     if a.cmd == "drop":
-        spec = spec_id(a.wt, a.spec)
+        spec = spec_id(a.wt, a.brief)
         nums = parse_reqs(spec, a.reqs)
         _, items = spec_requirements(load_script("records.py").fdir(a.wt), spec)
         if items is None: sys.exit(f"{spec} not found in the hub")
         unknown = [n for n in nums if n not in items]
         if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")
-        e = new_entry(entries, ids.BUILD, f"Drop {compress(spec, nums)}", Spec=spec, Requirements=", ".join(map(str, nums)),
+        e = new_entry(entries, ids.BUILD, f"Drop {compress(spec, nums)}", Brief=spec, Requirements=", ".join(map(str, nums)),
                       Status="dropped", Started=today, Note=a.why)
         write(p, entries); print(f"{e['id']} dropped: {compress(spec, nums)}")
         return
     if a.cmd == "milestone":
         step, text = plan_step_of(a.wt, a.step) if a.step else (None, "")
-        spec, piece = a.spec or step_spec(text), a.piece or step_piece(text)
-        if not spec or not piece: sys.exit(f"step {step} names no spec; add --spec" if step else "give --step, or --spec and --piece")
+        spec, piece = a.brief or step_spec(text), a.piece or step_piece(text)
+        if not spec or not piece: sys.exit(f"step {step} names no brief; add --brief" if step else "give --step, or --brief and --piece")
         spec = spec_id(a.wt, spec)
         plan = [x.strip() for x in a.passes.split(",") if x.strip()]
         known = catalogue()
         bad = [x for x in plan if known and x not in known]
         if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
         req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
-        m = new_entry(entries, ids.MILESTONE, piece.rstrip("."), Spec=spec, Plan=step, Passes=", ".join(plan), Required=", ".join(req), Started=today)
+        m = new_entry(entries, ids.MILESTONE, piece.rstrip("."), Brief=spec, Plan=step, Passes=", ".join(plan), Required=", ".join(req), Started=today)
         write(p, entries); print(f"{m['id']} planned" + (f" from {step}" if step else "") + f": {', '.join(plan)}" + (f"; required: {', '.join(req)}" if req else ""))
         return
     if a.cmd == "skip":
@@ -539,7 +540,7 @@ def main():
         m["multi"]["Skipped"].append(f"{a.focus}: {a.why}"); write(p, entries); print(f"{m['id']}: {a.focus} skipped")
         return
     if a.cmd == "checklist":
-        print("\n".join(checklist_lines(progress(a.wt, entries, a.spec))) or "no pieces logged")
+        print("\n".join(checklist_lines(progress(a.wt, entries, a.brief))) or "no handoffs logged")
         return
     if a.cmd == "milestones":
         lines, steps = milestone_lines(a.wt, entries)
@@ -547,13 +548,13 @@ def main():
         return
     if a.cmd in ("list", "progress"):
         if a.cmd == "list":
-            for e in pieces(entries):
+            for e in handoffs(entries):
                 st = e["f"].get("Status")
                 if a.open and st in ("done", "abandoned", "dropped"): continue
-                what = f"{e['f']['Record']}; {st}" if e["f"].get("Record") else f"{e['f'].get('Spec')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
+                what = f"{e['f']['Record']}; {st}" if e["f"].get("Record") else f"{e['f'].get('Brief')}: {e['f'].get('Requirements')}; {st}; {e['f'].get('Model')}"
                 print(f"{e['id']} {e['title']}  [{what}" + (f"; {e['f']['Commit']}" if e["f"].get("Commit") else "") + "]")
         else:
-            print("\n".join(progress_lines(progress(a.wt, entries, a.spec))) or "no pieces logged")
+            print("\n".join(progress_lines(progress(a.wt, entries, a.brief))) or "no handoffs logged")
         return
     e = find(entries, a.bid)
     if a.cmd == "done":
@@ -576,14 +577,14 @@ def main():
         write(p, entries); print(f"{e['id']} stopped: {a.question}")
     elif a.cmd == "resend":
         if e["f"].get("Status") in ("done", "abandoned", "dropped"): sys.exit(f"{e['id']} is {e['f'].get('Status')}")
-        e["f"]["Status"] = "briefed"; e["f"]["Attempts"] = str(int(e["f"].get("Attempts", "1")) + 1)
+        e["f"]["Status"] = "handed-off"; e["f"]["Attempts"] = str(int(e["f"].get("Attempts", "1")) + 1)
         if a.model or a.effort:
             m0, e0 = (e["f"].get("Model", "sonnet medium").split() + ["medium"])[:2]
             e["f"]["Model"] = f"{a.model or m0} {a.effort or e0}"
         if a.note: e["f"]["Note"] = a.note
-        write(p, entries); print(f"{e['id']} briefed again (attempt {e['f']['Attempts']}, {e['f']['Model']})")
+        write(p, entries); print(f"{e['id']} handed off again (attempt {e['f']['Attempts']}, {e['f']['Model']})")
     elif a.cmd == "note":
-        if e["f"].get("Status") not in ("briefed", "stopped"): sys.exit(f"{e['id']} is {e['f'].get('Status') or 'a milestone'}, not an open piece")
+        if e["f"].get("Status") not in OPEN: sys.exit(f"{e['id']} is {e['f'].get('Status') or 'a milestone'}, not an open handoff")
         text = " ".join(a.text.split())
         if text: e["f"]["Note"] = text
         else: e["f"].pop("Note", None)

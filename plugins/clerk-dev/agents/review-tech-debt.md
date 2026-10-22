@@ -160,7 +160,7 @@ instance. A long tail of small cleanups goes into one finding that lists them.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What existing code will the design build on or change, and would a

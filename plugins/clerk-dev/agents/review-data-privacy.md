@@ -67,7 +67,7 @@ minor unless the volume is large.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What personal or customer data does the design read, store, or send

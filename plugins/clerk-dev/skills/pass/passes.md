@@ -1,7 +1,7 @@
 # Pass catalogue
 
 A pass is a bounded stretch of writing with one focus on one piece of work,
-ending in commits and a narrow check with only the pass's lenses over only the
+ending in commits and a pass review with only the pass's lenses over only the
 pass's commits. Each pass below names its lenses; the writing follows each
 lens's `## Pass mode` section (`scripts/lens-section.py <lens>`), and the check
 runs the same lenses in review. `cross-repo` has no pass; it reviews and checks
@@ -10,7 +10,7 @@ designs only.
 | Pass          | Lenses                                       | When it is due                                                          |
 | ------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
 | prep          | tech-debt, design, naming-concepts           | always considered first, for any piece that touches existing code       |
-| happy-path    | spec-conformance, completeness               | first, for a piece with a spec; builds the main flow                    |
+| happy-path    | spec-conformance, completeness               | first, for a piece with a brief; builds the main flow                   |
 | dry           | design, tech-debt                            | after the happy path, when it added more than a few functions           |
 | edge-cases    | edge-cases, error-handling                   | after the happy path, for any piece with inputs or external calls       |
 | concurrency   | concurrency                                  | jobs, consumers, retries, or state shared between requests              |
@@ -42,8 +42,8 @@ A milestone (a step of the feature's plan) runs its passes in this order:
 
 ## Suggesting passes
 
-A piece is a spec record, or the paths the engineer names. Classify its files,
-or, before any code exists, what its spec's Approach and Contracts describe,
+A piece is a brief record, or the paths the engineer names. Classify its files,
+or, before any code exists, what its brief's Approach and Contracts describe,
 into the `routing.md` categories:
 
 | Category    | Passes it suggests                    |
@@ -62,8 +62,8 @@ Always start with prep for a piece that touches existing code, however small:
 a refactor that makes the change smaller is checked for before any writing, at
 the scale of a feature and of a one-function fix alike. When prep's item list
 comes out empty (the baseline is already clean), the pass ends with a line
-saying so and no commits. Then happy-path for a piece with a spec. Then scale by size, counting
-the piece's changed lines, or the spec's requirements before code exists:
+saying so and no commits. Then happy-path for a piece with a brief. Then scale by size, counting
+the piece's changed lines, or the brief's requirements before code exists:
 
 - Small (under about 150 lines, or one or two requirements): prep, happy-path,
   and the one pass its riskiest category suggests.

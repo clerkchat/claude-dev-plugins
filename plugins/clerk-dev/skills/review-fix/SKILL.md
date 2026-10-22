@@ -44,7 +44,7 @@ When the user's answer carries guidance (a rule beyond this case), or says
 `skills/review/tracking.md` describes, and say so in one line. An adjustment
 ("fix 4, but keep the old name") is guidance when it would apply to other
 findings too, or when the user gives the same one a second time; a one-off
-adjustment stays in that finding's brief and resolution only. A decision about
+adjustment stays in that finding's handoff and resolution only. A decision about
 one finding belongs in that finding's Notes, recorded as the `review-triage`
 skill describes under Recording a decision, never in a finding's instruction
 note.
@@ -58,7 +58,7 @@ of every fix request, draft Purpose if it is missing, then write the guidance
 file, `records.py guidance <worktree> --context
 <worktree>/.claude/skills/review-context/SKILL.md --out <run>/guidance.md`, so it
 holds the rules recorded since the review and the repository's Known noise;
-every brief points at it. Its branch scope
+every handoff points at it. Its branch scope
 decides what is in scope for a fix and how to make it (Branch scope in
 `tracking.md`; the fixer applies it), and its branch and feature guidance steer
 fixes and discussions.
@@ -81,8 +81,8 @@ for nothing wider.
    finding in the `debt` section (the report's "Cleanup and refactoring")
    whose recommendation starts "In a separate pull request:"; one that starts
    "In this pull request:" is fixed as usual.
-2. Build the brief from the run files, never from the rendered report alone. The
-   brief names the files and the fixer reads them; quote into it only the user's
+2. Build the handoff from the run files, never from the rendered report alone. The
+   handoff names the files and the fixer reads them; quote into it only the user's
    own words (the instruction note, an adjustment given in conversation, the
    picked alternatives), which are short and must not be paraphrased. Point it
    at: the merged entry `- id: <merged id>` in `<run>/merged.md`,
@@ -100,21 +100,21 @@ for nothing wider.
    the user's words about this finding; and any adjustment the user asked for.
    When the instruction picks labeled alternatives ("Fix as recommended (a)",
    `option` in `instructions.tsv`, or "fix 4 as recommended, option a"), the
-   brief gives only the picked alternatives as the recommendation and says the
+   handoff gives only the picked alternatives as the recommendation and says the
    others were not chosen. When the instruction is "Fix as noted", the Notes are
-   the design: put them first in the brief, labeled as replacing the card's
+   the design: put them first in the handoff, labeled as replacing the card's
    recommendation, and keep the recommendation only as background. Adjustments
    override the guidance, and both override the recommendation. Read a
    finding's files yourself only when you must decide something in this session
    (a product choice to lay out for the user, step 3).
 3. Delegate. You never edit code in this session; you coordinate. Launch the
-   `clerk-dev:review-fixer` agent with the brief. It defaults to `sonnet`, which
+   `clerk-dev:review-fixer` agent with the handoff. It defaults to `sonnet`, which
    suits mechanical fixes where the recommendation is the whole design (add an
    index, reject a path segment, add a filter). For fixes that touch structure,
    concurrency, or more than two files, pass `model: opus` on the invocation. A
    fix not marked Fix as recommended pauses first: weigh it with the
    `deliberate` skill, whose first step settles most in a line, wait for the
-   user's choice, then delegate with that choice in the brief. Several findings in one request get one fixer each, run one after
+   user's choice, then delegate with that choice in the handoff. Several findings in one request get one fixer each, run one after
    another so their commits do not interleave.
 4. The fixer changes the code, adds or updates the test the card's scenario
    implies, runs the touched tests, and reports the files changed and the test
@@ -137,7 +137,7 @@ for nothing wider.
    log` who has
    never seen the report. The fixer's `summary` line is the starting point for
    the body. No push, no amend. Several findings in one request get one commit
-   each, in number order. When the brief names a record the fix builds, log it
+   each, in number order. When the handoff names a record the fix builds, log it
    after the commit as "The build log" in the `writing-code` skill describes.
 7. Recheck immediately, as under Rechecking, against that commit.
 8. Write `<run>/resolution/<merged id>.md`, plain prose of a few short
@@ -158,7 +158,7 @@ for nothing wider.
      finding, append a paragraph rather than rewriting the earlier ones.
 9. If the recheck says partly resolved or unresolved, make one second attempt
    before recording: launch the fixer again with `model: fable`, the original
-   brief, the first fix's commit, and the recheck's reason as what remains;
+   handoff, the first fix's commit, and the recheck's reason as what remains;
    commit and recheck as before. If fable is unavailable to the account or hits
    a usage or rate limit (Model fallback in the `review` skill), run the same
    second attempt with `model: opus`; when the first attempt

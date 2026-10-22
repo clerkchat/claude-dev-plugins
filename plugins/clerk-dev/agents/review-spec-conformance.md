@@ -57,11 +57,11 @@ treat the absence of a spec section as a missing requirement.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Does the record agree with the records it builds on: the design it details,
-  the decisions it cites, the capability it implements?
+  the decisions it cites, the piece it implements?
 - Does it contradict an active decision without superseding it?
 - Is each requirement checkable: could a reviewer tell from a diff whether it
   is met?
@@ -72,7 +72,7 @@ the review protocol):
 What the author does in a pass that uses this lens (the `pass` skill reads
 this section; reviewers ignore it):
 
-- Build what the piece's spec and cited decisions say, in the shape they say.
+- Build what the piece's brief and cited decisions say, in the shape they say.
 - Leave out behavior no record asked for, or note it as a proposal.
-- When the code has to differ from the spec, keep going and say so, so a
-  superseding spec or decision can be written.
+- When the code has to differ from the brief, keep going and say so, so a
+  superseding brief or decision can be written.

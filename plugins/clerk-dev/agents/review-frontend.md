@@ -78,7 +78,7 @@ holds. For performance, name the list size or interaction at which it degrades.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What server state does the UI hold, which queries own it, and what

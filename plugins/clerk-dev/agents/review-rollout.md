@@ -80,7 +80,7 @@ change, usually produce an empty findings block. That is a valid result.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Can the change deploy while old code still runs: old workers reading new

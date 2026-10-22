@@ -127,14 +127,14 @@ class NamesTests(StatusCase):
     def names(self):
         return run_script("records", "names", self.repo.path, "B1", "BUILD-2", "b4", "R4.2", "R5.1", "R4.9", "R6.7")[1]
 
-    def test_a_record_entry_reads_as_a_piece_for_its_record(self):
-        self.assertIn("B1: piece for DEC-1: Decision one", self.names())
+    def test_a_record_entry_reads_as_a_handoff_for_its_record(self):
+        self.assertIn("B1: handoff for DEC-1: Decision one", self.names())
 
-    def test_a_plan_step_entry_reads_as_a_piece_for_the_step(self):
-        self.assertIn("BUILD-2: piece for PLAN-4.2: Piece two, the second thing", self.names())
+    def test_a_plan_step_entry_reads_as_a_handoff_for_the_step(self):
+        self.assertIn("BUILD-2: handoff for PLAN-4.2: Piece two, the second thing", self.names())
 
-    def test_a_spec_piece_reads_as_before(self):
-        self.assertIn("b4: piece: Five piece", self.names())
+    def test_a_brief_handoff_reads_as_a_handoff(self):
+        self.assertIn("b4: handoff: Five piece", self.names())
 
     def test_a_plan_step_reference_reads_as_the_steps_piece(self):
         self.assertIn("R4.2: step 2 of plan PLAN-4: Piece two, the second thing", self.names())
@@ -154,21 +154,21 @@ class DesignViewTests(StatusCase):
         self.assertEqual(code, 0, out)
         return out
 
-    def test_a_built_cell_reads_built_without_a_spec_with_its_commit(self):
-        self.assertIn("- 2 Piece two: built without a spec (abc1234)", self.design())
+    def test_a_built_cell_reads_built_without_a_brief_with_its_commit(self):
+        self.assertIn("- 2 Piece two: built without a brief (abc1234)", self.design())
 
-    def test_a_built_cell_with_no_commit_reads_built_without_a_spec(self):
+    def test_a_built_cell_with_no_commit_reads_built_without_a_brief(self):
         out = self.design()
-        self.assertIn("- 4 Piece four: built without a spec", out)
-        self.assertNotIn("4 Piece four: built without a spec (", out)
+        self.assertIn("- 4 Piece four: built without a brief", out)
+        self.assertNotIn("4 Piece four: built without a brief (", out)
 
-    def test_a_row_with_no_spec_and_not_built_still_needs_one(self):
-        self.assertIn("- 3 Piece three: no spec", self.design())
+    def test_a_row_with_no_brief_and_not_built_still_needs_one(self):
+        self.assertIn("- 3 Piece three: no brief", self.design())
 
-    def test_the_write_the_spec_step_names_only_the_unbuilt_row(self):
+    def test_the_write_the_brief_step_names_only_the_unbuilt_row(self):
         out = self.design()
-        self.assertIn("Write the spec for 3 Piece three, next in the plan without one.", out)
-        self.assertNotIn("Write the spec for 2", out)
+        self.assertIn("Write the brief for 3 Piece three, next in the plan without one.", out)
+        self.assertNotIn("Write the brief for 2", out)
         self.assertNotIn("more after it", out)
 
 
@@ -396,7 +396,7 @@ class NoUsableBaseTests(DecisionsOnlyCase):
         self.assertNotIn("Commits on the branch", out)
         self.assertNotIn("could not be read", out)
 
-    def test_a_fresh_branch_with_only_a_briefed_piece_is_not_merged(self):
+    def test_a_fresh_branch_with_only_a_handed_off_entry_is_not_merged(self):
         fresh = clone(self.repo.origin, self.path("fresh"))
         fresh.git("checkout", "-q", "-b", "feat2")
         self.write_decision(fresh.path)

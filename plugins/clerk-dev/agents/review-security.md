@@ -70,7 +70,7 @@ and generic hardening suggestions that the diff does not make worse, go under
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Where does untrusted input enter (users, webhooks, model output, files), and

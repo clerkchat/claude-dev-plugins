@@ -11,8 +11,15 @@ import ids
 class FormatTests(unittest.TestCase):
     def test_records_take_their_types_prefix(self):
         expected = {"brainstorm": "IDEAS-1", "design": "DESIGN-1", "decision": "DEC-1", "guidance": "GUIDE-1",
-                    "capabilities": "PIECES-1", "plan": "PLAN-1", "spec": "BRIEF-1"}
+                    "pieces": "PIECES-1", "plan": "PLAN-1", "brief": "BRIEF-1"}
         self.assertEqual({rtype: ids.record(1, rtype) for rtype in ids.RECORD_TYPES}, expected)
+
+    def test_old_type_names_read_as_the_new_ones(self):
+        self.assertEqual(ids.record_type("spec"), "brief")
+        self.assertEqual(ids.record_type("capabilities"), "pieces")
+        for rtype in ids.RECORD_TYPES:
+            with self.subTest(rtype=rtype):
+                self.assertEqual(ids.record_type(rtype), rtype)
 
     def test_a_record_needs_a_known_type(self):
         with self.assertRaises(ValueError):
@@ -168,7 +175,7 @@ class InputTests(unittest.TestCase):
         self.assertEqual(ids.complete("x9", ids.PASS), "X9")
 
     def test_render_needs_the_type_for_a_record(self):
-        self.assertEqual(ids.render(ids.read("r34.7", ids.REF), "spec"), "BRIEF-34.7")
+        self.assertEqual(ids.render(ids.read("r34.7", ids.REF), "brief"), "BRIEF-34.7")
         self.assertEqual(ids.render(ids.read("7", ids.RECORD), "decision"), "DEC-7")
         self.assertEqual(ids.render(ids.read("b3", ids.BUILD)), "BUILD-3")
         with self.assertRaises(ValueError):
@@ -176,7 +183,7 @@ class InputTests(unittest.TestCase):
 
 
 class CanonicalTests(unittest.TestCase):
-    TYPES = {13: "spec", 34: "spec", 37: "plan", 39: "decision"}
+    TYPES = {13: "brief", 34: "brief", 37: "plan", 39: "decision"}
 
     def test_a_record_id_takes_its_types_prefix(self):
         cases = {"R39": "DEC-39", "BRIEF-39": "DEC-39", "R34.7": "BRIEF-34.7", "R37.8": "PLAN-37.8",

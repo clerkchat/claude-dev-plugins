@@ -124,8 +124,9 @@ with "where are we?".
 > Capture this. / Park that idea. / What did we decide about polling?
 
 - A feature keeps its thinking as numbered records, each id naming its type
-  (IDEAS-1, DESIGN-2, DEC-3, ...): brainstorms, designs, decisions,
-  capabilities, plans, and specs.
+  (IDEAS-1, DESIGN-2, DEC-3, ...): brainstorms, designs, decisions, pieces
+  (the design cut into units of work), plans, and briefs (one per piece, for
+  whoever builds it).
 - Records are history. Each says what was true on its date; a change of mind is
   a new record that supersedes the old one.
 - On a bigger feature, records carry an area (`auth`, `delivery`), named as the
@@ -134,13 +135,13 @@ with "where are we?".
   they are adopted or dropped.
 - They live in `.clerk-dev/feature/` in the worktree you started in (the hub),
   where other repositories of the feature find them. Reviews check the code
-  against the active specs.
+  against the active briefs.
 
 #### Design checks
 
 > Check the design. / Poke holes in this. / Go through the design questions.
 
-Runs the focuses that fit what a design, plan, or spec describes (a
+Runs the focuses that fit what a design, plan, or brief describes (a
 tenant-facing endpoint gets tenant isolation; a prompt gets the LLM focus) and
 writes the questions worth settling before building, marked settle-first,
 worth settling, or note. Going through them records each answer as a decision.
@@ -219,7 +220,7 @@ reaches a choice no record settles, it stops and asks you rather than guessing.
 > What's next?
 
 Covers the feature as well as the review: passes in progress, design questions
-to settle first, open items in specs, and the follow-ups each repository owes
+to settle first, open items in briefs, and the follow-ups each repository owes
 the others. Follow-ups take the same instructions as findings, plus Refine:
 "refine F3", "ignore F2, that screen is gone".
 
@@ -289,8 +290,8 @@ edit and commit.
 <details>
 <summary><b>How it works</b></summary>
 
-- **Building is delegated.** The session you talk to cuts the work into pieces
-  and hands each to an implementer agent with a brief citing the spec and
+- **Building is delegated.** The session you talk to cuts each piece's work
+  into handoffs and sends each to an implementer agent, citing the brief and
   decisions: Opus for code others build on, Sonnet for the rest. It reviews the
   result, runs the tests, and commits, so your session keeps the whole feature
   in view.

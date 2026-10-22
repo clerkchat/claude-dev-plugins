@@ -70,7 +70,7 @@ score 40 or below.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What new queries does the design imply, and which indexes serve them?

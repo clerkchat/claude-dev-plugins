@@ -59,7 +59,7 @@ and readability trade-offs that cost microseconds.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Which paths in the design are hot, and what work does each do per call?

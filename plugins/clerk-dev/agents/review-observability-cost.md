@@ -63,7 +63,7 @@ cardinality or volume from the data model.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - How will someone know the new flow is working, or failing, in production?

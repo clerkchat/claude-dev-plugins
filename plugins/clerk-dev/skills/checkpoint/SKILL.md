@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: Write down everything this conversation settled that is not yet in a file (decisions, guidance, parked ideas, answers to design questions, built pieces, follow-ups owed elsewhere, scope changes), then say whether it is safe to clear the conversation. Use when the user says "checkpoint", "wrap up", "save where we are", "before I clear", "is it safe to clear", "I'm going to clear", or similar.
+description: Write down everything this conversation settled that is not yet in a file (decisions, guidance, parked ideas, answers to design questions, built handoffs, follow-ups owed elsewhere, scope changes), then say whether it is safe to clear the conversation. Use when the user says "checkpoint", "wrap up", "save where we are", "before I clear", "is it safe to clear", "I'm going to clear", or similar.
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
 ---
 
@@ -31,15 +31,15 @@ list each thing that was settled but has no file yet:
   idea`, with why and when.
 - **Answers to design questions** that are not yet in their check file:
   `items.py set` and `items.py status`, as the `design-check` skill's walk does.
-- **Pieces of work** built or committed but not in the build log, and
+- **Handoffs** built or committed but not in the build log, and
   requirements a commit covered: `build.py add` and `done`, as the
-  `writing-code` skill describes. A piece briefed and still running is not
+  `writing-code` skill describes. A handoff sent and still running is not
   pending; see step 3.
 - **Follow-ups** another repository now owes because of a change here:
   `followups.py add` in its worktree.
 - **Scope**: the branch's purpose widened or narrowed in conversation: a
   dated line in `.clerk-dev/branch-notes.md` Purpose.
-- **Spec open items** settled or raised: tick or add them in the spec.
+- **Brief open items** settled or raised: tick or add them in the brief.
 
 When it is unclear whether something was settled or only discussed, do not
 record it: list it in step 4 as open, in the user's words.
@@ -55,17 +55,18 @@ session.
 ## 3. Check what is in flight
 
 - `git status --short`: uncommitted changes to tracked files. Name them; a
-  finished piece is committed as the `writing-code` skill describes before
+  finished handoff is committed as the `writing-code` skill describes before
   clearing, and anything else is the user's to decide.
 - Subagents still running (an implementer, a review, a design check): clearing
   may lose their reports. Wait for them, or say which are running and what to
   do with their results in the next session.
-- An open pass or a briefed piece: these are in the logs already and survive a
+- An open pass or an open handoff: these are in the logs already and survive a
   clear. Write what the next session needs to finish it (what to log, what to
-  run next) as its note, replacing the old one: `passes.py note <worktree> PASS-9
-  "<next steps>"` or `build.py note <worktree> BUILD-3 "<next steps>"`. Status shows
-  the note of every open pass and piece, so this is the only place in-flight
-  next steps go; no other file takes them.
+  run next) as its next-step note, replacing the old one: `passes.py note
+  <worktree> PASS-9 "<next steps>"` or `build.py note <worktree> BUILD-3 "<next
+  steps>"`. Status shows the next-step note of every open pass and handoff,
+  under Next-step notes, so this is the only place in-flight next steps go; no
+  other file takes them.
 
 ## 4. Report
 
@@ -74,11 +75,11 @@ In a few lines:
 - what was written, one line each, with names ("decision DEC-74, chunk C ships
   the seams as PRs to main ahead of the core chunk");
 - what is still open and only in this conversation, if anything;
-- what is in flight, with the notes just written;
+- what is in flight, with the next-step notes just written;
 - **safe to clear** or **not yet, because ...**;
 - what to ask after clearing to pick up: "where are we on the implementation"
   or "where are we on the design", as fits. Next steps that belong to no open
-  pass or piece are not written down: status reports its own, so name only
+  pass or handoff are not written down: status reports its own, so name only
   what it already reports.
 
 ## Closing checkpoint

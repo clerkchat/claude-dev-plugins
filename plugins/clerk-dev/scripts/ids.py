@@ -5,9 +5,10 @@ RECORD, REF, CHECK = "record", "ref", "check"
 IDEA, PASS, BUILD, MILESTONE, DEFERRED, QUESTION, FOLLOWUP = "idea", "pass", "build", "milestone", "deferred", "question", "followup"
 
 RECORD_LEADS = {"brainstorm": "IDEAS-", "design": "DESIGN-", "decision": "DEC-", "guidance": "GUIDE-",
-                "capabilities": "PIECES-", "plan": "PLAN-", "spec": "BRIEF-"}
+                "pieces": "PIECES-", "plan": "PLAN-", "brief": "BRIEF-"}
 ITEM_LEADS = {IDEA: "IDEA-", PASS: "PASS-", BUILD: "BUILD-", MILESTONE: "MILE-", DEFERRED: "DEFER-", QUESTION: "Q-", FOLLOWUP: "F"}
 ALIASES = {"R": RECORD, "I": IDEA, "P": PASS, "B": BUILD, "M": MILESTONE, "D": DEFERRED, "Q": QUESTION}
+TYPE_ALIASES = {"spec": "brief", "capabilities": "pieces"}
 
 RECORD_TYPES = tuple(RECORD_LEADS)
 ITEMS = tuple(ITEM_LEADS)
@@ -20,6 +21,8 @@ class Id(NamedTuple):
     sub: int | None = None
     q: int | None = None
     record: str | None = None
+
+def record_type(name): return TYPE_ALIASES.get(name, name)
 
 def record(n, rtype):
     if rtype not in RECORD_LEADS: raise ValueError(f"{rtype!r} is not a record type")

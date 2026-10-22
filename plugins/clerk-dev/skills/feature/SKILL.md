@@ -1,7 +1,7 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, capabilities, plans, and specs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
-argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | spec <piece> | list | import <file>]"
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, pieces, plans, and briefs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the brief for", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
+argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | brief <piece> | list | import <file>]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 ---
 
@@ -23,11 +23,11 @@ Records are the user's thinking, written down. Draft them from the conversation
 in the user's terms, keep them short, and show the user what you wrote in a line
 or two (id, title, path), not the whole record. Never commit them.
 
-None of this is a required sequence. A small change may have one spec or no
+None of this is a required sequence. A small change may have one brief or no
 records at all; a large one may go round brainstorm and design several times.
 Do what the user asks, and suggest a next record only when it is clearly due
 (several brainstorms converging, a design with no decisions behind it, a plan
-with a piece that has no spec).
+with a piece that has no brief).
 
 ## Setup first
 
@@ -91,28 +91,28 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   new choice changes an earlier one, `--supersedes DEC-<n>` and restate it ("When
   a record changes another" below); never edit the old one. When the user drops one, `records.py discard <worktree> DEC-<n> --note
   "<why>"`.
-- **capabilities**: `--from` the design. Each piece names its repository and its
+- **pieces**: `--from` the design. Each piece names its repository and its
   dependencies.
 - **plan**: order across pieces and repositories, cut into milestones: each
-  numbered step is one milestone, naming its pieces, its spec, and the point
+  numbered step is one milestone, naming its pieces, its brief, and the point
   where it is done (what works, and what a review can check). Building works
   milestone by milestone, so a plan without them is not finished. Replanning is
   a new plan with `--supersedes`.
-- **spec**: one per piece, `--repo` the repository it is built in, `--from` the
-  capabilities or design record. Before writing Approach, read the code the
+- **brief**: one per piece, `--repo` the repository it is built in, `--from` the
+  pieces or design record. Before writing Approach, read the code the
   piece will touch: the patterns to follow, the helpers to reuse or extend,
   and what to refactor first (the Baseline section; always filled, "Clean"
   with a reason when nothing needs it). Keep
   Requirements numbered and checkable, and Open items as checkboxes; reviews
-  read both. When the piece changes the behavior of a spec that is already
-  built, Approach names that spec and what changes ("When a record changes
-  another" below). Any other list in a spec uses plain numbers, cited as
+  read both. When the piece changes the behavior of a brief that is already
+  built, Approach names that brief and what changes ("When a record changes
+  another" below). Any other list in a brief uses plain numbers, cited as
   BRIEF-33.4, never with an id prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a
   record type's prefix such as DEC, or the older letters I, D, B, M, P, R),
-  which clash with the plugin's ids. Every implementer works from the spec, so draft it with a
+  which clash with the plugin's ids. Every implementer works from the brief, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
-  give it the spec template in `records.md`, the records the piece builds on
-  (its capabilities or plan row, the design, the decisions of its area, and
+  give it the brief template in `records.md`, the records the piece builds on
+  (its pieces or plan row, the design, the decisions of its area, and
   the guidance file `records.py guidance <worktree> --area <area> --out
   <scratchpad>/guidance-<area>.md` writes), the reference code to
   port by path, and the output path `records.py new` gave; ask it to write the
@@ -137,15 +137,15 @@ changes several, give it the one it mostly restates, restate the others in the
 body, and discard each of them with `records.py discard <worktree> <id> --note
 "restated in <new id>"`.
 
-When the change touches one part of a large design or capabilities record,
+When the change touches one part of a large design or pieces record,
 either restate that whole record, or first split the settled part into its own
 decision and supersede that.
 
-Carve-out: a spec whose piece is built is history and is not restated. A spec
+Carve-out: a brief whose piece is built is history and is not restated. A brief
 is built when the build log shows all its requirements done or dropped;
-`records.py digest` marks each active spec "built: yes" or "built: no". A later
-spec that changes a built spec's behavior says so in its Approach, naming that
-spec and what changes; the overview treats that as consistent.
+`records.py digest` marks each active brief "built: yes" or "built: no". A later
+brief that changes a built brief's behavior says so in its Approach, naming that
+brief and what changes; the overview treats that as consistent.
 
 A record created earlier in this session may be edited freely. One from an
 earlier session is not rewritten: write a new record that supersedes it, or, for
@@ -174,7 +174,7 @@ and a proposal first for anything wider). Say in one line what was recorded.
 "What guidance have I given", "the rules for the harness": `records.py
 guidance <worktree> [--area <area>]`.
 
-When the last open question of a set put to the user is settled (a spec's or
+When the last open question of a set put to the user is settled (a brief's or
 plan's open questions, or any other skill's discussion), look back over the
 whole discussion as "Lessons from a discussion" in `skills/review/tracking.md`
 describes, before the next step starts.
@@ -208,12 +208,12 @@ to a `general-purpose` subagent on `model: fable`, effort `high` (finding the
 gaps and disagreements across every record is the part that needs it; falling back to Opus at the same effort as Model fallback in the `review` skill describes), with the path of `records.md` (for the format
 and rules) and the output path `<hub>/.clerk-dev/feature/overview.md`, asking it
 to write the overview from the digest alone, citing ids for every statement.
-The digest marks each spec built or not and lists every idea with its status;
+The digest marks each brief built or not and lists every idea with its status;
 the overview names an adopted idea by the record it became, and never calls
 one missing. Disagreements are only recording defects (a later record that
 should have superseded an earlier one: name both, and say the later one is to
-be restated in full) or real conflicts for the user to decide; a built spec and
-a later spec that names its change in Approach are consistent, not a
+be restated in full) or real conflicts for the user to decide; a built brief and
+a later brief that names its change in Approach are consistent, not a
 disagreement.
 When it returns, run `records.py stamp-overview <worktree>`, and tell the user
 the path. Its report cites bare ids; run `records.py names` on them and gloss
@@ -226,7 +226,7 @@ describes, then refresh again so the overview no longer lists them.
 ## Rolling up
 
 Decisions are written one at a time, so the synthesis records (designs, plans,
-capabilities) fall behind unless something prompts them. After writing records,
+pieces) fall behind unless something prompts them. After writing records,
 run `records.py suggest <worktree>` and mention at most two of its suggestions,
 one line each, as offers: an area with several decisions and no design (roll
 them up into a design that cites them), a design older than several decisions
@@ -253,7 +253,7 @@ before"; say they are superseded when quoting them.
 
 Asked to import a `Notes-*.md`, `Spec-*.md`, or similar file: read it, pick the
 type it mostly is (notes are usually a brainstorm, sometimes a design with
-decisions in it; a spec is a spec), create the record with the file's date
+decisions in it; a spec is a brief), create the record with the file's date
 noted in its Context section and an area from the file's subject (none for the
 broad one), and copy the content into the template's sections
 without rewriting the substance. When a notes file holds several settled

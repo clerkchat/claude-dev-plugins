@@ -12,7 +12,7 @@ and verifies everything afterward, so report what you actually found and let the
 pipeline do the filtering.
 
 When the prompt says `TASK: design-check`, you are checking a feature record (a
-design, plan, capabilities, or spec record), not a diff: follow Design mode at
+design, plan, pieces, or brief record), not a diff: follow Design mode at
 the end of this protocol and your agent's `## Design mode` section. Of the
 sections between here and there, Reading budget, Discovery fallback, Paths, and
 Conduct still apply, and so do the meanings of `CONTEXT`, `GUIDANCE`, and
@@ -72,11 +72,11 @@ The orchestrator's prompt gives you:
   the other repositories and worktrees of this job; use them to say which
   repository a fix needs a follow-up in.
 - `BAR`: `final` on a final pass, else absent. See Final pass bar below.
-- `DOCS`: paths of work-tracking documents (specs, notes, plans) selected for
+- `DOCS`: paths of work-tracking documents (briefs, specs, notes, plans) selected for
   this change, or `none`. Most lenses ignore these; spec-conformance and
   completeness read them.
-- `PASS`: present when this review is the narrow check of one pass (see the
-  `pass` skill): its focus and the piece's spec record. The diff is that pass's
+- `PASS`: present when this review is the pass review of one pass (see the
+  `pass` skill): its focus and the piece's brief record. The diff is that pass's
   commits only. Judge them against your lens as usual, but do not report
   requirements of other pieces or work that belongs to a different focus; other
   passes and the full review cover those. Your agent's `## Pass mode` section
@@ -355,8 +355,8 @@ Every path you write, in findings and in prose, is repo-relative with no leading
 
 ## Design mode
 
-With `TASK: design-check` you check a feature record (a design, plan, capabilities, or
-spec record; see `skills/feature/records.md`) before the code exists. Your
+With `TASK: design-check` you check a feature record (a design, plan, pieces, or
+brief record; see `skills/feature/records.md`) before the code exists. Your
 agent's `## Design mode` section lists what your lens asks of a design; apply
 it, with the same depth you bring to a diff.
 
@@ -364,7 +364,7 @@ Inputs:
 
 - `RECORDS`: paths of the records to check.
 - `SUPPORTING`: paths of records they build on or cite (decisions, the design a
-  spec details), or `none`. Read them to know what is already settled; do not
+  brief details), or `none`. Read them to know what is already settled; do not
   check them.
 - `REPO`, `CONTEXT`, `GUIDANCE`: the repository the records are about, its
   review context, and its guidance file, as in review. When the records span
@@ -395,7 +395,7 @@ Weight each question:
 - `settle-first`: building before it is answered risks rework, a breaking
   contract, data loss, or a security, tenancy, or side-effect problem.
 - `worth-settling`: the answer shapes the implementation; it can be settled
-  during the spec or the first pass.
+  during the brief or the first pass.
 - `note`: a consideration to keep in mind; no decision is needed now.
 
 Output one fenced block, then a `Coverage` section of one or two sentences:

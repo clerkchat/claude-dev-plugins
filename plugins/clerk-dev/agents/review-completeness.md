@@ -107,15 +107,15 @@ item.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
-- Does every requirement have somewhere it gets built, and every capability a
-  spec or a place in the plan?
+- Does every requirement have somewhere it gets built, and every piece a
+  brief or a place in the plan?
 - What wiring does the design imply but not list: registrations, migrations,
   feature gates, permissions, admin screens, docs, generated clients?
 - Are the open items and open questions of the records tracked, or silently
-  dropped between brainstorm, design, and spec?
+  dropped between brainstorm, design, and brief?
 - Is the piece's end defined: what must be true for it to be done?
 
 ## Pass mode
@@ -123,7 +123,7 @@ the review protocol):
 What the author does in a pass that uses this lens (the `pass` skill reads
 this section; reviewers ignore it):
 
-- Work through the piece's spec: every requirement built, every open item it
+- Work through the piece's brief: every requirement built, every open item it
   addresses ticked or still listed.
 - Add the wiring the change needs: registrations, module imports, migrations,
   permissions, feature gates, docs, generated clients.

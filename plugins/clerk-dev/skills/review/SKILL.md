@@ -266,11 +266,11 @@ Waves take minutes, so say something while one runs:
 Fable is used for these jobs only: the cross-repository check, verifying
 findings of severity `blocker` (and `major` ones on a final pass, and every
 verifier in `--deep` mode), the `security` and `tenancy` lenses of a security
-pass's narrow check (`--pass`), and a second attempt at a fix that a recheck
+pass's pass review (`--pass`), and a second attempt at a fix that a recheck
 found only partly resolved (in the `review-fix` skill). Outside the review,
-the feature, design-check, and writing-code skills use Fable for specs, the
-overview, roll-ups, settle-first lenses in design checks, foundation pieces,
-and stopped pieces' questions, all with this same fallback. Each is assigned by passing `model: fable` on the
+the feature, design-check, and writing-code skills use Fable for briefs, the
+overview, roll-ups, settle-first lenses in design checks, foundation handoffs,
+and stopped handoffs' questions, all with this same fallback. Each is assigned by passing `model: fable` on the
 invocation. Not every account has access to Fable, and access may come with its
 own usage limits, neither of which can be checked ahead of time, so:
 
@@ -356,9 +356,9 @@ need to read it unless debugging agent output.
 - `--standalone` (with a narrow target): a separate run, not added to the
   branch's review, and `.clerk-dev/latest` is left where it is.
 - `--pass PASS-<n>` (with a range target, `--standalone`, and `--lenses`): this run
-  is the narrow check of pass PASS-<n> from `.clerk-dev/passes.md` (see the `pass`
+  is the pass review of pass PASS-<n> from `.clerk-dev/passes.md` (see the `pass`
   skill). The lenses are exactly those given: no routing, triage, or quick-mode
-  cap adds or drops one. `DOCS` is only the pass's piece (its spec record), not
+  cap adds or drops one. `DOCS` is only the pass's piece (its brief record), not
   every active record, and every lens prompt gets a `PASS:` line naming the
   focus and the piece. For the security pass, the one a milestone cannot skip,
   run its `security` and `tenancy` instances with `model: fable` (see Model
@@ -728,8 +728,8 @@ it with the shipped script. Give it the target and the script path and have it:
    work-tracking selection above (the PR is still collected). Otherwise include the feature's
    active records
    (`records.py list <worktree> --active`, which reads the hub; see
-   `skills/feature/records.md`): every active spec, decision, and plan whose
-   `repo` is this repository, and the active design and capabilities records.
+   `skills/feature/records.md`): every active brief, decision, and plan whose
+   `repo` is this repository, and the active design and pieces records.
    They do not count against the eight either; brainstorms and superseded or
    discarded records are never included.
 7. Write `<run>/target.txt`: three lines, the target as given (`branch` for the

@@ -87,7 +87,7 @@ tokens per call and calls per unit of usage.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What does each prompt or tool get as input, and is its output shape enforced

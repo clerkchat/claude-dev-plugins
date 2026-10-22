@@ -14,9 +14,9 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
 | `.clerk-dev/deferred.md` | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
 | `.clerk-dev/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
-| `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, capabilities, plans, specs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
-| `.clerk-dev/passes.md` | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and narrow-check result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
-| `.clerk-dev/build.md` | this worktree's milestones (a plan row's ordered passes, required ones, skips) and delegated pieces of implementation: spec requirements covered and their status (including requirements a decision dropped from a spec), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or spec built directly by a commit); the only place requirement status lives | `build.py`, from the `writing-code` and `pass` skills | `status.py` (progress per spec, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
+| `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, pieces, plans, briefs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
+| `.clerk-dev/passes.md` | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and pass-review result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
+| `.clerk-dev/build.md` | this worktree's milestones (a plan row's ordered passes, required ones, skips) and handoffs: brief requirements covered and their status (including requirements a decision dropped from a brief), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or brief built directly by a commit); the only place requirement status lives | `build.py`, from the `writing-code` and `pass` skills | `status.py` (progress per brief, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
 
 ## Branch notes
 
@@ -62,7 +62,7 @@ Agents get these rules through one file, not this one:
 `records.py guidance <worktree> [--area <area> | --for <BRIEF-33, BRIEF-33.4, or
 BRIEF-18-1.Q-6>] [--context <review-context SKILL.md>] --out <file>` writes Purpose,
 these rules, the feature's active guidance, and the review context's Known noise
-into it, and that file is what lenses, verifiers, fixers, and implementer briefs
+into it, and that file is what lenses, verifiers, fixers, and implementer handoffs
 get as `GUIDANCE`. `--for` takes the area of the record it names; `--context`
 adds the noise.
 
@@ -179,7 +179,7 @@ Readers:
 ## Guidance from answers
 
 When the user answers a question (a design question, an implementer's stopped
-piece, a finding to discuss or a fix to adjust, a follow-up to refine, a pass
+handoff, a finding to discuss or a fix to adjust, a follow-up to refine, a pass
 item), the answer often carries guidance: a rule that would settle other
 choices the same way, beyond this one. Record it without being asked, where
 the routing below sends it, and say in one line what the rule says and how far it reaches, as "Talking to
@@ -212,9 +212,9 @@ fits:
    - the team: the plugin itself, such as the `writing-code` skill; propose it
      and ask first.
 2. Does it describe what the product does or must do? A requirement in the
-   spec, or a decision when it was chosen among alternatives.
+   brief, or a decision when it was chosen among alternatives.
 3. Does it fix the shape of something between components (a type, a route, an
-   event, a table another part reads)? A decision, or the spec's Contracts.
+   event, a table another part reads)? A decision, or the brief's Contracts.
 4. Does it say what may change on this branch, or how carefully? Purpose, as a
    dated line under "New in this branch" or "Deployed code it changes on
    purpose".
@@ -254,18 +254,18 @@ naming findings in generated files. Say if it reaches the whole feature."
 
 ### Lessons from a discussion
 
-A discussion is a set of questions put to the user together: a spec's or
+A discussion is a set of questions put to the user together: a brief's or
 plan's open questions, a design check's walk, the triage's discussions, a
-stopped piece with several questions, a pass's open items. When its last
+stopped handoff with several questions, a pass's open items. When its last
 question is settled, and before the next step starts (a build, the next
-piece, the next pass), look back over the whole discussion once for guidance
+handoff, the next pass), look back over the whole discussion once for guidance
 no single answer stated. This is the only time it happens; the rules above
 still record what an answer states as it comes.
 
 1. Gather the candidates. Look for:
    - reasons the user gave that would decide other cases ("both humans and
      agent-swarm read these reports");
-   - choices against a draft's or a brief's recommendation, and what made the
+   - choices against a draft's or a decision summary's recommendation, and what made the
      recommendation wrong;
    - guidance or decisions cited during the discussion, and whether the outcome
      honored them or showed their limit (a rule cited against the option the
@@ -311,8 +311,8 @@ inventory stays out of it unless they ask.
   never the file, the record kind, a script, or the steps taken. Routine
   writes (stamps, statuses, logs, progress, checkpoint notes that only restate
   the conversation) go unmentioned.
-- Use the plugin's vocabulary (pass, piece, milestone, record, item, lens,
-  area, overview) only when the user needs it to steer the work, and then in
+- Use the plugin's vocabulary (pass, piece, brief, handoff, milestone, record,
+  item, lens, area, overview) only when the user needs it to steer the work, and then in
   plain words ("the edge-cases work on the voice runtime", not "PASS-10"). If the
   user has to ask what a label means, the message should not have needed it.
 - Drop an id whenever it adds nothing to what the user will do next. Keep it
@@ -346,11 +346,11 @@ id after it ("the chunk plan (PLAN-31) allows independent improvements as PRs
 ahead of the core chunk (C)"), or follow the id with a gloss of two to six
 words ("PLAN-31 (the chunk plan)"). Later mentions in the same message may be
 bare. This covers record ids (PLAN-31, DEC-19), requirements (BRIEF-52.19),
-checks and their questions (BRIEF-30-1.Q-12), plan pieces (S, C), build pieces
-and milestones (BUILD-15, MILE-1), passes (PASS-3), follow-ups (F3), ideas
+checks and their questions (BRIEF-30-1.Q-12), plan pieces (S, C), handoffs
+and milestones of the build log (BUILD-15, MILE-1), passes (PASS-3), follow-ups (F3), ideas
 (IDEA-7), deferred items (DEFER-6), and finding numbers ("finding 12 (the
 unbounded export query)"). A record's prefix names its type (IDEAS brainstorm,
-DESIGN, DEC decision, GUIDE guidance, PIECES capabilities, PLAN, BRIEF spec)
+DESIGN, DEC decision, GUIDE guidance, PIECES, PLAN, BRIEF)
 but is not a gloss: it still needs one. Older ids (R31, B15, M1, P3, I7, D6,
 Q3, R52.19) still appear in files and resolve to the same things; cite them
 in the new form.
@@ -412,7 +412,7 @@ done as written):
   "<what>" --from <source> --path "<what was done for now>" --open "<what is
   left>" [--revisit "<when to look again>"]`, where the source is the finding
   (`<run> N`), question (`BRIEF-18-1.Q-6`), follow-up (`F3`), pass item (`PASS-3.4`),
-  piece (`BUILD-9`), or "this session". Then set the source's status to `deferred`
+  handoff (`BUILD-9`), or "this session". Then set the source's status to `deferred`
   with its Outcome naming the new DEFER id: `render-report.py --set N=deferred:DEFER-3`
   for a finding, `items.py status <file> Q-3 deferred --ref DEFER-3` for a design
   question, `followups.py close <worktree> F3 --status deferred --ref DEFER-3` for a

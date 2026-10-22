@@ -66,7 +66,7 @@ check the client configuration before reporting.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - What does each new request, job, or call hold in memory, and what bounds it

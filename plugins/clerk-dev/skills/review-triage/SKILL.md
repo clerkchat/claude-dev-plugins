@@ -143,7 +143,7 @@ and say 'go through the discussions'."
 The list is every finding whose instruction is `discuss` and whose status is
 still open, in number order. Fix the list when the pass starts; its length is
 the pass total. Take them one at a time, and hold only the current one in mind.
-Sort them and brief the borderline ones when the pass starts, as "Several
+Sort them and prepare the borderline ones when the pass starts, as "Several
 items waiting" in the `deliberate` skill describes.
 
 Open each presentation with a progress line, before the finding's number and

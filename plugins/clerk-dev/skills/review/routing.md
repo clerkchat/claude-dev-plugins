@@ -116,7 +116,7 @@ risks.
 1. By record type, at most three, in this order of preference:
    - a record that touches existing code: `tech-debt` (refactor first, and
      what to reuse);
-   - a spec: `completeness`, `spec-conformance`;
+   - a brief: `completeness`, `spec-conformance`;
    - records spanning repositories (see the `design-check` skill): `contracts`,
      `cross-repo`;
    - a record that introduces new concepts or modules: `design`,

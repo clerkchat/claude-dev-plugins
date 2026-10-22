@@ -67,7 +67,7 @@ narrow but the operation is frequent, say so; frequency raises severity.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Which new state can two requests, jobs, or consumers change at once, and what

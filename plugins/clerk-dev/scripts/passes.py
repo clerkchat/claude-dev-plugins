@@ -2,7 +2,7 @@
 """Keep a worktree's pass log, <worktree>/.clerk-dev/passes.md.
 
 A pass is a bounded stretch of writing with one focus on one piece of work,
-ending in commits and a narrow check with only the pass's lenses over only the
+ending in commits and a pass review with only the pass's lenses over only the
 pass's commits. The log holds each pass's focus, lenses, piece, mode, commit
 range, checklist, and check result. It is read strictly: a line it does not
 recognize stops the script rather than being dropped on the next write.
@@ -36,7 +36,7 @@ Entry format:
       - [-] 2. Unicode names: not applicable, names are opaque here
       - [ ] 3. Provider timeout leaves the import running (src/import.ts:88)
     - Check: pass-p3-1016; ran edge-cases, error-handling; edge-cases 2, error-handling 0
-    - Note: log item 3 once the timeout test passes   (the handoff of an open pass; status shows it)
+    - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
 import argparse, datetime, json, os, re, subprocess, sys, tempfile
 from records import load_script

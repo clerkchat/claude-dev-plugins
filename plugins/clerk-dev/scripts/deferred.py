@@ -13,7 +13,7 @@ Usage:
   deferred.py set WORKTREE DEFER-3 "Refine" [--note "..."]
 
 SRC is a finding "<run> N", a question "BRIEF-18-1.Q-6", a pass item "PASS-3.4",
-a piece "BUILD-9", or "this session".
+a handoff "BUILD-9", or "this session".
 """
 from records import load_script
 import ids

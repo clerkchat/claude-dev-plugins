@@ -85,7 +85,7 @@ review. Do not re-report single-repo findings.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Does the plan's repository order leave a working intermediate state after

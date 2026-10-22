@@ -1,6 +1,6 @@
 ---
 name: pass
-description: Write code in focused passes, one value at a time (edge cases, error handling, security, observability, DRY, and so on), each ended by a narrow check with only that pass's lenses. Use when the user says "do an edge-cases pass", "make a security pass on this", "pass for observability", "what passes does this need", "guide me through a tests pass", "check the pass", "abandon the pass", or "how are the passes doing". Not for reviewing a whole branch (that is /clerk-dev:review) or fixing review findings (review-fix).
+description: Write code in focused passes, one value at a time (edge cases, error handling, security, observability, DRY, and so on), each ended by a pass review with only that pass's lenses. Use when the user says "do an edge-cases pass", "make a security pass on this", "pass for observability", "what passes does this need", "guide me through a tests pass", "check the pass", "review the pass", "abandon the pass", or "how are the passes doing". Not for reviewing a whole branch (that is /clerk-dev:review) or fixing review findings (review-fix).
 argument-hint: "[<pass> [on BRIEF-<n> | on <paths>] [guide]] | suggest [BRIEF-<n>] | check PASS-<n> | abandon PASS-<n> | list | stats"
 allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Write, Grep, Glob
 ---
@@ -22,7 +22,7 @@ this file before going on.
 
 ## Suggesting passes
 
-"What passes does this need": find the piece (a spec record the user names or
+"What passes does this need": find the piece (a brief record the user names or
 the conversation is about, else the paths the user names, else the branch's
 changes), and suggest passes as `passes.md` describes. Show the list with one
 reason each, in a few lines. Do not start one.
@@ -30,8 +30,8 @@ reason each, in a few lines. Do not start one.
 ## Running a pass
 
 Inside a milestone (the `writing-code` skill's Milestones), the happy-path pass
-is the draft: start it, then build its pieces as that skill describes
-(delegated, logged in the build log) instead of listing items, and end it when
+is the draft: start it, then build it in handoffs as that skill describes
+(logged in the build log) instead of listing items, and end it when
 the draft is whole. The other passes run as below, one after another, with the
 milestone's stopping rules: stop for an implementer's question, for a check
 with findings rated major or blocker (`grep -cE "severity: (blocker|major)"
@@ -46,7 +46,7 @@ commit rules below.
    for uncommitted tracked files, show them and ask whether to commit them
    first or leave them out (`--leave-out`); when another pass is open, ask
    whether to end or abandon it.
-2. **List the work.** Print each lens's Pass mode text, read the piece's spec
+2. **List the work.** Print each lens's Pass mode text, read the piece's brief
    (if any) and the code the piece touches, and write what this pass will do in
    this code as items: `passes.py item <worktree> PASS-<n> "<what, with
    path:line>"`, one per change, specific enough that someone else could do it.
@@ -55,9 +55,9 @@ commit rules below.
 3. **Write.** Follow the `writing-code` skill throughout.
    - Claude mode: do the items, one coherent change per commit, delegated as
      the skill's Delegating section describes: group items that change the
-     same code into one piece, brief a `clerk-dev:implementer` per piece with
+     same code into one handoff, send a `clerk-dev:implementer` per handoff with
      the lens's Pass mode text and the items as its goal, at the model and
-     effort the piece calls for (a pass's items are usually sonnet, medium;
+     effort the handoff calls for (a pass's items are usually sonnet, medium;
      prep refactors that reshape shared code, opus, high), review, run the
      tests, and commit each. Items of a few lines are done inline. Mark each
      item as it lands
@@ -71,7 +71,7 @@ commit rules below.
 4. **End.** `passes.py end <worktree> PASS-<n>`. It refuses while tracked changes
    are uncommitted; it reports items not done and whether the pass made no
    commits (then there is nothing to check; say so and stop).
-5. **Check.** Get the range with `passes.py range <worktree> PASS-<n>` (it refuses
+5. **Check.** The pass review. Get the range with `passes.py range <worktree> PASS-<n>` (it refuses
    when the pass was rebased; offer to abandon it or re-anchor by hand). Then
    run the review headless, so its orchestration stays out of this session:
 
@@ -88,7 +88,7 @@ commit rules below.
    --findings <lens>=<n>,...` (or `--result empty|error`). It exits non-zero
    when a requested lens did not run; say which.
 6. **Report** in a few lines: the commits, items done and not applicable, and
-   the check's findings by lens with the run label. The pass ends here.
+   the pass review's findings by lens with the run label. The pass ends here.
    Findings are fixed through `review-fix` with the run label ("fix 3
    <label>") or `review-triage`; never start fixing them, or a second pass, on
    your own. After the report, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
@@ -97,7 +97,7 @@ commit rules below.
 
 When an item needs a choice, or an implementer stops on one, weigh it with
 the `deliberate` skill before asking. Put the answer in the
-implementer's brief, and when it changes what the pass does, in its items
+implementer's handoff, and when it changes what the pass does, in its items
 (`passes.py item`, or `passes.py done ... --na "<why>"`).
 
 When the user's answer carries guidance (a rule beyond this case), or says
@@ -111,12 +111,12 @@ files this pass changed, never anything under `.clerk-dev/` or files left out,
 and write messages that stand alone, describing the change ("Return early when
 the import has no contacts"), never the pass or its id. Never push or amend; a
 pass's range depends on its commits staying put. A commit that builds a record
-the pass's brief names is logged as "The build log" in the `writing-code`
+the pass's handoff names is logged as "The build log" in the `writing-code`
 skill describes.
 
 ## Other requests
 
-- "Check the pass": steps 5 and 6 for an ended pass.
+- "Check the pass", "review the pass": steps 5 and 6 for an ended pass.
 - "Abandon the pass": `passes.py abandon <worktree> PASS-<n> --note "<why>"`. Its
   commits stay; say so.
 - "List the passes", "how are the passes doing": `passes.py list` or

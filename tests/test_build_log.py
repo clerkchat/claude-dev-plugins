@@ -120,13 +120,13 @@ class BuiltRefusalTests(FeatureRepoCase):
         self.assertIn(f"BUILD-1 already logs DEC-1 as built in {self.c1}", out)
         self.assertEqual(self.repo.log_text(), before)
 
-    def test_a_whole_spec_that_already_has_pieces(self):
+    def test_a_whole_brief_that_already_has_handoffs(self):
         self.repo.build_ok("add", "Five piece", "--spec", "R5", "--reqs", "1")
         self.repo.build_ok("done", "BUILD-1", "--commit", self.c4)
         code, out = self.repo.build("built", "R5", "--commit", self.c4)
         self.assertNotEqual(code, 0)
         self.assertIn(
-            "BRIEF-5 already has pieces in the build log (BUILD-1); log its remaining requirements as pieces instead",
+            "BRIEF-5 already has handoffs in the build log (BUILD-1); log its remaining requirements as handoffs instead",
             out,
         )
         self.assertNotIn("Record:", self.repo.log_text())
@@ -259,9 +259,9 @@ class RelinkTests(FeatureRepoCase):
     def test_relink_by_hand_needs_both_an_entry_and_a_commit(self):
         self.assertRefusesRelink("give both an entry and --commit", "BUILD-1")
 
-    def test_relink_by_hand_refuses_an_open_piece(self):
-        self.repo.build_ok("add", "Open piece", "--spec", "R5", "--reqs", "2")
-        self.assertRefusesRelink("BUILD-6 is briefed, not done", "BUILD-6", "--commit", "HEAD")
+    def test_relink_by_hand_refuses_an_open_handoff(self):
+        self.repo.build_ok("add", "Open handoff", "--brief", "R5", "--reqs", "2")
+        self.assertRefusesRelink("BUILD-6 is handed-off, not done", "BUILD-6", "--commit", "HEAD")
 
     def test_relink_by_hand_refuses_an_unknown_entry(self):
         code, out = self.repo.build("relink", "BUILD-99", "--commit", "HEAD")

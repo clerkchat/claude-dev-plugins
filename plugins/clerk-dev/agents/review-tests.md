@@ -69,7 +69,7 @@ style within test files unless it hides a failure.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - How will each requirement be tested, and at what level (unit, integration,

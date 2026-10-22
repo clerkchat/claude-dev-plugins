@@ -10,6 +10,7 @@ how it was broken down and planned. They live in the hub worktree, at
   records/
     001-brainstorm-<slug>.md
     002-decision-<slug>.md
+    003-brief-<slug>.md
     ...
   checks/
     BRIEF-13-1.md             a design check of BRIEF-13 (the design-check skill)
@@ -38,22 +39,24 @@ Record bodies and the overview carry diagrams as "Diagrams" in
   is not rewritten: a revision is a new record with `--supersedes`. The only
   later changes are its status (`discard`, `reactivate`, or superseded by a new
   record), which the script makes.
-  One exception: a spec's Open items checklist tracks progress, so ticking an
+  One exception: a brief's Open items checklist tracks progress, so ticking an
   item or adding one is fine at any time.
 - **Restate in full.** A record that changes any part of an active record
   supersedes it and states the whole current version: what still holds, and the
   change. No record amends another in part ("as PLAN-8, except ..."). When a change
-  touches one part of a large design or capabilities record, restate that
+  touches one part of a large design or pieces record, restate that
   record, or first split the settled part into its own decision and supersede
-  that. A spec whose piece is built (every requirement done or dropped in the
-  build log) is history and is not restated; a later spec that changes its
+  that. A brief whose piece is built (every requirement done or dropped in the
+  build log) is history and is not restated; a later brief that changes its
   behavior names it and the change in its Approach. The procedure, including
   the check before writing, is "When a record changes another" in
   `skills/feature/SKILL.md`.
 - **Ids.** One sequence per feature, whatever the type, and each id is its
   type's prefix and its number: IDEAS-1 (brainstorm), DESIGN-2, DEC-3
-  (decision), GUIDE-4 (guidance), PIECES-5 (capabilities), PLAN-6, BRIEF-7
-  (spec). The number alone finds the record, so older ids (R7) still resolve.
+  (decision), GUIDE-4 (guidance), PIECES-5 (pieces), PLAN-6, BRIEF-7
+  (brief). The number alone finds the record, so older ids (R7) still resolve.
+  Older records may say `type: spec` or `type: capabilities`: they read as a
+  brief and a pieces record, and are not rewritten.
   The id is the handle in conversation ("DEC-3"), in other records (`from:`),
   and in items that link to a decision.
 - **Status.** `active`, `superseded` (by the record named in `superseded_by`),
@@ -73,9 +76,9 @@ Record bodies and the overview carry diagrams as "Diagrams" in
   share one. The area is a label, not content: retag a record (`records.py
   tag`) or rename an area (`records.py rename-area`) whenever the split turns
   out different. An area is not a piece: an area is a part of the problem you
-  think about, a piece a unit of work you build and review; a spec has both.
+  think about, a piece a unit of work you build and review; a brief has both.
 - **From.** The records this one builds on: the brainstorms a design settles,
-  the design a capabilities record breaks down, the capability a spec details.
+  the design a pieces record breaks down, the piece a brief details.
 - **Short over complete.** Each record holds what a reader needs months later to
   understand the choice, and no more. Leave out a template section with nothing
   to say rather than filling it.
@@ -143,7 +146,7 @@ What the design deliberately leaves out.
 
 ### decision
 
-One choice, with what was rejected and why. The strongest record: specs,
+One choice, with what was rejected and why. The strongest record: briefs,
 reviews, and fixes defer to active decisions. To refine one, write a new
 decision that supersedes it; to drop one, discard it with a note.
 
@@ -177,7 +180,7 @@ explicit lists, never a runtime registry"). A decision settles one choice and
 records what it rejected; guidance decides the next ones. Written without
 being asked whenever an answer carries one (see "Guidance from answers" in
 `skills/review/tracking.md`). Refined by superseding, like a decision.
-Implementer briefs, lens and fixer prompts, and design checks all get the
+Implementer handoffs, lens and fixer prompts, and design checks all get the
 active guidance through the file `records.py guidance` writes, and people read
 it the same way: the branch's scope and guidance, then every active rule in
 full with its why and what it applies to. Superseded and discarded rules show
@@ -206,14 +209,14 @@ codes; any new extension point.
 BRIEF-30-1.Q-12, answered 2026-10-16.
 ```
 
-### capabilities
+### pieces
 
-The breakdown of a design (`from:`) into pieces that can each be specified,
-built, and reviewed on their own. Each piece names its repository and what it
+The breakdown of a design (`from:`) into pieces that can each get a brief and
+be built and reviewed on their own. Each piece names its repository and what it
 depends on.
 
 ```markdown
-# PIECES-7. Report exports: capabilities
+# PIECES-7. Report exports: pieces
 
 1. **Export job** (api): create an export and run it in a worker. Depends on
    nothing.
@@ -225,7 +228,7 @@ depends on.
 
 Order and sequencing across pieces and repositories, including which repository
 goes first and where work is expected to loop back. Each numbered step is a
-milestone: its pieces, its spec, and what is true when it is done. The
+milestone: its pieces, its brief, and what is true when it is done. The
 `writing-code` skill builds one milestone at a time, so every step needs that
 done line, which may say "deferred items reviewed". Replanning writes a new
 plan that supersedes the old one.
@@ -233,10 +236,10 @@ plan that supersedes the old one.
 ```markdown
 # PLAN-8. Report exports: plan
 
-1. api: pieces 1 and 2 (PIECES-7, spec BRIEF-9), behind the `report-exports` flag.
+1. api: pieces 1 and 2 (PIECES-7, brief BRIEF-9), behind the `report-exports` flag.
    Done: an export can be started and polled with the flag on; api review;
    deferred items reviewed.
-2. web: piece 3 (spec BRIEF-10); expect contract changes back to api from this
+2. web: piece 3 (brief BRIEF-10); expect contract changes back to api from this
    exploration. Done: the dialog exports a report end to end.
 3. Feature review across api and web.
 
@@ -245,12 +248,13 @@ plan that supersedes the old one.
 - The dialog may need progress, not just done/not done, which reopens piece 2.
 ```
 
-### spec
+### brief
 
-Detailed implementation notes for one piece (`from:` the capabilities or
-design record). Reviews read active specs: the spec-conformance lens checks the
-change against Requirements, and the completeness lens checks Open items, so
-keep both sections and keep requirements checkable.
+Detailed implementation notes for one piece, written for whoever builds it
+(`from:` the pieces or design record). Reviews read active briefs: the
+spec-conformance lens checks the change against Requirements, and the
+completeness lens checks Open items, so keep both sections and keep
+requirements checkable.
 
 ```markdown
 # BRIEF-9. Export status endpoint
@@ -277,7 +281,7 @@ to drop. Or "Clean: <why>" when the existing code already fits.
 ## Approach
 
 Where the code goes, the patterns to follow, and the existing code and shared
-library helpers to reuse or extend (with paths). Name any built spec whose
+library helpers to reuse or extend (with paths). Name any built brief whose
 behavior this one changes, and what changes.
 
 ## Contracts
@@ -291,11 +295,11 @@ being.
 - [ ] Decide the download URL lifetime.
 ```
 
-Lists inside a spec other than Requirements and Open items use plain numbers,
-cited as BRIEF-9.4 (spec, then number). Never prefix list items with an id
+Lists inside a brief other than Requirements and Open items use plain numbers,
+cited as BRIEF-9.4 (brief, then number). Never prefix list items with an id
 prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a record type's prefix such as
 DEC or BRIEF, or the older single letters I, D, B, M, P, R): those are the
-plugin's ids for ideas, follow-ups, deferred items, build pieces, milestones,
+plugin's ids for ideas, follow-ups, deferred items, handoffs, milestones,
 passes, questions, and records.
 
 ## Ideas
@@ -310,7 +314,7 @@ checkbox list (IDEA-1, IDEA-2, ...) kept by `records.py idea`, `adopt`, `drop`, 
   again: a trigger rather than a date ("after the core lands", "if exports
   get slow"). An area when it belongs to one; inherited from its `from`
   record otherwise.
-- **Adopted** (fixed): it became a record (a brainstorm, a decision, a spec,
+- **Adopted** (fixed): it became a record (a brainstorm, a decision, a brief,
   or a piece of the plan); Outcome names the record.
 - **Dropped** (wont-fix): it will not be done; Outcome says why.
 
@@ -355,12 +359,12 @@ them and the decisions behind each part (DESIGN-30; DEC-21, DEC-22).
 
 ## Plan
 
-The order of work, from plans, capabilities, and decisions that set order,
+The order of work, from plans, pieces records, and decisions that set order,
 citing them. When pieces depend on each other in more than a straight line,
 start with a dependency graph in a code block. Then one row per piece, in
 order, so it can be skimmed: the piece, its repository, its branch or worktree
 when the records name one, what it branches from, what it depends on, its
-spec, and how far it is built (from the digest's Build progress). Ordering
+brief, and how far it is built (from the digest's Build progress). Ordering
 rules and notes that fit no row follow as a short list.
 
 ```
@@ -368,7 +372,7 @@ main ──► [C] core ──┬──► [A] assertions ──► [CA] capture
                     └──► [B] bisection
 ```
 
-| Piece | Repo | Branch | From | Depends on | Spec | Built |
+| Piece | Repo | Branch | From | Depends on | Brief | Built |
 |---|---|---|---|---|---|---|
 | C core harness | api | `feat/core` | main | nothing (DEC-19, DEC-29) | BRIEF-32 | 9 of 32; BUILD-7 stopped |
 | B bisection | api | `feat/bisection` | C | C; adds `baselineTestRunId` (DEC-22) | none | not started |
@@ -393,13 +397,13 @@ each "None." when empty:
 ### Questions
 
 Settle-first design questions first, then other open questions and open items
-in specs, one bullet each, citing the check or record.
+in briefs, one bullet each, citing the check or record.
 
 ### Gaps
 
 What the records lack: an area with decisions but no design, a piece with no
-spec that the digest does not mark built, no plan. A decision or plan step the
-digest marks built is not a gap without a spec: write it under its area as
+brief that the digest does not mark built, no plan. A decision or plan step the
+digest marks built is not a gap without a brief: write it under its area as
 built, citing the commit, and fill the Plan table's Built cell as `built,
 <sha>`.
 
@@ -411,7 +415,7 @@ superseded one; name the record that should supersede which, and say it is to
 be restated in full ("DEC-28 changes DEC-3's frozen-contract rule but does not
 supersede it; write a record superseding DEC-3 that restates it in full (DEC-3,
 DEC-28)."). A real conflict for the user to decide: records, or a record and
-active guidance, that cannot both hold. A built spec and a later spec that
+active guidance, that cannot both hold. A built brief and a later brief that
 names its change in Approach are consistent, not a disagreement.
 
 ## Parked

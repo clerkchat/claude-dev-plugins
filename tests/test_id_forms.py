@@ -56,7 +56,7 @@ class RecordsTests(OldRecordsCase):
     def test_old_records_are_listed_by_their_types_prefix(self):
         lines = self.records("list").splitlines()
         self.assertTrue(lines[0].startswith("DEC-1 decision: Decision one"), lines)
-        self.assertTrue(lines[1].startswith("BRIEF-2 spec: Spec two"), lines)
+        self.assertTrue(lines[1].startswith("BRIEF-2 brief: Spec two"), lines)
 
     def test_any_form_of_the_number_finds_the_record(self):
         want = self.record_file("R2.md")
@@ -207,10 +207,10 @@ class BuildLogTests(TempCase):
         )
 
     def test_a_new_entry_follows_the_old_numbers_in_the_new_form(self):
-        out = self.repo.build_ok("add", "Two two", "--spec", "brief2", "--reqs", "BRIEF-2.2")
-        self.assertEqual(out, "BUILD-2 briefed: BRIEF-2 requirements 2")
-        self.assertIn("- [ ] BUILD-2. Two two\n  - Spec: BRIEF-2\n", self.repo.log_text())
-        self.assertIn("- [x] B1. Two one\n  - Spec: R2\n", self.repo.log_text())
+        out = self.repo.build_ok("add", "Two two", "--brief", "brief2", "--reqs", "BRIEF-2.2")
+        self.assertEqual(out, "BUILD-2 handed off: BRIEF-2 requirements 2")
+        self.assertIn("- [ ] BUILD-2. Two two\n  - Brief: BRIEF-2\n", self.repo.log_text())
+        self.assertIn("- [x] B1. Two one\n  - Brief: R2\n", self.repo.log_text())
 
     def test_old_and_new_entries_count_toward_one_spec(self):
         self.repo.build_ok("add", "Two two", "--spec", "R2", "--reqs", "R2.2")
@@ -228,7 +228,7 @@ class BuildLogTests(TempCase):
     def test_a_new_milestone_cites_the_plan_step_in_the_new_form(self):
         out = self.repo.build_ok("milestone", "--step", "r3.1", "--passes", "edge-cases")
         self.assertEqual(out, "MILE-2 planned from PLAN-3.1: edge-cases")
-        self.assertIn("- [ ] MILE-2. Piece one, spec R2\n  - Spec: BRIEF-2\n  - Plan: PLAN-3.1\n", self.repo.log_text())
+        self.assertIn("- [ ] MILE-2. Piece one, spec R2\n  - Brief: BRIEF-2\n  - Plan: PLAN-3.1\n", self.repo.log_text())
 
     def test_a_pass_on_the_spec_in_either_form_counts_for_the_milestone(self):
         write_file(

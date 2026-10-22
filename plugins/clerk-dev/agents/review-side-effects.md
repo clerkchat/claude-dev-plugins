@@ -79,7 +79,7 @@ fail-closed sandbox you verified.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Which steps send messages, place calls, charge money, notify people, or

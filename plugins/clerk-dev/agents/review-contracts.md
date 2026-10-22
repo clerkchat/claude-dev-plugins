@@ -77,7 +77,7 @@ consistently across both sides are not findings.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - Which contracts does the design add or change: routes, DTOs, events, job

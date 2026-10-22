@@ -60,7 +60,7 @@ rarely need scaling findings. Note them under Coverage if at all.
 
 ## Design mode
 
-Asked of a design, plan, capabilities, or spec record (see Design mode in
+Asked of a design, plan, pieces, or brief record (see Design mode in
 the review protocol):
 
 - At a hundred times today's volume, which step breaks first?

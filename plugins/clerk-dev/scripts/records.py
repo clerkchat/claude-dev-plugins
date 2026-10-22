@@ -2,7 +2,7 @@
 """Manage a feature's records, <hub worktree>/.clerk-dev/feature/.
 
 A feature's records are point-in-time documents: brainstorms, designs,
-decisions, capabilities, plans, and specs. Each is one Markdown file under
+decisions, pieces, plans, and briefs. Each is one Markdown file under
 records/ with YAML-like frontmatter, numbered on one sequence (IDEAS-1,
 DESIGN-2, DEC-3, ...) so any record can be cited by id. A record is written
 once; afterwards only its status changes, and a revision is a new record that
@@ -139,10 +139,11 @@ def records(d):
     types = types_of(rs)
     return [cited_as(r, types) for r in rs]
 
-def types_of(rs): return {ids.number(r["id"]): r["type"] for r in rs if r.get("type") in TYPES}
+def types_of(rs): return {ids.number(r["id"]): ids.record_type(r["type"]) for r in rs if ids.record_type(r.get("type")) in TYPES}
 
 def cited_as(r, types):
-    return {**r, "file_id": r["id"], "id": ids.canonical(r["id"], types), **{k: ids.rewrite(r[k], types) for k in CITING if r.get(k)}}
+    typed = {"type": ids.record_type(r["type"])} if r.get("type") else {}
+    return {**r, **typed, "file_id": r["id"], "id": ids.canonical(r["id"], types), **{k: ids.rewrite(r[k], types) for k in CITING if r.get(k)}}
 
 def resolver(rs):
     types = types_of(rs)
@@ -196,8 +197,8 @@ def check_path(d, name):
 
 def slug(s): return re.sub(r"[^a-z0-9]+", "-", s.lower())[:50].strip("-") or "untitled"
 
-GIST_SECTION = {"decision": "Decision", "guidance": "Rule", "spec": "Goal", "design": "Shape", "brainstorm": "Leaning"}
-TYPE_ORDER = ("guidance", "design", "capabilities", "plan", "spec", "decision", "brainstorm")
+GIST_SECTION = {"decision": "Decision", "guidance": "Rule", "brief": "Goal", "design": "Shape", "brainstorm": "Leaning"}
+TYPE_ORDER = ("guidance", "design", "pieces", "plan", "brief", "decision", "brainstorm")
 
 LIST_RE = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
 
@@ -440,10 +441,6 @@ def load_script(name):
     return m
 
 def names(wt, wanted):
-    """A short name for each id or code, for glossing it in conversation:
-    records (R31), requirements (R52.19), checks and their questions
-    (R30-1, R30-1.Q12), plan pieces (C), ideas (I7), pieces and milestones
-    of the build log (B15, M1), passes (P3), and follow-ups (F3)."""
     d = fdir(wt); recs = {ids.number(r["id"]): r for r in records(d)}
     pieces = plan_pieces(d)
     here = os.path.abspath(wt)
@@ -477,7 +474,7 @@ def names(wt, wanted):
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
             elif kind in (ids.BUILD, ids.MILESTONE):
                 e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
-                if e: name = ("milestone: " if kind == ids.MILESTONE else f"piece for {e['f']['Record']}: " if e["f"].get("Record") else "piece: ") + e["title"]
+                if e: name = ("milestone: " if kind == ids.MILESTONE else f"handoff for {e['f']['Record']}: " if e["f"].get("Record") else "handoff: ") + e["title"]
             elif kind == ids.PASS:
                 e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if ids.same(e["id"], X)), None)
                 if e: name = f"pass: {e['title']}"
@@ -535,14 +532,14 @@ def suggestions(d):
             newest = max(des, key=lambda x: ids.number(x["id"]))
             later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"])]
             if len(later) >= 3: out.append(f"{name}: design {newest['id']} predates {len(later)} active decisions ({', '.join(later)}); supersede it with one that includes them.")
-    plans = [r for r in live if r.get("type") in ("plan", "capabilities")]
+    plans = [r for r in live if r.get("type") in ("plan", "pieces")]
     planlike = [r for r in live if r.get("type") == "decision" and re.search(r"\b(chunks|ordering|order of|sequenc\w*|dependencies|phases|milestones|pieces|plan|roadmap|breakdown)\b", r.get("title", ""), re.I)]
     if not plans:
         if planlike:
             cited = ", ".join(r["id"] for r in planlike)
-            out.append(f"No plan yet, but {cited} set pieces or their order; file a plan (or capabilities) record from {'them' if len(planlike) > 1 else 'it'}, so the order of work has one home.")
+            out.append(f"No plan yet, but {cited} set pieces or their order; file a plan (or pieces) record from {'them' if len(planlike) > 1 else 'it'}, so the order of work has one home.")
         if not planlike and (len({r.get('area', '') for r in live}) > 2 or len(live) >= 10):
-            out.append("No plan or capabilities record yet; write one for the order of work.")
+            out.append("No plan or pieces record yet; write one for the order of work.")
     if len(rs) >= 5:
         through, old, basis, added = overview_state(d)
         if through is None or old != basis: out.append("The overview is missing or stale; refresh it.")
@@ -615,7 +612,7 @@ def plan_lines(d, built, repo):
 def built_mark(r, built):
     if r["type"] not in load_script("build.py").BUILDABLE: return ""
     unproven = "unknown" if built.unread else "no"
-    if r["type"] == "spec": return f"; built: {'yes' if r['id'] in built.specs else unproven}"
+    if r["type"] == "brief": return f"; built: {'yes' if r['id'] in built.specs else unproven}"
     if r["type"] == "decision":
         cs = built.records.get(r["id"])
         return f"; built: yes ({', '.join(cs)})" if cs else f"; built: {unproven}"
@@ -653,9 +650,9 @@ def digest(d):
     out += ["", "# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
     out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} {idea_status(i)}" for i in ideas(d)] or ["none"]
-    out += ["", "# Open items in active specs", ""]
+    out += ["", "# Open items in active briefs", ""]
     for r in live:
-        if r["type"] != "spec": continue
+        if r["type"] != "brief": continue
         _, body = parse(r["path"])
         m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
         for item in re.findall(r"^\s*[-*] \[ \] (.*)$", m.group(1) if m else "", re.M): out.append(f"- {r['id']}: {item}")
@@ -715,9 +712,9 @@ def main():
     sp = ap.add_subparsers(dest="cmd", required=True)
     sp.add_parser("hub").add_argument("wt")
     s = sp.add_parser("start"); s.add_argument("wt"); s.add_argument("name"); s.add_argument("--summary", default="")
-    n = sp.add_parser("new"); n.add_argument("wt"); n.add_argument("type", choices=TYPES); n.add_argument("title")
+    n = sp.add_parser("new"); n.add_argument("wt"); n.add_argument("type", type=ids.record_type, choices=TYPES); n.add_argument("title")
     n.add_argument("--repo"); n.add_argument("--from", dest="src"); n.add_argument("--supersedes"); n.add_argument("--area")
-    l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--type", choices=TYPES); l.add_argument("--active", action="store_true"); l.add_argument("--repo"); l.add_argument("--area")
+    l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--type", type=ids.record_type, choices=TYPES); l.add_argument("--active", action="store_true"); l.add_argument("--repo"); l.add_argument("--area")
     sp.add_parser("areas").add_argument("wt")
     tg = sp.add_parser("tag"); tg.add_argument("wt"); tg.add_argument("rid"); tg.add_argument("--area")
     ra = sp.add_parser("rename-area"); ra.add_argument("wt"); ra.add_argument("old"); ra.add_argument("new")

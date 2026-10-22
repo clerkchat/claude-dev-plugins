@@ -74,7 +74,7 @@ report is the only thing an item should add here.
 Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 (this one included)."
 
-1. Build the brief from the item: its text (what to do), `Contract:` (what the
+1. Build the handoff from the item: its text (what to do), `Contract:` (what the
    other side now sends or accepts, which the change must match), `From:`
    (repository and commit), and `Finding:`. Find the source repository's
    worktree by its name in `.clerk-dev/review-workspace.md`, and pass its path
@@ -92,10 +92,10 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    the user will read, where a control goes, what to show on an empty or error
    state. Weigh it with the `deliberate` skill, which settles it in a line
    when the item text, the code, or the guidance already does, and wait for
-   the user's choice before delegating; put the choice in the brief. A choice
+   the user's choice before delegating; put the choice in the handoff. A choice
    that would settle later items the same way is recorded as "Guidance from
    answers" in `skills/review/tracking.md` describes.
-3. Delegate to `clerk-dev:review-fixer`, saying that the brief is a follow-up,
+3. Delegate to `clerk-dev:review-fixer`, saying that the handoff is a follow-up,
    not a finding. It defaults to sonnet; pass `model: opus` when the item
    touches structure or more than two files.
 4. If the fixer reports `scope: out`, commit nothing, leave the item open, tell
@@ -109,7 +109,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    follows the repository's usual style and says what the client now does; the
    body, two or three sentences from the fixer's `summary`, says what changed on
    the other side (the contract, in plain words) and what this change does about
-   it. When the brief names a record the follow-up builds, log it after the
+   it. When the handoff names a record the follow-up builds, log it after the
    commit as "The build log" in the `writing-code` skill describes.
 6. Close the item: `followups.py close <worktree> F3 --ref <sha>`. Any
    follow-ups the fixer listed for yet another repository are added with
