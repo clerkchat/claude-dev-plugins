@@ -284,6 +284,12 @@ class ItemListTests(TempCase):
         self.assertIn("--contract", out)
         self.assertFalse(os.path.exists(os.path.join(self.root, ".clerk-dev", "followups.md")))
 
+    def test_a_follow_up_with_a_blank_contract_is_refused(self):
+        code, out = run_script("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", "  ")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("--contract must not be blank", out)
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".clerk-dev", "followups.md")))
+
 
 class PassStepTests(TempCase):
     def setUp(self):
