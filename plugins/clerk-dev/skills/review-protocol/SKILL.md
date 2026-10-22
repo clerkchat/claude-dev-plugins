@@ -50,10 +50,11 @@ The orchestrator's prompt gives you:
 - `PR`: the pull request title and body, or `none`.
 - `GUIDANCE`: path of this worktree's guidance file, or `none`. It has four
   parts:
-  - Branch scope, the branch's Purpose: judge the diff by it. Code it lists as
-    new can change without compatibility concerns, deployed code it lists as
-    changed on purpose is intended (report how it is changed, not that it is),
-    and anything else the diff changes is unexpected and worth saying so.
+  - Branch scope: the Branch scope rule and the branch's Purpose, as the file
+    states them; judge the diff by them. Deployed code Purpose lists as
+    changed on purpose is intended (report how it is changed, not that it
+    is), and any other deployed code the diff changes is unexpected and worth
+    saying so.
   - Branch guidance and Feature guidance: the user's rules for this branch and
     for the feature, the feature's with record ids. Follow them as the user's
     direction: they settle the questions they answer, and can narrow or widen

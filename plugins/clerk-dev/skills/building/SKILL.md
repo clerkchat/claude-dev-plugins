@@ -76,14 +76,16 @@ Items reach intake in these ways:
 - a request from the user;
 - a brief's requirements, from Milestones;
 - a pass item, from the `pass` skill;
-- a finding the user hands to this skill directly ("build finding 4"): its
-  handoff is `Source: finding` with the Finding entry of By kind pasted,
-  pointed at the run files as the `review-fix` skill's Build the handoff step
-  lists them;
-- a follow-up the user hands to this skill directly ("build F3"): its handoff
-  is `Source: follow-up` with the Follow-up entry of By kind pasted, filled
-  from the item as the `review-followups` skill's Build the handoff step
-  lists;
+- a finding, from the `review-fix` skill ("fix finding 4", and the triage
+  queue through its Queue mode), bringing its handoff block and how it
+  closes; or handed to this skill directly ("build finding 4"): its handoff is
+  `Source: finding` with the Finding entry of By kind pasted, pointed at the
+  run files as the `review-fix` skill's Build the handoff step lists them;
+- a follow-up, from the `followups` skill (one item or its work list),
+  bringing its handoff block and how it closes; or handed to this skill
+  directly ("build F3"): its handoff is `Source: follow-up` with the
+  Follow-up entry of By kind pasted, filled from the item as the `followups`
+  skill's Build the handoff step lists;
 - several of these handed over together, a queue, sorted as "Queues"
   describes.
 
@@ -188,6 +190,12 @@ choices:
    with no further question. Before each item, check that the tree is clean:
    `git status --short --untracked-files=no` prints nothing. When it prints
    anything, stop the queue and show those files, since no item owns them.
+
+After the sort's one question, nothing asks. A stop that would need the user
+(a builder's `scope: out` or `size: too big`, failed tests, a question, or a
+guidance rule that cannot hold) is recorded on the item as its source's skill
+records a stop in a queue, with its edits reverted as Leftover edits says for
+a queue, and the queue goes on.
 
 ## What stays in the session
 

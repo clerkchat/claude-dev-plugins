@@ -17,7 +17,7 @@ Usage:
       --queued keeps only findings marked fix, noted, or discuss.
   stale-findings.py RUN --open-in FILE [FILE ...]
       Open findings that point at any of the given files, as TSV: number,
-      merged_id, instruction, file, line, claim. For a fixer that wants to
+      merged_id, instruction, file, line, claim. For a builder that wants to
       know which findings sit in the code it is about to change.
   stale-findings.py RUN --delta [--repo .]
       Every commit since the review, first parent, oldest first, as TSV:
@@ -132,7 +132,7 @@ def format_only(repo, sha):
 
 def classify_since(repo, run, reviewed, head):
     """Each first-parent commit in reviewed..head, oldest first, as (sha,
-    kind, subject). Follow-up and fix commits were read by the fixer and a
+    kind, subject). Follow-up and fix commits were read by the builder and a
     recheck, narrow ones by a narrow review; merges bring in the main
     branch. What is left is unreviewed."""
     status, _, _ = state(run)

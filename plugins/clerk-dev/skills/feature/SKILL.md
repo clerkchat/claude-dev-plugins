@@ -109,7 +109,7 @@ way separate `Notes-*.md` files would. Areas are not declared up front.
   another" below). Any other list in a brief uses plain numbers, cited as
   BRIEF-33.4, never with an id prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a
   record type's prefix such as DEC, or the older letters I, D, B, M, P, R),
-  which clash with the plugin's ids. Every implementer works from the brief, so draft it with a
+  which clash with the plugin's ids. Every builder works from the brief, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
   give it the brief template in `records.md`, the records the piece builds on
   (its pieces or plan row, the design, the decisions of its area, and

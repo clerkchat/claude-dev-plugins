@@ -441,7 +441,7 @@ Incremental run:
    current commit, plus uncommitted work, restricted to the earlier target, and
    only the files that something unreviewed changed:
    `stale-findings.py <run> --delta` classifies each commit since the earlier
-   run. Commits marked `fix` or `follow-up` were already read by the fixer and a
+   run. Commits marked `fix` or `follow-up` were already read by the builder and a
    recheck, `narrow` ones by a narrow review, and `merge` and `format` ones add
    nothing to review; those wait for the final pass. The patch is
    `git diff BASE..HEAD -- <files of the unreviewed commits>`, plus uncommitted

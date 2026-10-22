@@ -33,7 +33,7 @@ Inside a milestone (the `building` skill's Milestones), the happy-path pass
 is the draft: start it, then build it in handoffs as that skill describes
 (logged in the build log) instead of listing items, and end it when
 the draft is whole. The other passes run as below, one after another, with the
-milestone's stopping rules: stop for an implementer's question, for a check
+milestone's stopping rules: stop for a builder's question, for a check
 with findings rated major or blocker (`grep -cE "severity: (blocker|major)"
 <run>/merged.md`), and for any finding in a required pass.
 
@@ -54,18 +54,17 @@ commit rules below.
    few lines.
 3. **Write.** Follow the `writing-code` skill for the code and the `building`
    skill for the handoffs throughout.
-   - Claude mode: do the items, one coherent change per commit, handed off as
-     the `building` skill describes: group items that change the
-     same code into one handoff, send a `clerk-dev:builder` per handoff whose
-     first line is `Source: pass`, with the `building` skill's Pass entry from By kind
-     pasted word for word, the lens's Pass mode text, and the items as its
-     goal, at the model and effort the handoff calls for (a pass's items are
-     usually sonnet, medium; prep refactors that reshape shared code, opus,
-     high), read each report as the `building` skill's "After each handoff" describes
-     (a `scope: out` included), review, run the tests, and commit each.
-     Items of a few lines are done inline. Mark each item as it lands
-     (`passes.py done <worktree> PASS-<n> <k>`, or `--na "<why>"` when it turns out
-     not to apply). Stay inside the items: something outside them goes in a
+   - Claude mode: do the items, one coherent change per commit: group items
+     that change the same code into one handoff, and hand each to Intake in
+     the `building` skill, its first line `Source: pass`, with the `building`
+     skill's Pass entry from By kind pasted word for word, the lens's Pass
+     mode text, and the items as its goal, and the pass's model hint (a
+     pass's items are usually sonnet, medium; prep refactors that reshape
+     shared code, opus, high). Intake says one line per handoff, sends it,
+     reads the report as "After each handoff" there describes, and commits.
+     Items of a few lines are done inline, as Intake's inline route. Mark
+     each item as it lands (`passes.py done <worktree> PASS-<n> <k>`, or
+     `--na "<why>"` when it turns out not to apply). Stay inside the items: something outside them goes in a
      line to the user, not into this pass. An item the pass cannot finish is
      deferred as "Items" in `skills/review/tracking.md` describes, with the
      pass item as the source (`PASS-<n>.<k>`).
@@ -98,9 +97,9 @@ commit rules below.
 
 ## Answers during a pass
 
-When an item needs a choice, or an implementer stops on one, weigh it with
+When an item needs a choice, or a builder stops on one, weigh it with
 the `deliberate` skill before asking. Put the answer in the
-implementer's handoff, and when it changes what the pass does, in its items
+builder's handoff, and when it changes what the pass does, in its items
 (`passes.py item`, or `passes.py done ... --na "<why>"`).
 
 When the user's answer carries guidance (a rule beyond this case), or says
@@ -109,12 +108,9 @@ When the user's answer carries guidance (a rule beyond this case), or says
 
 ## Commit rules
 
-Commit as the Commit step of "After each handoff" in the `building` skill
-describes, adding only the files this pass changed and never files left out.
-A message never names the pass or its id. Never push or amend; a pass's range
-depends on its commits staying put. A commit that builds a record
-the pass's handoff names is logged as "The build log" in the `building`
-skill describes.
+Commits follow the Commit step of "After each handoff" in the `building`
+skill. A message never names the pass or its id. Never push or amend; a
+pass's range depends on its commits staying put.
 
 ## Other requests
 

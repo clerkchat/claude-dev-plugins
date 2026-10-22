@@ -17,6 +17,10 @@ def referring_files():
     ]
 
 
+def plugin_text_files():
+    return [*referring_files(), *glob.glob(os.path.join(PLUGIN, "scripts", "*.py"))]
+
+
 def resolves(plugin, name):
     return os.path.isfile(os.path.join(plugin, "agents", name + ".md")) or os.path.isdir(
         os.path.join(plugin, "skills", name)
@@ -45,6 +49,18 @@ class AgentReferenceTests(unittest.TestCase):
     def test_the_old_builder_agents_are_gone(self):
         for name in ("implementer", "review-fixer"):
             self.assertFalse(os.path.exists(os.path.join(PLUGIN, "agents", name + ".md")), name)
+        self.assertFalse(os.path.exists(os.path.join(PLUGIN, "skills", "review-followups")))
+        self.assertTrue(os.path.isfile(os.path.join(PLUGIN, "skills", "followups", "SKILL.md")))
+
+    def test_no_file_names_the_old_agents_or_the_old_followups_skill(self):
+        old = re.compile(r"implementer|fixer|review-followups", re.I)
+        named = []
+        for path in plugin_text_files():
+            with open(path, encoding="utf-8") as f:
+                for number, line in enumerate(f, 1):
+                    if old.search(line):
+                        named.append(f"{os.path.relpath(path, ROOT)}:{number}")
+        self.assertEqual(named, [])
 
 
 class ReferenceCheckerTests(TempCase):

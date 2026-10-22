@@ -31,7 +31,7 @@ Usage:
   build.py checklist WORKTREE [--brief BRIEF-52]     progress as a checklist, one line per requirement
 
 Without --covered, `done` marks every requirement of the handoff done. Statuses:
-handed-off (sent to an implementer), stopped (it stopped on a question),
+handed-off (sent to a builder), stopped (it stopped on a question),
 done (landed in a commit), abandoned, dropped (requirements a later decision
 took out of the brief; they leave its count). `built` logs a record entry, done
 at once: it covers a decision, a plan step, or a brief with no handoffs in the log,

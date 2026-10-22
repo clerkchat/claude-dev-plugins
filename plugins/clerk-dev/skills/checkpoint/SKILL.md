@@ -58,7 +58,7 @@ session.
 - `git status --short`: uncommitted changes to tracked files. Name them; a
   finished handoff is committed as the `building` skill describes before
   clearing, and anything else is the user's to decide.
-- Subagents still running (an implementer, a review, a design check): clearing
+- Subagents still running (a builder, a review, a design check): clearing
   may lose their reports. Wait for them, or say which are running and what to
   do with their results in the next session.
 - An open pass or an open handoff: these are in the logs already and survive a

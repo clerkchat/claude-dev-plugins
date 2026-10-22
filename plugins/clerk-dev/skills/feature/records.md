@@ -180,7 +180,7 @@ explicit lists, never a runtime registry"). A decision settles one choice and
 records what it rejected; guidance decides the next ones. Written without
 being asked whenever an answer carries one (see "Guidance from answers" in
 `skills/review/tracking.md`). Refined by superseding, like a decision.
-Implementer handoffs, lens and fixer prompts, and design checks all get the
+Builder handoffs, lens prompts, and design checks all get the
 active guidance through the file `records.py guidance` writes, and people read
 it the same way: the branch's scope and guidance, then every active rule in
 full with its why and what it applies to. Superseded and discarded rules show
