@@ -54,20 +54,81 @@ that owns that branch, never in the repository that sent it: only that code
 shows how far the change goes. Most items size in one line, as the
 `deliberate` skill's trivial exit does.
 
+An item that is already `in-progress` with an active brief as its reference
+(a finding's reference in `status.tsv`, a follow-up's Outcome) is being built
+as that brief: it is not sized again. Say so in its intake line and go on, in
+a queue to the next item.
+
 - Small, one handoff and one commit: send one handoff, as "The handoff"
   describes, or do it in the session when the handoff would be longer than
   the change (What stays in the session).
 - Large, many files, a shape others build on, or a new state to handle:
-  propose it to the user as a piece, a brief plus a one-step milestone, and
-  wait for the user's yes; never cut the item into handoffs silently. The
-  item stays open at its source with the proposal as its note.
+  propose it to the user as a piece, a brief plus a one-step milestone, with
+  a sentence on what the change reaches, and wait for the user's yes; never
+  cut the item into handoffs silently. On yes, grow it as "Growing an item"
+  describes. On no, the item stays open at its source with the proposal as
+  its note.
 - Unclear: weigh it with the `deliberate` skill, the local code as its
   facts; its answer routes the item as small or large.
 
-A finding reaches intake when the user hands it to this skill directly
-("build finding 4"). Its handoff is `Source: finding` with the Finding entry
-of By kind pasted, pointed at the run files as step 2 of the `review-fix`
-skill lists them.
+Items reach intake in these ways:
+
+- a request from the user;
+- a brief's requirements, from Milestones;
+- a pass item, from the `pass` skill;
+- a finding the user hands to this skill directly ("build finding 4"): its
+  handoff is `Source: finding` with the Finding entry of By kind pasted,
+  pointed at the run files as step 2 of the `review-fix` skill lists them;
+- a follow-up the user hands to this skill directly ("build F3"): its handoff
+  is `Source: follow-up` with the Follow-up entry of By kind pasted, filled
+  from the item as step 1 of the `review-followups` skill lists;
+- several of these handed over together, a queue, sorted as "Queues"
+  describes.
+
+### Growing an item
+
+Growing turns a large request, finding, or follow-up into a piece: a brief
+and a one-step milestone, with no pieces record. Only size grows an item:
+intake sized it large, or a builder reported `size: too big` on a small
+finding, follow-up, or request (After each handoff, step 4). `scope: out`
+never grows an item; it takes the source's row of the Scope table, whatever
+the item's size. On the user's yes:
+
+1. Write the brief: `records.py new <hub> brief "<title>" --from <the item>
+   --area <area>`, where the item is `F3` for a follow-up, `<run> N` for a
+   finding, or "this session" for a request, and the area is chosen as the
+   `feature` skill's Areas section says. Draft it as that skill's brief step
+   in "Writing each type" describes, giving the drafting subagent, in place of
+   a pieces row, the item's By kind entry with the material its handoff would
+   point at (the run files for a finding; the item and `git -C <path> show
+   <sha>` for a follow-up; the user's words for a request) and the sentence
+   on what the change reaches. Items that share files and size large
+   together grow into one brief, its `--from` naming each. The brief is
+   active at once.
+2. Give it a one-step milestone. When the feature has an active plan, write a
+   new plan that supersedes it, restated in full as "Replanning writes a new
+   plan" in the `feature` skill's `records.md` says, with the piece appended
+   as a step naming the piece, "brief BRIEF-<n>", and a done line in the
+   item's words; then run `build.py milestone <worktree> --step
+   PLAN-<new>.<n> --passes <list>`, and edit the Plan line of every milestone
+   under way to the new plan's step, as Milestones step 1 says. When the
+   feature has no plan, run `build.py milestone <worktree> --brief BRIEF-<n>
+   --piece "<title>" --passes <list>` and write no plan. The pass list is the
+   one Milestones step 1 gives.
+3. Mark the source item `in-progress`, naming the brief: a finding with
+   `render-report.py --set N=in-progress:BRIEF-<n>`, re-rendered as the
+   `review-fix` skill does, its instruction unchanged; a follow-up with
+   `items.py status <worktree>/.clerk-dev/followups.md F3 in-progress --ref
+   BRIEF-<n>`. A request has nothing to mark; the brief's Goal quotes it.
+   Items grown into one brief are each marked alike.
+4. Say its intake line, routed `grown into BRIEF-<n>` with its milestone and
+   when it runs: after the milestone under way, since passes cannot nest,
+   unless the user says now; then end or abandon the open pass first, as the
+   `pass` skill's step 1 asks.
+
+The piece is built like any other: its handoffs are `Source: piece`, logged
+with `build.py add` and `done`, and its source items close when it is built
+(After each handoff, step 7).
 
 ### Scope
 
@@ -93,12 +154,35 @@ Say one line per item before its handoff is sent, giving its size, its route,
 and its scope answer:
 
 ```
-<item>: <small | large | unclear>, <one handoff | inline | proposed as a piece | to deliberate>; scope: <in | out, proposed | out, asked once>
+<item>: <small | large | unclear>, <route>; scope: <in | out, proposed | out, asked once>
 ```
+
+The route is one of `one handoff`, `inline`, `proposed as a piece`, `to
+deliberate`, or `grown into BRIEF-<n> (MILE-<m>, runs after MILE-<k> | now)`;
+in a queue, a grown item's line ends `; leaves the queue`. An item already
+being built is not sized, and its line is `<item>: being built as
+BRIEF-<n>`.
 
 The line is not written to any file: the build log entry, when the route
 builds a record, and the source item's note, when it does not, carry what
 persists.
+
+### Queues
+
+A queue is several items handed to intake together ("build F2, F3, F5",
+"build findings 4, 7, 9"). Sort it in one pass before any handoff, as step 1
+of "Several items waiting" in the `deliberate` skill sorts choices:
+
+1. Gather the files each item reaches, once, and size the items that share
+   files together; a group that shares files and sizes large grows into one
+   brief.
+2. Say one intake line per item.
+3. Propose the large ones together, in one message, each with its sentence
+   on what the change reaches: this is the one question a queue asks. On yes,
+   each is grown as "Growing an item" describes and leaves the queue with its
+   line; on no, it stays open at its source with the proposal as its note.
+4. Run the small ones, one handoff and one commit each, in the queue's order,
+   with no further question.
 
 ## What stays in the session
 
@@ -315,7 +399,16 @@ status lives only here; the brief is not edited for it.
    (`BRIEF-52.7: done` becomes `7:done`), and `--covered` passed only when
    the line names a brief; and
    tick the brief's open items it closes. A small finding, follow-up, or
-   request gets no entry and closes at its source with the commit.
+   request gets no entry and closes at its source with the commit. When the
+   commit builds a grown piece, leaving every requirement of its brief done
+   or dropped (`build.py checklist <worktree> --brief BRIEF-<n>` all ticked),
+   close its source items, naming the brief: a finding with
+   `render-report.py --set "N=fixed:<sha> (BRIEF-<n>)"`, and
+   `<run>/resolution/<merged id>.md` written as step 8 of the `review-fix`
+   skill describes, its first paragraph naming the brief and saying that the milestone's pass review and the next
+   triage's moved-code check stand in for a recheck, so no recheck runs; a
+   follow-up with `followups.py close <worktree> F3 --ref "in <sha>
+   (BRIEF-<n>)"`. A request has nothing to close.
 8. Add each `follow-ups:` line with `followups.py add` to the owing
    repository's worktree, as Follow-ups in `skills/review/tracking.md`
    describes, with the commit as `--from`. When `contract:` is not "none",
@@ -323,8 +416,8 @@ status lives only here; the brief is not edited for it.
    `review-fix` skill describes.
 9. Say one line: the handoff, the commit, the tests, anything accepted, the
    rollout considerations when `rollout:` is not "none", the worktrees that
-   got a follow-up, and the count it moves ("BUILD-15 done in 4c1e2ab, tests
-   pass: BRIEF-52 now 27 of 32").
+   got a follow-up, the source items step 7 closed, and the count it moves
+   ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
 
 Whenever you report progress against a brief at more length (the user asks,
 the draft ends, a milestone's passes are done), show `build.py checklist
