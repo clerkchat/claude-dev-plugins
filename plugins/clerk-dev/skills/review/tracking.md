@@ -166,6 +166,9 @@ A builder's `follow-ups:` line and a finding's `follow_up` field carry one
 follow-up per line as `<repo>: changed|wanted: <contract>; needs: <behavior>`:
 the item goes to `<repo>`'s worktree, the part after `; needs:` is its text,
 and the part between `<repo>: ` and `; needs:` is its `--contract`.
+A line not in that form (no `changed:` or `wanted:`, or no `; needs:`) is
+not filed as written: restate it in the form from the rest of the report or
+finding, or ask the builder for it, as a malformed report is sent back.
 
 Find the owing worktree in `.clerk-dev/review-workspace.md` (see
 `workspace-manifest.md`). When the file is missing or does not list the
