@@ -40,6 +40,66 @@ own:
 The others (a hub and feature, a review workspace, workspace rows whose
 worktree is missing) are settled as the output says.
 
+## Intake
+
+Every item that becomes code enters here, after the setup check: a coding
+request, a brief's requirements, a pass item, a review finding, or a
+follow-up. Intake sizes the item, applies the scope test, and says one line
+for it before anything is handed off.
+
+### Size and route
+
+Size the item against the code of the repository it is in, in the session
+that owns that branch, never in the repository that sent it: only that code
+shows how far the change goes. Most items size in one line, as the
+`deliberate` skill's trivial exit does.
+
+- Small, one handoff and one commit: send one handoff, as "The handoff"
+  describes, or do it in the session when the handoff would be longer than
+  the change (What stays in the session).
+- Large, many files, a shape others build on, or a new state to handle:
+  propose it to the user as a piece, a brief plus a one-step milestone, and
+  wait for the user's yes; never cut the item into handoffs silently. The
+  item stays open at its source with the proposal as its note.
+- Unclear: weigh it with the `deliberate` skill, the local code as its
+  facts; its answer routes the item as small or large.
+
+A finding reaches intake when the user hands it to this skill directly
+("build finding 4"). Its handoff is `Source: finding` with the Finding entry
+of By kind pasted, pointed at the run files as step 2 of the `review-fix`
+skill lists them.
+
+### Scope
+
+Apply one scope test to every item: the Branch scope rule in the guidance
+file that `records.py guidance` writes (The handoff, item 3), read there
+rather than restated here. The item's source says what the branch owes:
+
+| Source | What the branch owes | Reaching deployed code Purpose does not cover |
+| --- | --- | --- |
+| Finding | What Purpose covers; nobody asked for the change | Propose the fix and its rollout considerations, and change no code |
+| Follow-up | The work, whatever its size | Ask the user once, add a dated line to Purpose under "Deployed code it changes on purpose", and go on |
+| Request | What the user asked | As a follow-up: ask once, add the dated Purpose line, and build |
+| Brief requirement or pass item | The work, in scope by its record | As a follow-up: ask once, add the dated Purpose line, and go on |
+
+Size and scope are separate answers: too big for one handoff routes to a
+piece, and not this branch's business routes to a proposal, so a large
+follow-up is still owed. A builder's `size: too big` and `scope: out` come
+back to these routes, as steps 3 and 4 of "After each handoff" describe.
+
+### The intake line
+
+Say one line per item before its handoff is sent, giving its size, its route,
+and its scope answer:
+
+```
+<item>: <small | large | unclear>, <one handoff | inline | proposed as a piece | to deliberate>; scope: <in | out, proposed | out, asked once>
+```
+
+The line is not written to any file: the build log entry, when the route
+builds a record, and the source item's note, when it does not, carry what
+persists.
+
 ## What stays in the session
 
 - Settling choices. When a handoff needs a choice no record settles and it
@@ -79,7 +139,7 @@ Raise a handoff a row when its first attempt comes back with deviations or
 failing tests that point at reasoning, not at the handoff; a handoff that fails
 that way at Opus goes to Fable.
 
-Not every account has Fable, and it may have its own usage limits. When an
+Not every account has Fable, and it may have its own usage limits. When a
 builder on Fable fails because the model is unavailable or a limit is
 reached, run the same handoff on Opus at the same effort, say so once in a line,
 and use Opus for the rest of the session's Fable handoffs, as Model fallback in
@@ -153,9 +213,15 @@ the user asks for one.
 
 ## The build log
 
-Log every handoff in `.clerk-dev/build.md` with
-`${CLAUDE_PLUGIN_ROOT}/scripts/build.py` (below, `build.py`); status reports
-progress from it, so a handoff not logged is invisible there:
+The build log, `.clerk-dev/build.md`, is kept with
+`${CLAUDE_PLUGIN_ROOT}/scripts/build.py` (below, `build.py`). An entry is
+written only for a route that builds a record: a brief's requirements, a
+piece grown from an item included, through `build.py add` and `done`; or a
+decision, plan step, or whole brief, through `build.py built`. A small
+finding, follow-up, or request gets no entry: it closes at its source with
+its commit, as its source's skill closes one, and status already reports
+that commit as a branch commit no entry names. Status reports a brief's
+progress from the log, so a brief's handoff not logged is invisible there:
 
 - when handing off: `build.py add <worktree> "<title>" --brief BRIEF-52 --reqs 4,5
   --model <model> --effort <effort>`, which gives the handoff's id (BUILD-3);
@@ -184,8 +250,9 @@ or no longer wanted), do not supersede the brief to delete one line: run
 dropped it, and where it went>"`. The requirement leaves the brief's count and
 shows as dropped in the checklist; the brief itself stays as written.
 
-A change done inline that covers brief requirements is logged too, as a
-handoff added and marked done in one go, so the progress stays whole.
+A change done inline gets an entry only when it covers brief requirements:
+a handoff added and marked done in one go, so the brief's progress stays
+whole.
 
 "Log the built work" (status suggests it when the branch has commits the log
 does not name): list the branch's commits since its base, read each one's
@@ -201,39 +268,58 @@ status lives only here; the brief is not edited for it.
 
 ## After each handoff
 
-1. Read the report by its `status`, `questions:`, `deviations:`, and
-   `requirements:` lines. A report that is empty, misses a line of the
+1. Read the report by its `status`, `size`, `scope`, `files:`,
+   `requirements:`, `questions:`, `deviations:`, `rollout:`, `follow-ups:`,
+   and `contract:` lines. A report that is empty, misses a line of the
    builder's report, or has them out of order is sent back once, to the same
    builder with SendMessage, asking for the report alone; a second such report
    is handled as `status: stopped` with that as its reason, and its `files:`
    are taken from `git status --short`.
-2. `status: stopped` or `questions:` go back to the user (or are
-   settled from the records and guidance) before anything else. Before asking,
+2. `questions:`, and a `status: stopped` that steps 3 and 4 do not cover, go
+   back to the user (or are settled from the records and guidance) before
+   anything else. Before asking,
    weigh each question with the `deliberate` skill, with the handoff and the code and
    records it touches as its facts, and put its decision summary to the user
    rather than the bare question. When the
    user's answer carries guidance (a rule beyond this case), or says
    `guidance: ...`, record it as "Guidance from answers" in
    `skills/review/tracking.md` describes, and say so in one line.
-3. On `scope: out`, ask the user once, since the record that sent the work
-   already put it in scope; on yes, add the area to Purpose under "Deployed
-   code it changes on purpose" with a dated line, write the guidance file
-   again, and re-send the handoff.
-4. `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
+3. On `scope: out`, act on the source's row of the table in Intake's Scope:
+   for a finding, propose the fix and change nothing; for any other source,
+   ask the user once, and on yes add the dated Purpose line, write the
+   guidance file again, and re-send the handoff.
+4. On `size: too big`, act by source. For a piece or pass handoff, cut the
+   handoff smaller and re-send it (`build.py resend` with a note on the cut),
+   telling the user in one line; stop it (`build.py stop`) and weigh the cut
+   with the `deliberate` skill only when the cut needs a choice the brief did
+   not make. For a finding, follow-up, or request, the report means the item
+   is large and intake sized it small: take Intake's large route, proposing a
+   piece and waiting for the user's yes.
+5. `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
    a line, and record it when it changes a decision) or sent back with a
    correction.
-5. Read the diff (`git diff --stat`, then the parts that carry the handoff's
+6. Read the diff (`git diff --stat`, then the parts that carry the handoff's
    shape), and run the handoff's tests yourself.
-6. Commit as step 6 of the `review-fix` skill describes: only the handoff's
+7. Commit as step 6 of the `review-fix` skill describes: only the handoff's
    files (the report's `files:`), a message that stands alone and describes the change, never
-   `.clerk-dev/` paths or record ids. Mark the handoff done in the build log (or log
-   the record it builds with `built`, as "The build log" describes), with
+   `.clerk-dev/` paths or record ids, with the `rollout:` text in its body when
+   it is not "none". When the route builds a record, mark the handoff done in
+   the build log (or log the record it builds with `built`, as "The build
+   log" describes), with
    the `requirements:` ids turned to bare numbers for `--covered`
    (`BRIEF-52.7: done` becomes `7:done`), and `--covered` passed only when
    the line names a brief; and
-   tick the brief's open items it closes.
-7. Say one line: the handoff, the commit, the tests, anything accepted, and the
-   count it moves ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
+   tick the brief's open items it closes. A small finding, follow-up, or
+   request gets no entry and closes at its source with the commit.
+8. Add each `follow-ups:` line with `followups.py add` to the owing
+   repository's worktree, as Follow-ups in `skills/review/tracking.md`
+   describes, with the commit as `--from`. When `contract:` is not "none",
+   check every related worktree as "Clients of a changed contract" in the
+   `review-fix` skill describes.
+9. Say one line: the handoff, the commit, the tests, anything accepted, the
+   rollout considerations when `rollout:` is not "none", the worktrees that
+   got a follow-up, and the count it moves ("BUILD-15 done in 4c1e2ab, tests
+   pass: BRIEF-52 now 27 of 32").
 
 Whenever you report progress against a brief at more length (the user asks,
 the draft ends, a milestone's passes are done), show `build.py checklist
