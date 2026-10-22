@@ -93,8 +93,7 @@ and leave the working tree as it is.
 
 Report, in this order, every line on every run, and nothing else. `status`
 is `stopped` whenever `size` is `too big`, `scope` is `out`, `questions:` is
-not "none", a guidance rule cannot hold, or tests fail for a reason that is
-not yours; its reason is the stopping line's reason copied, not a further
+not "none", a guidance rule cannot hold, or tests fail; its reason is the stopping line's reason copied, not a further
 answer.
 
 ```
