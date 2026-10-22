@@ -499,3 +499,14 @@ class SupersededStepTests(TempCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StartBuildingTests(TempCase):
+    def test_a_brief_with_nothing_built_points_at_the_building_skill(self):
+        repo = init_repo(self.path("fresh"))
+        repo.git("checkout", "-q", "-b", "feat")
+        write_feature_md(repo.path)
+        write_record(repo.path, "R5", "spec", "Spec five", body=SPEC_BODY.format(a="Five one", b="Five two"))
+        code, out = repo.status("--focus", "implementation")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Start building BRIEF-5: cut its requirements into handoffs and send the first (the building skill).", out)

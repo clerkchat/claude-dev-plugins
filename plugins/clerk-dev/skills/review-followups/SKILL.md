@@ -74,7 +74,7 @@ report is the only thing an item should add here.
 Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 (this one included)."
 
-1. Build the handoff as "The handoff" in the `writing-code` skill describes:
+1. Build the handoff as "The handoff" in the `building` skill describes:
    its first line is `Source: follow-up`, and it pastes the Follow-up entry
    from By kind word for word. Then fill it from the item: its text (what to
    do), `Contract:` (what the other side now sends or accepts, which the
@@ -98,8 +98,8 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    that would settle later items the same way is recorded as "Guidance from
    answers" in `skills/review/tracking.md` describes.
 3. Delegate to `clerk-dev:builder`, at the model and effort the Model and
-   effort table in the `writing-code` skill gives for the item.
-4. Check the report's shape as writing-code's "After each handoff" step 1
+   effort table in the `building` skill gives for the item.
+4. Check the report's shape as the `building` skill's "After each handoff" step 1
    does, then read its `status`. On `status: stopped`, commit nothing and
    take the first that applies; the item stays open until a handoff for it
    lands:
@@ -114,7 +114,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    - The tests failed: show the failure and ask how to proceed.
    - Any other reason (`questions:` is not "none", or a guidance rule cannot
      hold): weigh it with the `deliberate` skill as step 2 of "After each
-     handoff" in the `writing-code` skill does, then re-send the handoff with
+     handoff" in the `building` skill does, then re-send the handoff with
      the answer in it.
    A stopped report whose `files:` is not "none" left edits: show the files and
    ask whether to keep them (the item stays open with the edits in the tree,
@@ -127,7 +127,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
    body, two or three sentences from the fixer's `summary`, says what changed on
    the other side (the contract, in plain words) and what this change does about
    it. When the handoff names a record the follow-up builds, log it after the
-   commit as "The build log" in the `writing-code` skill describes.
+   commit as "The build log" in the `building` skill describes.
 6. Close the item: `followups.py close <worktree> F3 --ref <sha>`. Any
    follow-ups the fixer listed for yet another repository are added with
    `followups.py add` to that repository's worktree, and its `contract:` line is

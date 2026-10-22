@@ -82,7 +82,7 @@ for nothing wider.
    whose recommendation starts "In a separate pull request:"; one that starts
    "In this pull request:" is fixed as usual.
 2. Build the handoff from the run files, never from the rendered report alone,
-   as "The handoff" in the `writing-code` skill describes: its first line is
+   as "The handoff" in the `building` skill describes: its first line is
    `Source: finding`, and it pastes the Finding entry from By kind word for
    word. The handoff names the files and the builder reads them; quote into it
    only the user's own words (the instruction note, an adjustment given in
@@ -103,7 +103,7 @@ for nothing wider.
    (a product choice to lay out for the user, step 3).
 3. Delegate. You never edit code in this session; you coordinate. Launch the
    `clerk-dev:builder` agent with the handoff, at the model and effort the
-   Model and effort table in the `writing-code` skill gives for it. A
+   Model and effort table in the `building` skill gives for it. A
    fix not marked Fix as recommended pauses first: weigh it with the
    `deliberate` skill, whose first step settles most in a line, wait for the
    user's choice, then delegate with that choice in the handoff. Several findings in one request get one builder each, run one after
@@ -111,7 +111,7 @@ for nothing wider.
 4. The fixer changes the code, adds or updates the test the card's scenario
    implies, runs the touched tests, and reports the files changed and the test
    result. It does not touch the run directory and does not commit.
-5. Check the report's shape as writing-code's "After each handoff" step 1
+5. Check the report's shape as the `building` skill's "After each handoff" step 1
    does, then read its `status`. On `status: stopped`, make no commit, and
    take the first that applies:
    - `scope: out`: record `--instruct N=discuss:<the scope reason>`, tell the
@@ -126,7 +126,7 @@ for nothing wider.
      failure, and ask how to proceed.
    - Any other reason (`questions:` is not "none", or a guidance rule cannot
      hold): weigh it with the `deliberate` skill as step 2 of "After each
-     handoff" in the `writing-code` skill does, then run the fix again with
+     handoff" in the `building` skill does, then run the fix again with
      the answer in the handoff.
    A stopped report whose `files:` is not "none" left edits: show the files and
    ask whether to keep them (record `in-progress` with those files, as for
@@ -143,7 +143,7 @@ for nothing wider.
    never seen the report. The fixer's `summary` line is the starting point for
    the body. No push, no amend. Several findings in one request get one commit
    each, in number order. When the handoff names a record the fix builds, log it
-   after the commit as "The build log" in the `writing-code` skill describes.
+   after the commit as "The build log" in the `building` skill describes.
 7. Recheck immediately, as under Rechecking, against that commit.
 8. Write `<run>/resolution/<merged id>.md`, plain prose of a few short
    paragraphs, each standing alone:

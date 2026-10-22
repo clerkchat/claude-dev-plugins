@@ -33,7 +33,7 @@ list each thing that was settled but has no file yet:
   `items.py set` and `items.py status`, as the `design-check` skill's walk does.
 - **Handoffs** built or committed but not in the build log, and
   requirements a commit covered: `build.py add` and `done`, as the
-  `writing-code` skill describes. A handoff sent and still running is not
+  `building` skill describes. A handoff sent and still running is not
   pending; see step 3.
 - **Follow-ups** another repository now owes because of a change here:
   `followups.py add` in its worktree.
@@ -55,7 +55,7 @@ session.
 ## 3. Check what is in flight
 
 - `git status --short`: uncommitted changes to tracked files. Name them; a
-  finished handoff is committed as the `writing-code` skill describes before
+  finished handoff is committed as the `building` skill describes before
   clearing, and anything else is the user's to decide.
 - Subagents still running (an implementer, a review, a design check): clearing
   may lose their reports. Wait for them, or say which are running and what to

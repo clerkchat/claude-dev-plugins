@@ -229,7 +229,7 @@ depends on.
 Order and sequencing across pieces and repositories, including which repository
 goes first and where work is expected to loop back. Each numbered step is a
 milestone: its pieces, its brief, and what is true when it is done. The
-`writing-code` skill builds one milestone at a time, so every step needs that
+`building` skill builds one milestone at a time, so every step needs that
 done line, which may say "deferred items reviewed". Replanning writes a new
 plan that supersedes the old one.
 

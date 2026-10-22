@@ -29,7 +29,7 @@ reason each, in a few lines. Do not start one.
 
 ## Running a pass
 
-Inside a milestone (the `writing-code` skill's Milestones), the happy-path pass
+Inside a milestone (the `building` skill's Milestones), the happy-path pass
 is the draft: start it, then build it in handoffs as that skill describes
 (logged in the build log) instead of listing items, and end it when
 the draft is whole. The other passes run as below, one after another, with the
@@ -52,15 +52,16 @@ commit rules below.
    path:line>"`, one per change, specific enough that someone else could do it.
    Leave out anything another pass in the catalogue owns. Show the items in a
    few lines.
-3. **Write.** Follow the `writing-code` skill throughout.
-   - Claude mode: do the items, one coherent change per commit, delegated as
-     the skill's Delegating section describes: group items that change the
+3. **Write.** Follow the `writing-code` skill for the code and the `building`
+   skill for the handoffs throughout.
+   - Claude mode: do the items, one coherent change per commit, handed off as
+     the `building` skill describes: group items that change the
      same code into one handoff, send a `clerk-dev:builder` per handoff whose
-     first line is `Source: pass`, with the skill's Pass entry from By kind
+     first line is `Source: pass`, with the `building` skill's Pass entry from By kind
      pasted word for word, the lens's Pass mode text, and the items as its
      goal, at the model and effort the handoff calls for (a pass's items are
      usually sonnet, medium; prep refactors that reshape shared code, opus,
-     high), read each report as the skill's "After each handoff" describes
+     high), read each report as the `building` skill's "After each handoff" describes
      (a `scope: out` included), review, run the tests, and commit each.
      Items of a few lines are done inline. Mark each item as it lands
      (`passes.py done <worktree> PASS-<n> <k>`, or `--na "<why>"` when it turns out
@@ -113,7 +114,7 @@ files this pass changed, never anything under `.clerk-dev/` or files left out,
 and write messages that stand alone, describing the change ("Return early when
 the import has no contacts"), never the pass or its id. Never push or amend; a
 pass's range depends on its commits staying put. A commit that builds a record
-the pass's handoff names is logged as "The build log" in the `writing-code`
+the pass's handoff names is logged as "The build log" in the `building`
 skill describes.
 
 ## Other requests

@@ -268,7 +268,7 @@ findings of severity `blocker` (and `major` ones on a final pass, and every
 verifier in `--deep` mode), the `security` and `tenancy` lenses of a security
 pass's pass review (`--pass`), and a second attempt at a fix that a recheck
 found only partly resolved (in the `review-fix` skill). Outside the review,
-the feature, design-check, and writing-code skills use Fable for briefs, the
+the feature, design-check, and building skills use Fable for briefs, the
 overview, roll-ups, settle-first lenses in design checks, foundation handoffs,
 and stopped handoffs' questions, all with this same fallback. Each is assigned by passing `model: fable` on the
 invocation. Not every account has access to Fable, and access may come with its
