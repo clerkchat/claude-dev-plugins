@@ -21,6 +21,15 @@ Read `### Deploy`, `### Async handlers`, `### Replication`, and
 units from Dockerfiles, task or deployment definitions, and workflow files, and
 find the migration tooling from the package scripts.
 
+## Revert policy
+
+When `### Deploy` in `CONTEXT`, or the guidance, says `Revert policy: roll
+forward only`, the team never reverts a deploy. Then skip checklist item 7,
+the down-migration part of item 1, and the revert questions of Design mode and
+Pass mode, and report nothing whose only exposure is a revert. The
+coexistence window still applies in full: a rolling deploy runs old and new
+code side by side whatever the policy. Otherwise reverts are assumed.
+
 ## The coexistence window
 
 Deployments are not atomic. Assume, for some minutes, every combination of:
@@ -60,7 +69,7 @@ correct is fine.
    error.
 6. Configuration: new environment variables or secrets that must exist before
    boot, and whether boot fails loudly or silently when they are missing.
-7. Revert: reverting the code after the migration ran, after jobs with the new
+7. Revert (unless the revert policy is roll forward only): reverting the code after the migration ran, after jobs with the new
    payload were enqueued, after a gate was enabled. Name the first thing that
    breaks.
 8. Ordering across repos: when `CONTEXT` lists provides or consumes
@@ -87,7 +96,8 @@ the review protocol):
   payloads, old clients calling new routes, new code reading old rows?
 - What do the migrations lock, on which tables, and can they be reversed?
 - Is it behind a feature gate, and what is the plan to turn it on and off?
-- What is the revert path once data has been written in the new shape?
+- What is the revert path once data has been written in the new shape (unless
+  the revert policy is roll forward only)?
 
 ## Pass mode
 

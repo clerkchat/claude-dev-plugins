@@ -47,7 +47,10 @@ the headings below so lens agents can jump to the one they need:
 - `### Feature gates`: the flag mechanism, how to check one, how to test both
   paths.
 - `### Deploy`: deployable units, which ones share code, ordering constraints,
-  how migrations run relative to code.
+  how migrations run relative to code, and the revert policy. A line
+  `Revert policy: roll forward only` says the team never reverts a deploy and
+  fixes forward instead; the rollout lens then skips the revert path but still
+  checks old and new code running side by side. Absent, reverts are assumed.
 - `### Observability`: logging and metrics conventions, known cost traps.
 - `### Data stores`: each store, its engine specifics, migration tooling.
 - `### LLM surface`: where prompts, tool schemas, and model clients live.
