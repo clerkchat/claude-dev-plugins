@@ -633,7 +633,8 @@ def area_view(wt, out, name, logs):
     if summ: out += [summ, ""]
     live = [r for r in mine if r.get("status") == "active"]
     counts_by_type = {k: sum(1 for r in live if r.get("type") == k) for k in ("design", "brief", "plan", "decision")}
-    out.append(f"**Records:** {len(live)} active ({', '.join(f'{counts_by_type[k]} {k}{'s' if counts_by_type[k] != 1 else ''}' for k in ('design', 'brief', 'plan', 'decision') if any(r.get('type') == k for r in live))}), {len(mine) - len(live)} history.")
+    type_counts = ", ".join(f"{counts_by_type[k]} {k}{'s' if counts_by_type[k] != 1 else ''}" for k in ("design", "brief", "plan", "decision") if any(r.get("type") == k for r in live))
+    out.append(f"**Records:** {len(live)} active ({type_counts}), {len(mine) - len(live)} history.")
     for r in rc.ordered([r for r in live if r.get("type") != "decision"]):
         out.append(f"- {r['id']} {r['type']}: {short(r.get('title', ''), 70)}")
     decs = [r for r in live if r.get("type") == "decision"]

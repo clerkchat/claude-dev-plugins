@@ -345,7 +345,7 @@ def labeled(label, text):
     or several paragraphs."""
     if not text: return []
     if "\n\n" in text or re.match(r"^\s*(?:[-*+]|\d+\.)\s", text): return [f"**{label}:**", "", text, ""]
-    return [f"**{label}:** {re.sub(r'\s*\n\s*', ' ', text)}", ""]
+    return [f"**{label}:** " + re.sub(r"\s*\n\s*", " ", text), ""]
 
 def rule_lines(heading, body, rule):
     return [f"### {heading}", "", body_section(body, "Rule") or rule, ""] + labeled("Why", body_section(body, "Why")) + labeled("Applies to", body_section(body, "Applies to"))

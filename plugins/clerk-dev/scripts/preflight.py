@@ -90,7 +90,7 @@ def block(path, log_n):
     base = git(wt, "merge-base", "HEAD", main) if main else ""
     if base:
         count = git(wt, "rev-list", "--count", f"{base}..HEAD")
-        out.append(f"- Merge base: `{base[:9]}` ({count} commit{"" if count == "1" else "s"} on the branch)")
+        out.append(f"- Merge base: `{base[:9]}` ({count} commit{'' if count == '1' else 's'} on the branch)")
     else:
         out.append("- Merge base: unknown")
 
