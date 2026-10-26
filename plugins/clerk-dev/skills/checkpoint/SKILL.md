@@ -59,7 +59,10 @@ session.
   clearing, and anything else is the user's to decide.
 - A pull request description drafted in this conversation
   (`.clerk-dev/pr-description.md`, from the `pr-draft` skill) is named like an
-  uncommitted file: it is the user's to post or keep editing.
+  uncommitted file: it is the user's to post or keep editing. A change to it
+  that the user asked for and that has no entry in
+  `.clerk-dev/pr-draft-notes.md` is logged there first, as that skill's
+  Refine step says.
 - Subagents still running (an implementer, a review, a design check): clearing
   may lose their reports. Wait for them, or say which are running and what to
   do with their results in the next session.
