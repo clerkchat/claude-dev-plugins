@@ -1,5 +1,5 @@
 ---
-name: review-observability-cost
+name: lens-observability-cost
 description: Observability lens for /clerk-dev:review. Checks that new failure paths are visible (logs with context on early exits and catches, metrics on new operations) and that telemetry does not become a cost or noise problem (unbounded metric tags, log volume per row, oversized traces). Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

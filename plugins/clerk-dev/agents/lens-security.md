@@ -1,5 +1,5 @@
 ---
-name: review-security
+name: lens-security
 description: Security lens for /clerk-dev:review. Finds injection, unsafe deserialization, SSRF, secret exposure, missing webhook signature checks, sandbox escapes, and prompt injection paths that reach tools. Invoked by the review orchestrator, and by the design-check skill on feature records; can also be asked directly to security-review a diff.
 model: opus
 effort: high

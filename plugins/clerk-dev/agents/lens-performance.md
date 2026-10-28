@@ -1,5 +1,5 @@
 ---
-name: review-performance
+name: lens-performance
 description: Runtime performance lens for /clerk-dev:review. Finds work that is slower than it needs to be inside a single execution: algorithmic cost, repeated computation, redundant I/O, serialization and copying in hot paths, blocking calls on async paths, and rendering work in UI loops. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

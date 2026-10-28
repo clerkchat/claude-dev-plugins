@@ -1,5 +1,5 @@
 ---
-name: review-frontend
+name: lens-frontend
 description: Frontend lens for /clerk-dev:review. Reviews UI code for server-state cache correctness (query keys, invalidation, optimistic updates), render performance, effect and subscription hygiene, accessibility, theming and dark-mode parity, real-time event handling, and constraints of embedded host environments. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

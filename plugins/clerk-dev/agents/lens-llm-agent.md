@@ -1,5 +1,5 @@
 ---
-name: review-llm-agent
+name: lens-llm-agent
 description: LLM and agent lens for /clerk-dev:review. Reviews prompts, tool schemas, model client calls, and agent loops: schema correctness and strictness, handling of nondeterministic and malformed output, token and cost growth, prompt-cache invalidators, evals kept in step with prompt changes, model API drift, and loop termination. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

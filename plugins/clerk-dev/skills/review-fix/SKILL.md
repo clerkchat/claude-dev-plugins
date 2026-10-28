@@ -239,7 +239,7 @@ finding's lens; give the recheck agent the comment's text as the claim.
    manual `--recheck` with no commit named, the diff of the finding's files from
    the run's `HEAD` to the working tree. Write it to `<run>/recheck/<id>.patch`,
    without printing it.
-3. Run one instance of that lens agent (`clerk-dev:review-<lens>`) in standard
+3. Run one instance of that lens agent (`clerk-dev:lens-<lens>`) in standard
    mode with `DIFF` set to that patch, `SCOPE: all`, `SLICES: none`, the usual
    `CONTEXT`, and one extra line, `RECHECK: <merged id> in <run>/merged.md`,
    which points it at the original finding's claim and scenario. The protocol

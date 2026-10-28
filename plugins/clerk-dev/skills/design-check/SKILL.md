@@ -34,7 +34,7 @@ user through them and records each answer.
 2. **Lenses.** Pick them as `skills/review/routing.md` "Design checks"
    describes, applying any `--lenses` argument. Say the set in one line, using
    the plain names from `routing.md`, and go on; do not wait for approval.
-3. **Run.** Launch one `clerk-dev:review-<lens>` agent per lens, all in one
+3. **Run.** Launch one `clerk-dev:lens-<lens>` agent per lens, all in one
    message so they run in parallel, each with this prompt:
 
    ```

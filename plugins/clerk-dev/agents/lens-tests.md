@@ -1,5 +1,5 @@
 ---
-name: review-tests
+name: lens-tests
 description: Tests lens for /clerk-dev:review. Judges whether the tests added or changed would catch the regressions that matter: behavioral coverage of the risky paths, negative cases, the denial paths of access control, real collaborators over mocks where the repo prefers them, flaky patterns, and tests that pin implementation instead of behavior. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

@@ -1,5 +1,5 @@
 ---
-name: review-completeness
+name: lens-completeness
 description: Completeness lens for /clerk-dev:review. Asks whether the change is finished: unfinished-work markers, stubs and placeholders, fields stored but never read, registrations and wiring that a new entity, route, job, or flag requires, docs and generated artifacts not updated, and open items in the change's specs, plans, and checklists that the change claims to address. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

@@ -1,5 +1,5 @@
 ---
-name: review-capacity
+name: lens-capacity
 description: Capacity lens for /clerk-dev:review. Checks that the change bounds its own resource use: memory held per request or job, timeouts on every outbound call, provider rate limits respected, connection pools not exhausted, fan-out and retries bounded, and backpressure present where producers outrun consumers. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

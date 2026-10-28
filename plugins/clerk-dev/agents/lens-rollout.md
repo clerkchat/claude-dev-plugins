@@ -1,5 +1,5 @@
 ---
-name: review-rollout
+name: lens-rollout
 description: Rollout lens for /clerk-dev:review. Checks whether the change can deploy and roll back safely: old and new code coexisting, migration ordering and locks, in-flight job and event payloads, replicated tables, feature gates, and the revert path. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

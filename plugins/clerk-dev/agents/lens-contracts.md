@@ -1,5 +1,5 @@
 ---
-name: review-contracts
+name: lens-contracts
 description: Contracts lens for /clerk-dev:review. Checks the agreements the change makes with its callers and its own parts: public API and DTO shapes, event and job payloads, persisted schemas, generated docs, and the seams between slices where a field is added in one layer and never arrives in another. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

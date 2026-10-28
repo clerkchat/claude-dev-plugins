@@ -1,5 +1,5 @@
 ---
-name: review-scaling
+name: lens-scaling
 description: Scaling lens for /clerk-dev:review. Asks how the change behaves at one hundred times today's volume: per-row work that should be batched, N+1 patterns, hot rows and partitions, unbounded growth of tables or queues, and worker concurrency versus real load. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

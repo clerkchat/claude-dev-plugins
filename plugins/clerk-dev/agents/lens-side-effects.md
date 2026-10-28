@@ -1,5 +1,5 @@
 ---
-name: review-side-effects
+name: lens-side-effects
 description: Real-world side effects lens for /clerk-dev:review. Finds changes that can send messages, place calls, charge money, notify people, or write to customer systems by accident: from paths users perceive as safe (test, replay, preview, retry, seed, backfill), with weak confirmation or UI that looks harmless, with missing dry-run or sandbox guards, or by replaying real customer data. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

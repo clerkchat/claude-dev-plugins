@@ -1,5 +1,5 @@
 ---
-name: review-cross-repo
+name: lens-cross-repo
 description: Cross-repo lens for /clerk-dev:review in feature mode. Given diffs from several repositories that together implement one feature, checks that every changed contract has its consumers updated, that the deploy order has a working intermediate state, that feature gates agree across repos, and that shared concepts carry the same names and semantics everywhere. Invoked by the review orchestrator only, and by the design-check skill on multi-repository plans.
 model: opus
 effort: high

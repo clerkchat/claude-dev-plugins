@@ -1,5 +1,5 @@
 ---
-name: review-tenancy
+name: lens-tenancy
 description: Tenancy lens for /clerk-dev:review. Checks that every lookup, mutation, listing, and background job in the change is scoped to the calling tenant or sits behind an access guard, and that nothing leaks across tenants through caches, search, or events. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

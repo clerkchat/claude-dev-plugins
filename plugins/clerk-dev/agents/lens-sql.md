@@ -1,5 +1,5 @@
 ---
-name: review-sql
+name: lens-sql
 description: SQL and schema lens for /clerk-dev:review. Checks new queries for index coverage and scan behavior, multi-row reads for ordering, migrations for lock behavior and reversibility, and engine-specific pitfalls in relational, time-series, and OLAP stores. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

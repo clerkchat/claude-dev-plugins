@@ -1,5 +1,5 @@
 ---
-name: review-naming-concepts
+name: lens-naming-concepts
 description: Naming and concepts lens for /clerk-dev:review. Checks that new names fit the domain vocabulary already in the codebase, that one concept has one name, that abstractions do not leak implementation, and that files live where the feature lives. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

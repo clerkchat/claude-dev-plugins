@@ -1,5 +1,5 @@
 ---
-name: review-design
+name: lens-design
 description: Design lens for /clerk-dev:review. Finds duplication of helpers or patterns the codebase already has, new patterns introduced where an established one exists, wrong abstraction level, unnecessary coupling, dead code, and comments that have rotted or narrate instead of explain. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

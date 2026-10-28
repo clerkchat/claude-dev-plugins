@@ -14,7 +14,7 @@ import os, re, sys
 AGENTS = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "agents")
 
 def section(lens, name):
-    p = os.path.join(AGENTS, f"review-{lens}.md")
+    p = os.path.join(AGENTS, f"lens-{lens}.md")
     if not os.path.exists(p): return None
     m = re.search(rf"^## {re.escape(name)}\n(.*?)(?=^## |\Z)", open(p, encoding="utf-8").read(), re.S | re.M)
     return m.group(1).strip() if m else None
@@ -25,7 +25,7 @@ def main():
     if args[0] == "--list":
         name = args[1] if len(args) > 1 else "Pass mode"
         for f in sorted(os.listdir(AGENTS)):
-            m = re.fullmatch(r"review-(.+)\.md", f)
+            m = re.fullmatch(r"lens-(.+)\.md", f)
             if m and section(m.group(1), name): print(m.group(1))
         return
     lens, name = args[0], (args[1] if len(args) > 1 else "Pass mode")

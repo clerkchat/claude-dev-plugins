@@ -1,5 +1,5 @@
 ---
-name: review-error-handling
+name: lens-error-handling
 description: Error-handling lens for /clerk-dev:review. Hunts silent failures: swallowed exceptions, broad catches, fallbacks that hide problems, default values masking missing data, errors logged without action, and failure paths that leave partial state. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: sonnet
 effort: medium

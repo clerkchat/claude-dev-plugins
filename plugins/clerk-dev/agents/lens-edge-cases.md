@@ -1,5 +1,5 @@
 ---
-name: review-edge-cases
+name: lens-edge-cases
 description: Edge-case lens for /clerk-dev:review. Hunts for inputs and states the change does not handle: nulls and empties, boundaries, time and zone arithmetic, unicode and encoding, legacy data missing new fields, partial failure mid-loop, and ordering assumptions. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

@@ -1,5 +1,5 @@
 ---
-name: review-concurrency
+name: lens-concurrency
 description: Concurrency lens for /clerk-dev:review. Finds races between concurrent requests, jobs, and consumers: lost updates, check-then-act gaps, non-idempotent handlers under at-least-once delivery, duplicate processing, lock scope and ordering, and state machines with unguarded transitions. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high

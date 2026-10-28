@@ -331,7 +331,7 @@ see Step 6b):
   `summary.md`, and `not-reviewed.md`, numbers the findings, and writes
   `numbers.tsv`.
 
-Lens agents are provided by this plugin as `clerk-dev:review-<lens>`; pass that
+Lens agents are provided by this plugin as `clerk-dev:lens-<lens>`; pass that
 full name as the subagent type.
 
 The protocol every lens agent follows is the `review-protocol` skill; you do not
@@ -795,7 +795,7 @@ Skip triage in quick mode and when the whole diff is under 20,000 tokens.
 Build the lens set from `routing.md`, the triage answers, and the arguments. A
 lens triggered only by a path category that triage answered "no" for in every
 slice is dropped, and the report header says so. Only lenses that exist as a
-`clerk-dev:review-<lens>` agent can run.
+`clerk-dev:lens-<lens>` agent can run.
 
 Decide walk versus split per the flags, else by size: if total estimated tokens
 exceed 60,000 or the slice map has more than five slices, every lens runs one
@@ -1330,7 +1330,7 @@ skills, and repo context, and writes its run and report under that worktree's
    `origin/HEAD`; `git -C <worktree> diff
    <base>...HEAD`), even when that repository's review was incremental,
    because contract mismatches do not care when a change was made. Run
-   `clerk-dev:review-cross-repo` with `model: fable` (see Model fallback) and
+   `clerk-dev:lens-cross-repo` with `model: fable` (see Model fallback) and
    repeated `REPO`, `DIFF`, `BASE`, `HEAD`,
    `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's guidance
    file, `records.py guidance <its worktree> --context <its CONTEXT> --out

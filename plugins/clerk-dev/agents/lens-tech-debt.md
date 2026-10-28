@@ -1,5 +1,5 @@
 ---
-name: review-tech-debt
+name: lens-tech-debt
 description: Tech debt lens for /clerk-dev:review. Looks past the changed lines into the functions, classes, and modules the change touches, and proposes cleanups, simplifications, and refactors that cut lines and make the code easier to change next time: long functions, large files, crowded directories, deep nesting, duplication, dead code, hand-rolled logic the codebase or a library already provides. Labels each finding cleanup, simplify, or refactor. Invoked by the review orchestrator, and by the design-check skill on feature records.
 model: opus
 effort: high
