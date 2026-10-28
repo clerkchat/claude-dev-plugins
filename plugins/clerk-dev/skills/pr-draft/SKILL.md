@@ -162,7 +162,7 @@ changes to deployed code, new, tooling, tests, docs, and `!` to break). A
 commit with no type is sorted from its diff: extractions and renames the rest
 builds on are refactors; a change to how code that runs on the base behaves
 is a change to deployed code; a commit that only adds code nothing on the base
-calls is new; pipeline and housekeeping changes are tooling; tests only is
+calls is new; CI and housekeeping changes are tooling; tests only is
 tests; docs only is docs; removing or changing a route, field, table, or check
 callers rely on is a break. A mixed commit goes under its riskiest group, in
 the order `commits.md` gives. A type is a claim, not proof: when a stage

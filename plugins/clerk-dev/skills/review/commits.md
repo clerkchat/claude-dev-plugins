@@ -13,7 +13,7 @@ other commits use.
 | `fix` | live | Repairing behavior the base already has |
 | `change` | live | Deliberately changing behavior the base already has: a new option on a deployed endpoint, a different default |
 | `build` | live | Build setup, dependencies, and packaging, since they change what is deployed |
-| `ci` | tooling | Pipelines and checks; nothing deployed changes |
+| `ci` | tooling | CI workflows and checks; nothing deployed changes |
 | `chore` | tooling | Housekeeping with no effect on what runs: lint config, scripts |
 | `test` | tests | Tests only |
 | `docs` | docs | Docs only |

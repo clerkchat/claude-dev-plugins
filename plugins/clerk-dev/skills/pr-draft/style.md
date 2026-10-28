@@ -94,7 +94,7 @@ commit counts.
     base" for it, and keep "deployed" for code the default branch has.
   - **New code**, named for what it is ("New sync code"). Code nothing on
     the base calls yet.
-  - **Tooling.** Pipelines, checks, and housekeeping; nothing deployed
+  - **Tooling.** CI, checks, and housekeeping; nothing deployed
     changes.
   - **Tests.** Tests only.
   - **Docs.** Docs only.
