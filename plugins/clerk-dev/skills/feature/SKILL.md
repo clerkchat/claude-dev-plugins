@@ -54,7 +54,7 @@ what this branch builds, the feature summary is what the whole feature is for,
 and they should agree.
 
 When the feature spans repositories, the hub is the worktree the user starts in.
-Once a second repository joins, set up `.clerk-dev/review-workspace.md` as
+Once a second repository joins, set up `.clerk-dev/workspace.md` as
 `skills/review/workspace-manifest.md` describes, with the `Hub:` line naming
 this repository, so sessions in the other worktrees find the records.
 

@@ -284,9 +284,9 @@ not reopen findings you declined or deferred, so the review can end.
 #### The slash command
 
 Everything above also works as `/clerk-dev:review` followed by a target and
-options; use completion to see what it accepts. The optional review context
-lives at `.claude/skills/review-context/SKILL.md` in the repository, yours to
-edit and commit.
+options; use completion to see what it accepts. The optional repo context
+lives at `<git common dir>/clerk-dev/repo-context.md`, one per repository and
+shared by its worktrees, yours to edit.
 
 <details>
 <summary><b>How it works</b></summary>

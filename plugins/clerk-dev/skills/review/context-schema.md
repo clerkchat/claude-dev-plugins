@@ -1,20 +1,14 @@
-# review-context schema
+# Repo context schema
 
-A repo may provide `.claude/skills/review-context/SKILL.md`. The orchestrator
+A repo may have one repo context, `<git common dir>/clerk-dev/repo-context.md`
+(the directory from `git rev-parse --path-format=absolute --git-common-dir`),
+shared by every worktree of the repository and never committed. The preflight
+prints its path. Reviews, design checks, passes, fixes, and handoffs read it;
+the review orchestrator
 reads it when present and passes its path to every lens agent as `CONTEXT`.
 Everything in it is instance knowledge: the names this repo gives to the
 categories the generic lenses reason about. Keep the generic lens prompts free
 of these names.
-
-Frontmatter:
-
-```yaml
----
-name: review-context
-description: Repo-specific slice vocabulary, hotspots, and cross-repo contracts for the /clerk-dev:review orchestrator. Not meant to be invoked directly.
-user-invocable: false
----
-```
 
 Body sections, in this order. All are optional, but keep the headings exact so
 the orchestrator and agents can find them.
@@ -124,11 +118,11 @@ Patterns that look wrong but are intentional here, so lenses do not re-report
 them. `records.py guidance --context` copies this section into the guidance
 file as Repository noise, which is where lenses read it.
 
-# Drafting a review context
+# Drafting a repo context
 
 When the user agrees to have one drafted (First runs in a repository, in the
 review skill), run one `general-purpose` subagent with `model: sonnet`, effort
-`medium`, that writes only `.claude/skills/review-context/SKILL.md` and reads
+`medium`, that writes only `<git common dir>/clerk-dev/repo-context.md` and reads
 the rest. It fills in what it can find and leaves out any section it cannot;
 an empty heading is worse than none, since lenses trust what is there.
 
@@ -155,6 +149,6 @@ an empty heading is worse than none, since lenses trust what is there.
 6. Existing review material: pointers to standards documents or skills the
    lenses should read.
 
-The file starts with the frontmatter above and a line saying it was drafted on
-that date and is the user's to edit and commit. Keep it to about 150 lines.
-Never commit it.
+The file starts with a line saying it was drafted on that date and is the
+user's to edit. Keep it to about 150 lines.
+

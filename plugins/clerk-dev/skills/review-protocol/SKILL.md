@@ -34,7 +34,7 @@ The orchestrator's prompt gives you:
 - `TRIAGE`: path to yes-or-no answers about what this scope contains (new
   queries, routes, jobs, external calls, strings, prompts, schema changes), or
   `none`. Use it to skip parts of the patch that cannot concern your lens.
-- `CONTEXT`: path to a repo review-context file, or `none`. When present, it
+- `CONTEXT`: path to a repo context file, or `none`. When present, it
   names the repo's instances of the categories your lens cares about (what
   "tenant" means here, where guards live, which tables are replicated). Read it
   first, and always read the subsection for your lens under
@@ -62,13 +62,13 @@ The orchestrator's prompt gives you:
     rule. Code that breaks a rule is a finding of your lens when the rule is
     about your lens's concern; cite the rule's id, or a branch rule's heading,
     in `evidence`.
-  - Repository noise, when the repository's review context has a Known noise
+  - Repository noise, when the repository's repo context has a Known noise
     section: patterns that look wrong but are intentional here. Do not report
     them.
   The guidance does not change the confidence rubric. If it tells you to skip
   something you believe is a blocker, report the blocker anyway and say that
   the guidance asked to skip this kind of finding.
-- `WORKSPACE`: path of `.clerk-dev/review-workspace.md`, or `none`. Its rows name
+- `WORKSPACE`: path of `.clerk-dev/workspace.md`, or `none`. Its rows name
   the other repositories and worktrees of this job; use them to say which
   repository a fix needs a follow-up in.
 - `BAR`: `final` on a final pass, else absent. See Final pass bar below.
@@ -167,7 +167,7 @@ through it in order and record under Coverage where you stopped reading closely.
 When `CONTEXT` is `none`, you still need to know the repo's instances. Read the
 repo's `AGENTS.md` or `CLAUDE.md` if present, then grep for the patterns your
 lens cares about. Spend at most a few searches on this; say in your output that
-no review context was available.
+no repo context was available.
 
 ## What to ignore
 
@@ -305,7 +305,7 @@ per finding, fields in this order:
   fix_size: <trivial | small | medium | large; see Origin and fix scope>
   follow_up: <"none", or the repository that must change too and what it
     must do: "web: show the new export error". Use the names in WORKSPACE or
-    the review context's `## Provides`; "clients outside this repository" when
+    the repo context's `## Provides`; "clients outside this repository" when
     you cannot name them.>
   debt: <tech-debt lens only: cleanup | simplify | refactor. Other lenses
     leave it out.>
@@ -367,7 +367,7 @@ Inputs:
   brief details), or `none`. Read them to know what is already settled; do not
   check them.
 - `REPO`, `CONTEXT`, `GUIDANCE`: the repository the records are about, its
-  review context, and its guidance file, as in review. When the records span
+  repo context, and its guidance file, as in review. When the records span
   repositories, there is instead one `REPOSITORY` block per repository, each
   with `NAME`, `REPO`, `CONTEXT`, and `GUIDANCE`; ground each question in the
   repository it concerns, and check contracts from both sides.

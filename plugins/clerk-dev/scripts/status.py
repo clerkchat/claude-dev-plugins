@@ -26,7 +26,7 @@ Prints a short Markdown summary:
     formatting only, not a merge; plus staged and unstaged changes;
   - this worktree's open follow-ups, marking the ones added since the last
     status (remembered in .clerk-dev/status-seen);
-  - open follow-ups in the other worktrees of .clerk-dev/review-workspace.md;
+  - open follow-ups in the other worktrees of .clerk-dev/workspace.md;
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
     in-progress fixes, and open findings whose code moved since the review;
@@ -91,16 +91,9 @@ def parse_followups(wt):
             for it in fu.read(os.path.join(wt, ".clerk-dev", "followups.md"))]
 
 def workspace_rows(wt):
-    """(repo name, real worktree path) for each row of the review workspace
-    table in .clerk-dev/review-workspace.md; empty when there is no such file."""
-    p = os.path.join(wt, ".clerk-dev", "review-workspace.md")
-    if not os.path.exists(p): return []
-    rows = []
-    for line in open(p, encoding="utf-8"):
-        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.lstrip().startswith("|") else []
-        if len(cells) < 2 or cells[0] in ("", "Repo") or set(cells[0]) <= set("-: "): continue
-        rows.append((cells[0], os.path.realpath(os.path.expanduser(cells[1]))))
-    return rows
+    """(repo name, real worktree path) for each row of the workspace table in
+    .clerk-dev/workspace.md; empty when there is no such file."""
+    return [(n, os.path.realpath(os.path.expanduser(p))) for n, p in load_script("records.py").workspace(wt)[1].items()]
 
 def repo_name(wt, rows):
     """The repository's name in follow-up `From:` lines: its row in the review
@@ -169,17 +162,17 @@ def setup_gaps(wt, rows, built):
     purpose, _ = rc.branch_notes(wt)
     if not purpose: gaps.append("Purpose: " + ("the branch notes have no Purpose" if purpose is not None else "no .clerk-dev/branch-notes.md") + "; draft it as tracking.md's Branch notes describes and show it to the user")
     missing = [(n, p) for n, p in rows if not os.path.isdir(p)]
-    gaps += [f"workspace row {n}: {p} does not exist; fix the row in .clerk-dev/review-workspace.md or create the worktree" for n, p in missing]
+    gaps += [f"workspace row {n}: {p} does not exist; fix the row in .clerk-dev/workspace.md or create the worktree" for n, p in missing]
     declared, _ = rc.workspace(wt)
     if declared and os.path.realpath(os.path.expanduser(declared)) not in {p for _, p in rows} and not os.path.isdir(os.path.expanduser(declared)):
-        gaps.append(f"hub {declared} (the Hub line of .clerk-dev/review-workspace.md) does not exist; fix the line")
+        gaps.append(f"hub {declared} (the Hub line of .clerk-dev/workspace.md) does not exist; fix the line")
     try: d = rc.fdir(wt)
     except SystemExit: d = None
     featured = bool(d) and os.path.exists(os.path.join(d, "feature.md"))
     if d and not featured:
         elsewhere = hub_feature_elsewhere(wt, rows)
         passes, _ = read_passes(wt)
-        if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to .clerk-dev/review-workspace.md (skills/review/workspace-manifest.md)")
+        if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to .clerk-dev/workspace.md (skills/review/workspace-manifest.md)")
         elif built or passes: gaps.append("this worktree has a " + ("build log" if built else "pass log") + " but no feature; start one: records.py start <worktree> \"<name>\" (the feature skill)")
     named = other_repos(wt, rows, d)
     if named:

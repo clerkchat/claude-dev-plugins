@@ -268,7 +268,7 @@ class WorkspaceTests(StatusCase):
         self.other_commit = self.other.head()
         self.write_workspace(self.other.path)
         os.makedirs(os.path.join(self.other.path, ".clerk-dev"), exist_ok=True)
-        with open(os.path.join(self.other.path, ".clerk-dev", "review-workspace.md"), "w") as f:
+        with open(os.path.join(self.other.path, ".clerk-dev", "workspace.md"), "w") as f:
             f.write("Hub: hub\n\n" + self.workspace_table(self.other.path))
         self.other.build_ok("built", "R3", "--commit", self.other_commit)
 
@@ -276,7 +276,7 @@ class WorkspaceTests(StatusCase):
         return f"| Repo | Worktree |\n|---|---|\n| hub | {self.repo.path} |\n| other | {other_path} |\n"
 
     def write_workspace(self, other_path):
-        with open(os.path.join(self.repo.path, ".clerk-dev", "review-workspace.md"), "w") as f:
+        with open(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), "w") as f:
             f.write(self.workspace_table(other_path))
 
     def test_a_decision_built_in_another_worktree_reads_built(self):

@@ -58,7 +58,7 @@ report is the only thing an item should add here.
 2. Draft this worktree's Purpose if it is missing (Branch notes in
    `skills/review/tracking.md`), then write the guidance file to the
    scratchpad: `records.py guidance <worktree> --context
-   <worktree>/.claude/skills/review-context/SKILL.md --out
+   <git common dir>/clerk-dev/repo-context.md --out
    <scratchpad>/guidance.md`.
    Write it again whenever a rule is recorded during the run.
 3. Check the working tree with `git status --short`. Each commit must hold only
@@ -77,7 +77,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 1. Build the handoff from the item: its text (what to do), `Contract:` (what the
    other side now sends or accepts, which the change must match), `From:`
    (repository and commit), and `Finding:`. Find the source repository's
-   worktree by its name in `.clerk-dev/review-workspace.md`, and pass its path
+   worktree by its name in `.clerk-dev/workspace.md`, and pass its path
    and the commit so the fixer can read the change with
    `git -C <path> show <sha>`. When the item names a
    finding, add the source run's `resolution/<merged id>.md` if it exists

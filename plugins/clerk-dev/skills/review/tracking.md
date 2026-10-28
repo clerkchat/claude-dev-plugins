@@ -13,7 +13,7 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
 | `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
 | `.clerk-dev/deferred.md` | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
-| `.clerk-dev/review-workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
+| `.clerk-dev/workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
 | `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, pieces, plans, briefs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
 | `.clerk-dev/passes.md` | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and pass-review result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
 | `.clerk-dev/build.md` | this worktree's milestones (a plan row's ordered passes, required ones, skips) and handoffs: brief requirements covered and their status (including requirements a decision dropped from a brief), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or brief built directly by a commit); the only place requirement status lives | `build.py`, from the `writing-code` and `pass` skills | `status.py` (progress per brief, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
@@ -60,8 +60,8 @@ relying on it. Never record anything the user did not say.
 
 Agents get these rules through one file, not this one:
 `records.py guidance <worktree> [--area <area> | --for <BRIEF-33, BRIEF-33.4, or
-BRIEF-18-1.Q-6>] [--context <review-context SKILL.md>] --out <file>` writes Purpose,
-these rules, the feature's active guidance, and the review context's Known noise
+BRIEF-18-1.Q-6>] [--context <repo-context.md>] --out <file>` writes Purpose,
+these rules, the feature's active guidance, and the repo context's Known noise
 into it, and that file is what lenses, verifiers, fixers, and implementer handoffs
 get as `GUIDANCE`. `--for` takes the area of the record it names; `--context`
 adds the noise.
@@ -141,7 +141,7 @@ followups.py add <consuming worktree> "Send exportId back when polling report do
   --finding "api 8"
 ```
 
-Find the consuming worktree in `.clerk-dev/review-workspace.md` (see
+Find the consuming worktree in `.clerk-dev/workspace.md` (see
 `workspace-manifest.md`). When the file is missing or does not list the
 consuming repository, add the item to the current worktree's file with the text
 starting `[<repo>]`, and say so.
@@ -450,5 +450,5 @@ Untracked files in the worktree, such as personal notes, drafts, and scratch
 specs, are the user's own. Reviews do not read them, and fixes never stage or
 commit them. The plugin's own files are only those under `.clerk-dev/`,
 including feature records, which the user writes too. Documents
-committed to the repository are read through the review-context
+committed to the repository are read through the repo-context
 `## Work tracking` section and never written to.

@@ -44,7 +44,7 @@ question rather than guess.
 When the target is the whole branch and the words neither ask for the feature
 nor rule it out, ask one question before anything else: review the whole
 feature across repositories, or just this worktree? When
-`.clerk-dev/review-workspace.md` exists, name its other repositories in the
+`.clerk-dev/workspace.md` exists, name its other repositories in the
 feature option ("the whole feature: this worktree plus web and worker"). When it
 does not, say that the feature option first asks which repositories take part.
 The answer adds `--feature` or not; other flags from the words are kept. A
@@ -64,9 +64,9 @@ Then:
 
 Start every run with one call:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...]`, giving this
-worktree and, when the request names them or `.clerk-dev/review-workspace.md`
+worktree and, when the request names them or `.clerk-dev/workspace.md`
 lists them, the other worktrees of the job. For each one it prints the
-repository's `review-setup` lines, the remote main or that `origin/HEAD` is
+repository's `setup` lines, the remote main or that `origin/HEAD` is
 missing, when the last fetch was, the merge base, the branch's commit messages,
 `diff --stat` and `git status --short`, whether the branch notes have a Purpose,
 the review workspace rows, open follow-ups, and the latest run and whether it is
@@ -112,7 +112,7 @@ When the file already has a Purpose, use it without asking.
 ## First runs in a repository
 
 A few things only need saying once per repository, so the plugin remembers
-what it has said in `<git common dir>/review-setup` (the directory from
+what it has said in `<git common dir>/clerk-dev/setup` (the directory from
 `git rev-parse --path-format=absolute --git-common-dir`, shared by every
 worktree of the repository, never committed): one line per item,
 `<key>: <value> <date>`. Read it at the start of a run. A headless session
@@ -125,14 +125,14 @@ reads it but never asks, offers, or records anything.
   last fetch was, that whether a finding is new on this branch or already on
   main is judged against that state, and that a `git fetch` before reviewing
   makes it current. Do not fetch, and do not wait.
-- The review context (key `context`). When the repository has no
-  `.claude/skills/review-context/SKILL.md` and the key is absent or says
+- The repo context (key `context`). When the repository has no
+  `<git common dir>/clerk-dev/repo-context.md` and the key is absent or says
   `later`, ask at the run's first stop (the Purpose check or the plan; a run
-  with no stop does not ask): "This repository has no review context, so the
+  with no stop does not ask): "This repository has no repo context, so the
   reviewers will guess at its conventions: what a tenant is, where access
   guards live, which files to skip, which mistakes the team keeps catching.
   Draft one now (a few minutes, before the review starts), later, or never?"
-  Record `later` or `never`. On "now", draft it as Drafting a review context in
+  Record `later` or `never`. On "now", draft it as Drafting a repo context in
   `context-schema.md` describes, show its path, point out the Hazards by focus
   section as the one worth the user's time, record `drafted`, and continue the
   run with it as `CONTEXT`.
@@ -293,7 +293,7 @@ own usage limits, neither of which can be checked ahead of time, so:
 Supporting files, all in this skill's directory:
 
 - `routing.md`: category heuristics, lens triggers, triage questions.
-- `context-schema.md`: what a repo's review-context file contains.
+- `context-schema.md`: what a repo's repo-context file contains.
 - `workspace-manifest.md`: the review workspace file, which names the
   repositories and worktrees of a review job across repositories, and how to
   set it up with the user.
@@ -369,7 +369,7 @@ need to read it unless debugging agent output.
   at four, sonnet, a higher bar for minor findings. Deep: all routed lenses,
   deep tracing, fable verifier.
 - `--feature`: review the whole feature across the worktrees named in
-  `.clerk-dev/review-workspace.md`, each in its own headless session. See Feature
+  `.clerk-dev/workspace.md`, each in its own headless session. See Feature
   mode.
 - `--consolidate` (with `--feature`): start no reviews; use each worktree's
   latest finished run, run only the cross-repository lens, and write the feature
@@ -693,7 +693,7 @@ it with the shipped script. Give it the target and the script path and have it:
    with
    `measure-patch.py <run>/patch/all.patch --tsv <run>/files.tsv --md
    <run>/scope-table.md`,
-   passing each glob from the repo review-context `## Excluded from review`
+   passing each glob from the repo context `## Excluded from review`
    section as `--exclude`. The script writes per-file bytes, added and removed
    lines, tokens (bytes divided by 4), and exclusion reasons. Do not recompute
    any of these by hand.
@@ -703,7 +703,7 @@ it with the shipped script. Give it the target and the script path and have it:
    - matches a default exclusion glob: `**/*.lock`, `**/*-lock.json`,
      `**/yarn.lock`, `**/dist/**`, `**/build/**`, `**/*.generated.*`,
      `**/__snapshots__/**`, `**/*.snap`, `**/*.min.*`;
-   - matches a repo review-context `## Excluded from review` glob;
+   - matches a repo context `## Excluded from review` glob;
    - looks generated or minified: more than 10,000 bytes and an average above
      300 bytes per changed line. Small files never trip this rule; a short
      wiring file with long import lines is cheap to read and often the most
@@ -713,10 +713,10 @@ it with the shipped script. Give it the target and the script path and have it:
      in the table with their sizes, are left out of every patch and token total,
      and are listed in the report header so nothing disappears silently.
 5. Classify each included file into categories per `routing.md`, using the repo
-   review-context `## Slices` globs if `.claude/skills/review-context/SKILL.md`
+   repo-context `## Slices` globs if `<git common dir>/clerk-dev/repo-context.md`
    exists.
 6. Collect the PR title and body if the target is a PR or a PR exists for the
-   branch (`gh pr view`), and the work-tracking documents per the review-context
+   branch (`gh pr view`), and the work-tracking documents per the repo-context
    `## Work tracking` section (default globs `TODO*.md`, `docs/plans/**`). Only
    files tracked in git count: untracked files are the user's own (see
    `tracking.md`) and the review does not read them. Select only documents that
@@ -748,7 +748,7 @@ changed: write one patch at `<run>/patch/whole.patch` from included files and
 pass `SLICES: none`.
 
 Otherwise run a sonnet subagent (effort `medium`) with the file table (not the
-content), the review-context `## Slices` table if present, and the routing
+content), the repo-context `## Slices` table if present, and the routing
 heuristics. It writes `<run>/slices.md`:
 
 ```
@@ -891,13 +891,13 @@ HEAD: <ref>
 SLICES: <path or none>
 SCOPE: <all or slice name>
 TRIAGE: <path to this slice's triage answers, or none>
-CONTEXT: <path to review-context SKILL.md or none>
+CONTEXT: <path to repo-context.md or none>
 MODE: <quick | standard | deep>
 REPO: <absolute repo root>
 PR: <title and body, or none>
 DOCS: <paths of selected work-tracking documents, or none>
 GUIDANCE: <path of <run>/guidance.md>
-WORKSPACE: <path of .clerk-dev/review-workspace.md, or none>
+WORKSPACE: <path of .clerk-dev/workspace.md, or none>
 ```
 
 plus `BAR: final` on a final pass, and `PASS: <focus>; piece <record id or none>`
@@ -907,7 +907,7 @@ Before the first wave, write the guidance file with `records.py guidance
 <worktree> --context <the CONTEXT path, when there is one> --out
 <run>/guidance.md`: the branch's Purpose (read, or drafted, at the start of the
 run; see Branch notes first), its guidance rules, the feature's active guidance
-(see Branch notes in `tracking.md`), and the review context's Known noise. Pass its path as
+(see Branch notes in `tracking.md`), and the repo context's Known noise. Pass its path as
 `GUIDANCE` to every lens and verifier. Relay any warning it prints about
 guidance that names specific code in one line. When the branch notes have
 Guidance rules or the feature has active guidance, mention in the plan in one
@@ -1273,10 +1273,10 @@ With `--comment` and a PR target, post the report as one PR comment via
 
 With `--feature`, each repository is reviewed in its own worktree by its own
 headless Claude Code session, so it loads that repository's CLAUDE.md, settings,
-skills, and review context, and writes its run and report under that worktree's
+skills, and repo context, and writes its run and report under that worktree's
 `.clerk-dev/`. This session coordinates and runs only the cross-repository lens.
 
-1. Discover: read `.clerk-dev/review-workspace.md` in this worktree. When it is
+1. Discover: read `.clerk-dev/workspace.md` in this worktree. When it is
    missing, set it up with the user as `workspace-manifest.md` describes (a
    headless session stops instead). Its rows are the repositories and
    worktrees of this job; nothing else is searched. Say in one line which
@@ -1400,7 +1400,7 @@ later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the
 final pass's verdict) next to `report.md`. Next to the run directories,
 `.clerk-dev/latest`, `.clerk-dev/latest-feature`, `.clerk-dev/branch-notes.md`, `.clerk-dev/followups.md`,
-`.clerk-dev/review-workspace.md` (or a link to it), and `.clerk-dev/status-seen`
+`.clerk-dev/workspace.md` (or a link to it), and `.clerk-dev/status-seen`
 belong to the worktree. Raw and verify files are written
 only on completion, which is what makes `--resume` safe. A run stopped after
 `--plan-only` has no `progress.md` items checked and no raw files;

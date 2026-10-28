@@ -5,7 +5,7 @@ Usage: preflight.py [WORKTREE ...] [--log N]
 
 For each worktree (default: the current directory) prints a Markdown block:
   - the worktree root, branch, HEAD, and git common directory;
-  - the repository's review-setup lines (<common dir>/review-setup);
+  - the repository's setup lines (<common dir>/clerk-dev/setup) and repo context;
   - the remote main (origin/HEAD), or that it is missing;
   - when the last fetch was (FETCH_HEAD in the common directory);
   - the merge base with the remote main and the commit count since it;
@@ -73,9 +73,12 @@ def block(path, log_n):
     out += [f"## {rs.repo_name(wt, rows)} ({branch})", "",
             f"- Worktree: `{wt}`", f"- HEAD: `{head[:9]}`", f"- Common dir: `{common}`"]
 
-    setup = os.path.join(common, "review-setup")
+    rec = load_script("records.py")
+    setup = rec.setup_path(wt)
     lines = open(setup, encoding="utf-8").read().strip().splitlines() if os.path.exists(setup) else []
-    out.append(f"- review-setup: {'; '.join(lines) if lines else 'none'}")
+    out.append(f"- Setup: {'; '.join(lines) if lines else 'none'}")
+    context = rec.repo_context_path(wt)
+    out.append(f"- Repo context: `{context}`" if os.path.exists(context) else "- Repo context: none")
 
     main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD")
     out.append(f"- Remote main: `{main}`" if main else "- Remote main: missing (origin/HEAD is not set)")
@@ -97,9 +100,9 @@ def block(path, log_n):
     review = os.path.join(wt, ".clerk-dev")
     out.append(f"- Branch notes: {purpose_state(os.path.join(review, 'branch-notes.md'))}")
     if rows:
-        out.append("- Review workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows))
+        out.append("- Workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows))
     else:
-        out.append("- Review workspace: none")
+        out.append("- Workspace: none")
     open_fu = [i for i in rs.parse_followups(wt) if not i["done"]]
     out.append(f"- Open follow-ups: {len(open_fu)}")
     out.append(f"- Latest run: {latest_run(wt, head)}")

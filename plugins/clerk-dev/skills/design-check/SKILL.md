@@ -42,9 +42,9 @@ user through them and records each answer.
    RECORDS: <absolute paths>
    SUPPORTING: <absolute paths, or none>
    REPO: <absolute path of the repository the records are about>
-   CONTEXT: <.claude/skills/review-context/SKILL.md of that repository, or none>
+   CONTEXT: <<git common dir>/clerk-dev/repo-context.md of that repository, or none>
    GUIDANCE: <path of that repository's guidance file, written as below>
-   WORKSPACE: <.clerk-dev/review-workspace.md, or none>
+   WORKSPACE: <.clerk-dev/workspace.md, or none>
    ```
 
    Run the lenses whose questions are most often settle-first, `contracts`,
@@ -64,7 +64,7 @@ user through them and records each answer.
    REPOSITORY:
      NAME: <repo name from the workspace>
      REPO: <absolute worktree path>
-     CONTEXT: <its review context, or none>
+     CONTEXT: <its repo context, or none>
      GUIDANCE: <path of its guidance file>
    ```
 

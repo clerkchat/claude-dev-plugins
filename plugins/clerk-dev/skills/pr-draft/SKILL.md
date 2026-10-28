@@ -33,7 +33,7 @@ The scripts below are in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 
 ## 1. The repositories
 
-The unit is every row of `.clerk-dev/review-workspace.md` (read as
+The unit is every row of `.clerk-dev/workspace.md` (read as
 `skills/review/workspace-manifest.md` says), or only this worktree when there
 is no workspace. `<repo>` arguments narrow it to those rows. A row whose
 worktree is missing gets one line in the report and is skipped.

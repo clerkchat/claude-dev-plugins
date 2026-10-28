@@ -1,13 +1,13 @@
 # Routing table
 
 Maps change categories to lenses. The scope step classifies every changed file
-into one or more categories, using the repo review-context globs when present
+into one or more categories, using the repo context globs when present
 and the path heuristics below otherwise. A lens runs when any changed file hits
 one of its categories, or when it is listed under "always".
 
 ## Categories and path heuristics
 
-| Category    | Heuristic when no review-context                                                                                 | Meaning                              |
+| Category    | Heuristic when no repo-context                                                                                 | Meaning                              |
 | ----------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `schema`    | `migration`, `migrations`, `entities`, `entity`, `schema`, `drizzle`, `reviewa`, `.sql`                          | Persistent data shape                |
 | `domain`    | `service`, `services`, `domain`, `lib`, `core`, `utils`                                                          | Business logic                       |

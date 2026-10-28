@@ -1,16 +1,16 @@
 # Review workspace
 
 A review job that spans repositories is described by one file,
-`review-workspace.md`. It says which repositories take part and which worktree
+`workspace.md`. It says which repositories take part and which worktree
 of each holds the feature. It is the only record of that: nothing is inferred
 from directory layout or branch names.
 
 ## Where it lives
 
 The file is created in the worktree where the job was set up, at
-`<worktree>/.clerk-dev/review-workspace.md`. Every other worktree in its table gets
+`<worktree>/.clerk-dev/workspace.md`. Every other worktree in its table gets
 a symbolic link at the same path pointing at it, so a session in any of those
-worktrees reads the same file at `.clerk-dev/review-workspace.md`. Like everything
+worktrees reads the same file at `.clerk-dev/workspace.md`. Like everything
 under `.clerk-dev/`, it is excluded from git through each repository's
 `.git/info/exclude`.
 
@@ -73,8 +73,8 @@ in an interactive session first.
 5. Show the table, and on confirmation write the file here. Then, for every
    other worktree in it, create `.clerk-dev/` (and its `.git/info/exclude` entry
    when needed) and link the file:
-   `ln -s <this file> <worktree>/.clerk-dev/review-workspace.md`. If a worktree
-   already has a `review-workspace.md` for another job, say so and ask whether
+   `ln -s <this file> <worktree>/.clerk-dev/workspace.md`. If a worktree
+   already has a `workspace.md` for another job, say so and ask whether
    to replace it; never replace it silently. Say in one line where the file is.
 
 To change the job later, the user edits the file. To add a repository, add a

@@ -56,7 +56,7 @@ applies to every run until changed. Its format, and how to draft Purpose when
 it is missing, are in Branch notes in `skills/review/tracking.md`. At the start
 of every fix request, draft Purpose if it is missing, then write the guidance
 file, `records.py guidance <worktree> --context
-<worktree>/.claude/skills/review-context/SKILL.md --out <run>/guidance.md`, so it
+<git common dir>/clerk-dev/repo-context.md --out <run>/guidance.md`, so it
 holds the rules recorded since the review and the repository's Known noise;
 every handoff points at it. Its branch scope
 decides what is in scope for a fix and how to make it (Branch scope in
@@ -87,13 +87,13 @@ for nothing wider.
    picked alternatives), which are short and must not be paraphrased. Point it
    at: the merged entry `- id: <merged id>` in `<run>/merged.md`,
    `<run>/verify/<merged id>.md`, `<run>/notes/<merged id>.md` when it exists,
-   `<run>/guidance.md`, and `.claude/skills/review-context/SKILL.md` when
+   `<run>/guidance.md`, and `<git common dir>/clerk-dev/repo-context.md` when
    it exists. What the fixer must take from them: the card text; the merged
    entry's `claim`, `scenario`, `evidence`, and `fix` (for a pull request
    comment, its text, replies, and the verifier's note stand in for these; when
    a comment is linked to the finding, include its text too, since the
    reviewer's point may add to the finding's); the verifier's note from
-   `verify/<id>.md`; the `snippet` range; the repo review-context sections the
+   `verify/<id>.md`; the `snippet` range; the repo context sections the
    finding's lens would have read; the branch scope and the guidance rules in
    `<run>/guidance.md` that bear on this finding; the finding's
    instruction note and its free-text notes (`notes/<merged id>.md`), which are
@@ -180,7 +180,7 @@ The fixer sees only this repository, so its `follow-ups:` covers the clients it
 happens to know about. When its `contract:` line is not "none", check every
 related worktree yourself, without a model:
 
-1. The worktrees: every other row of `.clerk-dev/review-workspace.md`
+1. The worktrees: every other row of `.clerk-dev/workspace.md`
    (`skills/review/workspace-manifest.md`). When the file is missing, check
    nothing elsewhere: say in one line that no other repositories are known for
    this branch, so their clients were not checked, and that a feature review

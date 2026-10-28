@@ -181,7 +181,7 @@ Give paths, not contents. Include:
   them;
 - the tests to write or port, and the exact command to run them;
 - the guidance file's path: `records.py guidance <worktree> --for <the
-  piece's brief> [--context <the repository's review-context SKILL.md>] --out
+  piece's brief> [--context <the repository's repo-context.md>] --out
   <scratchpad>/guidance-<area>.md` writes the branch's Purpose, its guidance,
   the feature's active guidance for the brief's area, and the repository's Known
   noise (`--area <area>` names the area directly);

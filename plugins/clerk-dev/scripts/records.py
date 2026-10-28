@@ -15,7 +15,7 @@ use, and the index groups records by them. The area is a label, not content, so
 it can be changed at any time (tag, rename-area).
 
 The hub is the worktree that holds the records: the worktree named on the
-`Hub:` line of .clerk-dev/review-workspace.md, or else this worktree.
+`Hub:` line of .clerk-dev/workspace.md, or else this worktree.
 
 Usage:
   records.py hub WORKTREE
@@ -86,9 +86,11 @@ def exclude(wt):
             os.makedirs(os.path.dirname(exf), exist_ok=True)
             with open(exf, "a") as fh: fh.write(".clerk-dev/\n")
 
+def workspace_path(wt): return os.path.join(wt, ".clerk-dev", "workspace.md")
+
 def workspace(wt):
-    """(hub worktree or None, {repo: worktree}) from .clerk-dev/review-workspace.md."""
-    p = os.path.join(wt, ".clerk-dev", "review-workspace.md")
+    """(hub worktree or None, {repo: worktree}) from .clerk-dev/workspace.md."""
+    p = workspace_path(wt)
     if not os.path.exists(p): return None, {}
     text = open(p, encoding="utf-8").read()
     repos = {}
@@ -111,7 +113,7 @@ def this_repo(wt, repos):
 
 def hub(wt):
     h, _ = workspace(wt)
-    if h and not os.path.isdir(h): sys.exit(f"hub worktree {h} (from .clerk-dev/review-workspace.md) does not exist")
+    if h and not os.path.isdir(h): sys.exit(f"hub worktree {h} (from .clerk-dev/workspace.md) does not exist")
     return os.path.abspath(h or wt)
 
 def fdir(wt): return os.path.join(hub(wt), ".clerk-dev", "feature")
@@ -352,10 +354,27 @@ def rule_lines(heading, body, rule):
 
 def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
 
+def repo_dir(wt):
+    return os.path.join(git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir"), "clerk-dev")
+
+def repo_context_path(wt): return os.path.join(repo_dir(wt), "repo-context.md")
+
+def setup_path(wt): return os.path.join(repo_dir(wt), "setup")
+
+def old_repo_files(wt):
+    common = os.path.dirname(repo_dir(wt))
+    old = [os.path.join(wt, ".clerk-dev", "review-workspace.md"),
+           os.path.join(wt, ".claude", "skills", "review-context", "SKILL.md"),
+           os.path.join(common, "review-setup")]
+    return [p for p in old if os.path.exists(p)]
+
 def guard(wt):
     p = notes_path(wt)
     if os.path.exists(p) and {"## Review", "## Fixes"} & set(open(p, encoding="utf-8").read().splitlines()):
         sys.exit(f'{p} still has the old "## Review"/"## Fixes" sections; run /clerk-dev:migrate in this worktree first.')
+    old = old_repo_files(wt)
+    if old:
+        sys.exit(f"{', '.join(old)} still use the old names; run /clerk-dev:migrate in this worktree first.")
 
 def guard_file(path):
     parts = os.path.abspath(path).split(os.sep)

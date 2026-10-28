@@ -45,7 +45,7 @@ keep those glosses when you show or summarize it, and gloss any id you add.
 It reads only files and git: the latest review run, `.clerk-dev/followups.md`,
 `.clerk-dev/deferred.md`, and `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
 worktrees of
-`.clerk-dev/review-workspace.md`, the feature records and design checks in the
+`.clerk-dev/workspace.md`, the feature records and design checks in the
 hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen`,
 which remembers the follow-ups already shown so the next status can mark new
 ones. Pass `--run <label>` when the user names a run.

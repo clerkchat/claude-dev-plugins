@@ -441,7 +441,7 @@ started in, which depends on their background. Records stay there, where they
 are at hand while working.
 
 `records.py hub <worktree>` resolves it: the worktree named on the `Hub:` line
-of `.clerk-dev/review-workspace.md` (see `skills/review/workspace-manifest.md`),
+of `.clerk-dev/workspace.md` (see `skills/review/workspace-manifest.md`),
 or else the worktree itself. A session in any worktree of the workspace reads
 and writes the hub's records through the script.
 
