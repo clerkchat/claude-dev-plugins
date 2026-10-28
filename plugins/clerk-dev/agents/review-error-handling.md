@@ -28,15 +28,20 @@ and who learns about it.
 
 ## Checklist
 
-1. Swallowed: caught and ignored, caught and only logged when the caller needs
-   to know, caught and converted to a success-shaped return (empty list, null,
-   zero, false).
+1. Swallowed: caught and ignored, caught and only logged, caught and converted
+   to a success-shaped return (empty list, null, zero, false). A log line alone
+   is swallowing: nobody watches the logs, and a test that should fail passes
+   while the error goes to the log. An error is handled when it is rethrown so
+   it reaches the caller, the job's retry, and the tests, or reported to the
+   error tracker (`Sentry.captureException`) where the repository uses one, or
+   both. The fix to propose is one of those, not a louder log level.
 2. Too broad: a catch that was written for one failure but also captures
    programming errors, cancellation, or unrelated faults, so a bug looks like
    the expected failure.
 3. Fallbacks: silently using a default, a cached value, a mock, or a secondary
    path without surfacing that the primary failed. A fallback is acceptable when
-   it is logged, bounded, and the caller can tell.
+   it is bounded, the caller can tell, and the primary's failure reaches the
+   error tracker.
 4. Partial state: a failure after some writes or side effects, with no rollback,
    compensation, or marker that the operation is incomplete; retries that assume
    nothing happened.
@@ -59,12 +64,19 @@ and who learns about it.
 ## Scenario quality
 
 Name the failing call, the error it produces, and what the user, operator, or
-downstream system observes instead of the truth.
+downstream system observes instead of the truth. For a swallowed error, also
+name the test that would have caught it and passes instead.
+
+Rate a swallowed error by what is lost when it happens, not by how rarely it
+happens: a downstream retry that covers most causes lowers the likelihood, which
+goes in `uncertainty`, not the severity.
 
 ## Noise to avoid
 
-A catch that logs with context and rethrows, or converts to the repo's standard
-error type, is correct. Do not report catches in test code.
+A catch that rethrows (with or without a log), converts to the repo's standard
+error type, or reports to the error tracker, is correct. A deliberate drop of an
+error that retrying cannot fix (a validation error on bad input) is correct when
+it is reported to the error tracker. Do not report catches in test code.
 
 ## Design mode
 

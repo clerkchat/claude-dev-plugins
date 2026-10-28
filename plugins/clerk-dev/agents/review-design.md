@@ -46,7 +46,9 @@ change to that, and report rather than let a borderline case pass.
    around a single call.
 7. Dead code: unused exports, parameters, branches, flags, imports, and files
    the diff adds or leaves behind after a removal; commented-out code.
-8. Comments: every comment the diff adds is a candidate. Report ones that
+8. Comments: every comment the diff adds, in test files too, is a candidate.
+   Report ones a reader cannot act on or would ask "is this needed?" about,
+   ones that
    restate the code, narrate the author's process, argue with a rejected
    alternative, reference documents or plans not in the repo, or describe a
    roadmap, and also ones whose point a better name or a smaller function

@@ -1014,7 +1014,10 @@ verdict, which the renderer uses instead. Tell it the rubric's
 rule as well: confidence is only about whether the defect exists; if it is real
 but rare or its impact depends on something unseen, it keeps the confidence, may
 lower the `severity`, and puts what is uncertain in its note. A verifier that
-lowers confidence because impact is uncertain hides real findings. Write each
+lowers confidence because impact is uncertain hides real findings. Nor does
+rarity lower the severity of an error that fails silently (caught and only
+logged, or turned into a default): what is lost when it happens sets the
+severity, since nobody will notice when it does. Write each
 verdict to `<run>/verify/<id>.md`, where `<id>` is the finding's id from
 `merged.md`, as soon as that verifier returns, with a second line
 `model: <model>  usage: <tokens> tokens, <duration>` as for the reviewers; a resumed run skips findings that

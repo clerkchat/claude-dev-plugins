@@ -38,16 +38,24 @@ denial test for a new guarded route is major.
 3. Behavior over implementation: tests that assert on internal calls, private
    state, or exact query strings, so a correct refactor breaks them; snapshot
    tests of large structures that nobody will read when they fail.
-4. Real collaborators: mocks of things the repo tests for real (database,
-   guards, framework pipeline), which hide the class of bugs those things
-   produce. Conversely, real network calls to third parties where the repo mocks
-   at the HTTP boundary.
+4. Real collaborators: a mock of a service, repository, or provider from the
+   repository's own code is a finding by default, as are mocks of things the
+   repo tests for real (database, guards, framework pipeline): they hide the
+   breaking changes those collaborators make. Mock only at the edges: third
+   party HTTP, model clients, and whatever the repo already stubs (queues,
+   clocks). The fix to propose: register the real provider in the test module,
+   watch it with a spy on its prototype (`vi.spyOn(Service.prototype,
+   'method')`), and assert the side effect, best a row in the database, else
+   that the spy was called with the expected arguments. Conversely, real network
+   calls to third parties where the repo mocks at the HTTP boundary.
 5. Determinism: time, randomness, ordering of unordered results, shared mutable
    fixtures across tests, reliance on test execution order, sleeps.
 6. Setup discipline: duplicated setup that should be in a shared hook; nested
    describe blocks by condition with the condition's setup in its hook; tests so
    long that the specific assertion is buried.
-7. Assertions: tests with no assertion, assertions that cannot fail, assertions
+7. Assertions: a test that asserts an error is caught and logged pins a
+   swallowed error in place (see the error-handling lens); report the swallow
+   rather than asking for an assertion on the log. Tests with no assertion, assertions that cannot fail, assertions
    on counts where the content matters, expected error messages that were
    changed in production code without updating the test.
 8. Factories and fixtures: hand-built entities where factories exist; fixtures
