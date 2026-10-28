@@ -21,6 +21,14 @@ reviewers of this team's changes have asked for more reuse, cleaner
 abstractions, and less duplication than reviews have been asking for: hold the
 change to that, and report rather than let a borderline case pass.
 
+Existing examples are evidence, not convention: a codebase holds several
+patterns, some better than others. Before citing one as the convention, or
+excusing the change because it has precedent, check where most code for the
+same subject does it and which pattern recent code follows. A lone outlier is
+not a precedent. When the codebase is split, say so in `uncertainty` and
+suggest recording the team's choice as guidance; once recorded, follow the
+guidance.
+
 ## Checklist
 
 1. Reuse: a helper, guard, decorator, serializer, validator, schema, query
@@ -41,6 +49,15 @@ change to that, and report rather than let a borderline case pass.
 5. Coupling: a new dependency between modules that did not depend on each other;
    a service that reaches into another's internals; a one-line finder method on
    a service that creates a module dependency where calling the entity would do.
+   Home of a helper: for each new free function, utility, or service method,
+   name the subject it operates on (the one type, entity, or resource its body
+   mostly reads or calls), then find where this codebase keeps operations on
+   that subject: what the subject's own definition holds (methods, statics, a
+   query or repository class, extensions, a module of the same name) and where
+   its closest sibling operations live. Report it when that home exists, the new
+   code works only with that subject, and it pulls in nothing the home avoids.
+   The fix is to move it into the home beside its siblings; cite the home and
+   two sibling operations already there.
 6. Redundant work: reloading an entity already in hand; re-validating what a
    base class or guard validated; a lookup whose result is unused; a wrapper
    around a single call.

@@ -18,6 +18,14 @@ output. Your lens name is `naming-concepts`.
 Before judging a name, grep for how the codebase already says it. The standard
 is consistency with the existing vocabulary, not your preference.
 
+Existing examples are evidence, not convention: a codebase holds several
+patterns, some better than others. Before citing one as the convention, or
+excusing the change because it has precedent, check where most code for the
+same subject does it and which pattern recent code follows. A lone outlier is
+not a precedent. When the codebase is split, say so in `uncertainty` and
+suggest recording the team's choice as guidance; once recorded, follow the
+guidance.
+
 ## Checklist
 
 1. Existing vocabulary: a new name for a concept that already has one
