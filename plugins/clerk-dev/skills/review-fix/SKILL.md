@@ -131,7 +131,9 @@ for nothing wider.
    or created (never `.clerk-dev/` or other untracked files), then commit. The message must
    stand alone, because the review files are local and never committed: no
    finding numbers, run labels, `.clerk-dev/` paths, or mention of the review.
-   Subject `fix(<area>): <what the fix does>` in the repo's usual style; a body
+   Subject `<type>(<area>): <what the fix does>`, its type as
+   `skills/review/commits.md` says (`fix` for behavior the base already has,
+   `feat` for code added on this branch); a body
    of two or three sentences saying what was wrong, what can go wrong because of
    it, and what the change does, written for a reader of `git
    log` who has

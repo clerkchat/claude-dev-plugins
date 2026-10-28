@@ -106,7 +106,7 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
 5. Commit: `git add` only the files the fixer changed, then commit. The message
    stands alone, since the follow-ups file and review runs are local: no
    follow-up ids, finding numbers, run labels, or `.clerk-dev/` paths. The subject
-   follows the repository's usual style and says what the client now does; the
+   follows `skills/review/commits.md` and says what the client now does; the
    body, two or three sentences from the fixer's `summary`, says what changed on
    the other side (the contract, in plain words) and what this change does about
    it. When the handoff names a record the follow-up builds, log it after the

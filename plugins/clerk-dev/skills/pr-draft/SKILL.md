@@ -156,19 +156,21 @@ Each stage's size comes from `git diff --numstat origin/<base>...HEAD --
 helpers, rounded as `style.md` says. A file in several stages is split evenly
 between them. Prep commits are not subtracted.
 
-Sort the commits into the groups of `style.md`'s Overview of commits
-(refactors, changes to deployed code, new code, tests, break), from a marker
-in the subject when it has one, else from the diff: extractions and renames
-the rest builds on are refactors; a change to how code that runs on the base
-behaves is a change to deployed code; a commit that only adds code nothing on
-the base calls is new; tests only is tests; removing or changing a route,
-field, table, or check callers rely on is a break. A mixed commit goes under
-its riskiest group: break, deployed code, new, refactors, tests. A marker is a
-claim, not proof: when a stage writer finds that a commit marked refactor
-changes behavior, the commit moves to changes to deployed code. Note whether
-the branch's subjects carry markers, for the Conventions subsection. On a
-stacked base, changes to deployed code and changes to code on the base are
-separate groups and may both appear.
+Sort the commits into the groups of `style.md`'s Overview of commits by their
+types, as `skills/review/commits.md` maps them (prep to refactors, live to
+changes to deployed code, new, tooling, tests, docs, and `!` to break). A
+commit with no type is sorted from its diff: extractions and renames the rest
+builds on are refactors; a change to how code that runs on the base behaves
+is a change to deployed code; a commit that only adds code nothing on the base
+calls is new; pipeline and housekeeping changes are tooling; tests only is
+tests; docs only is docs; removing or changing a route, field, table, or check
+callers rely on is a break. A mixed commit goes under its riskiest group, in
+the order `commits.md` gives. A type is a claim, not proof: when a stage
+writer finds that a commit typed refactor or chore changes behavior, the
+commit moves to changes to deployed code. Note whether the branch's subjects
+carry types, for the Conventions subsection. On a stacked base, changes to
+deployed code and changes to code on the base are separate groups and may
+both appear.
 
 A change that needs no spine (a fix in one place, a dependency bump, a few
 small edits, or a repository of a few hundred non-test lines in a larger

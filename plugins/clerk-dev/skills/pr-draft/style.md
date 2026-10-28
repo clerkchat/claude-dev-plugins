@@ -79,8 +79,8 @@ The group's purpose and a few examples; the full list is in the commits. No
 commit counts.
 
 - **Conventions** (`####`), only when the branch's commit subjects carry
-  markers (`<area> (refactor):`, `(tests)`, `(breaking)`): what each marker
-  means in reviewer terms, as bullets. Say why a refactor can be trusted (it
+  types (`refactor(<area>):`, `change`, `!`, as `skills/review/commits.md`
+  lists them): what each type present means in reviewer terms, as bullets. Say why a refactor can be trusted (it
   changes no behavior and existing tests guard it) and what it allows
   (cherry-picking it on its own), not only what it does not touch.
 - **Groups** (`####`, or no heading when there are no Conventions): one
@@ -94,14 +94,18 @@ commit counts.
     base" for it, and keep "deployed" for code the default branch has.
   - **New code**, named for what it is ("New sync code"). Code nothing on
     the base calls yet.
+  - **Tooling.** Pipelines, checks, and housekeeping; nothing deployed
+    changes.
   - **Tests.** Tests only.
+  - **Docs.** Docs only.
   - **API break**, or the kind of break ("Schema break with backfill",
     "Behavior break"). What breaks, whether it is public or customer-facing,
     and who calls it. Only the repository that changes the contract has this
     group; a client that follows the change says so in its other groups and
     in its deployment section.
 - Detail goes where the review is: the new code and the changes to deployed
-  code get bullets, refactors and tests a line or a few examples each.
+  code get bullets; refactors, tooling, tests, and docs a line or a few
+  examples each.
 - Any list of two or more items is a bullet list.
 - Cut qualifiers the group heading already implies, especially one a sibling
   repository's PR makes false ("nothing calls it", when the sibling does).
@@ -336,10 +340,11 @@ Sibling pull requests:
 
 #### Conventions
 
-Commits are small and each has one kind of change, marked in its subject:
+Commits are small and each has one kind of change, marked by its type:
 
-- `pipeline (refactor):` changes deployed pipeline code without changing behavior, relying on the existing pipeline tests to catch a regression. These commits touch no harness code, so they can be cherry-picked onto `master` on their own.
-- `(tests)` adds or changes tests only, and `(breaking)` changes a contract callers rely on.
+- `refactor(pipeline):` changes deployed pipeline code without changing behavior, relying on the existing pipeline tests to catch a regression. These commits touch no harness code, so they can be cherry-picked onto `master` on their own.
+- `fix` and `change` alter behavior production has today; `feat` adds code nothing deployed runs yet.
+- `test` adds or changes tests only, and a `!` marks a change to a contract callers rely on.
 
 #### Groups
 
