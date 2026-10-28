@@ -1,7 +1,7 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, pieces, plans, and briefs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the brief for", "write the spec for", "what did we decide about X", "show the feature records", or asks to import a Notes-*.md or Spec-*.md file as records.
-argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | brief <piece> | list | import <file>]"
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, pieces, plans, and briefs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the brief for", "write the spec for", "what did we decide about X", or "show the feature records".
+argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | brief <piece> | list]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 ---
 
@@ -60,8 +60,8 @@ this repository, so sessions in the other worktrees find the records.
 
 ## Areas
 
-A complex feature's thinking splits into areas, one per capability or layer, the
-way separate `Notes-*.md` files would. Areas are not declared up front.
+A complex feature's thinking splits into areas, one per capability or layer.
+Areas are not declared up front.
 
 - When writing a record, give it the area the conversation is about. Check
   existing names first (`records.py areas <worktree>`) and reuse one when it
@@ -248,20 +248,3 @@ and answer citing their ids. Superseded records answer "what did we think
 before"; say they are superseded when quoting them.
 
 "Show the records": `records.py list <worktree>` and show its output as it is.
-
-## Importing existing notes
-
-Asked to import a `Notes-*.md`, `Spec-*.md`, or similar file: read it, pick the
-type it mostly is (notes are usually a brainstorm, sometimes a design with
-decisions in it; a spec is a brief), create the record with the file's date
-noted in its Context section and an area from the file's subject (none for the
-broad one), and copy the content into the template's sections
-without rewriting the substance. When a notes file holds several settled
-choices, offer to split them out as decision records. Leave the original file
-where it is; it is the user's.
-
-A set of notes files (`Notes-*.md`, one per capability or layer, plus usually
-a broad one) imports as one record per file: the broad file feature-wide, each
-other file in an area named after its subject, `from` the broad one when it
-grew out of it. Show the proposed areas in one line before writing, since they
-become the index's grouping.
