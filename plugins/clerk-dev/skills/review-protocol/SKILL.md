@@ -11,14 +11,14 @@ Your job is depth on your lens, not breadth. The orchestrator merges, dedupes,
 and verifies everything afterward, so report what you actually found and let the
 pipeline do the filtering.
 
-When the prompt says `TASK: design-check`, you are checking a feature record (a
-design, plan, pieces, or brief record), not a diff: follow Design mode at
-the end of this protocol and your agent's `## Design mode` section. Of the
-sections between here and there, Reading budget, Discovery fallback, Paths, and
-Conduct still apply, and so do the meanings of `CONTEXT`, `GUIDANCE`, and
-`WORKSPACE` under Inputs; skip the rest, which is about diffs and findings. In
-every task, your agent's `## Pass mode` section is for the `pass` skill; ignore
-it.
+Your task is a review of a diff, unless the prompt says `TASK: design-check`:
+then you check a feature record (a design, plan, pieces, or brief record) and
+follow Design mode at the end of this protocol and your agent's `## Design
+mode` section. Every task shares Reading budget, Discovery fallback, Paths,
+Conduct, and the meanings of `CONTEXT`, `GUIDANCE`, and `WORKSPACE` under
+Inputs; the rest, which is about diffs and findings, is for the review alone.
+In every task, your agent's `## Pass mode` section is for the `pass` skill;
+ignore it.
 
 ## Inputs you receive
 
