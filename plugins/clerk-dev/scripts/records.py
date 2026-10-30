@@ -554,7 +554,8 @@ def suggestions(d):
             out.append(f"{name}: {len(decs)} active decisions and no design; roll them up into a design that cites them.")
         elif des:
             newest = max(des, key=lambda x: ids.number(x["id"]))
-            later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"])]
+            cited = {m.group(1) for m in ID_RE.finditer(parse(newest["path"])[1])}
+            later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"]) and x["id"] not in cited]
             if len(later) >= 3: out.append(f"{name}: design {newest['id']} predates {len(later)} active decisions ({', '.join(later)}); supersede it with one that includes them.")
     plans = [r for r in live if r.get("type") in ("plan", "pieces")]
     planlike = [r for r in live if r.get("type") == "decision" and re.search(r"\b(chunks|ordering|order of|sequenc\w*|dependencies|phases|milestones|pieces|plan|roadmap|breakdown)\b", r.get("title", ""), re.I)]
