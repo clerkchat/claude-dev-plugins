@@ -103,10 +103,10 @@ Open each item with a progress line: "Follow-up 3 of 9 (F3): 2 done, 7 left
      decision: "<date>, after <sha> (a follow-up): <why>". Do not change its
      instruction or status; the next triage judges it against the commit.
    - Large, from Intake's sizing, or from a builder's `size: too big` on a
-     work list of one item: on the user's yes, Growing an item in the
-     `building` skill marks it `in-progress` naming the brief, and nothing
-     more happens here; on no, `followups.py set <worktree> F3 Discuss --note
-     "<the proposal>"`.
+     work list of one item: Growing an item in the `building` skill
+     marks it `in-progress` naming the brief, and nothing more happens here;
+     when the user says not to grow it, `followups.py set <worktree> F3
+     Discuss --note "<the route they chose>"`.
    - In a work list of several items, any other stop: `followups.py set
      <worktree> F3 Discuss --note "<reason>"`, the reason ending "; its edits
      were reverted" when Leftover edits in the `building` skill reverted any,

@@ -121,10 +121,10 @@ for nothing wider.
      in `tracking.md` describes; if the user approves, add the area to Purpose
      under "Deployed code it changes on purpose" with a dated line, write the
      guidance file again, and hand the finding to Intake again.
-   - Large, from Intake's sizing or a builder's `size: too big`: on the user's
-     yes, Growing an item in the `building` skill marks the finding
-     `in-progress:BRIEF-<n>`, and nothing more happens here; on no, record
-     `--instruct N=discuss:<the proposal>`.
+   - Large, from Intake's sizing or a builder's `size: too big`: Growing an item
+     in the `building` skill marks the finding `in-progress:BRIEF-<n>`, and
+     nothing more happens here; when the user says not to grow it, record
+     `--instruct N=discuss:<the route they chose>`.
    - The tests failed: record `in-progress` with the files, when Leftover
      edits in the `building` skill keeps them.
    - A question: nothing here; "After each handoff" settles it and re-sends
@@ -167,16 +167,16 @@ for nothing wider.
 
 The triage skill works its fix queue in its own session through queue mode:
 the queue, in finding-number order, is handed to Intake in the `building`
-skill as one queue, which sorts it and asks once about the large ones, as
+skill as one queue, which sorts it and grows the large ones, as
 Queues there describes, and runs the rest one finding at a time. Each
 finding's handoff is built as in step 2 and closed as in steps 4 to 7, with
 these changes:
 
-- Nothing asks after the sort. A fix that would need the user's choice moves
+- Nothing asks. A fix that would need the user's choice moves
   to discussion instead, where the user decides it.
 - Every stop is recorded `--instruct N=discuss:<reason>`, and the queue goes
-  on. The reason is the `scope:` reason for `scope: out`, the piece proposal
-  for `size: too big` or a large finding the user declined at the sort,
+  on. The reason is the `scope:` reason for `scope: out`, the route the user
+  chose for a large finding they said not to grow,
   `tests failed: <one line>` when the tests failed, and otherwise the question
   from `questions:` or the guidance rule that cannot hold. When Leftover
   edits in the `building` skill reverted any edits, the reason ends with

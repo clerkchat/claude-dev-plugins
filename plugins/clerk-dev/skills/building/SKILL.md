@@ -63,11 +63,11 @@ a queue to the next item.
   describes, or do it in the session when the handoff would be longer than
   the change (What stays in the session).
 - Large, many files, a shape others build on, or a new state to handle:
-  propose it to the user as a piece, a brief plus a one-step milestone, with
-  a sentence on what the change reaches, and wait for the user's yes; never
-  cut the item into handoffs silently. On yes, grow it as "Growing an item"
-  describes. On no, the item stays open at its source with the proposal as
-  its note.
+  grow it into a piece, a brief plus a one-step milestone, as "Growing an
+  item" describes, without asking: the intake line, with a sentence on what
+  the change reaches, tells the user. Never cut the item into handoffs
+  without a brief. When the user says not to grow it, the item stays open at
+  its source with the route they chose as its note.
 - Unclear: weigh it with the `deliberate` skill, the local code as its
   facts; its answer routes the item as small or large.
 
@@ -96,7 +96,7 @@ and a one-step milestone, with no pieces record. Only size grows an item:
 intake sized it large, or a builder reported `size: too big` on a small
 finding, follow-up, or request (After each handoff, step 4). `scope: out`
 never grows an item; it takes the source's row of the Scope table, whatever
-the item's size. On the user's yes:
+the item's size. Grow it without asking:
 
 1. Write the brief: `records.py new <hub> brief "<title>" --from <the item>
    --area <area>`, where the item is `F3` for a follow-up, `<run> N` for a
@@ -161,7 +161,7 @@ and its scope answer:
 <item>: <small | large | unclear>, <route>; scope: <in | out, proposed | out, asked once>
 ```
 
-The route is one of `one handoff`, `inline`, `proposed as a piece`, `to
+The route is one of `one handoff`, `inline`, `to
 deliberate`, or `grown into BRIEF-<n> (MILE-<m>, runs after MILE-<k> | now)`;
 in a queue, a grown item's line ends `; leaves the queue`. An item already
 being built is not sized, and its line is `<item>: being built as
@@ -182,16 +182,14 @@ choices:
    files together; a group that shares files and sizes large grows into one
    brief.
 2. Say one intake line per item.
-3. Propose the large ones together, in one message, each with its sentence
-   on what the change reaches: this is the one question a queue asks. On yes,
-   each is grown as "Growing an item" describes and leaves the queue with its
-   line; on no, it stays open at its source with the proposal as its note.
+3. Grow the large ones as "Growing an item" describes, each leaving the
+   queue with its line and its sentence on what the change reaches.
 4. Run the small ones, one handoff and one commit each, in the queue's order,
-   with no further question. Before each item, check that the tree is clean:
+   with no question. Before each item, check that the tree is clean:
    `git status --short --untracked-files=no` prints nothing. When it prints
    anything, stop the queue and show those files, since no item owns them.
 
-After the sort's one question, nothing asks. A stop that would need the user
+Nothing in a queue asks. A stop that would need the user
 (a builder's `scope: out` or `size: too big`, failed tests, a question, or a
 guidance rule that cannot hold) is recorded on the item as its source's skill
 records a stop in a queue, with its edits reverted as Leftover edits says for
@@ -397,8 +395,8 @@ status lives only here; the brief is not edited for it.
    telling the user in one line; stop it (`build.py stop`) and weigh the cut
    with the `deliberate` skill when the cut needs a choice the brief did
    not make, or when a handoff already cut once comes back too big again. For a finding, follow-up, or request, the report means the item
-   is large and intake sized it small: take Intake's large route, proposing a
-   piece and waiting for the user's yes.
+   is large and intake sized it small: take Intake's large route and grow it
+   into a piece.
 5. `deviations:` are judged against the brief, decisions, and guidance, and either accepted (say so to the user in
    a line, and record it when it changes a decision) or sent back with a
    correction.
