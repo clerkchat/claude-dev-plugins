@@ -72,7 +72,8 @@ class BlockersTests(BlockersCase):
         self.write_check()
         out = self.blockers()
         self.assertIn("**Settle-first design questions:**", out)
-        self.assertIn("-1.Q-1", out)
+        self.assertIn("- BRIEF-5-1 (design check of BRIEF-5): BRIEF-5-1.Q-1", out)
+        self.assertNotIn("BRIEF-5 (brief", out)
         self.assertNotIn("Q-2", out)
         self.assertIn("walk the design questions", out)
 

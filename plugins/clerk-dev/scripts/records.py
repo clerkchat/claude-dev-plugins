@@ -507,7 +507,7 @@ def names(wt, wanted):
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
-ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
+ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
 
 def gloss(wt, text, n=50):
     """The text with each id's first plain mention followed by its short name,
