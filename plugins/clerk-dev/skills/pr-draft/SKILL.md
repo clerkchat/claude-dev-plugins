@@ -1,6 +1,6 @@
 ---
 name: pr-draft
-description: Draft, refine, and post the pull request descriptions of a large change at the end of a deployable unit of work, one per repository in the unit. Drafts go to .clerk-dev/pr-description.md; refinements are made in place and logged as notes that later drafts follow; posting pushes the branches, creates the pull requests, and links the siblings to each other. Use only when the user asks for it: "draft the PR description", "write the PR descriptions for the feature", "describe this PR", "in the PR draft, ...", "refine the PR description", "post the PRs", "open the pull requests", or /clerk-dev:pr-draft. Never run it from another skill or at the end of a build, and never post without the user asking to post. Meant for large PRs, where a walkthrough ordered by the change's main flow pays off.
+description: Draft, refine, and post pull request descriptions, one per repository in the change. Drafts go to .clerk-dev/pr-description.md; refinements are made in place and logged as notes that later drafts follow; posting pushes the branches, creates the pull requests, and links the siblings to each other. Use whenever the user asks for a PR description in any words: "draft a PR description", "draft the PR description for this", "write the PR description", "describe this PR", "write the PR descriptions for the feature", "in the PR draft, ...", "refine the PR description", "post the PRs", "open the pull requests", or /clerk-dev:pr-draft. Do not start it unprompted, from another skill, or at the end of a build, and never post without the user asking to post.
 argument-hint: "[--base <branch>] [<repo>...]"
 allowed-tools: Bash(git *), Bash(gh pr view *), Bash(gh pr create *), Bash(gh pr edit *), Bash(python3 *), Read, Write, Edit, Grep, Glob, Agent
 ---
@@ -19,6 +19,9 @@ reviewer reads first: what the change adds, what the base lacks, and a
 walkthrough of the diff in the order a reviewer follows it. It gathers and
 checks; `style.md` next to this file says how the draft looks, with a worked
 example. Read `style.md` before writing anything and follow it.
+
+The walkthrough pays off most on a large change; for a small one, keep it to
+a few lines rather than skipping the skill.
 
 A first draft is rarely the last. The skill has three modes, picked from what
 the user asks:
