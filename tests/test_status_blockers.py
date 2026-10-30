@@ -78,7 +78,8 @@ class BlockersTests(BlockersCase):
         self.assertIn("walk the design questions", out)
 
     def test_an_open_follow_up_appears_and_status_seen_is_not_written(self):
-        code, out = run_script("followups", "add", self.repo.path, "Send exportId back", "--from", "api abc1234")
+        code, out = run_script("followups", "add", self.repo.path, "Send exportId back", "--from", "api abc1234",
+                               "--contract", "changed: POST /exports: now returns exportId")
         self.assertEqual(code, 0, out)
         out = self.blockers()
         self.assertIn("**Follow-ups owed here:**", out)
