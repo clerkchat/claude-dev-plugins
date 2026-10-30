@@ -467,7 +467,11 @@ done as written):
   for a finding, `items.py status <file> Q-3 deferred --ref DEFER-3` for a design
   question, `followups.py close <worktree> F3 --status deferred --ref DEFER-3` for a
   follow-up, `passes.py done <worktree> PASS-3 4 --na "deferred, DEFER-3"` for a pass
-  item. "Deferred items" below says what they are.
+  item. "Deferred items" below says what they are. A survey item
+  (`SURVEY-2.Q-3`) parks an idea instead, since nothing was done for now:
+  `records.py idea <worktree> "<what>" --from SURVEY-2.Q-3 --why "..." --when
+  "..."`, then `items.py status <survey file> Q-3 deferred --ref IDEA-7`, and no
+  deferred item.
 - `Ignore`: not at all; the status becomes `wont-fix`, with why.
 - `Refine`: investigate first (read the source change and the local code),
   propose a concrete fix or a reason not to, as the `deliberate` skill does,

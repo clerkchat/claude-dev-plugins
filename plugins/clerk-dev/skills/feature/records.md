@@ -20,6 +20,8 @@ worktrees and records; features are not tracked across each other.
   checks/
     BRIEF-13-1.md             a design check of BRIEF-13 (the design-check skill)
     BRIEF-13-1/raw/<lens>.md  each lens's reply, verbatim
+    SURVEY-1.md               a survey of existing code (the design-check skill)
+    SURVEY-1/raw/<lens>.md    each lens's reply, verbatim
   overview.md                 generated from the active records; never edited
   ideas.md                    parked ideas, IDEA-1, IDEA-2, ...; kept by records.py
 ```
@@ -27,7 +29,9 @@ worktrees and records; features are not tracked across each other.
 `overview.md` is the feature's current state in one read, generated from the
 active records (below). `ideas.md` holds ideas set aside for later (below). Check files are not
 records: they have no record id, are never superseded, and are
-listed in the index under every record they checked.
+listed in the index under every record they checked. A survey is a check-style
+file over code, not a record: it is listed under the record it was for, or as
+paths.
 
 Manage files only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`: it
 assigns ids, writes the frontmatter, marks superseded records, and regenerates

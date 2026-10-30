@@ -13,7 +13,8 @@ def skill(name):
 
 
 def headings(text):
-    return re.findall(r"^## (.+)$", text, re.M)
+    prose = re.sub(r"^\s*```.*?^\s*```", "", text, flags=re.S | re.M)
+    return re.findall(r"^## (.+)$", prose, re.M)
 
 
 class SkillSplitTests(unittest.TestCase):
@@ -25,6 +26,12 @@ class SkillSplitTests(unittest.TestCase):
 
     def test_building_opens_with_the_setup_check_then_intake(self):
         self.assertEqual(headings(skill("building"))[:2], ["Before the first handoff", "Intake"])
+
+    def test_design_check_shares_the_lens_run_between_a_check_and_a_survey(self):
+        self.assertEqual(
+            headings(skill("design-check")),
+            ["Running the lenses", "Running a check", "Running a survey", "Check file", "Survey file", "Walking the questions"],
+        )
 
     def test_neither_skill_names_the_old_agents_or_delegating(self):
         for name in ("writing-code", "building"):

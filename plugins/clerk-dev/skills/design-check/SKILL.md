@@ -1,7 +1,7 @@
 ---
 name: design-check
-description: Check a feature's design, plan, pieces, or brief record against the review lenses before the code exists, and work through the questions that come back. Use when the user says "check the design", "design-check BRIEF-10", "run the lenses on the brief", "run the lenses on the spec", "what should we settle before building this", "poke holes in this", "review the plan", or "go through the design questions". Not for reviewing code; that is /clerk-dev:review.
-argument-hint: "[<record id>[,<record id>...]] [--lenses a,b | +a | -a] [walk]"
+description: Check a feature's design, plan, pieces, or brief record against the review lenses before the code exists, or survey existing code for the refactors worth doing first and the traps already in it before a change is defined, and work through what comes back. Use when the user says "check the design", "design-check BRIEF-10", "run the lenses on the brief", "run the lenses on the spec", "what should we settle before building this", "poke holes in this", "review the plan", "go through the design questions", "survey <paths | record>", "survey this module", "what should we refactor first in <paths>", "survey the code for BRIEF-85", or "walk the survey". Not for reviewing a change; that is /clerk-dev:review.
+argument-hint: "[<record id>[,<record id>...] | survey <paths | record id> [--cap <n>]] [--lenses a,b | +a | -a] [walk]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
 ---
 
@@ -15,17 +15,22 @@ keep the work safe. Prefer `/clear` at a natural boundary to compaction; the
 `checkpoint` skill writes down what is pending first.
 
 Runs the review lenses in design mode (see Design mode in the `review-protocol`
-skill) on feature records (see `skills/feature/records.md`), and writes the
-questions they raise to a check file in the hub. Then, when asked, walks the
-user through them and records each answer.
+skill) on feature records (see `skills/feature/records.md`), or in survey mode
+(see Survey mode there) on existing code, and writes the items they raise to a
+check file in the hub. Then, when asked, walks the user through them and
+records each answer.
 
 `records.py` below is `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`.
 
 ## Running the lenses
 
-Each kind of run below picks what it runs on and its lenses, says them, and
-then runs these steps with its own parts: the area, the prompt, the block it reads back,
-its sort and earlier runs, the file's name and header, and the report's counts.
+Each kind of run below picks what it runs on and its lenses and says them in
+a line each, the lenses by their plain names from `skills/review/routing.md`,
+then goes on without waiting for approval. It runs these steps with its own
+parts: the area, the prompt, the block it reads back, its sort and earlier
+runs, the file's name and header, and the report's counts. A record's
+repository is its `repo` field, at the worktree the workspace file lists for
+it, defaulting to this worktree.
 The kind names its file `<hub>/.clerk-dev/feature/checks/<run>.md` and gives
 the `<subject>` it is on; the run's own files go in
 `<hub>/.clerk-dev/feature/checks/<run>/`.
@@ -93,13 +98,11 @@ the lenses", with these parts.
   conversation is about; failing that, the newest active brief, plan, or design
   in the area the conversation is about (`records.py list <worktree> --active
   --area <area>`), or feature-wide when it is about the whole feature; ask
-  when that is unclear and several areas have candidates. Say in one line which records you
-  are checking. Supporting records are the ones the checked records name in
+  when that is unclear and several areas have candidates. Supporting records are the ones the checked records name in
   `from` or cite by id, plus the active decisions; pass them, but do not
   check them.
 - **Lenses.** Pick them as `skills/review/routing.md` "Design checks"
-  describes, applying any `--lenses` argument. Say the set in one line, using
-  the plain names from `routing.md`, and go on; do not wait for approval.
+  describes, applying any `--lenses` argument.
 - **Prompt.**
 
   ```
@@ -112,8 +115,7 @@ the lenses", with these parts.
   WORKSPACE: <.clerk-dev/workspace.md, or none>
   ```
 
-  The repository a record is about is its `repo` field; find its worktree in
-  the workspace file, defaulting to this worktree. Records **span
+  The records' repository is found as "Running the lenses" says. Records **span
   repositories** when the workspace lists more than one repository and either
   the checked records have different `repo` values, or a checked plan, design,
   or pieces record assigns work to more than one of them. Then replace
@@ -142,6 +144,65 @@ the lenses", with these parts.
 
 Check files are not records: they have no record id and are not superseded. A
 question is cited as `BRIEF-13-1.Q-3`, or `Q-3` when the check in hand is clear.
+
+## Running a survey
+
+A survey runs the lenses in survey mode on existing code, before a change to
+it is defined, through "Running the lenses", with these parts. It is asked as
+`survey <paths | record id> [--cap <n>]`, or in words ("survey this module",
+"what should we refactor first in src/export", "survey the code for
+BRIEF-85").
+
+- **For.** `FOR` is the record given as the target, else the record the
+  conversation is about, else `none`. The repository is `FOR`'s, else this
+  worktree.
+- **Target.** Paths: each a file or directory under the repository. A record:
+  the paths in backticks in its body that exist under the repository; when it
+  names none, say so, ask for paths, and stop.
+- **Files.** `<k>` is one more than the highest existing survey's. Resolve the
+  target with `${CLAUDE_PLUGIN_ROOT}/scripts/survey-files.py <repository>
+  <path>... [--cap <n>] [--exclude <glob>]... --out
+  <hub>/.clerk-dev/feature/checks/SURVEY-<k>/files.txt`, which expands each
+  directory to its tracked files, drops what `measure-patch.py`'s default
+  exclusions drop, and writes the absolute paths, sorted, one per line; that
+  file is `FILES`. Pass as `--exclude` the globs of the `tests` and `config`
+  categories, classified as "Categories and path heuristics" in
+  `skills/review/routing.md` says: the repo context's `## Slices` globs of
+  those layers first, then each heuristic of those two rows with a `*` added
+  at either end that lacks one (`.test.` as `*.test.*`, `.env*` as
+  `*.env*`). The script applies them only to files a directory expanded to,
+  so a file the target names directly stays. The cap is 40 files, or
+  `--cap`. Over it, the script writes nothing and prints the directories with
+  their file counts: show them, ask the user to narrow the target, and stop
+  before any lens runs; never truncate the list. On any other error, show it
+  and stop.
+- **Lenses.** Pick them as `skills/review/routing.md` "Surveys" describes,
+  applying any `--lenses` argument, and name each trap lens with the category
+  behind it.
+- **Prompt.**
+
+  ```
+  TASK: survey
+  FILES: <absolute path of files.txt>
+  TARGET: <the target as the user gave it>
+  FOR: <the record's id and absolute path, or none>
+  REPO: <absolute path of the repository>
+  CONTEXT: <<git common dir>/clerk-dev/repo-context.md of that repository, or none>
+  GUIDANCE: <path of that repository's guidance file>
+  WORKSPACE: <.clerk-dev/workspace.md, or none>
+  ```
+
+- **Block.** The `survey` block.
+- **Sort and earlier runs.** Sort by weight (do-first, worth-doing, note), then
+  by file and line. Earlier runs are the surveys whose `Surveyed` line names a
+  path in this target.
+- **Area.** `FOR`'s area, or none.
+- **File.** `<run>` is `SURVEY-<k>` and `<subject>` the target as given.
+  Format below.
+- **Report.** The counts by weight and by kind, and the do-first items.
+
+A survey file is a check file over code: cited as `SURVEY-2`, its items as
+`SURVEY-2.Q-3`.
 
 ## Check file
 
@@ -173,11 +234,41 @@ naming-concepts 22k 25s.
 - Should exports poll? Answered by DEC-5 (completeness).
 ```
 
+## Survey file
+
+```markdown
+# Survey: src/export
+
+Surveyed 2026-10-30: src/export. For: BRIEF-85. Lenses: tech debt, design and
+reuse, naming, tenant isolation.
+Usage: tech-debt 41k 62s, design 38k 55s, naming-concepts 30k 40s, tenancy
+52k 90s.
+
+- [ ] Q-1. Export query built in two places
+  - Lens: tech-debt, design
+  - Kind: refactor
+  - Where: /Users/me/src/app/src/export/job.ts:42
+  - Weight: do-first
+  - Why: The next change adds a filter to both copies; one query helper makes
+    it one edit.
+  - Suggestion: Extract the query into `src/export/query.ts` and call it from
+    the job and the controller.
+  - Size: small
+  - Evidence: /Users/me/src/app/src/export/job.ts:42,
+    /Users/me/src/app/src/export/controller.ts:88
+  - Instruction:
+  - Status: open
+```
+
+Seen before and Dropped follow as in a check file. It differs from a check file in its name, its `Surveyed` line in place of
+`Checked` (the paths as given, or the record id and its paths; then `For:`),
+Kind and Size, and Where pointing at code rather than a record section.
+
 ## Walking the questions
 
 When the user asks to go through them ("walk the design questions", "go
-through Q-3"), take the open questions in order, settle-first first, one at a
-time. Sort them and prepare the borderline ones first, as "Several items
+through Q-3", "walk the survey"), take the open items in order, settle-first
+or do-first first, one at a time. Sort them and prepare the borderline ones first, as "Several items
 waiting" in the `deliberate` skill describes.
 
 1. Show the question with its why and suggestion, briefly, and the code or
@@ -201,9 +292,28 @@ waiting" in the `deliberate` skill describes.
    `skills/review/tracking.md`, with the question as the source. Then move on.
    Discuss and Refine leave it open until decided.
 
+A survey item takes steps 1 and 2; in place of 3 and 4, it closes by its
+instruction:
+
+- `Fix as recommended` or `Fix as noted` makes it a constraint on the next
+  change: it stays `open` until the next design or brief cites it, as
+  "Writing each type" in the `feature` skill says, and closes
+  `fixed --ref <that record>`. A constraint that is a choice in its own right
+  becomes a decision record now, as for a question, and closes with it.
+- A small trap may instead be fixed at once: hand it to the `building`
+  skill's Intake as a request, quoting the item, and close it
+  `fixed --ref <sha>` with the commit.
+- `Defer` parks an idea, as `Defer` under "Items" in
+  `skills/review/tracking.md` says for a survey item.
+- `Ignore` closes it `wont-fix` with why; `Discuss` and `Refine` leave it
+  open.
+
+An item a second survey of the same paths finds again is under that survey's
+Seen before, by the merge in "Running the lenses"; the walk adds no rule for it.
+
 Records written while walking follow the `feature` skill's rules. When the user's answer carries guidance (a rule beyond this case), or says
 `guidance: ...`, record it as "Guidance from answers" in
 `skills/review/tracking.md` describes, and say so in one line.
-When the walk's last question is settled, look back over it as "Lessons
+When the walk's last item is settled, look back over it as "Lessons
 from a discussion" in `skills/review/tracking.md` describes, then
 run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.

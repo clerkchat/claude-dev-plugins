@@ -87,6 +87,7 @@ Areas are not declared up front.
   questions; they are what later readers need most.
 - **design**: when brainstorming settles. `--from` the brainstorms it settles.
   Write a decision record for each significant choice first, and cite them.
+  Before writing Shape, take in the survey items (below).
 - **decision**: one choice per record, with what was rejected and why. When a
   new choice changes an earlier one, `--supersedes DEC-<n>` and restate it ("When
   a record changes another" below); never edit the old one. When the user drops one, `records.py discard <worktree> DEC-<n> --note
@@ -102,7 +103,8 @@ Areas are not declared up front.
   pieces or design record. Before writing Approach, read the code the
   piece will touch: the patterns to follow, the helpers to reuse or extend,
   and what to refactor first (the Baseline section; always filled, "Clean"
-  with a reason when nothing needs it). Keep
+  with a reason when nothing needs it), and take in the survey items
+  (below). Keep
   Requirements numbered and checkable, and Open items as checkboxes; reviews
   read both. When the piece changes the behavior of a brief that is already
   built, Approach names that brief and what changes ("When a record changes
@@ -112,13 +114,23 @@ Areas are not declared up front.
   which clash with the plugin's ids. Every builder works from the brief, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
   give it the brief template in `records.md`, the records the piece builds on
-  (its pieces or plan row, the design, the decisions of its area, and
-  the guidance file `records.py guidance <worktree> --area <area> --out
+  (its pieces or plan row, the design, the decisions of its area, the
+  survey items it takes in, and the guidance file `records.py guidance <worktree> --area <area> --out
   <scratchpad>/guidance-<area>.md` writes), the reference code to
   port by path, and the output path `records.py new` gave; ask it to write the
   body and list anything it could not settle from the records as open items.
   Then read it, settle what you can with the user, and edit it in this
   session.
+
+Survey items are the walked items of a survey (see Running a survey in the
+`design-check` skill) that the next design or brief must honor. Before writing
+a design's Shape or a brief's Baseline or Approach, list the open items of each
+survey (`${CLAUDE_PLUGIN_ROOT}/scripts/items.py list <survey file> --open`)
+and take those that have an Instruction and whose Where falls in the code the
+record covers. Cite each as `SURVEY-<k>.Q-<n>` where it lands, refactors in
+Baseline and traps in Requirements or Approach (both in Shape in a design), and
+once the record is written close it with `items.py status <survey file> Q-<n> fixed
+--ref <the record>`.
 
 ## Needs from another repository
 

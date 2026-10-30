@@ -141,11 +141,19 @@ with "where are we?".
 #### Design checks
 
 > Check the design. / Poke holes in this. / Go through the design questions.
+>
+> Survey this module. / What should we refactor first in src/export?
 
 Runs the focuses that fit what a design, plan, or brief describes (a
 tenant-facing endpoint gets tenant isolation; a prompt gets the LLM focus) and
 writes the questions worth settling before building, marked settle-first,
 worth settling, or note. Going through them records each answer as a decision.
+
+Before a change is defined, a survey reads the existing code (paths, a module,
+or the code a record names) with the refactor focuses and the trap focuses that
+fit it, and lists the refactors worth doing first and the traps already there.
+Going through it turns each item into a constraint the next design or brief
+cites, a parked idea, a fix made now, or a drop.
 
 #### Guidance
 
