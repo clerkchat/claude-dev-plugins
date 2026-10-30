@@ -4,6 +4,11 @@ A feature's records are its history: what was considered, what was settled, and
 how it was broken down and planned. They live in the hub worktree, at
 `<hub>/.clerk-dev/feature/`, and are never committed.
 
+A feature is one unit of deployment: one worktree per repository, one pull
+request each, deployed together. A work branch merged back into the feature's
+branch is part of it. A later refinement is a new feature with its own
+worktrees and records; features are not tracked across each other.
+
 ```
 .clerk-dev/feature/
   feature.md                  name, summary, and the generated index of records

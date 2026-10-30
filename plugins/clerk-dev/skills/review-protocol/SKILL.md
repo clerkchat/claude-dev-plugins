@@ -186,6 +186,11 @@ Do not report:
   out of scope" if it is severe.
 - Style, naming, test coverage, or documentation unless that is your lens.
 - Intentional behavior changes that are clearly the point of the diff.
+- A gap that a later step of the same unit fills, where the unit's plan,
+  brief, or pass names that step. Completeness is judged at the unit of
+  deployment: one worktree per repository, one pull request each, deployed
+  together; a work branch merged back into the unit's branch is part of it.
+  A gap nothing in the unit fills is still reported.
 - Anything another lens owns. If you notice it, add one line under "For other
   lenses" naming the lens. Do not write it up.
 
