@@ -120,6 +120,16 @@ class CheckTests(OldRecordsCase):
             "# Check\n\nChecked against: BRIEF-2.\n\n- [ ] Q-1. New question\n  - Weight: minor\n",
         )
 
+    def test_the_header_reader_returns_the_kind_and_the_records_a_design_check_names(self):
+        import records
+
+        self.assertEqual(records.check_header("# Check\n\nChecked against: R2, R1.\n\n- [ ] Q1. x\n"), (records.DESIGN_CHECK, ["R2", "R1"]))
+
+    def test_the_header_reader_returns_no_records_without_a_header(self):
+        import records
+
+        self.assertEqual(records.check_header("# Check\n"), (records.DESIGN_CHECK, []))
+
     def test_the_index_names_checks_in_the_new_form_and_links_their_files(self):
         self.records("index")
         text = read_file(os.path.join(feature_dir(self.root), "feature.md"))

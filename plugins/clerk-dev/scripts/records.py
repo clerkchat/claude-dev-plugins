@@ -170,8 +170,13 @@ def set_fields(r, **kw):
         else: meta[k] = v
     open(r["path"], "w", encoding="utf-8").write(render(meta, body))
 
+DESIGN_CHECK = "design check"
+
+def check_header(text):
+    m = re.search(r"^Checked [^:]*:\s*(.*?)(?:\.\s|\.$|$)", text, re.M)
+    return DESIGN_CHECK, ids.records_in(m.group(1)) if m else []
+
 def checks(d):
-    """Design-check files in checks/: name, records covered (from the Checked line), open and closed counts."""
     cd = os.path.join(d, "checks")
     if not os.path.isdir(cd): return []
     canon = resolver(records(d))
@@ -179,9 +184,8 @@ def checks(d):
     for f in sorted(check_files(cd), key=check_order):
         name = ids.check_from_file(f)
         text = open(os.path.join(cd, f), encoding="utf-8").read()
-        m = re.search(r"^Checked [^:]*:\s*(.*?)(?:\.\s|\.$|$)", text, re.M)
-        recs = [canon(x) for x in ids.records_in(m.group(1))] if m else []
-        out.append({"name": canon(name), "records": recs, "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
+        kind, named = check_header(text)
+        out.append({"name": canon(name), "kind": kind, "records": [canon(x) for x in named], "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
                     "closed": len(re.findall(r"^[-*] \[[xX]\]", text, re.M))})
     return out
 
