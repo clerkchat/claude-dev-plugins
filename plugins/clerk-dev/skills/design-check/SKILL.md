@@ -54,7 +54,21 @@ on; the run's own files go in `<hub>/.clerk-dev/feature/checks/<run>/`.
    once asking for the kind's block only; if it still has none, say so in the
    report. Zero items in a well-formed block is
    a valid answer.
-4. **Merge** the items as the kind describes.
+4. **Merge** the items:
+   - Merge items that say the same thing from different lenses into one,
+     listing every lens.
+   - Drop any an active decision or active guidance already answers, unless
+     the agent says the code shows it cannot hold; list each dropped item in
+     the file's Dropped section with the record that answered it, so the user
+     can contest the drop.
+   - Compare each remaining item with the closed items of earlier runs on the
+     same target, by meaning, not wording. A match is not a new item: list it
+     under the file's "Seen before" section with the earlier id and outcome
+     ("Do exports expire? BRIEF-9-1.Q-4: no change, deleted with the report"),
+     unless the target has changed in a way that reopens it; then keep it, and
+     cite the earlier one in its Why.
+   - Sort as the kind says: its weight order, its location key, and which
+     earlier files count as the same target.
 5. **Write** the kind's file, its header as the kind describes. A `Usage:`
    line under the header gives each lens's tokens and duration from the
    completion notices ("Usage: completeness 24k 25s, llm-agent 79k 177s"), so
@@ -109,19 +123,8 @@ the lenses", with these parts.
   ```
 
 - **Block.** The `questions` block.
-- **Merge.** Merge questions that ask the same thing from different lenses
-  into one, listing every lens. Drop any an active decision or active guidance already answers,
-  unless the agent says the code shows the decision cannot hold; list each
-  dropped question in the check file's Dropped section with the decision that
-  answered it, so the user can contest the drop. Sort by weight (settle-first,
-  worth-settling, note), then by record and section.
-  Then read the earlier check files of the same records (the index lists them)
-  and compare each new question with their closed ones by meaning, not
-  wording. A match is not a new item: list it under the check file's "Seen
-  before" section with the earlier id and outcome ("Do exports expire?
-  BRIEF-9-1.Q-4: no change, deleted with the report"), unless the record has
-  changed in a way that reopens it; then keep it, and cite the earlier one in
-  its Why.
+- **Merge.** Sort by weight (settle-first, worth-settling, note), then by
+  record and section. Earlier runs are the index's checks of the same records.
 - **File.** `<run>` is `<id>-<k>`, where `<id>` is the first checked record's
   id (BRIEF-13; `records.py names` gives its type) and `<k>` is one more than
   the highest existing check of it, counting older files named with its old
