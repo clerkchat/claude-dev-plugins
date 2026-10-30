@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Where a worktree's review work stands, from files and git only.
 
-Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review] [--area NAME|BRIEF-52]
+Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review|blockers] [--area NAME|BRIEF-52]
        status.py [WORKTREE] --setup
 
 --focus design prints whether the feature is ready to build: readiness per
@@ -58,6 +58,11 @@ records, briefs, or follow-ups name other repositories (or it lacks a row for
 one); workspace rows whose worktree is missing; a plan with a done line on
 every step when active briefs exist; a milestone under way whose Plan step is
 gone or whose plan was superseded or discarded. It changes nothing.
+
+--focus blockers prints the short list of what blocks the work: handoffs stopped
+on a question, settle-first design questions, open follow-ups here, and open
+findings in the review's "Fix before merging" section, whatever their mark,
+then the next steps for each. It leaves .clerk-dev/status-seen untouched.
 
 --no-mark leaves .clerk-dev/status-seen untouched.
 """
@@ -243,6 +248,22 @@ def pass_word(e):
 
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
+
+def seen_path(wt): return os.path.join(wt, ".clerk-dev", "status-seen")
+
+def seen_followups(wt):
+    return int(open(seen_path(wt)).read().strip() or 0) if os.path.exists(seen_path(wt)) else 0
+
+def followup_lines(open_items, seen):
+    new = [i for i in open_items if i["id"] > seen]
+    lines = [f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if seen and new else "") + "."]
+    for i in open_items:
+        tag = " (new)" if seen and i["id"] > seen else ""
+        lines.append(f"- {ids.item(ids.FOLLOWUP, i['id'])}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
+    return lines
+
+def number_list(nums):
+    return f"{', '.join(nums[:12])}{', …' if len(nums) > 12 else ''}"
 
 def as_bullets(lines, suffix=""):
     return [f"- {l.strip()}{suffix}" if not l.startswith(" ") else f"  - {l.strip()}" for l in lines]
@@ -678,7 +699,7 @@ def finding_groups(run, status, instr, numbers):
     sections = {}
     for r in sf.tsv(os.path.join(run, "numbers.tsv")):
         if len(r) > 2 and r[1].isdigit(): sections[int(r[1])] = r[2]
-    unmarked, queue, discuss, inprog, new = {}, [], [], [], []
+    unmarked, queue, discuss, inprog, new, by_section = {}, [], [], [], [], {}
     ap = os.path.join(run, "reconcile", "appended.tsv")
     appended = {int(x) for x in open(ap).read().split()[1:] if x.isdigit()} if os.path.exists(ap) else set()
     for mid in sf.load_findings(run):
@@ -686,12 +707,45 @@ def finding_groups(run, status, instr, numbers):
         choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
         st = status[mid][1] if mid in status else "open"
         sec = sections.get(mid, "")
+        if sec in SECTION_NAMES: by_section.setdefault(sec, []).append(numbers[mid])
         if st == "in-progress": inprog.append(numbers[mid])
         if choice in ("fix", "noted"): queue.append(numbers[mid])
         elif choice == "discuss": discuss.append(numbers[mid])
         elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
-    return unmarked, queue, discuss, inprog, new
+    return unmarked, queue, discuss, inprog, new, by_section
+
+def blockers_view(wt, out, logs, run, have_run):
+    rc = load_script("records.py")
+    stopped = [f"- {e['id']} ({e['title']}){f' ({log.name})' if log.name else ''}: {stopped_question(e, 'its question')}"
+               for log in logs for e in log.entries if e["f"].get("Status") == "stopped"]
+    try: d = rc.fdir(wt)
+    except SystemExit: d = None
+    settle = []
+    for c in rc.checks(d) if d else []:
+        if not c["open"]: continue
+        sfq = open_questions(d, c)[1]
+        if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
+    open_items = [i for i in parse_followups(wt) if not i["done"]]
+    fix = []
+    if have_run:
+        status, instr, numbers = sf.state(run)
+        fix = sorted(finding_groups(run, status, instr, numbers)[5].get("fix", []), key=int)
+    steps = []
+    if stopped:
+        out += ["", "**Handoffs stopped on a question:**"] + stopped
+        steps.append(f"Answer the question{plural(stopped)} of the stopped handoff{plural(stopped)}, record the answer, then resend {'it' if len(stopped) == 1 else 'them'}.")
+    if settle:
+        out += ["", "**Settle-first design questions:**"] + [f"- {name}: {', '.join(qs)}" for name, qs in settle]
+        steps.append(f"Settle {', '.join(q for _, qs in settle for q in qs)} (\"walk the design questions\").")
+    if open_items:
+        out += [""] + followup_lines(open_items, seen_followups(wt))
+        steps.append(f"Work the open follow-up{plural(open_items)} ({len(open_items)}): \"go through the follow-ups\".")
+    if fix:
+        out += ["", f"**Findings to fix before merging:** {len(fix)} ({number_list(fix)})"]
+        steps.append(f"Mark the finding{plural(fix)} in {SECTION_NAMES['fix']} in `.clerk-dev/{os.path.basename(run)}/report.md`, then fix {'it' if len(fix) == 1 else 'them'}: \"work the queue\".")
+    if not steps: out += ["", "Nothing blocking."]
+    return steps
 
 def final_pass_stands(run):
     report, target = os.path.join(run, "final-review-report.md"), os.path.join(run, "target.txt")
@@ -707,8 +761,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("worktree", nargs="?", default=".")
     ap.add_argument("--run"); ap.add_argument("--no-mark", action="store_true")
-    ap.add_argument("--focus", choices=("all", "design", "implementation", "review"), default="all",
-                    help="design: readiness to build; implementation: building progress and its next steps only; review: the review only")
+    ap.add_argument("--focus", choices=("all", "design", "implementation", "review", "blockers"), default="all",
+                    help="design: readiness to build; implementation: building progress and its next steps only; review: the review only; blockers: what blocks the work")
     ap.add_argument("--area", help="one area, or a brief id for one piece and its area")
     ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
     a = ap.parse_args()
@@ -725,8 +779,13 @@ def main():
     if a.setup:
         emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
     theirs = builder_logs(wt, rows)
-    out.append(f"## Where {'the implementation in ' if a.focus == 'implementation' else 'the design of ' if a.focus == 'design' else ''}{repo_name(wt, rows)} stands ({branch})\n")
+    lead = {"implementation": "the implementation in ", "design": "the design of "}.get(a.focus, "")
+    out.append(f"## What blocks {repo_name(wt, rows)} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{repo_name(wt, rows)} stands ({branch})\n")
     out += setup_lines(gaps)
+    if a.focus == "blockers":
+        steps = blockers_view(wt, out, [mine] + theirs, run, have_run)
+        out += [""] + ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else []
+        emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
     if a.focus == "design" or a.area:
         logs = [mine] + theirs
         steps = area_view(wt, out, a.area, logs) if a.area else design_view(wt, out, logs)
@@ -778,20 +837,15 @@ def main():
 
     # Follow-ups here
     items = parse_followups(wt)
-    seen_path = os.path.join(wt, ".clerk-dev", "status-seen")
-    seen = int(open(seen_path).read().strip() or 0) if os.path.exists(seen_path) else 0
+    seen = seen_followups(wt)
     open_items = [i for i in items if not i["done"]]
     out.append("")
     if open_items:
-        new = [i for i in open_items if i["id"] > seen]
-        out.append(f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if seen and new else "") + ".")
-        for i in open_items:
-            tag = " (new)" if seen and i["id"] > seen else ""
-            out.append(f"- {ids.item(ids.FOLLOWUP, i['id'])}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
+        out += followup_lines(open_items, seen)
     else:
         out.append(f"**Follow-ups owed here:** none open ({len(items)} done)." if items else "**Follow-ups owed here:** none.")
     if items and not a.no_mark:
-        try: open(seen_path, "w").write(str(max(i["id"] for i in items)) + "\n")
+        try: open(seen_path(wt), "w").write(str(max(i["id"] for i in items)) + "\n")
         except OSError: pass
     out += deferred_lines(wt)
 
@@ -843,7 +897,7 @@ def main():
     # Findings
     if have_run:
         findings = sf.load_findings(run)
-        unmarked, queue, discuss, inprog, new = finding_groups(run, status, instr, numbers)
+        unmarked, queue, discuss, inprog, new, _ = finding_groups(run, status, instr, numbers)
         try:
             _, moved = sf.candidates(run, wt)
         except SystemExit:
@@ -853,10 +907,10 @@ def main():
         out.append(f"**Findings:** {len(numbers)} in the report, {closed} closed (fixed, won't fix, deferred, ignored).")
         for sec, nums in unmarked.items():
             nums.sort(key=int)
-            out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({', '.join(nums[:12])}{', …' if len(nums) > 12 else ''})")
+            out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({number_list(nums)})")
         if new:
             new.sort(key=int)
-            out.append(f"- new since the first report, unmarked: {len(new)} ({', '.join(new[:12])}{', …' if len(new) > 12 else ''}); `grep -n '\\[new\\]' report.md` finds them")
+            out.append(f"- new since the first report, unmarked: {len(new)} ({number_list(new)}); `grep -n '\\[new\\]' report.md` finds them")
         if queue: out.append(f"- marked to fix, not yet fixed: {len(queue)}")
         if discuss: out.append(f"- marked to discuss: {len(discuss)}")
         if inprog: out.append(f"- fix in progress (partly fixed or tests failed): {', '.join(sorted(inprog, key=int))}")
