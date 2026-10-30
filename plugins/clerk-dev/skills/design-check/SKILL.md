@@ -24,7 +24,7 @@ user through them and records each answer.
 ## Running the lenses
 
 Each kind of run below picks what it runs on and its lenses, says them, and
-then runs these steps with its own parts: the prompt, the block it reads back,
+then runs these steps with its own parts: the area, the prompt, the block it reads back,
 its sort and earlier runs, the file's name and header, and the report's counts.
 The kind names its file `<hub>/.clerk-dev/feature/checks/<run>.md` and gives
 the `<subject>` it is on; the run's own files go in
@@ -32,14 +32,14 @@ the `<subject>` it is on; the run's own files go in
 
 1. **Guidance.** Before launching, write the guidance file of each repository
    the prompt names, with `records.py guidance <that repository's worktree>
-   [--area <the area of the records it is about>] [--context <its CONTEXT>]
+   [--area <the kind's area>] [--context <its CONTEXT>]
    --out <hub>/.clerk-dev/feature/checks/<run>/guidance-<repo>.md`: its branch
    scope, its branch guidance, the feature's active guidance, and its review
    context's Known noise.
 2. **Launch.** Launch one `clerk-dev:lens-<lens>` agent per lens, all in one
    message so they run in parallel, each with the kind's prompt.
 
-   Run the lenses whose questions are most often settle-first, `contracts`,
+   Run the lenses whose items most often must be settled first, `contracts`,
    `cross-repo`, `rollout`, `tenancy`, and `security`, with `model: fable`
    when they are in the set, falling back to Opus at the same effort as Model
    fallback in the `review` skill describes; every other lens uses the agent's
@@ -64,7 +64,8 @@ the `<subject>` it is on; the run's own files go in
      the file's Dropped section with the record that answered it, so the user
      can contest the drop.
    - Compare each remaining item with the closed items of earlier runs on the
-     same target (the kind says which files those are), by meaning, not wording. A match is not a new item: list it
+     same target (the kind says which files those are), by meaning, not
+     wording. A match is not a new item: list it
      under the file's "Seen before" section with the earlier id and outcome
      ("Do exports expire? BRIEF-9-1.Q-4: no change, deleted with the report"),
      unless the target has changed in a way that reopens it; then keep it, and
@@ -130,10 +131,11 @@ the lenses", with these parts.
 - **Sort and earlier runs.** Sort by weight (settle-first, worth-settling,
   note), then by record and section. Earlier runs are the index's checks of the
   same records.
+- **Area.** The area of the checked records.
 - **File.** `<subject>` is the first checked record's id (BRIEF-13;
-  `records.py names` gives its type). `<run>` is `<subject>-<k>`, where `<k>` is one
-  more than the highest existing check of it, counting older files named with its old
-  id (R13-1.md). Its `Checked <date>: BRIEF-13, DESIGN-10.` line names every
+  `records.py names` gives its type). `<run>` is `<subject>-<k>`, where `<k>`
+  is one more than the highest existing check of it, counting older files
+  named with its old id (R13-1.md). Its `Checked <date>: BRIEF-13, DESIGN-10.` line names every
   checked record, so the feature index lists the check under each. Format
   below.
 - **Report.** The counts by weight, and the settle-first questions.
