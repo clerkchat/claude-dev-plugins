@@ -9,14 +9,14 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/<label>/`        | one review run                                                                                                                                            | the review orchestrator                                                                                                                                                                                                                       | everything below; see "Run directory contents" in `SKILL.md`                                                                                                          |
 | `.clerk-dev/latest`          | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
 | `.clerk-dev/latest-feature`  | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `status.py`                                                                                                                                          |
-| `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the rules the user set for this branch only (Guidance); may be written before the first review | the review orchestrator, the `review-fix` and `review-followups` skills (draft Purpose when missing), any skill recording an answer's guidance for this branch ("Guidance from answers" below), the user | `records.py guidance`, whose file every lens, verifier, fixer, and implementer brief gets; the `review-fix`, `review-followups`, and `review-triage` skills and the fixer (Branch scope below) |
+| `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the rules the user set for this branch only (Guidance); may be written before the first review | the review orchestrator, the `building` skill's setup check (drafts Purpose when missing), any skill recording an answer's guidance for this branch ("Guidance from answers" below), the user | `records.py guidance`, whose file every lens, verifier, and builder handoff gets; the `building` skill's intake and the builder (Branch scope below) |
 | `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
-| `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `review-fix` and `review-followups` skills                                                                                                                                                                       | the review orchestrator (as a document for completeness and cross-repo lenses), the `review-followups` skill (implements and closes items, one commit each), the user |
+| `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `building` skill (After each handoff and its Clients of a changed contract) and `checkpoint` | the review orchestrator (as a document for completeness and cross-repo lenses), the `followups` skill (works and closes items, one commit each), the user |
 | `.clerk-dev/deferred.md` | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
-| `.clerk-dev/workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `review-fix` skill (clients of a changed contract), the `review-followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
+| `.clerk-dev/workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `building` skill (clients of a changed contract), the `followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
 | `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, pieces, plans, briefs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
 | `.clerk-dev/passes.md` | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and pass-review result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
-| `.clerk-dev/build.md` | this worktree's milestones (a plan row's ordered passes, required ones, skips) and handoffs: brief requirements covered and their status (including requirements a decision dropped from a brief), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or brief built directly by a commit); the only place requirement status lives | `build.py`, from the `writing-code` and `pass` skills | `status.py` (progress per brief, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
+| `.clerk-dev/build.md` | this worktree's milestones (a plan row's ordered passes, required ones, skips) and handoffs: brief requirements covered and their status (including requirements a decision dropped from a brief), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or brief built directly by a commit); the only place requirement status lives | `build.py`, from the `building` and `pass` skills | `status.py` (progress per brief, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
 
 ## Branch notes
 
@@ -62,7 +62,7 @@ Agents get these rules through one file, not this one:
 `records.py guidance <worktree> [--area <area> | --for <BRIEF-33, BRIEF-33.4, or
 BRIEF-18-1.Q-6>] [--context <repo-context.md>] --out <file>` writes Purpose,
 these rules, the feature's active guidance, and the repo context's Known noise
-into it, and that file is what lenses, verifiers, fixers, and implementer handoffs
+into it, and that file is what lenses, verifiers, and the builder's handoffs
 get as `GUIDANCE`. `--for` takes the area of the record it names; `--context`
 adds the noise.
 
@@ -103,9 +103,8 @@ say so in one sentence.
 A feature branch usually builds something new that is not deployed yet, next to
 existing code that is live. Purpose says which is which, and the plugin's work
 follows it: reviewers judge the diff by it (see `GUIDANCE` in the
-`review-protocol` skill), and every fix, whether from `review-fix`,
-`review-triage`, or `review-followups`, decides how to change code by it. Code
-is on one of three sides:
+`review-protocol` skill), and every item the `building` skill's intake sends
+decides how to change code by it. Code is on one of three sides:
 
 - New in this branch: listed under Purpose as new, or introduced by the
   branch's own commits and absent from the remote main. Change it directly, with
@@ -132,31 +131,60 @@ if still unsure.
 ## Follow-ups
 
 A follow-up is created where the work has to happen, not where it was caused.
+It states a contract and a need, never the change to make in the receiving
+repository or its size, since the sender cannot see the receiving code. The
+contract takes one of two forms:
+
+- `changed: <old to new>`, from a provider to its consumers: the endpoint,
+  event, or schema as it was and as it is now. The need is the behavior the
+  consumer must now handle. Contract `changed: GET /reports/:id/download: took
+  no parameters, now requires the exportId that POST /reports/:id/exports
+  returns`; need "a download poll without exportId is now refused with 400".
+- `wanted: <shape, and how it differs from today>`, from a consumer to its
+  provider: the shape it needs. The need is what the consumer is building
+  against. Contract `wanted: GET /contacts?q= matches phoneNumber too; today it
+  matches name only`; need "contact search sends phone digits as q and expects
+  the matching contacts".
+
+The need is never the receiver's action: "show the number on the contact card"
+is the receiving repository's call. The receiving session sizes the item and
+routes it through intake (the `building` skill).
+
 When a fix in the api changes a contract the frontend consumes, the item goes
-into the frontend worktree's `.clerk-dev/followups.md`:
+into the frontend worktree's `.clerk-dev/followups.md`, with the need as the
+text and the contract as `--contract`:
 
 ```
-followups.py add <consuming worktree> "Send exportId back when polling report downloads" \
-  --from "api 7c1e2ab" --contract "POST /reports/:id/exports accepts and returns exportId" \
+followups.py add <owing worktree> "A download poll without exportId is now refused with 400" \
+  --from "api 7c1e2ab" \
+  --contract "changed: GET /reports/:id/download: took no parameters, now requires the exportId that POST /reports/:id/exports returns" \
   --finding "api 8"
 ```
 
-Find the consuming worktree in `.clerk-dev/workspace.md` (see
+A builder's `follow-ups:` line and a finding's `follow_up` field carry one
+follow-up per line as `<repo>: changed|wanted: <contract>; needs: <behavior>`:
+the item goes to `<repo>`'s worktree, the part after `; needs:` is its text,
+and the part between `<repo>: ` and `; needs:` is its `--contract`.
+A line not in that form (no `changed:` or `wanted:`, or no `; needs:`) is
+not filed as written: restate it in the form from the rest of the report or
+finding, or ask the builder for it, as a malformed report is sent back.
+
+Find the owing worktree in `.clerk-dev/workspace.md` (see
 `workspace-manifest.md`). When the file is missing or does not list the
-consuming repository, add the item to the current worktree's file with the text
+owing repository, add the item to the current worktree's file with the text
 starting `[<repo>]`, and say so.
 
 The item's id (`F3`) is the handle in conversation. Each item has an
-Instruction and a Status (see Items below); the author of a follow-up was in
-another repository, so its recommendation is a hypothesis, and Refine is the
-usual instruction when it may not fit here. The user sets one by saying so
+Instruction and a Status (see Items below). For a follow-up, "done as written"
+and `Fix as recommended` mean meeting the need as intake sizes it. Refine
+(investigate, then set one of the others) is the instruction for an item whose
+need is unclear against the local code. The user sets one by saying so
 ("refine F3", "ignore F2, the web app dropped that screen"), which is recorded
-with `followups.py set <worktree> F3 "Refine" [--note "..."]`. The
-`review-followups` skill works the open items by their instructions, one fixer
-and one commit each, and closes each with `followups.py close <worktree> F3
---ref <sha>` (or `--status wont-fix|deferred --ref "<reason>"`). Close one by
-hand the same way when the user says it is done. Hand-ticked boxes are honored
-as fixed.
+with `followups.py set <worktree> F3 "Refine" [--note "..."]`. The `followups` skill works the open items by their
+instructions, one handoff and one commit each, and closes each with
+`followups.py close <worktree> F3 --ref <sha>` (or `--status
+wont-fix|deferred --ref "<reason>"`). Close one by hand the same way when the
+user says it is done. Hand-ticked boxes are honored as fixed.
 
 Readers:
 
@@ -172,13 +200,13 @@ Readers:
   a finding a follow-up resolved is marked fixed, and one whose recommendation
   no longer fits moves to discuss. Judgments are remembered in the run's
   `stale.tsv`, so the same commits are not judged twice.
-- The `review-followups` skill gives each fixer the open findings in the files
+- The `followups` skill gives each handoff the open findings in the files
   it will change, as context, and notes on a finding when the follow-up's
   contract overrides its recommendation.
 
 ## Guidance from answers
 
-When the user answers a question (a design question, an implementer's stopped
+When the user answers a question (a design question, a builder's stopped
 handoff, a finding to discuss or a fix to adjust, a follow-up to refine, a pass
 item), the answer often carries guidance: a rule that would settle other
 choices the same way, beyond this one. Record it without being asked, where
@@ -363,7 +391,7 @@ The rule holds in every case, the ones where it slips most included:
 - Each message stands alone. An id glossed in an earlier message is glossed
   again in this one; the user may have cleared, scrolled, or switched sessions.
 - Relayed text counts. A subagent's report (an overview refresh, a design
-  check, an implementer, a lens) cites bare ids by design; rewrite it with
+  check, a builder, a lens) cites bare ids by design; rewrite it with
   glosses before passing it on, never paste it through.
 - Ids used as labels count. A bullet or heading that leads with "DEC-19 vs DEC-21:"
   or "BUILD-15:" is a first mention; gloss it there ("DEC-19 (production edits only

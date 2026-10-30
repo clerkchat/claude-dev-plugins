@@ -291,11 +291,11 @@ shared by its worktrees, yours to edit.
 <details>
 <summary><b>How it works</b></summary>
 
-- **Building is delegated.** The session you talk to cuts each piece's work
-  into handoffs and sends each to an implementer agent, citing the brief and
-  decisions: Opus for code others build on, Sonnet for the rest. It reviews the
-  result, runs the tests, and commits, so your session keeps the whole feature
-  in view.
+- **Building is delegated.** One intake in the session you talk to sizes
+  every item that becomes code (a request, a brief's requirements, a pass
+  item, a finding, a follow-up) and hands each to one builder agent: Opus for
+  code others build on, Sonnet for the rest. It reviews the result, runs the
+  tests, and commits, so your session keeps the whole feature in view.
 - **A review splits among many small agents**, each on the cheapest model that
   does its job well: Haiku for sizing up the change and matching findings;
   Sonnet for checklist-style reviews and minor findings; Opus for security,

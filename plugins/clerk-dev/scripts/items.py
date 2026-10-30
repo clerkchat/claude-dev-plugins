@@ -158,6 +158,9 @@ class WorktreeList:
         r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("iid")
         s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("iid"); s.add_argument("instruction"); s.add_argument("--note")
         args = ap.parse_args()
+        if args.cmd == "add":
+            for k in self.required:
+                if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
         load_script("records.py").guard(args.wt)
         p = self.path(args.wt); its = self.read(p)
         if args.cmd == "add":

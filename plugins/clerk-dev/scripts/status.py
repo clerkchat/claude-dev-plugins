@@ -464,7 +464,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
         where = ", ".join(os.path.basename(p) for p in elsewhere)
         steps.append(f"The building happens in {where}; its next steps are in a status asked there.")
     elif not entries and not unlogged and unlogged_specs:
-        steps.append(f"Start building {unlogged_specs[0]['id']}: cut its requirements into handoffs and send the first (the writing-code skill).")
+        steps.append(f"Start building {unlogged_specs[0]['id']}: cut its requirements into handoffs and send the first (the building skill).")
     return steps
 
 def names_pass(step, e): return ids.key(e["id"]) in {ids.key(x) for x in ids.mentions(step, ids.PASS)}

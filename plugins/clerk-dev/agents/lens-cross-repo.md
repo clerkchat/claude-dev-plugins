@@ -37,7 +37,10 @@ reader can check your map.
 1. Unmatched changes: a producer changed a contract and a consumer in the
    feature set did not change, or the reverse. Grep the consumer for the field
    or route to confirm it reads it. A consumer repo not present in the feature
-   set at all is a finding when the contract it consumes changed.
+   set at all is a finding when the contract it consumes changed. A finding
+   that names a consumer the feature set did not change states, in
+   `follow_up`, the contract and what the consumer must now handle, not the
+   change to make in it.
 2. Shape agreement: for each contract changed on both sides, compare the two
    definitions field by field: names, types, nullability, enum members, date and
    identifier formats, pagination shape.

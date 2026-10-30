@@ -268,7 +268,7 @@ findings of severity `blocker` (and `major` ones on a final pass, and every
 verifier in `--deep` mode), the `security` and `tenancy` lenses of a security
 pass's pass review (`--pass`), and a second attempt at a fix that a recheck
 found only partly resolved (in the `review-fix` skill). Outside the review,
-the feature, design-check, and writing-code skills use Fable for briefs, the
+the feature, design-check, and building skills use Fable for briefs, the
 overview, roll-ups, settle-first lenses in design checks, foundation handoffs,
 and stopped handoffs' questions, all with this same fallback. Each is assigned by passing `model: fable` on the
 invocation. Not every account has access to Fable, and access may come with its
@@ -441,7 +441,7 @@ Incremental run:
    current commit, plus uncommitted work, restricted to the earlier target, and
    only the files that something unreviewed changed:
    `stale-findings.py <run> --delta` classifies each commit since the earlier
-   run. Commits marked `fix` or `follow-up` were already read by the fixer and a
+   run. Commits marked `fix` or `follow-up` were already read by the builder and a
    recheck, `narrow` ones by a narrow review, and `merge` and `format` ones add
    nothing to review; those wait for the final pass. The patch is
    `git diff BASE..HEAD -- <files of the unreviewed commits>`, plus uncommitted
@@ -458,8 +458,8 @@ Incremental run:
    usual; the plan says it is incremental, since when, and what it leaves out,
    from the `--delta` counts: "16 commits since a86f57469: 3 new, read here; 12
    fixes and 1 merge are left for the final pass."
-4. Merge into `<run>/merged-new.md`, then fold it in, after step 5's rechecks so
-   their outcomes are known:
+4. **Merge and fold in.** Merge into `<run>/merged-new.md`, then fold it in,
+   after step 5's rechecks so their outcomes are known:
    - `reconcile.py --append <run>/merged-new.md <run>` proposes candidate
      matches in `reconcile/append-candidates.tsv` and changes nothing (with no
      candidates, it appends everything at once).

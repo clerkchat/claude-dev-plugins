@@ -1,6 +1,6 @@
 ---
 name: review-triage
-description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through its own fixer agent and commit, then walks the user through the ones marked "Discuss", and records outcomes in the report.
+description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", and records outcomes in the report.
 argument-hint: "[fixes | discuss | check | all] [run label]"
 allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 ---
@@ -14,7 +14,7 @@ recommended (optionally with a note), Discuss, Defer, or Ignore. This skill
 works through those instructions. You coordinate; you never edit code, and you
 never hold the details of more than one fix in your context.
 
-Everything runs in this session: each fix through its own fixer and recheck
+Everything runs in this session: each fix through its own builder and recheck
 agents, which the user can follow in the task panel. The run files are the
 record, so this session's context is working memory only, and the user can
 `/clear` between items and ask again; the next invocation resumes with whatever
@@ -58,7 +58,7 @@ step until they are done; a finding fixed first may be fixed against code the
 follow-up rewrites. Ask once: "<n> follow-ups are open (<their
 texts in a few words each>). Do them first?", recommending yes. With `check`, do
 not offer; say how many are open and that the check sees only the ones already
-done. On yes, follow the `review-followups` skill to the end, then continue with
+done. On yes, follow the `followups` skill to the end, then continue with
 the next check. On no, go on; the check below still sees any follow-up commits
 made earlier.
 
@@ -117,11 +117,12 @@ A finding in "Already on main" marked Fix as recommended is deferred to a
 separate pull request, not fixed, as the `review-fix` skill describes; it counts
 in the queue's summary as deferred.
 
-Work the queue in this session: for each finding, follow the `review-fix`
-skill's steps in queue mode, as recommended, as noted (findings marked Fix as
-noted), or with the picked alternatives (the `option` column, comma separated).
-One finding at a time: wait for its fixer, commit, and recheck to finish before
-starting the next, since their commits must not interleave.
+Work the queue in this session: hand it to Intake in the `building` skill as
+one queue through the `review-fix` skill's Queue mode, each finding as
+recommended, as noted (findings marked Fix as noted), or with the picked
+alternatives (the `option` column, comma separated). Queues there runs them
+one finding at a time: each finding's commit and recheck finish before the
+next starts, since their commits must not interleave.
 
 Open each with a progress line: "Fix 3 of 12 (finding 27): 2 done, 10 left (this
 one included)." End each with the fix skill's one line ("27 fixed in 1a2b3c4",
@@ -250,7 +251,7 @@ correct it.
 - No commits except through the fix skill, which follows the user's commit
   rules.
 - No changes to an instruction the user set, except: the fix skill moves a `fix`
-  to `discuss` when the fix is out of scope or its tests fail, with the reason
+  to `discuss` on any stop (scope, size, tests, a question), with the reason
   as the note; and the check under Findings whose code moved marks a finding
   fixed by a later commit, or moves a `fix` or `noted` finding to `discuss` when
   that commit changed what its fix should be.

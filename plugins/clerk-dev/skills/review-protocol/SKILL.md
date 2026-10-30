@@ -50,10 +50,11 @@ The orchestrator's prompt gives you:
 - `PR`: the pull request title and body, or `none`.
 - `GUIDANCE`: path of this worktree's guidance file, or `none`. It has four
   parts:
-  - Branch scope, the branch's Purpose: judge the diff by it. Code it lists as
-    new can change without compatibility concerns, deployed code it lists as
-    changed on purpose is intended (report how it is changed, not that it is),
-    and anything else the diff changes is unexpected and worth saying so.
+  - Branch scope: the Branch scope rule and the branch's Purpose, as the file
+    states them; judge the diff by them. Deployed code Purpose lists as
+    changed on purpose is intended (report how it is changed, not that it
+    is), and any other deployed code the diff changes is unexpected and worth
+    saying so.
   - Branch guidance and Feature guidance: the user's rules for this branch and
     for the feature, the feature's with record ids. Follow them as the user's
     direction: they settle the questions they answer, and can narrow or widen
@@ -216,8 +217,10 @@ only the hunk:
   contract other code relies on.
 
 `follow_up` says whether the fix makes another repository change too: a client
-of a route, payload, event, or type the fix changes. A fix with a follow-up is
-at least `medium`.
+of a route, payload, event, or type the fix changes, or a provider whose
+contract the fix needs in a new shape. It states the contract and the need,
+never the change to make in that repository. A fix with a follow-up is at
+least `medium`.
 
 ## Confidence rubric
 
@@ -303,10 +306,16 @@ per finding, fields in this order:
     reason, or (b) have `start` return the reason." One fix gets no label.
     With `origin: existing`, start with "Fix in a separate pull request:".>
   fix_size: <trivial | small | medium | large; see Origin and fix scope>
-  follow_up: <"none", or the repository that must change too and what it
-    must do: "web: show the new export error". Use the names in WORKSPACE or
-    the repo context's `## Provides`; "clients outside this repository" when
-    you cannot name them.>
+  follow_up: <"none", or one line, "<repo>: changed|wanted: <contract>;
+    needs: <behavior>": the repository that must change too, its contract as
+    changed (old to new) or wanted (the shape, and how it differs from
+    today's), and the need (the behavior it must now handle, or what this
+    repository builds against), never the change to make there: "web:
+    changed: POST /reports/:id/exports: a failed export returned 200 with an
+    empty body, now returns 422 with { error }; needs: an export request can
+    now fail with a readable error". Use the names in WORKSPACE or the review
+    context's `## Provides`; "clients outside this repository" when you cannot
+    name them.>
   debt: <tech-debt lens only: cleanup | simplify | refactor. Other lenses
     leave it out.>
   saves: <tech-debt lens only, optional: net lines the proposal removes, as

@@ -33,10 +33,11 @@ list each thing that was settled but has no file yet:
   `items.py set` and `items.py status`, as the `design-check` skill's walk does.
 - **Handoffs** built or committed but not in the build log, and
   requirements a commit covered: `build.py add` and `done`, as the
-  `writing-code` skill describes. A handoff sent and still running is not
+  `building` skill describes. A handoff sent and still running is not
   pending; see step 3.
 - **Follow-ups** another repository now owes because of a change here:
-  `followups.py add` in its worktree.
+  `followups.py add` in its worktree, with its contract and need as Follow-ups
+  in `skills/review/tracking.md` describes.
 - **Scope**: the branch's purpose widened or narrowed in conversation: a
   dated line in `.clerk-dev/branch-notes.md` Purpose.
 - **Brief open items** settled or raised: tick or add them in the brief.
@@ -55,7 +56,7 @@ session.
 ## 3. Check what is in flight
 
 - `git status --short`: uncommitted changes to tracked files. Name them; a
-  finished handoff is committed as the `writing-code` skill describes before
+  finished handoff is committed as the `building` skill describes before
   clearing, and anything else is the user's to decide.
 - A pull request description drafted in this conversation
   (`.clerk-dev/pr-description.md`, from the `pr-draft` skill) is named like an
@@ -63,7 +64,7 @@ session.
   that the user asked for and that has no entry in
   `.clerk-dev/pr-draft-notes.md` is logged there first, as that skill's
   Refine step says.
-- Subagents still running (an implementer, a review, a design check): clearing
+- Subagents still running (a builder, a review, a design check): clearing
   may lose their reports. Wait for them, or say which are running and what to
   do with their results in the next session.
 - An open pass or an open handoff: these are in the logs already and survive a

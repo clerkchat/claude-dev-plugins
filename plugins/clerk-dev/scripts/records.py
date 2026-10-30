@@ -409,10 +409,15 @@ def noise(context):
     if not context or not os.path.exists(context): return ""
     return body_section(open(context, encoding="utf-8").read(), "Known noise")
 
+TRACKING = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "skills", "review", "tracking.md")
+
+def branch_scope_rule():
+    return body_section(open(TRACKING, encoding="utf-8").read(), "Branch scope")
+
 def guidance(wt, area=None, context=None):
     purpose, branch_rules = branch_notes(wt)
     out = ["# Guidance", "", "These are the user's standing rules for this worktree, narrowest scope first: the branch, then the feature. A rule that cannot hold is raised, not silently broken.", "",
-           "## Branch scope", "", purpose or ("No branch notes in this worktree." if purpose is None else "The branch notes have no Purpose."), "",
+           "## Branch scope", "", branch_scope_rule(), "", "### Purpose", "", purpose or ("No branch notes in this worktree." if purpose is None else "The branch notes have no Purpose."), "",
            "## Branch guidance", ""]
     warnings = []
     for rule, body in branch_rules:
