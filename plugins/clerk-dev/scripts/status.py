@@ -261,6 +261,12 @@ def relink_lines(wt, log):
     if bd.linked(log.entries) and bd.merged(wt): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
     return lines, steps
 
+def open_questions(d, c):
+    qs = [q for q in load_script("items.py").read(load_script("records.py").check_path(d, c["name"])) if not q["done"]]
+    return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+
+def stopped_question(e, default=""): return e["multi"]["Question"][-1] if e["multi"]["Question"] else default
+
 def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     bd = load_script("build.py")
     first, later, elsewhere = [], [], {}
@@ -295,7 +301,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     for e in entries:
         st = e["f"].get("Status")
         if st == "stopped":
-            q = e["multi"]["Question"][-1] if e["multi"]["Question"] else "its question"
+            q = stopped_question(e, "its question")
             first.append(f"Answer {e['id']} ({e['title']})'s question, record the answer, then resend it: {q}")
         elif st == "handed-off":
             first.append(f"Land {e['id']} ({e['title']}): handed off and not committed; finish it, resend it, or abandon it.")
@@ -315,7 +321,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
 
 def feature_block(wt, rows, out):
     first, later = [], []
-    rc = load_script("records.py"); it = load_script("items.py")
+    rc = load_script("records.py")
     try: d = rc.fdir(wt)
     except SystemExit as e:
         out.append(f"**Feature:** {e}"); return first, later
@@ -334,8 +340,7 @@ def feature_block(wt, rows, out):
     settle, open_q = [], 0
     for c in rc.checks(d):
         if not c["open"]: continue
-        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
-        sf_ = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        qs, sf_ = open_questions(d, c)
         open_q += len(qs)
         ar = next((r.get("area") for r in recs if c["records"] and r["id"] == c["records"][0] and r.get("area")), "")
         out.append(f"- design questions open in {c['name']}{' (' + ar + ')' if ar else ''}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
@@ -382,7 +387,7 @@ def builders(wt, rows):
     return out
 
 def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, theirs):
-    bd = load_script("build.py"); rc = load_script("records.py"); it = load_script("items.py")
+    bd = load_script("build.py"); rc = load_script("records.py")
     first, later, elsewhere = build_block(wt, out, unreviewed, mine, theirs, render=bd.checklist_lines)
     entries = mine.entries
     me = repo_name(wt, rows)
@@ -418,8 +423,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     settle = []
     for c in rc.checks(d) if d else []:
         if not c["open"] or not (set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas): continue
-        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
-        sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        qs, sfq = open_questions(d, c)
         out.append(f"- Design questions open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
         if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
     for r in specs:
@@ -486,13 +490,13 @@ def overview_parts(d):
         parts["areas"][m.group(1).strip().lower()] = re.sub(r"\s+", " ", para)
     return parts
 
-def spec_facts(d, r, cs, it):
+def spec_facts(d, r, cs):
     rc = load_script("records.py")
     body = open(r["path"], encoding="utf-8").read()
     mine = [c for c in cs if r["id"] in c["records"]]
     settle = []
     for c in mine:
-        settle += [ids.in_check(c["name"], q["id"]) for q in it.read(rc.check_path(d, c["name"])) if not q["done"] and q["fields"].get("Weight", "").startswith("settle-first")]
+        settle += [ids.in_check(c["name"], q) for q in open_questions(d, c)[1]]
     base = section(body, "Baseline").strip()
     m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
     items = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
@@ -522,7 +526,7 @@ def design_view(wt, out, logs):
     """Whether the feature is ready to build: readiness per piece, each area's
     decisions and design, open questions by area, and the overview's gaps and
     disagreements. Returns the next steps, design only."""
-    rc = load_script("records.py"); it = load_script("items.py"); bd = load_script("build.py")
+    rc = load_script("records.py"); bd = load_script("build.py")
     d = rc.fdir(wt)
     if not os.path.exists(os.path.join(d, "feature.md")):
         out += ["", "**Design:** no feature records here or in a hub."]; return ["Start a feature: \"start a feature for <name>\"."]
@@ -545,7 +549,7 @@ def design_view(wt, out, logs):
             out.append(f"- {piece}: built without a brief" + (f" ({built_by})" if built_by else "")); continue
         if not r:
             out.append(f"- {piece}: no brief"); nospec.append(piece); continue
-        named.add(sid); f = spec_facts(d, r, cs, it)
+        named.add(sid); f = spec_facts(d, r, cs)
         word = "ready" if not f["missing"] else "not ready: " + ", ".join(f["missing"])
         out.append(f"- {piece} ({sid}): {word}" + (f"; {built[sid]}" if sid in built else "") + (f"; {f['items']} open items" if f["items"] else ""))
         settle_all += f["settle"]
@@ -553,7 +557,7 @@ def design_view(wt, out, logs):
         if not f["baseline"]: steps.append(f"Fill {sid}'s Baseline: the refactor to do first, or \"Clean\" with why.")
     for sid, r in specs.items():
         if sid in named: continue
-        f = spec_facts(d, r, cs, it)
+        f = spec_facts(d, r, cs)
         word = "ready" if not f["missing"] else "not ready: " + ", ".join(f["missing"])
         out.append(f"- {sid} {short(r.get('title', ''), 50)}: {word}" + (f"; {built[sid]}" if sid in built else "") + (f"; {f['items']} open items" if f["items"] else ""))
         settle_all += f["settle"]
@@ -568,8 +572,7 @@ def design_view(wt, out, logs):
     qlines, other = [], 0
     for c in cs:
         if not c["open"]: continue
-        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
-        sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        qs, sfq = open_questions(d, c)
         other += len(qs) - len(sfq)
         status_of = {r["id"]: r for r in recs}
         gone = [x for x in c["records"] if status_of.get(x, {}).get("status") == "superseded"]
@@ -605,7 +608,7 @@ def design_view(wt, out, logs):
     return first + list(dict.fromkeys(steps)) + tail
 
 def area_view(wt, out, name, logs):
-    rc = load_script("records.py"); it = load_script("items.py"); bd = load_script("build.py")
+    rc = load_script("records.py"); bd = load_script("build.py")
     d = rc.fdir(wt); recs = rc.records(d); canon = rc.resolver(recs)
     spec = None
     if ids.kind_of(ids.normalize(name)) == ids.RECORD:
@@ -636,8 +639,7 @@ def area_view(wt, out, name, logs):
     qs_lines = []
     for c in rc.checks(d):
         if not c["open"] or not set(c["records"]) & mine_ids: continue
-        qs = [q for q in it.read(rc.check_path(d, c["name"])) if not q["done"]]
-        sfq = [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
+        qs, sfq = open_questions(d, c)
         qs_lines.append(f"- {c['name']}: {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else ""))
         settle += [ids.in_check(c["name"], q) for q in sfq]
     if qs_lines: out += ["", "**Open questions:**"] + qs_lines
@@ -655,7 +657,7 @@ def area_view(wt, out, name, logs):
         except SystemExit: rows = []
         prog += as_bullets(bd.progress_lines(rows), where)
         for e in (e for r in rows for e in r.handoffs):
-            if e["f"].get("Status") == "stopped": steps.insert(0, f"Answer {e['id']}'s question{where}: {e['multi']['Question'][-1] if e['multi']['Question'] else ''}")
+            if e["f"].get("Status") == "stopped": steps.insert(0, f"Answer {e['id']}'s question{where}: {stopped_question(e)}")
         ps, _ = read_passes(log.path)
         pas += [f"- {pass_line(e)}" for e in ps if canon(e["f"].get("Piece") or "") in {x["id"] for x in specs} and e["f"].get("Status") in ("open", "ended", "checked")]
     if specs:
@@ -664,13 +666,32 @@ def area_view(wt, out, name, logs):
     if settle: steps.insert(0, f"Settle {', '.join(settle)} (\"walk the design questions\").")
     if dis: steps.append(f"Resolve the {len(dis)} disagreement{plural(dis)} touching it, each with a new or superseding record.")
     for x in specs:
-        f = spec_facts(d, x, rc.checks(d), it)
+        f = spec_facts(d, x, rc.checks(d))
         if "no design check" in f["missing"]: steps.append(f"Design-check {x['id']}.")
         if not f["baseline"]: steps.append(f"Fill {x['id']}'s Baseline.")
     if not specs and not spec: steps.append(f"No brief in {area or 'feature-wide'} yet; write one for its first piece when it is ready to build.")
     if decs and not any(r.get("type") == "design" for r in live) and len(decs) >= 3:
         steps.append(f"Roll its {len(decs)} decisions into a design that cites them.")
     return steps
+
+def finding_groups(run, status, instr, numbers):
+    sections = {}
+    for r in sf.tsv(os.path.join(run, "numbers.tsv")):
+        if len(r) > 2 and r[1].isdigit(): sections[int(r[1])] = r[2]
+    unmarked, queue, discuss, inprog, new = {}, [], [], [], []
+    ap = os.path.join(run, "reconcile", "appended.tsv")
+    appended = {int(x) for x in open(ap).read().split()[1:] if x.isdigit()} if os.path.exists(ap) else set()
+    for mid in sf.load_findings(run):
+        if mid not in numbers or not sf.is_open(mid, status, instr): continue
+        choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
+        st = status[mid][1] if mid in status else "open"
+        sec = sections.get(mid, "")
+        if st == "in-progress": inprog.append(numbers[mid])
+        if choice in ("fix", "noted"): queue.append(numbers[mid])
+        elif choice == "discuss": discuss.append(numbers[mid])
+        elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
+        if not choice and st == "open" and mid in appended: new.append(numbers[mid])
+    return unmarked, queue, discuss, inprog, new
 
 def final_pass_stands(run):
     report, target = os.path.join(run, "final-review-report.md"), os.path.join(run, "target.txt")
@@ -822,22 +843,7 @@ def main():
     # Findings
     if have_run:
         findings = sf.load_findings(run)
-        sections = {}
-        for r in sf.tsv(os.path.join(run, "numbers.tsv")):
-            if len(r) > 2 and r[1].isdigit(): sections[int(r[1])] = r[2]
-        unmarked, queue, discuss, inprog, new = {}, [], [], [], []
-        ap = os.path.join(run, "reconcile", "appended.tsv")
-        appended = {int(x) for x in open(ap).read().split()[1:] if x.isdigit()} if os.path.exists(ap) else set()
-        for mid in findings:
-            if mid not in numbers or not sf.is_open(mid, status, instr): continue
-            choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
-            st = status[mid][1] if mid in status else "open"
-            sec = sections.get(mid, "")
-            if st == "in-progress": inprog.append(numbers[mid])
-            if choice in ("fix", "noted"): queue.append(numbers[mid])
-            elif choice == "discuss": discuss.append(numbers[mid])
-            elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
-            if not choice and st == "open" and mid in appended: new.append(numbers[mid])
+        unmarked, queue, discuss, inprog, new = finding_groups(run, status, instr, numbers)
         try:
             _, moved = sf.candidates(run, wt)
         except SystemExit:
