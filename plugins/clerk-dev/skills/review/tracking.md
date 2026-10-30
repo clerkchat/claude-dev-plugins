@@ -347,7 +347,29 @@ inventory stays out of it unless they ask.
   when they are likely to refer back to it ("fix 3"), and then name it as
   below.
 - Short and in prose. No tables or headings for a short answer; a list only
-  for things the user will pick from or tick off.
+  for things the user will pick from or tick off, or for the map of where the
+  work sits below.
+
+### Where the work sits
+
+When the work moves to a new piece, milestone, plan step, area, or worktree,
+and when a session starts or resumes, the message that says so shows where
+the work now sits in the whole: a header line naming the feature, the
+repository, and the worktree, then a short ASCII checklist of the plan steps
+or pieces at the level the move happened, in the feature's own words and
+without ids, each marked done `[x]`, current `[>]` with what is happening on
+it, or not started `[ ]`.
+
+```
+dev-workflow · claude-dev-plugins (feat/dev-workflow)
+  [x] build log links commits to records
+  [>] builder agent  <- drafting its brief
+  [ ] building skill and intake
+  [ ] follow-ups carry contract and need
+```
+
+Draw it from the plan and the build log; with no plan, list the pieces; with
+neither, leave it out. Updates within a step stay one line, with no map.
 
 ### Diagrams
 
