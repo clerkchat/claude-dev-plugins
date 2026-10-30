@@ -115,6 +115,24 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(ids.next_number(["DEC-3", "BRIEF-10"], ids.RECORD), 11)
 
 
+class SurveyTests(unittest.TestCase):
+    def test_a_survey_round_trips(self):
+        self.assertEqual(ids.parse(ids.survey(3)), ids.Id(ids.SURVEY, 3))
+
+    def test_an_item_of_a_survey_round_trips(self):
+        item = ids.in_check(ids.survey(3), ids.item(ids.QUESTION, 2))
+        self.assertEqual(ids.render(ids.parse(item)), "SURVEY-3.Q-2")
+
+    def test_a_survey_reads_without_its_dash(self):
+        self.assertEqual(ids.normalize("survey3"), "SURVEY-3")
+
+    def test_rewrite_keeps_a_survey_item_citation(self):
+        self.assertEqual(ids.rewrite("from SURVEY-1.Q-2 and R2", {2: "brief"}), "from SURVEY-1.Q-2 and BRIEF-2")
+
+    def test_a_survey_is_not_a_check_of_a_record(self):
+        self.assertNotEqual(ids.kind_of("SURVEY-1"), ids.CHECK)
+
+
 class AliasTests(unittest.TestCase):
     OLD_AND_NEW = [
         ("R36", "DEC-36"), ("R34.7", "BRIEF-34.7"), ("R13-1", "BRIEF-13-1"), ("R13-1.Q6", "BRIEF-13-1.Q-6"),

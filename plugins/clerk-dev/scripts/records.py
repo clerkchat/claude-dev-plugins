@@ -170,11 +170,31 @@ def set_fields(r, **kw):
         else: meta[k] = v
     open(r["path"], "w", encoding="utf-8").write(render(meta, body))
 
-DESIGN_CHECK = "design check"
+DESIGN_CHECK, SURVEY = "design check", "survey"
+OPEN_ITEMS = {DESIGN_CHECK: "design questions", SURVEY: "survey items"}
+SENTENCE_END = r"(?:\.\s|\.$|$)"
+HEADER_LINES = ((SURVEY, rf"^Surveyed [^:]*:.*?\bFor:\s*(.*?){SENTENCE_END}"), (DESIGN_CHECK, rf"^Checked [^:]*:\s*(.*?){SENTENCE_END}"))
 
 def check_header(text):
-    m = re.search(r"^Checked [^:]*:\s*(.*?)(?:\.\s|\.$|$)", text, re.M)
-    return DESIGN_CHECK, ids.records_in(m.group(1)) if m else []
+    for kind, line in HEADER_LINES:
+        m = re.search(line, text, re.M)
+        if m: return kind, ids.records_in(m.group(1))
+    return DESIGN_CHECK, []
+
+def survey_target(text):
+    m = re.search(r"^# Survey:\s*(.+)$", text, re.M)
+    return m.group(1).strip() if m else "unnamed target"
+
+def survey_name(path, q):
+    what = f"survey of {survey_target(open(path, encoding='utf-8').read())}"
+    if q is None: return what
+    it = question_in(path, q)
+    return f"item {q} of {what}: {it['text']}" if it else None
+
+def records_cell(c): return ", ".join(c["records"]) or ("paths" if c["kind"] == SURVEY else "")
+
+def question_in(path, q):
+    return next((i for i in items_mod().read(path) if ids.same(i["id"], ids.item(ids.QUESTION, q))), None)
 
 def checks(d):
     cd = os.path.join(d, "checks")
@@ -320,7 +340,7 @@ def index(d):
     cs = checks(d)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
-        rows += [f"| [{c['name']}]({os.path.relpath(check_path(d, c['name']), d)}) | {', '.join(c['records'])} | {c['open']} | {c['closed']} |" for c in cs] + [""]
+        rows += [f"| [{c['name']}]({os.path.relpath(check_path(d, c['name']), d)}) | {records_cell(c)} | {c['open']} | {c['closed']} |" for c in cs] + [""]
     if past:
         rows += ["## History", "", "Brainstorms, and records no longer active, oldest first.", ""]
         for r in past:
@@ -494,9 +514,12 @@ def names(wt, wanted):
                 cp = check_path(d, ids.check(p.record, p.sub))
                 if os.path.exists(cp):
                     if p.q is not None:
-                        it = next((i for i in items_mod().read(cp) if ids.same(i["id"], ids.item(ids.QUESTION, p.q))), None)
+                        it = question_in(cp, p.q)
                         if it: name = f"design question: {it['text']}"
                     else: name = f"design check of {recs[p.n]['id'] if p.n in recs else p.record}"
+            elif kind == ids.SURVEY:
+                cp = check_path(d, ids.survey(p.n))
+                if os.path.exists(cp): name = survey_name(cp, p.q)
             elif kind == ids.IDEA:
                 it = next((i for i in ideas(d) if ids.same(i["id"], X)), None)
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
@@ -516,7 +539,7 @@ def names(wt, wanted):
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
-ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
+ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.SURVEY, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
 
 def gloss(wt, text, n=50):
     """The text with each id's first plain mention followed by its short name,
@@ -656,6 +679,14 @@ def idea_status(i):
     f = i["fields"]
     return f"Status: {idea_word(i)}. Why: {f.get('Why', '-')}. When: {f.get('When', '-')}."
 
+def open_item_lines(d, c):
+    text = open(check_path(d, c["name"]), encoding="utf-8").read()
+    out = []
+    for q in re.finditer(rf"^- \[ \] ({ids.pattern(ids.QUESTION)})\. (.*)$", text, re.M):
+        w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
+        out.append(f"- {ids.in_check(c['name'], q.group(1))} ({w.group(1) if w else '?'}): {q.group(2)}")
+    return out
+
 def digest(d):
     rs = records(d)
     out = []
@@ -670,13 +701,10 @@ def digest(d):
     out += ["# Brainstorms (history; one line each)", ""]
     out += [f"- {r['id']} ({r.get('area') or 'feature-wide'}): {r.get('title', '')}. {gist(r)}" for r in rs if r.get("type") == "brainstorm"] + [""]
     out += ["# Superseded or discarded (ids only)", "", ", ".join(f"{r['id']} {r.get('status')}" for r in rs if r.get("status") in ("superseded", "discarded")) or "none", ""]
-    out += ["# Open design questions", ""]
-    for c in checks(d):
-        text = open(check_path(d, c["name"]), encoding="utf-8").read()
-        for q in re.finditer(rf"^- \[ \] ({ids.pattern(ids.QUESTION)})\. (.*)$", text, re.M):
-            w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
-            out.append(f"- {ids.in_check(c['name'], q.group(1))} ({w.group(1) if w else '?'}): {q.group(2)}")
-    out += ["", "# Build progress", ""] + lines
+    cs = checks(d)
+    for kind, words in OPEN_ITEMS.items():
+        out += [f"# Open {words}", ""] + [line for c in cs if c["kind"] == kind for line in open_item_lines(d, c)] + [""]
+    out += ["# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
     out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} {idea_status(i)}" for i in ideas(d)] or ["none"]
     out += ["", "# Open items in active briefs", ""]

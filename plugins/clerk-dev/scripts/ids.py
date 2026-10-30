@@ -1,7 +1,7 @@
 import re
 from typing import NamedTuple
 
-RECORD, REF, CHECK = "record", "ref", "check"
+RECORD, REF, CHECK, SURVEY = "record", "ref", "check", "survey"
 IDEA, PASS, BUILD, MILESTONE, DEFERRED, QUESTION, FOLLOWUP = "idea", "pass", "build", "milestone", "deferred", "question", "followup"
 
 RECORD_LEADS = {"brainstorm": "IDEAS-", "design": "DESIGN-", "decision": "DEC-", "guidance": "GUIDE-",
@@ -9,11 +9,12 @@ RECORD_LEADS = {"brainstorm": "IDEAS-", "design": "DESIGN-", "decision": "DEC-",
 ITEM_LEADS = {IDEA: "IDEA-", PASS: "PASS-", BUILD: "BUILD-", MILESTONE: "MILE-", DEFERRED: "DEFER-", QUESTION: "Q-", FOLLOWUP: "F"}
 ALIASES = {"R": RECORD, "I": IDEA, "P": PASS, "B": BUILD, "M": MILESTONE, "D": DEFERRED, "Q": QUESTION}
 TYPE_ALIASES = {"spec": "brief", "capabilities": "pieces"}
+SURVEY_LEAD = "SURVEY-"
 
 RECORD_TYPES = tuple(RECORD_LEADS)
 ITEMS = tuple(ITEM_LEADS)
 RECORD_KINDS = (CHECK, REF, RECORD)
-ORDER = RECORD_KINDS + ITEMS
+ORDER = RECORD_KINDS + (SURVEY,) + ITEMS
 
 class Id(NamedTuple):
     kind: str
@@ -32,12 +33,16 @@ def item(kind, n): return f"{ITEM_LEADS[kind]}{n}"
 def ref(record_id, n): return f"{record_id}.{n}"
 def check(record_id, n): return f"{record_id}-{n}"
 def in_check(check_name, question_id): return f"{check_name}.{question_id}"
+def survey(n): return f"{SURVEY_LEAD}{n}"
 
 def record_file(n, rtype, slug): return f"{n:03d}-{rtype}-{slug}.md"
 def check_file(check_name): return f"{check_name}.md"
 def check_from_file(filename): return filename[:-3] if filename.endswith(".md") else None
 
-def _written(kind): return list(RECORD_LEADS.values()) if kind == RECORD else [ITEM_LEADS[kind]]
+def _written(kind):
+    if kind == RECORD: return list(RECORD_LEADS.values())
+    if kind == SURVEY: return [SURVEY_LEAD]
+    return [ITEM_LEADS[kind]]
 
 def _leads(kind): return _written(kind) + [lead for lead, k in ALIASES.items() if k == kind]
 
@@ -47,17 +52,19 @@ def _alternatives(leads):
 def _shape(kind, named):
     def group(name, body): return f"(?P<{name}>{body})" if named else body
     number = group("n", r"\d+")
+    question = r"(?:\." + _alternatives(_leads(QUESTION)) + group("q", r"\d+") + ")?"
+    if kind == SURVEY: return _alternatives(_leads(kind)) + number + question
     if kind in ITEM_LEADS: return _alternatives(_leads(kind)) + number
     rec = group("record", _alternatives(_leads(RECORD)) + number)
     if kind == RECORD: return rec
     if kind == REF: return rec + r"\." + group("sub", r"\d+")
-    return rec + "-" + group("sub", r"\d+") + r"(?:\." + _alternatives(_leads(QUESTION)) + group("q", r"\d+") + ")?"
+    return rec + "-" + group("sub", r"\d+") + question
 
 def pattern(*kinds): return "(?:" + "|".join(_shape(k, False) for k in ORDER if k in kinds) + ")"
 
 PARSERS = [(k, re.compile(_shape(k, True))) for k in ORDER]
 def _dashless():
-    stems = [lead[:-1] for lead in (*RECORD_LEADS.values(), *ITEM_LEADS.values()) if lead.endswith("-")]
+    stems = [lead[:-1] for lead in (*RECORD_LEADS.values(), *ITEM_LEADS.values(), SURVEY_LEAD) if lead.endswith("-")]
     return re.compile("^(" + "|".join(sorted(stems, key=len, reverse=True)) + r")(?=\d)")
 
 DASHLESS = _dashless()
@@ -112,13 +119,15 @@ def read(text, *kinds):
     kind = REF if m.group(2) else next((k for k in kinds if k != REF), None)
     return Id(kind, int(m.group(1)), _int(m.group(2))) if kind in kinds else None
 
+def _with_question(name, q): return name if q is None else in_check(name, item(QUESTION, q))
+
 def render(p, rtype=None):
+    if p.kind == SURVEY: return _with_question(survey(p.n), p.q)
     if p.kind in ITEM_LEADS: return item(p.kind, p.n)
     rec = record(p.n, rtype)
     if p.kind == RECORD: return rec
     if p.kind == REF: return ref(rec, p.sub)
-    name = check(rec, p.sub)
-    return name if p.q is None else in_check(name, item(QUESTION, p.q))
+    return _with_question(check(rec, p.sub), p.q)
 
 def complete(text, kind, *also):
     p = read(text, kind, *also)

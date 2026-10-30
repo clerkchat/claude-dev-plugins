@@ -68,7 +68,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import git, load_script
+from records import DESIGN_CHECK, OPEN_ITEMS, git, load_script
 import ids
 
 sf = load_script("stale-findings.py")
@@ -286,6 +286,8 @@ def open_questions(d, c):
     qs = [q for q in load_script("items.py").read(load_script("records.py").check_path(d, c["name"])) if not q["done"]]
     return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
 
+def is_design_check(c): return c["kind"] == DESIGN_CHECK
+
 def stopped_question(e, default=""): return e["multi"]["Question"][-1] if e["multi"]["Question"] else default
 
 def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
@@ -362,9 +364,9 @@ def feature_block(wt, rows, out):
     for c in rc.checks(d):
         if not c["open"]: continue
         qs, sf_ = open_questions(d, c)
-        open_q += len(qs)
+        if is_design_check(c): open_q += len(qs)
         ar = next((r.get("area") for r in recs if c["records"] and r["id"] == c["records"][0] and r.get("area")), "")
-        out.append(f"- design questions open in {c['name']}{' (' + ar + ')' if ar else ''}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
+        out.append(f"- {OPEN_ITEMS[c['kind']]} open in {c['name']}{' (' + ar + ')' if ar else ''}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
         if sf_: settle.append(f"{c['name']} ({', '.join(sf_)})")
     for r in recs:
         if r.get("type") == "brief" and r.get("status") == "active":
@@ -445,7 +447,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     for c in rc.checks(d) if d else []:
         if not c["open"] or not (set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas): continue
         qs, sfq = open_questions(d, c)
-        out.append(f"- Design questions open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
+        out.append(f"- {OPEN_ITEMS[c['kind']].capitalize()} open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
         if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
     for r in specs:
         body = open(r["path"], encoding="utf-8").read()
@@ -514,7 +516,7 @@ def overview_parts(d):
 def spec_facts(d, r, cs):
     rc = load_script("records.py")
     body = open(r["path"], encoding="utf-8").read()
-    mine = [c for c in cs if r["id"] in c["records"]]
+    mine = [c for c in cs if is_design_check(c) and r["id"] in c["records"]]
     settle = []
     for c in mine:
         settle += [ids.in_check(c["name"], q) for q in open_questions(d, c)[1]]
@@ -594,7 +596,7 @@ def design_view(wt, out, logs):
     for c in cs:
         if not c["open"]: continue
         qs, sfq = open_questions(d, c)
-        other += len(qs) - len(sfq)
+        if is_design_check(c): other += len(qs) - len(sfq)
         status_of = {r["id"]: r for r in recs}
         gone = [x for x in c["records"] if status_of.get(x, {}).get("status") == "superseded"]
         note = "; on " + ", ".join(f"superseded {x} (now {status_of[x].get('superseded_by')})" for x in gone) if gone else ""
