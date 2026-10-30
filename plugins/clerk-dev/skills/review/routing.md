@@ -134,6 +134,18 @@ The skill announces each risk lens with the category behind it, so a missing
 lens is visible and `--lenses +x` adds it. With `--lenses`, the explicit rules
 above apply instead.
 
+## Surveys
+
+A survey in the `design-check` skill picks lenses for existing code, from the
+six lenses with a Survey mode. The refactor lenses, `tech-debt`, `design`, and
+`naming-concepts`, always run. The trap lenses, `edge-cases`, `concurrency`,
+and `tenancy`, run when a target file hits one of their categories under Lens
+triggers, classified as Categories and path heuristics says (repo context
+globs first), ignoring the "always" column. The skill announces each trap lens
+with the category behind it, as design checks announce risk lenses.
+`--lenses` applies as Explicit selection, limited to these six; another lens
+is reported and skipped, since it has no Survey mode.
+
 ## Triage questions
 
 Asked per slice by a haiku agent that reads the slice patch once. Each answer is

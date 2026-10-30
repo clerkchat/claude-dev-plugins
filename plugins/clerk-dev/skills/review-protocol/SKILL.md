@@ -13,12 +13,13 @@ pipeline do the filtering.
 
 Your task is a review of a diff, unless the prompt says `TASK: design-check`:
 then you check a feature record (a design, plan, pieces, or brief record) and
-follow Design mode at the end of this protocol and your agent's `## Design
-mode` section. Every task shares Reading budget, Discovery fallback, Paths,
-Conduct, and the meanings of `CONTEXT`, `GUIDANCE`, and `WORKSPACE` under
-Inputs; the rest, which is about diffs and findings, is for the review alone.
-In every task, your agent's `## Pass mode` section is for the `pass` skill;
-ignore it.
+follow Design mode below and your agent's `## Design mode` section; or
+`TASK: survey`: then you read existing code before a change is defined and
+follow Survey mode below and your agent's `## Survey mode` section. Every
+task shares Reading budget, Discovery fallback, Paths, Conduct, and the
+meanings of `CONTEXT`, `GUIDANCE`, and `WORKSPACE` under Inputs; the rest,
+which is about diffs and findings, is for the review alone. In every task,
+your agent's `## Pass mode` section is for the `pass` skill; ignore it.
 
 ## Inputs you receive
 
@@ -159,10 +160,11 @@ sits on a boundary between two slices, tag it with both.
 
 ## Reading budget
 
-Read your input once: the patch, or the records. Open other code only to confirm
-or refute one specific suspicion or question, a few files per item at most, not
-to explore the repository. If your input is very large, work through it in order
-and record under Coverage where you stopped reading closely.
+Read your input once: the patch, the records, or the listed files. Open other
+code only to confirm or refute one specific suspicion or question, a few files
+per item at most, not to explore the repository. If your input is very large,
+work through it in order and record under Coverage where you stopped reading
+closely.
 
 ## Discovery fallback
 
@@ -430,3 +432,67 @@ Output one fenced block, then a `Coverage` section of one or two sentences:
 At most eight questions; fewer is fine and none is a valid answer. Record ids
 stay as ids (BRIEF-13). Answer only in the `questions` block,
 never a `findings` block.
+
+## Survey mode
+
+With `TASK: survey` you read existing code before any change to it is defined,
+for the refactors worth doing first and the traps already in it. Your agent's
+`## Survey mode` section lists what your lens asks of that code; apply it, with
+the same depth you bring to a diff.
+
+Inputs:
+
+- `FILES`: path of a file listing the target's files, absolute, one per line.
+- `TARGET`: what the user named to survey, as given.
+- `FOR`: the id and path of the record the survey prepares for, or `none`.
+  Read it to know which change comes next in this code; do not check it.
+- `REPO`, `CONTEXT`, `GUIDANCE`, `WORKSPACE`: as in review.
+
+Method:
+
+1. Read every listed file in full, in order, as Reading budget says; open
+   other code only to confirm or refute one item (the callers of a function,
+   the helper a copy duplicates).
+2. Report what is in the code now, never what a change might add. A
+   `refactor` item is what to reshape before any change; a `trap` item is a
+   defect or gap in the code as it stands.
+3. Anchor every item at a `path:line` in a listed file, grounded in code you
+   read as Design mode's step 2 grounds a question.
+4. Apply the guidance as in review and Design mode. Do not report what an
+   active decision or guidance already settles, as Design mode's step 3 says.
+
+Weight each item:
+
+- `do-first`: a refactor the next change in this code would be clearly smaller
+  or safer on top of, or a trap that change would extend (a race, a tenant
+  gap, a legacy shape with no handling, in code it builds on).
+- `worth-doing`: shapes how the change is written.
+- `note`: a consideration to keep in mind.
+
+Output as Design mode does, one fenced block, then a `Coverage` section:
+
+```survey
+- lens: <your lens name>
+  kind: refactor | trap
+  file: <absolute path of a listed file>
+  line: <single line number in the file>
+  end_line: <optional, last line of the range>
+  weight: do-first | worth-doing | note
+  title: <as in Finding format: at most ten words, no file names>
+  claim: <one sentence: what is in the code now>
+  why: <the concrete case: what the next change gets smaller or safer by, or
+    what goes wrong today, naming the code, data, or caller involved>
+  suggestion: <the refactor or fix, or alternatives labeled (a), (b); "none
+    obvious" when you have none>
+  fix_size: <trivial | small | medium | large; see Origin and fix scope>
+  debt: <tech-debt lens only, as its Labeling. Other lenses leave it out.>
+  saves: <tech-debt lens only, optional, as its Labeling. Other lenses leave
+    it out.>
+  evidence: <absolute path:line references you read>
+```
+
+The prose rules under Finding format apply to the text fields. At most twelve
+items per lens, largest payoff first; a lens's own limit yields to this.
+Severity, confidence, origin, and the verifier do not apply: every survey item
+is in deployed code by definition, and the user judges it in the walk. Answer
+only in the `survey` block, never a `findings` or `questions` block.
