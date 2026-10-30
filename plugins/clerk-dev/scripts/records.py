@@ -185,11 +185,12 @@ def survey_target(text):
     m = re.search(r"^# Survey:\s*(.+)$", text, re.M)
     return m.group(1).strip() if m else "unnamed target"
 
-def survey_name(path, q):
-    what = f"survey of {survey_target(open(path, encoding='utf-8').read())}"
-    if q is None: return what
+def check_gloss(d, check_id, q, whole, item):
+    path = check_path(d, check_id)
+    if not os.path.exists(path): return None
+    if q is None: return whole(path)
     it = question_in(path, q)
-    return f"item {q} of {what}: {it['text']}" if it else None
+    return item(path, it["text"]) if it else None
 
 def records_cell(c): return ", ".join(c["records"]) or ("paths" if c["kind"] == SURVEY else "")
 
@@ -511,15 +512,10 @@ def names(wt, wanted):
                 if items and p.sub in items: name = f"requirement of {rid}: {bm.label(items[p.sub])}"
                 elif step is not None: name = f"step {p.sub} of plan {rid}: {bm.step_piece(step)}"
             elif kind == ids.CHECK:
-                cp = check_path(d, ids.check(p.record, p.sub))
-                if os.path.exists(cp):
-                    if p.q is not None:
-                        it = question_in(cp, p.q)
-                        if it: name = f"design question: {it['text']}"
-                    else: name = f"design check of {recs[p.n]['id'] if p.n in recs else p.record}"
+                name = check_gloss(d, ids.check(p.record, p.sub), p.q, lambda _: f"design check of {recs[p.n]['id'] if p.n in recs else p.record}", lambda _, t: f"design question: {t}")
             elif kind == ids.SURVEY:
-                cp = check_path(d, ids.survey(p.n))
-                if os.path.exists(cp): name = survey_name(cp, p.q)
+                survey_of = lambda cp: f"survey of {survey_target(open(cp, encoding='utf-8').read())}"
+                name = check_gloss(d, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
             elif kind == ids.IDEA:
                 it = next((i for i in ideas(d) if ids.same(i["id"], X)), None)
                 if it: name = f"idea ({idea_word(it)}): {it['text']}"
@@ -680,12 +676,8 @@ def idea_status(i):
     return f"Status: {idea_word(i)}. Why: {f.get('Why', '-')}. When: {f.get('When', '-')}."
 
 def open_item_lines(d, c):
-    text = open(check_path(d, c["name"]), encoding="utf-8").read()
-    out = []
-    for q in re.finditer(rf"^- \[ \] ({ids.pattern(ids.QUESTION)})\. (.*)$", text, re.M):
-        w = re.search(r"Weight: (\S+)", text[q.end():q.end() + 800])
-        out.append(f"- {ids.in_check(c['name'], q.group(1))} ({w.group(1) if w else '?'}): {q.group(2)}")
-    return out
+    return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
+            for i in items_mod().read(check_path(d, c["name"])) if not i["done"]]
 
 def digest(d):
     rs = records(d)
