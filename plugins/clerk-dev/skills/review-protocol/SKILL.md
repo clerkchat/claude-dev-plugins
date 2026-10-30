@@ -159,9 +159,10 @@ sits on a boundary between two slices, tag it with both.
 
 ## Reading budget
 
-Read the patch once. Open surrounding code only to confirm or refute a specific
-suspicion, not to survey. If the patch for your scope is very large, work
-through it in order and record under Coverage where you stopped reading closely.
+Read your input once: the patch, or the records. Open other code only to confirm
+or refute one specific suspicion or question, a few files per item at most, not
+to explore the repository. If your input is very large, work through it in order
+and record under Coverage where you stopped reading closely.
 
 ## Discovery fallback
 
@@ -356,7 +357,8 @@ empty `findings` block and the `Coverage` section.
 
 Every path you write, in findings and in prose, is repo-relative with no leading
 `./`, and a reference to a line is `path:line`: `libs/foo/bar.ts:120`, not
-"`libs/foo/bar.ts` line 120". Paths in another repository are absolute.
+"`libs/foo/bar.ts` line 120". Paths in another repository are absolute, and so are paths in items written to a
+file in the hub, which may be another repository.
 
 ## Conduct
 
@@ -395,9 +397,7 @@ Method:
    reuse a helper, or change an entity, find the existing code and read enough
    of it to know whether the plan fits: how tenants are scoped there, what the
    current contract is, what a migration on that table would lock. A question
-   backed by code you read beats a generic one. Open code to confirm or
-   refute a specific question, a few files per question at most; do not survey
-   the repository.
+   backed by code you read beats a generic one. Follow Reading budget.
 3. Ask only what the records leave open or get wrong for your lens. Do not ask
    what an active decision already settles, unless the code shows the decision
    cannot hold; then say so and cite it.
@@ -427,7 +427,6 @@ Output one fenced block, then a `Coverage` section of one or two sentences:
   evidence: <file:line references and record ids you read>
 ```
 
-At most eight questions; fewer is fine and none is a valid answer. Paths in
-`evidence` are absolute, since the check file lives in the hub, which may be
-another repository; record ids stay as ids (BRIEF-13). Never edit files. Answer only in
-the `questions` block, never a `findings` block.
+At most eight questions; fewer is fine and none is a valid answer. Record ids
+stay as ids (BRIEF-13). Never edit files. Answer only in the `questions` block,
+never a `findings` block.
