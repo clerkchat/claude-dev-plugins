@@ -20,7 +20,7 @@ class SkillSplitTests(unittest.TestCase):
     def test_writing_code_holds_only_how_to_shape_code(self):
         self.assertEqual(
             headings(skill("writing-code")),
-            ["Refactor first", "Changing live code", "Reuse", "One source of truth"],
+            ["Refactor first", "Changing live code", "Reuse", "One source of truth", "Tests"],
         )
 
     def test_building_opens_with_the_setup_check_then_intake(self):

@@ -88,3 +88,54 @@ riskier than it is.
 - Abstractions at the right level: no framework for one caller, no wrapper
   around one call, no parameter added to a shared type because one function
   needs it.
+
+## Tests
+
+Agents tend to write a test as one long method that builds everything, runs
+several scenarios, and asserts along the way. Write tests the way the rest of
+this skill writes code: a shared baseline, then small parts that each add one
+thing.
+
+- Group tests by the unit or behavior under test (`describe`, a test class,
+  subtests). Put the baseline every test in the group needs (the subject, its
+  collaborators, default data) in the framework's setup hook: `beforeEach`,
+  `setUp`, a pytest fixture, a helper each subtest calls.
+- One scenario per test. A test states only how its scenario differs from the
+  baseline, does one thing, and asserts that one thing's outcome.
+- When several tests share a condition, give the condition a nested group whose
+  setup hook applies it, and name the group after it.
+- Name groups and tests so they read as a spec: "when the contact is archived",
+  "rejects the update".
+- Build test data with the repository's factories or builders, or add one,
+  rather than repeating object literals.
+- Keep what matters to a test visible: a reader should see, from the test and
+  the nearest setup hook, every input its assertion depends on. Do not hide a
+  scenario's deciding input three hooks up.
+- When the test file you extend is itself written as long methods, restructure
+  the tests your change touches first, as in Refactor first.
+
+The same shape in any framework; in Jest, instead of one test that creates a
+contact, updates it, archives it, and updates it again:
+
+```ts
+describe('ContactService.update', () => {
+  let contact: Contact;
+
+  beforeEach(async () => {
+    contact = await contactFactory.create({ name: 'Ada' });
+  });
+
+  it('saves the new name', async () => {
+    await service.update(contact.id, { name: 'Grace' });
+    expect(await repo.findOneBy({ id: contact.id })).toMatchObject({ name: 'Grace' });
+  });
+
+  describe('when the contact is archived', () => {
+    beforeEach(() => service.archive(contact.id));
+
+    it('rejects the update', async () => {
+      await expect(service.update(contact.id, { name: 'Grace' })).rejects.toThrow(ArchivedContactError);
+    });
+  });
+});
+```

@@ -50,9 +50,12 @@ denial test for a new guarded route is major.
    calls to third parties where the repo mocks at the HTTP boundary.
 5. Determinism: time, randomness, ordering of unordered results, shared mutable
    fixtures across tests, reliance on test execution order, sleeps.
-6. Setup discipline: duplicated setup that should be in a shared hook; nested
-   describe blocks by condition with the condition's setup in its hook; tests so
-   long that the specific assertion is buried.
+6. Shape, as Tests in the writing-code skill describes it: duplicated setup
+   that should be in a shared hook; a condition several tests share without a
+   nested group whose hook applies it; one test running several scenarios, or
+   so long that the specific assertion is buried; a test whose deciding input
+   is hidden in a distant hook. Report these as minor, and as one finding per
+   file.
 7. Assertions: a test that asserts an error is caught and logged pins a
    swallowed error in place (see the error-handling lens); report the swallow
    rather than asking for an assertion on the log. Tests with no assertion, assertions that cannot fail, assertions
