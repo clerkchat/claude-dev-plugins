@@ -25,9 +25,10 @@ user through them and records each answer.
 
 Each kind of run below picks what it runs on and its lenses, says them, and
 then runs these steps with its own parts: the prompt, the block it reads back,
-the merge, the file's name and header, and the report's counts. The kind names
-its file `<hub>/.clerk-dev/feature/checks/<run>.md` and gives the `<id>` it is
-on; the run's own files go in `<hub>/.clerk-dev/feature/checks/<run>/`.
+its sort and earlier runs, the file's name and header, and the report's counts.
+The kind names its file `<hub>/.clerk-dev/feature/checks/<run>.md` and gives
+the `<subject>` it is on; the run's own files go in
+`<hub>/.clerk-dev/feature/checks/<run>/`.
 
 1. **Guidance.** Before launching, write the guidance file of each repository
    the prompt names, with `records.py guidance <that repository's worktree>
@@ -40,13 +41,14 @@ on; the run's own files go in `<hub>/.clerk-dev/feature/checks/<run>/`.
 
    Run the lenses whose questions are most often settle-first, `contracts`,
    `cross-repo`, `rollout`, `tenancy`, and `security`, with `model: fable`
-   when they are in the set, on every brief, design, and plan, falling back to Opus at the same effort as Model fallback in the `review` skill describes; every
-   other lens uses the agent's own model. A question settled before building
-   costs far less than the rework it saves.
+   when they are in the set, falling back to Opus at the same effort as Model
+   fallback in the `review` skill describes; every other lens uses the agent's
+   own model. A question settled before building costs far less than the
+   rework it saves.
 3. **Keep the raw output.** Write each agent's reply verbatim to
    `<hub>/.clerk-dev/feature/checks/<run>/raw/<lens>.md` with
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out <path>
-   --header "# <lens> on <id>" --header "usage: <tokens>, <duration>"`, where
+   --header "# <lens> on <subject>" --header "usage: <tokens>, <duration>"`, where
    `output_file` is the one the Agent tool returned for that agent and the
    usage comes from its completion notice; do not copy replies by hand. Then
    count the items in the kind's block. When a lens has none but its reply has
@@ -62,14 +64,16 @@ on; the run's own files go in `<hub>/.clerk-dev/feature/checks/<run>/`.
      the file's Dropped section with the record that answered it, so the user
      can contest the drop.
    - Compare each remaining item with the closed items of earlier runs on the
-     same target, by meaning, not wording. A match is not a new item: list it
+     same target (the kind says which files those are), by meaning, not wording. A match is not a new item: list it
      under the file's "Seen before" section with the earlier id and outcome
      ("Do exports expire? BRIEF-9-1.Q-4: no change, deleted with the report"),
      unless the target has changed in a way that reopens it; then keep it, and
      cite the earlier one in its Why.
-   - Sort as the kind says: its weight order, its location key, and which
-     earlier files count as the same target.
-5. **Write** the kind's file, its header as the kind describes. A `Usage:`
+   - Sort by the kind's weight order, then its location key.
+5. **Write** the kind's file, its header as the kind describes. Fields are a
+   nested list so a Markdown formatter keeps the layout, as in follow-ups.
+   `Instruction` is empty until the user decides; `Status` and `Outcome`
+   follow "Items" in `skills/review/tracking.md`. A `Usage:`
    line under the header gives each lens's tokens and duration from the
    completion notices ("Usage: completeness 24k 25s, llm-agent 79k 177s"), so
    the cost of each run is visible per lens. Then run
@@ -123,11 +127,12 @@ the lenses", with these parts.
   ```
 
 - **Block.** The `questions` block.
-- **Merge.** Sort by weight (settle-first, worth-settling, note), then by
-  record and section. Earlier runs are the index's checks of the same records.
-- **File.** `<run>` is `<id>-<k>`, where `<id>` is the first checked record's
-  id (BRIEF-13; `records.py names` gives its type) and `<k>` is one more than
-  the highest existing check of it, counting older files named with its old
+- **Sort and earlier runs.** Sort by weight (settle-first, worth-settling,
+  note), then by record and section. Earlier runs are the index's checks of the
+  same records.
+- **File.** `<subject>` is the first checked record's id (BRIEF-13;
+  `records.py names` gives its type). `<run>` is `<subject>-<k>`, where `<k>` is one
+  more than the highest existing check of it, counting older files named with its old
   id (R13-1.md). Its `Checked <date>: BRIEF-13, DESIGN-10.` line names every
   checked record, so the feature index lists the check under each. Format
   below.
@@ -165,10 +170,6 @@ naming-concepts 22k 25s.
 
 - Should exports poll? Answered by DEC-5 (completeness).
 ```
-
-Fields are a nested list so a Markdown formatter keeps the layout, as in
-follow-ups. `Instruction` is empty until the user decides; `Status` and
-`Outcome` follow "Items" in `skills/review/tracking.md`.
 
 ## Walking the questions
 

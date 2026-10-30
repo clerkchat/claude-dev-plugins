@@ -387,8 +387,7 @@ Inputs:
   repositories, there is instead one `REPOSITORY` block per repository, each
   with `NAME`, `REPO`, `CONTEXT`, and `GUIDANCE`; ground each question in the
   repository it concerns, and check contracts from both sides.
-- `WORKSPACE`: as in review. Do not ask what the guidance already answers,
-  unless the code shows the rule cannot hold; then say so and cite it.
+- `WORKSPACE`: as in review.
 
 Method:
 
@@ -428,5 +427,5 @@ Output one fenced block, then a `Coverage` section of one or two sentences:
 ```
 
 At most eight questions; fewer is fine and none is a valid answer. Record ids
-stay as ids (BRIEF-13). Never edit files. Answer only in the `questions` block,
+stay as ids (BRIEF-13). Answer only in the `questions` block,
 never a `findings` block.
