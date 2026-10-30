@@ -21,93 +21,114 @@ user through them and records each answer.
 
 `records.py` below is `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`.
 
-## Running a check
+## Running the lenses
 
-1. **Records.** With ids given, check those. Otherwise take the record the
-   conversation is about; failing that, the newest active brief, plan, or design
-   in the area the conversation is about (`records.py list <worktree> --active
-   --area <area>`), or feature-wide when it is about the whole feature; ask
-   when that is unclear and several areas have candidates. Say in one line which records you
-   are checking. Supporting records are the ones the checked records name in
-   `from` or cite by id, plus the active decisions; pass them, but do not
-   check them.
-2. **Lenses.** Pick them as `skills/review/routing.md` "Design checks"
-   describes, applying any `--lenses` argument. Say the set in one line, using
-   the plain names from `routing.md`, and go on; do not wait for approval.
-3. **Run.** Launch one `clerk-dev:lens-<lens>` agent per lens, all in one
-   message so they run in parallel, each with this prompt:
+Each kind of run below picks what it runs on and its lenses, says them, and
+then runs these steps with its own parts: the prompt, the block it reads back,
+the merge, the file's name and header, and the report's counts. The kind names
+its file `<hub>/.clerk-dev/feature/checks/<run>.md` and gives the `<id>` it is
+on; the run's own files go in `<hub>/.clerk-dev/feature/checks/<run>/`.
 
-   ```
-   TASK: design-check
-   RECORDS: <absolute paths>
-   SUPPORTING: <absolute paths, or none>
-   REPO: <absolute path of the repository the records are about>
-   CONTEXT: <<git common dir>/clerk-dev/repo-context.md of that repository, or none>
-   GUIDANCE: <path of that repository's guidance file, written as below>
-   WORKSPACE: <.clerk-dev/workspace.md, or none>
-   ```
+1. **Guidance.** Before launching, write the guidance file of each repository
+   the prompt names, with `records.py guidance <that repository's worktree>
+   [--area <the area of the records it is about>] [--context <its CONTEXT>]
+   --out <hub>/.clerk-dev/feature/checks/<run>/guidance-<repo>.md`: its branch
+   scope, its branch guidance, the feature's active guidance, and its review
+   context's Known noise.
+2. **Launch.** Launch one `clerk-dev:lens-<lens>` agent per lens, all in one
+   message so they run in parallel, each with the kind's prompt.
 
    Run the lenses whose questions are most often settle-first, `contracts`,
    `cross-repo`, `rollout`, `tenancy`, and `security`, with `model: fable`
    when they are in the set, on every brief, design, and plan, falling back to Opus at the same effort as Model fallback in the `review` skill describes; every
    other lens uses the agent's own model. A question settled before building
    costs far less than the rework it saves.
-
-   The repository a record is about is its `repo` field; find its worktree in
-   the workspace file, defaulting to this worktree. Records **span
-   repositories** when the workspace lists more than one repository and either
-   the checked records have different `repo` values, or a checked plan, design,
-   or pieces record assigns work to more than one of them. Then replace
-   `REPO`, `CONTEXT`, and `GUIDANCE` with one block per repository involved:
-
-   ```
-   REPOSITORY:
-     NAME: <repo name from the workspace>
-     REPO: <absolute worktree path>
-     CONTEXT: <its repo context, or none>
-     GUIDANCE: <path of its guidance file>
-   ```
-
-   Write each guidance file before launching, with `records.py guidance
-   <that repository's worktree> [--area <the checked records' area>]
-   [--context <its CONTEXT>] --out
-   <hub>/.clerk-dev/feature/checks/<id>-<k>/guidance-<repo>.md`: its branch
-   scope, its branch guidance, the feature's active guidance, and its review
-   context's Known noise.
-4. **Keep the raw output.** Write each agent's reply verbatim to
-   `<hub>/.clerk-dev/feature/checks/<id>-<k>/raw/<lens>.md` (naming below)
-   with `${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out
-   <path> --header "# <lens> on <id>" --header "usage: <tokens>, <duration>"`,
-   where `output_file` is the one the Agent tool returned for that agent and
-   the usage comes from its completion notice; do not copy replies by hand.
-   Then count the questions in its `questions` block. When a lens has none but
-   its reply has a `findings` block or a broken `questions` block, resume that
-   agent once asking for the `questions` block only; if it still has none, say
-   so in the report. Zero questions in a well-formed block is a valid answer.
-5. **Merge.** Merge questions that ask the same thing from different lenses
-   into one, listing every lens. Drop any an active decision or active guidance already answers,
-   unless the agent says the code shows the decision cannot hold; list each
-   dropped question in the check file's Dropped section with the decision that
-   answered it, so the user can contest the drop. Sort by weight (settle-first,
-   worth-settling, note), then by record and section.
-   Then read the earlier check files of the same records (the index lists them)
-   and compare each new question with their closed ones by meaning, not
-   wording. A match is not a new item: list it under the check file's "Seen
-   before" section with the earlier id and outcome ("Do exports expire?
-   BRIEF-9-1.Q-4: no change, deleted with the report"), unless the record has
-   changed in a way that reopens it; then keep it, and cite the earlier one in
-   its Why.
-6. **Write** `<hub>/.clerk-dev/feature/checks/<id>-<k>.md`, where `<id>` is the
-   first checked record's id (BRIEF-13; `records.py names` gives its type) and
-   `<k>` is one more than the highest existing check of it, counting older
-   files named with its old id (R13-1.md). Its `Checked <date>: BRIEF-13,
-   DESIGN-10.` line names every checked record, so the feature index lists
-   the check under each. A `Usage:` line under it gives each lens's tokens and
-   duration from the completion notices ("Usage: completeness 24k 25s,
-   llm-agent 79k 177s"), so the cost of checks is visible per lens. Format below. Then run `records.py index <worktree>`.
-7. **Report** in a few lines: the path, the counts by weight, any lens with no
-   usable output, and the settle-first questions, one line each. Offer to walk
+3. **Keep the raw output.** Write each agent's reply verbatim to
+   `<hub>/.clerk-dev/feature/checks/<run>/raw/<lens>.md` with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out <path>
+   --header "# <lens> on <id>" --header "usage: <tokens>, <duration>"`, where
+   `output_file` is the one the Agent tool returned for that agent and the
+   usage comes from its completion notice; do not copy replies by hand. Then
+   count the items in the kind's block. When a lens has none but its reply has
+   a different block (a `findings` block) or a broken one, resume that agent
+   once asking for the kind's block only; if it still has none, say so in the
+   report. Zero items in a well-formed block is
+   a valid answer.
+4. **Merge** the items as the kind describes.
+5. **Write** the kind's file, its header as the kind describes. A `Usage:`
+   line under the header gives each lens's tokens and duration from the
+   completion notices ("Usage: completeness 24k 25s, llm-agent 79k 177s"), so
+   the cost of each run is visible per lens. Then run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/items.py validate <the file>` and
+   `records.py index <worktree>`.
+6. **Report** in a few lines: the path, the kind's counts, any lens with no
+   usable output, and the items the kind lists one line each. Offer to walk
    them. Do not start answering them yourself.
+
+## Running a check
+
+A check runs the lenses in design mode on feature records, through "Running
+the lenses", with these parts.
+
+- **Records.** With ids given, check those. Otherwise take the record the
+  conversation is about; failing that, the newest active brief, plan, or design
+  in the area the conversation is about (`records.py list <worktree> --active
+  --area <area>`), or feature-wide when it is about the whole feature; ask
+  when that is unclear and several areas have candidates. Say in one line which records you
+  are checking. Supporting records are the ones the checked records name in
+  `from` or cite by id, plus the active decisions; pass them, but do not
+  check them.
+- **Lenses.** Pick them as `skills/review/routing.md` "Design checks"
+  describes, applying any `--lenses` argument. Say the set in one line, using
+  the plain names from `routing.md`, and go on; do not wait for approval.
+- **Prompt.**
+
+  ```
+  TASK: design-check
+  RECORDS: <absolute paths>
+  SUPPORTING: <absolute paths, or none>
+  REPO: <absolute path of the repository the records are about>
+  CONTEXT: <<git common dir>/clerk-dev/repo-context.md of that repository, or none>
+  GUIDANCE: <path of that repository's guidance file>
+  WORKSPACE: <.clerk-dev/workspace.md, or none>
+  ```
+
+  The repository a record is about is its `repo` field; find its worktree in
+  the workspace file, defaulting to this worktree. Records **span
+  repositories** when the workspace lists more than one repository and either
+  the checked records have different `repo` values, or a checked plan, design,
+  or pieces record assigns work to more than one of them. Then replace
+  `REPO`, `CONTEXT`, and `GUIDANCE` with one block per repository involved:
+
+  ```
+  REPOSITORY:
+    NAME: <repo name from the workspace>
+    REPO: <absolute worktree path>
+    CONTEXT: <its repo context, or none>
+    GUIDANCE: <path of its guidance file>
+  ```
+
+- **Block.** The `questions` block.
+- **Merge.** Merge questions that ask the same thing from different lenses
+  into one, listing every lens. Drop any an active decision or active guidance already answers,
+  unless the agent says the code shows the decision cannot hold; list each
+  dropped question in the check file's Dropped section with the decision that
+  answered it, so the user can contest the drop. Sort by weight (settle-first,
+  worth-settling, note), then by record and section.
+  Then read the earlier check files of the same records (the index lists them)
+  and compare each new question with their closed ones by meaning, not
+  wording. A match is not a new item: list it under the check file's "Seen
+  before" section with the earlier id and outcome ("Do exports expire?
+  BRIEF-9-1.Q-4: no change, deleted with the report"), unless the record has
+  changed in a way that reopens it; then keep it, and cite the earlier one in
+  its Why.
+- **File.** `<run>` is `<id>-<k>`, where `<id>` is the first checked record's
+  id (BRIEF-13; `records.py names` gives its type) and `<k>` is one more than
+  the highest existing check of it, counting older files named with its old
+  id (R13-1.md). Its `Checked <date>: BRIEF-13, DESIGN-10.` line names every
+  checked record, so the feature index lists the check under each. Format
+  below.
+- **Report.** The counts by weight, and the settle-first questions.
 
 Check files are not records: they have no record id and are not superseded. A
 question is cited as `BRIEF-13-1.Q-3`, or `Q-3` when the check in hand is clear.
@@ -144,8 +165,7 @@ naming-concepts 22k 25s.
 
 Fields are a nested list so a Markdown formatter keeps the layout, as in
 follow-ups. `Instruction` is empty until the user decides; `Status` and
-`Outcome` follow "Items" in `skills/review/tracking.md`. After writing, run
-`${CLAUDE_PLUGIN_ROOT}/scripts/items.py validate <check file>`.
+`Outcome` follow "Items" in `skills/review/tracking.md`.
 
 ## Walking the questions
 
