@@ -120,6 +120,19 @@ Areas are not declared up front.
   Then read it, settle what you can with the user, and edit it in this
   session.
 
+## Needs from another repository
+
+When brainstorming, designing, or briefing in one repository turns up a shape
+another repository must provide and does not today (an endpoint, a field, an
+event, a schema), file it there as a `wanted:` follow-up, as "Follow-ups" in
+`skills/review/tracking.md` describes: the contract is the shape and how it
+differs from today's, the need is what this repository builds against, and the
+item goes to the providing repository's worktree from `.clerk-dev/workspace.md`.
+File it once the record that relies on the shape is written, cite that record
+in `--from`, and say in one line what was filed and where ("filed F4 in api:
+wanted GET /contacts?q= to match phoneNumber"). A shape the user is still
+undecided about stays an open question in the record, not a follow-up.
+
 ## When a record changes another
 
 A record that changes any part of an active record supersedes it and states the
