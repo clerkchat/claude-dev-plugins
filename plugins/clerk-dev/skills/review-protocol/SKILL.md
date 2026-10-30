@@ -357,8 +357,9 @@ empty `findings` block and the `Coverage` section.
 
 Every path you write, in findings and in prose, is repo-relative with no leading
 `./`, and a reference to a line is `path:line`: `libs/foo/bar.ts:120`, not
-"`libs/foo/bar.ts` line 120". Paths in another repository are absolute, and so are paths in items written to a
-file in the hub, which may be another repository.
+"`libs/foo/bar.ts` line 120". Paths in another repository are absolute, and so
+is every path in any task other than review, since its output is written to the
+feature's hub, which may be another repository.
 
 ## Conduct
 
