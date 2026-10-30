@@ -104,6 +104,18 @@ the review protocol):
 - Does the design couple modules that are separate today?
 - Is any part speculative: built for a future case no record asks for?
 
+## Survey mode
+
+Asked of existing code before a change is defined (see Survey mode in
+the review protocol):
+
+- Which of these files duplicates a pattern, helper, or module the codebase
+  already has? Name both.
+- Is each abstraction in these files at the right level, or does it wrap one
+  caller?
+- Which modules in these files are coupled although they are separate
+  concerns?
+
 ## Pass mode
 
 What the author does in a pass that uses this lens (the `pass` skill reads

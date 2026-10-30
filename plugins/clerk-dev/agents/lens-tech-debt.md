@@ -176,6 +176,23 @@ the review protocol):
 - Which cleanup should be its own commit before the feature, and which can
   wait?
 
+## Survey mode
+
+Asked of existing code before a change is defined (see Survey mode in
+the review protocol):
+
+- Which of these files would a refactor make smaller or plainer to change
+  next: a helper to extract, a function to split, a shape to fix, dead code to
+  drop? Name the refactor and the commit it would be.
+- Which of these files builds alongside something the codebase or its
+  libraries already have, instead of reusing or extending it? Name both.
+- Where is there duplication, dead code, or a tangled module in these files
+  that the next change here would make worse?
+- Which directory holding these files is crowded enough that its files should
+  be grouped into named subdirectories first?
+- Which cleanup should be its own commit before any change here, and which can
+  wait?
+
 ## Pass mode
 
 What the author does in a pass that uses this lens (the `pass` skill reads

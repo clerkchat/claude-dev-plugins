@@ -77,6 +77,20 @@ the review protocol):
   what happens when two transitions race?
 - Does any step read, decide, then write, with time between?
 
+## Survey mode
+
+Asked of existing code before a change is defined (see Survey mode in
+the review protocol):
+
+- Which state these files change can two requests, jobs, or consumers change
+  at once, and what serializes it today (a unique constraint, a lock, an
+  idempotency key)?
+- Which handlers in these files are unsafe under at-least-once delivery and
+  retries?
+- Which state machines do these files hold? Are their transitions guarded, and
+  what happens when two transitions race?
+- Which steps in these files read, decide, then write, with time between?
+
 ## Pass mode
 
 What the author does in a pass that uses this lens (the `pass` skill reads

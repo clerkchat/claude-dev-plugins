@@ -81,6 +81,22 @@ the review protocol):
   a row, a config, a result), at what point in the run does that value come
   into being, and is it there every time the component reads it?
 
+## Survey mode
+
+Asked of existing code before a change is defined (see Survey mode in
+the review protocol):
+
+- Which inputs these files handle have an empty, missing, or boundary case
+  with no code for it?
+- Which code reads existing data that predates the current shape: rows missing
+  fields, old statuses, legacy formats, with no handling?
+- Which code assumes events arrive in order, or that clocks agree?
+- Where does a multi-step operation leave partial state when a later step
+  fails?
+- Where do these files hand runtime state to another component (an id, a row,
+  a config, a result), and is that value there every time the component reads
+  it?
+
 ## Pass mode
 
 What the author does in a pass that uses this lens (the `pass` skill reads

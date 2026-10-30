@@ -81,6 +81,20 @@ the review protocol):
 - Is any new path an admin or internal one that reaches tenant data with a
   weaker check?
 
+## Survey mode
+
+Asked of existing code before a change is defined (see Survey mode in
+the review protocol):
+
+- What is the tenant for each entity, route, job, and store in these files,
+  and where is it enforced?
+- Do jobs and events in these files carry the tenant, and do their processors
+  re-scope by it?
+- Do caches, search indexes, and analytics queries in these files include the
+  tenant in their keys and filters?
+- Which path in these files is an admin or internal one that reaches tenant
+  data with a weaker check?
+
 ## Pass mode
 
 What the author does in a pass that uses this lens (the `pass` skill reads

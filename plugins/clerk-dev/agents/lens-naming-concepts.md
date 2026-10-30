@@ -76,6 +76,17 @@ the review protocol):
 - Do the names describe the domain, or leak the implementation?
 - Where will the code live, and does that match where the feature lives?
 
+## Survey mode
+
+Asked of existing code before a change is defined (see Survey mode in
+the review protocol):
+
+- Does each concept in these files have one name, and does it match the
+  vocabulary the codebase and product use for the same thing?
+- Is any name in these files used for more than one meaning?
+- Do the names in these files describe the domain, or leak the implementation?
+- Does the code live where the feature it serves lives?
+
 ## Pass mode
 
 What the author does in a pass that uses this lens (the `pass` skill reads
