@@ -23,6 +23,11 @@ class CapBelowOneKeepsNoEarlierListTests(TempCase):
         self.assertNotEqual(code, 0, out)
         self.assertFalse(os.path.exists(self.out))
 
+    def test_a_cap_that_is_not_a_number_removes_the_earlier_list(self):
+        code, out = run_script("survey-files", self.path("work"), "src", "--cap", "abc", "--out", self.out)
+        self.assertNotEqual(code, 0, out)
+        self.assertFalse(os.path.exists(self.out))
+
 
 if __name__ == "__main__":
     unittest.main()
