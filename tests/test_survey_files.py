@@ -108,6 +108,7 @@ class CapBelowOneTests(SurveyFilesCase):
     def test_a_cap_that_is_not_a_number_removes_the_earlier_list(self):
         code, out = self.resolve("src", "--cap", "abc")
         self.assertNotEqual(code, 0, out)
+        self.assertIn("--cap must be at least 1", out)
         self.assertFalse(os.path.exists(self.out))
 
 
