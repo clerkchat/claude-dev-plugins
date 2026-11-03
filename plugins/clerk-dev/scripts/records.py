@@ -371,7 +371,7 @@ def rules(d, area=None):
     return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), ids.number(r["id"])))]
 
 def heading_line(heading, level=2):
-    return rf"^{'#' * level} {re.escape(heading)}$"
+    return rf"^{'#' * level} {re.escape(heading)}[ \t]*$"
 
 def has_section(text, heading, level=2):
     return re.search(heading_line(heading, level), text, re.M) is not None

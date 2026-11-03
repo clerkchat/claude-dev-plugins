@@ -38,6 +38,11 @@ class HasSectionTests(unittest.TestCase):
     def test_an_empty_section_is_still_present(self):
         self.assertTrue(records.has_section("## Empty\n\n## Next\ntext\n", "Empty"))
 
+    def test_a_heading_with_trailing_spaces(self):
+        text = "## Purpose  \nWhat it builds.\n"
+        self.assertTrue(records.has_section(text, "Purpose"))
+        self.assertEqual(records.body_section(text, "Purpose"), "What it builds.")
+
 
 class GistTests(TempCase):
     def gist_of(self, body):

@@ -40,9 +40,9 @@ def fence(text):
 def purpose_state(path):
     if not os.path.exists(path): return "missing"
     text = open(path, encoding="utf-8").read()
-    m = re.search(r"^## Purpose\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
-    if not m: return "present, no Purpose section"
-    return "present, Purpose filled in" if m.group(1).strip() else "present, Purpose empty"
+    rec = load_script("records.py")
+    if not rec.has_section(text, "Purpose"): return "present, no Purpose section"
+    return "present, Purpose filled in" if rec.body_section(text, "Purpose") else "present, Purpose empty"
 
 def latest_run(wt, head):
     run = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest"))
