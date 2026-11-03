@@ -207,13 +207,12 @@ def checks(d):
         text = open(os.path.join(cd, f), encoding="utf-8").read()
         kind, named = check_header(text)
         every = items_mod().read(os.path.join(cd, f))
-        n_open = len(not_done(every))
+        n_open = len(items_mod().not_done(every))
         out.append({"name": canon(name), "kind": kind, "records": [canon(x) for x in named], "open": n_open, "closed": len(every) - n_open})
     return out
 
-def not_done(items): return [i for i in items if not i["done"]]
 
-def open_check_items(d, name): return not_done(items_mod().read(check_path(d, name)))
+def open_check_items(d, name): return items_mod().not_done(items_mod().read(check_path(d, name)))
 
 def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
 
@@ -339,7 +338,7 @@ def index(d):
             for r in ordered(grp): rows += entry(r, d, repos)
             rows.append("")
         if not live: rows += ["No active records.", ""]
-    parked = [i for i in ideas(d) if not i["done"]]
+    parked = items_mod().not_done(ideas(d))
     if parked:
         rows += ["## Ideas", "", f"Parked, {len(parked)}; all of them, with why and when, in [ideas.md](ideas.md).", ""]
         rows += [f"- **{i['id']}**{' (' + i['fields']['Area'] + ')' if i['fields'].get('Area') else ''}: {i['text']}" for i in parked] + [""]

@@ -103,7 +103,7 @@ def block(path, log_n):
         out.append("- Workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows))
     else:
         out.append("- Workspace: none")
-    open_fu = [i for i in rs.parse_followups(wt) if not i["done"]]
+    open_fu = rs.not_done(rs.parse_followups(wt))
     out.append(f"- Open follow-ups: {len(open_fu)}")
     out.append(f"- Latest run: {latest_run(wt, head)}")
 

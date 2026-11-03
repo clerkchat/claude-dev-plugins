@@ -72,6 +72,7 @@ from records import DESIGN_CHECK, OPEN_ITEMS, brief_open_items, git, load_script
 import ids
 
 sf = load_script("stale-findings.py")
+not_done = load_script("items.py").not_done
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
@@ -129,7 +130,7 @@ def other_repos(wt, rows, d):
     follow-ups name."""
     rc = load_script("records.py"); me = repo_name(wt, rows)
     named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
-    named |= {re.split(r"[ @]", i["from"])[0] for i in parse_followups(wt) if not i["done"] and i["from"]}
+    named |= {re.split(r"[ @]", i["from"])[0] for i in not_done(parse_followups(wt)) if i["from"]}
     return sorted(n for n in named if n and n != me)
 
 def plan_gaps(d):
@@ -196,7 +197,7 @@ def next_step_lines(passes, entries):
     return ["", "**Next-step notes:**"] + notes if notes else []
 
 def deferred_lines(wt):
-    its = [i for i in load_script("items.py").read(os.path.join(wt, ".clerk-dev", "deferred.md")) if not i["done"]]
+    its = not_done(load_script("items.py").read(os.path.join(wt, ".clerk-dev", "deferred.md")))
     return [f"**Deferred items:** {len(its)} open."] + [f"- {i['id']}: {short(i['text'])}" + (f" (revisit: {i['fields']['Revisit']})" if i["fields"].get("Revisit") else "") for i in its] if its else []
 
 REROUTED_RE = re.compile(r"^\s*(?:[-*]\s+)?(?:\d{4}-\d{2}-\d{2}\.?\s+)?rerouted:", re.I)
@@ -612,7 +613,7 @@ def design_view(wt, out, logs):
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d))]
     gl = rc.rules(d)
     if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural(gl)}; say \"what guidance have I given\" to list them."]
-    parked = [i for i in rc.ideas(d) if not i["done"]]
+    parked = not_done(rc.ideas(d))
     if parked:
         by = {}
         for i in parked: by.setdefault(i["fields"].get("Area") or "feature-wide", []).append(i["id"])
@@ -667,7 +668,7 @@ def area_view(wt, out, name, logs):
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
     gl = [(r, rule) for r, rule in rc.rules(d, area or None) if (r.get("area") or "") == area]
     if gl: out += ["", f"**Guidance:** {len(gl)}"] + [f"- {r['id']}: {short(rule, 110)}" for r, rule in gl]
-    parked = [i for i in rc.ideas(d) if not i["done"] and (i["fields"].get("Area") or "") == area]
+    parked = [i for i in not_done(rc.ideas(d)) if (i["fields"].get("Area") or "") == area]
     if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['id']}: {short(i['text'], 90)}" + (f" When: {i['fields']['When']}." if i["fields"].get("When") else "") for i in parked]
     specs = [spec] if spec else [r for r in live if r.get("type") == "brief"]
     prog, pas = [], []
@@ -725,7 +726,7 @@ def blockers_view(wt, out, logs, run, have_run):
         if not c["open"]: continue
         sfq = open_questions(d, c)[1]
         if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
-    open_items = [i for i in parse_followups(wt) if not i["done"]]
+    open_items = not_done(parse_followups(wt))
     fix = []
     if have_run:
         status, instr, numbers = sf.state(run)
@@ -837,7 +838,7 @@ def main():
     # Follow-ups here
     items = parse_followups(wt)
     seen = seen_followups(wt)
-    open_items = [i for i in items if not i["done"]]
+    open_items = not_done(items)
     out.append("")
     if open_items:
         out += followup_lines(open_items, seen)
@@ -852,7 +853,7 @@ def main():
     me = repo_name(wt, rows)
     rel = []
     for name, other in related_worktrees(wt, rows):
-        its = [i for i in parse_followups(other) if not i["done"]]
+        its = not_done(parse_followups(other))
         from_me = [i for i in its if re.split(r"[ @]", i["from"])[0] == me]
         rel.append(f"{name} {len(its)} open" + (f" ({len(from_me)} from {me})" if its else ""))
     if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")

@@ -25,6 +25,10 @@ import ids
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")
 DONE = ("fixed", "wont-fix", "deferred")
+
+
+def not_done(items): return [i for i in items if not i["done"]]
+
 ITEM_ID = ids.pattern(*ids.ITEMS)
 ITEM_RE = re.compile(rf"^[-*+] \[( |x|X)\] ({ITEM_ID})\.\s+(.*)$")
 
