@@ -188,8 +188,10 @@ class WrappedHeaderTests(unittest.TestCase):
         self.assertEqual(records.check_header(text, "BRIEF-85-1"), (records.DESIGN_CHECK, ["BRIEF-85", "BRIEF-86"]))
 
     def test_a_surveyed_line_does_not_read_a_for_from_the_next_paragraph(self):
-        text = "Surveyed 2026-11-03: src/a.py.\n\nFor: BRIEF-9.\n"
-        self.assertEqual(records.check_header(text, "SURVEY-2"), (records.SURVEY, []))
+        for gap in ("\n\n", "\n  \n", "\r\n\r\n"):
+            with self.subTest(gap=repr(gap)):
+                text = f"Surveyed 2026-11-03: src/a.py.{gap}For: BRIEF-9.\n"
+                self.assertEqual(records.check_header(text, "SURVEY-2"), (records.SURVEY, []))
 
 
 class SurveyWithoutSurveyedLineTests(SurveyFileCase):
