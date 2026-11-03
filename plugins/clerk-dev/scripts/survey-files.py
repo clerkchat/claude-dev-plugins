@@ -38,6 +38,10 @@ def resolve(repo, paths, extra):
         files.update(rel for rel in found if kept(repo, rel, globs))
     return sorted(os.path.join(repo, rel) for rel in files)
 
+def totals(repo, files):
+    sized = [as_added(repo, os.path.relpath(f, repo)) for f in files]
+    return sum(f["added"] for f in sized), sum(measure_patch.estimate_tokens(f["bytes"]) for f in sized)
+
 def directory_counts(repo, files):
     counts = Counter(os.path.relpath(os.path.dirname(f), repo) for f in files)
     return [f"  {d}/: {n}" for d, n in sorted(counts.items())]
@@ -60,6 +64,7 @@ def main():
         sys.exit(1)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh: fh.write("\n".join(files) + "\n")
-    print(f"{len(files)} file{'' if len(files) == 1 else 's'} in {a.out}")
+    lines, tokens = totals(repo, files)
+    print(f"{len(files)} file{'' if len(files) == 1 else 's'}, {lines:,} lines, ~{tokens:,} tokens in {a.out}")
 
 if __name__ == "__main__": main()

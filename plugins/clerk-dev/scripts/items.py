@@ -25,6 +25,10 @@ import ids
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")
 DONE = ("fixed", "wont-fix", "deferred")
+DESIGN_WEIGHTS = ("settle-first", "worth-settling", "note")
+SURVEY_WEIGHTS = ("do-first", "worth-doing", "note")
+SURVEY_KINDS = ("refactor", "trap")
+ABSOLUTE_WHERE = re.compile(r"^/\S*:\d+$")
 
 
 def not_done(items): return [i for i in items if not i["done"]]
@@ -111,6 +115,21 @@ def find(items, iid):
     it = next((i for i in items if ids.same(i["id"], ids.normalize(iid))), None)
     if not it: sys.exit(f"{iid} not found")
     return it
+
+def first_token(value): return (value.split() or [""])[0]
+
+def check_problems(path, items):
+    records = load_script("records.py")
+    kind, _ = records.check_header(open(path, encoding="utf-8").read(), ids.check_from_file(os.path.basename(path)) or "")
+    survey = kind == records.SURVEY
+    weights = SURVEY_WEIGHTS if survey else DESIGN_WEIGHTS
+    bad = []
+    for i in items:
+        f = i["fields"]
+        if f.get("Weight") and first_token(f["Weight"]) not in weights: bad.append(f"{i['id']}: weight {f['Weight']!r}")
+        if survey and f.get("Kind") and f["Kind"].strip() not in SURVEY_KINDS: bad.append(f"{i['id']}: kind {f['Kind']!r}")
+        if survey and f.get("Where") and not ABSOLUTE_WHERE.match(f["Where"].strip()): bad.append(f"{i['id']}: where {f['Where']!r}")
+    return bad
 
 def guard_file(path): load_script("records.py").guard_file(path)
 
@@ -203,6 +222,7 @@ def main():
     elif a.cmd == "validate":
         bad = [f"{i['id']}: instruction {i['fields']['Instruction']!r}" for i in items if i["fields"].get("Instruction") and base(i["fields"]["Instruction"]) not in INSTRUCTIONS]
         bad += [f"{i['id']}: status {i['fields']['Status']!r}" for i in items if i["fields"]["Status"] not in STATUSES]
+        bad += check_problems(a.file, items)
         print("\n".join(bad) or f"{len(items)} items, all valid"); sys.exit(1 if bad else 0)
     else:
         it = find(items, a.iid)

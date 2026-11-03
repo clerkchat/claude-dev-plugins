@@ -175,7 +175,8 @@ BRIEF-85").
   `--cap`. Over it, the script writes nothing and prints the directories with
   their file counts: show them, ask the user to narrow the target, and stop
   before any lens runs; never truncate the list. On any other error, show it
-  and stop.
+  and stop. On success it prints the file count with the files' total lines
+  and estimated tokens: show that line to the user before any lens runs.
 - **Lenses.** Pick them as `skills/review/routing.md` "Surveys" describes,
   applying any `--lenses` argument, and name each trap lens with the category
   behind it.

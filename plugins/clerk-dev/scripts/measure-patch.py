@@ -39,6 +39,8 @@ def reason(f, globs):
     if p.lower().endswith(DATA_EXT) and (changed > 500 or f["bytes"] > 40000): return "data file over size limit"
     return ""
 
+def estimate_tokens(nbytes): return nbytes // 4
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("patch"); ap.add_argument("--exclude", action="append", default=[])
@@ -47,7 +49,7 @@ def main():
     globs = DEFAULT_GLOBS + a.exclude
     files = measure(a.patch)
     for f in files:
-        f["tokens"] = f["bytes"] // 4
+        f["tokens"] = estimate_tokens(f["bytes"])
         f["excluded"] = reason(f, globs)
     inc = [f for f in files if not f["excluded"]]; exc = [f for f in files if f["excluded"]]
     rows = ["file\tbytes\tadded\tremoved\ttokens\texcluded"] + [f"{f['file']}\t{f['bytes']}\t{f['added']}\t{f['removed']}\t{f['tokens']}\t{f['excluded']}" for f in sorted(files, key=lambda x: -x['tokens'])]

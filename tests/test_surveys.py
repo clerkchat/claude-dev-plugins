@@ -255,5 +255,63 @@ class SurveyBoxCheckedButStatusOpenTests(SurveyFileCase):
         self.assertIn("- SURVEY-1.Q-1 (do-first)", section(digest, "Open survey items"))
 
 
+class ValidateSurveyItemsTests(SurveyFileCase):
+    def setUp(self):
+        super().setUp()
+        with open(self.survey) as f:
+            self.text = f.read().replace("  - Kind: refactor\n", "  - Kind: refactor\n  - Where: /repo/src/export/job.ts:42\n")
+
+    def validate(self, text=None):
+        write_file(self.survey, self.text if text is None else text)
+        return run_script("items", "validate", self.survey)
+
+    def test_a_valid_survey_passes(self):
+        code, out = self.validate()
+        self.assertEqual(code, 0, out)
+
+    def test_a_weight_with_a_trailing_note_passes(self):
+        code, out = self.validate(self.text.replace("Weight: do-first", "Weight: do-first (the next change needs it)"))
+        self.assertEqual(code, 0, out)
+
+    def test_rejects_a_weight_of_a_design_check(self):
+        code, out = self.validate(self.text.replace("Weight: do-first", "Weight: settle-first"))
+        self.assertNotEqual(code, 0)
+        self.assertIn("Q-1: weight", out)
+
+    def test_rejects_a_kind_other_than_refactor_or_trap(self):
+        code, out = self.validate(self.text.replace("Kind: trap", "Kind: bug"))
+        self.assertNotEqual(code, 0)
+        self.assertIn("Q-2: kind", out)
+
+    def test_rejects_a_relative_where(self):
+        code, out = self.validate(self.text.replace("/repo/src/export/job.ts:42", "src/export/job.ts:42"))
+        self.assertNotEqual(code, 0)
+        self.assertIn("Q-1: where", out)
+
+    def test_rejects_a_where_without_a_line(self):
+        code, out = self.validate(self.text.replace("/repo/src/export/job.ts:42", "/repo/src/export/job.ts"))
+        self.assertNotEqual(code, 0)
+        self.assertIn("Q-1: where", out)
+
+
+class ValidateDesignCheckWeightTests(SurveyFileCase):
+    def setUp(self):
+        super().setUp()
+        self.check = os.path.join(self.root, ".clerk-dev", "feature", "checks", "CHECK-1.md")
+
+    def validate(self, weight):
+        write_file(self.check, f"# Check\n\nChecked 2026-10-30: BRIEF-5.\n\n- [ ] Q-1. A question\n  - Weight: {weight}\n  - Status: open\n")
+        return run_script("items", "validate", self.check)
+
+    def test_accepts_a_design_check_weight(self):
+        code, out = self.validate("worth-settling")
+        self.assertEqual(code, 0, out)
+
+    def test_rejects_a_survey_weight(self):
+        code, out = self.validate("do-first")
+        self.assertNotEqual(code, 0)
+        self.assertIn("Q-1: weight", out)
+
+
 if __name__ == "__main__":
     unittest.main()
