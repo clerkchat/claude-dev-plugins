@@ -54,6 +54,12 @@ def clone(source, dest, *args):
     return Repo(dest)
 
 
+def write_file(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(text)
+
+
 def write_record(root, record_id, record_type, title, status="active", extra="", body=""):
     records = os.path.join(root, ".clerk-dev", "feature", "records")
     os.makedirs(records, exist_ok=True)

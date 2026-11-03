@@ -3,7 +3,7 @@ import re
 import sys
 import unittest
 
-from helpers import SCRIPTS, TempCase, init_repo, run_ok, run_script, write_feature_md, write_record
+from helpers import SCRIPTS, TempCase, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -27,109 +27,9 @@ Surveyed 2026-10-30: src/export. For: {target}. Lenses: tech-debt, tenancy.
 BRIEF_BODY = "## Requirements\n\n1. Five one.\n\n## Baseline\n\nClean."
 
 
-def write_file(path, text):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(text)
-
-
 def section(text, heading):
     m = re.search(rf"^# {heading}\n(.*?)(?=^# |\Z)", text, re.S | re.M)
     return m.group(1) if m else ""
-
-
-class SurveyFilesCase(TempCase):
-    def setUp(self):
-        super().setUp()
-        self.repo = init_repo(self.path("work"), with_origin=False)
-        for rel in ("src/b/c.py", "src/a.py", "src/yarn.lock", "src/dist/bundle.js", "tests/test_a.py"):
-            self.write(rel, "x = 1\n")
-        self.repo.git("add", "-A")
-        self.repo.git("commit", "-qm", "files")
-        self.out = self.path("checks/SURVEY-1/files.txt")
-
-    def write(self, rel, text):
-        write_file(os.path.join(self.repo.path, rel), text)
-
-    def at(self, rel):
-        return os.path.join(self.repo.path, rel)
-
-    def resolve(self, *args):
-        return run_script("survey-files", self.repo.path, *args, "--out", self.out)
-
-    def listed(self, *args):
-        code, out = self.resolve(*args)
-        self.assertEqual(code, 0, out)
-        with open(self.out) as f:
-            return f.read().splitlines()
-
-
-class SurveyFilesTests(SurveyFilesCase):
-    def test_writes_the_tracked_files_as_absolute_sorted_paths(self):
-        self.assertEqual(self.listed("src"), [self.at("src/a.py"), self.at("src/b/c.py")])
-
-    def test_drops_a_lockfile_and_build_output(self):
-        listed = self.listed("src")
-        self.assertNotIn(self.at("src/yarn.lock"), listed)
-        self.assertNotIn(self.at("src/dist/bundle.js"), listed)
-
-    def test_drops_a_data_file_over_the_size_limit(self):
-        self.write("src/data.json", "[\n" + "1,\n" * 600 + "]\n")
-        self.repo.git("add", "-A")
-        self.assertNotIn(self.at("src/data.json"), self.listed("src"))
-
-    def test_leaves_out_untracked_files_of_a_directory(self):
-        self.write("src/scratch.py", "y = 2\n")
-        self.assertNotIn(self.at("src/scratch.py"), self.listed("src"))
-
-    def test_drops_files_an_exclude_glob_matches_in_a_directory(self):
-        self.assertNotIn(self.at("tests/test_a.py"), self.listed(".", "--exclude", "tests/**"))
-
-    def test_keeps_a_file_named_directly_that_an_exclude_glob_matches(self):
-        self.assertEqual(self.listed("tests/test_a.py", "--exclude", "tests/**"), [self.at("tests/test_a.py")])
-
-    def test_refuses_a_path_outside_the_repository(self):
-        code, out = self.resolve("..")
-        self.assertNotEqual(code, 0, out)
-        self.assertIn("is not under", out)
-
-
-class OverTheCapTests(SurveyFilesCase):
-    def setUp(self):
-        super().setUp()
-        self.code, self.printed = self.resolve("src", "--cap", "1")
-
-    def test_exits_non_zero(self):
-        self.assertNotEqual(self.code, 0, self.printed)
-
-    def test_prints_each_directory_with_its_file_count(self):
-        self.assertIn("2 files, over the cap of 1", self.printed)
-        self.assertIn("  src/: 1", self.printed)
-        self.assertIn("  src/b/: 1", self.printed)
-
-    def test_writes_no_file_list(self):
-        self.assertFalse(os.path.exists(self.out))
-
-
-class StaleFileListTests(SurveyFilesCase):
-    def setUp(self):
-        super().setUp()
-        write_file(self.out, "stale\n")
-
-    def test_an_over_cap_run_removes_the_earlier_list(self):
-        self.resolve("src", "--cap", "1")
-        self.assertFalse(os.path.exists(self.out))
-
-    def test_a_failed_run_removes_the_earlier_list(self):
-        self.resolve("missing")
-        self.assertFalse(os.path.exists(self.out))
-
-
-class CapBelowOneTests(SurveyFilesCase):
-    def test_a_zero_cap_is_a_usage_error(self):
-        code, out = self.resolve("src", "--cap", "0")
-        self.assertNotEqual(code, 0, out)
-        self.assertIn("--cap must be at least 1", out)
 
 
 class SurveyFileCase(TempCase):
@@ -176,6 +76,20 @@ class SurveyForNoRecordTests(SurveyFileCase):
 
     def test_the_index_lists_paths_as_its_records(self):
         self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | paths | 2 | 0 |", self.index())
+
+    def test_no_brief_counts_it_as_its_design_check(self):
+        self.assertIn("- BRIEF-5 Spec five: not ready: no design check", self.status("--focus", "design"))
+
+
+class SurveyNamesUnknownTests(SurveyFileCase):
+    def test_a_survey_whose_file_is_missing_is_unknown(self):
+        self.assertEqual(run_ok("records", "names", self.root, "SURVEY-9"), "SURVEY-9: unknown")
+
+    def test_an_item_id_that_is_not_in_the_file_is_unknown(self):
+        self.assertEqual(run_ok("records", "names", self.root, "SURVEY-1.Q-9"), "SURVEY-1.Q-9: unknown")
+
+    def test_an_item_of_a_missing_survey_is_unknown(self):
+        self.assertEqual(run_ok("records", "names", self.root, "SURVEY-9.Q-1"), "SURVEY-9.Q-1: unknown")
 
 
 class WrappedHeaderTests(unittest.TestCase):

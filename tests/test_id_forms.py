@@ -10,6 +10,7 @@ from helpers import (
     run_ok,
     run_script,
     write_feature_md,
+    write_file,
     write_log,
     write_record,
 )
@@ -19,12 +20,6 @@ SPEC_BODY = "## Requirements\n\n1. {a}.\n2. {b}.\n\n## Baseline\n\nClean."
 
 def feature_dir(root):
     return os.path.join(root, ".clerk-dev", "feature")
-
-
-def write_file(path, text):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(text)
 
 
 def read_file(path):
