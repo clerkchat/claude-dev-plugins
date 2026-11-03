@@ -84,7 +84,9 @@ the `<subject>` it is on; the run's own files go in
    completion notices ("Usage: completeness 24k 25s, llm-agent 79k 177s"), so
    the cost of each run is visible per lens. Then run
    `${CLAUDE_PLUGIN_ROOT}/scripts/items.py validate <the file>` and
-   `records.py index <worktree>`.
+   `records.py index <worktree>`. When validate names a field, correct it
+   from that lens's raw reply and run validate again; name in the report any
+   field that still fails, rather than changing it to pass.
 6. **Report** in a few lines: the path, the kind's counts, any lens with no
    usable output, and the items the kind lists one line each. Offer to walk
    them. Do not start answering them yourself.
@@ -268,7 +270,9 @@ Usage: tech-debt 41k 62s, design 38k 55s, naming-concepts 30k 40s, tenancy
 
 Seen before and Dropped follow as in a check file. It differs from a check file in its name, its `Surveyed` line in place of
 `Checked` (the paths as given, or the record id and its paths; then `For:`),
-Kind and Size, and Where pointing at code rather than a record section.
+Kind and Size, and Where pointing at code rather than a record section. When lenses merged into one item
+disagree on Kind, it is `trap`. Where is the single `path:line` the lens
+gave first, never a range.
 
 ## Walking the questions
 
