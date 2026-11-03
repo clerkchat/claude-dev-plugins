@@ -257,8 +257,7 @@ def gist(r, limit=220):
     _, body = parse(r["path"])
     body = re.sub(r"^# .*\n", "", body.lstrip("\n"), count=1)
     sec = GIST_SECTION.get(r.get("type", ""))
-    m = re.search(rf"^## {sec}\n(.*?)(?=^## |\Z)", body, re.S | re.M) if sec else None
-    text = m.group(1) if m else re.sub(r"^## .*$", "", body, flags=re.M)
+    text = (body_section(body, sec) if sec else "") or re.sub(r"^## .*$", "", body, flags=re.M)
     text = re.sub(r"```.*?```", "", text, flags=re.S)
     blocks = []
     for block in re.split(r"\n\s*\n", text):
@@ -367,8 +366,14 @@ def rules(d, area=None):
     if area is not None: rs = [r for r in rs if not r.get("area") or r.get("area") == area]
     return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), ids.number(r["id"])))]
 
+def heading_line(heading, level=2):
+    return rf"^{'#' * level} {re.escape(heading)}$"
+
+def has_section(text, heading, level=2):
+    return re.search(heading_line(heading, level), text, re.M) is not None
+
 def section(text, heading, level=2):
-    m = re.search(rf"^{'#' * level} {re.escape(heading)}\n(.*?)(?=^#{{2,{level}}} |\Z)", text, re.S | re.M)
+    m = re.search(rf"{heading_line(heading, level)}\n(.*?)(?=^#{{2,{level}}} |\Z)", text, re.S | re.M)
     return m.group(1) if m else ""
 
 def body_section(body, heading):

@@ -10,14 +10,15 @@ LENS is the lens name (edge-cases), not the agent name. Exits 1 when the lens or
 the section does not exist.
 """
 import os, re, sys
+import records
 
 AGENTS = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "agents")
 
 def section(lens, name):
     p = os.path.join(AGENTS, f"lens-{lens}.md")
     if not os.path.exists(p): return None
-    m = re.search(rf"^## {re.escape(name)}\n(.*?)(?=^## |\Z)", open(p, encoding="utf-8").read(), re.S | re.M)
-    return m.group(1).strip() if m else None
+    text = open(p, encoding="utf-8").read()
+    return records.body_section(text, name) if records.has_section(text, name) else None
 
 def main():
     args = sys.argv[1:]

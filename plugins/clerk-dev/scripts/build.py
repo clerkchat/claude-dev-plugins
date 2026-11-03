@@ -211,9 +211,8 @@ def spec_requirements(hub_dir, spec_id):
     r = next((r for r in rc.records(hub_dir) if ids.same(r["id"], spec_id)), None)
     if not r: return None, None
     _, body = rc.parse(r["path"])
-    m = re.search(r"^## Requirements\n(.*?)(?=^## |\Z)", body, re.S | re.M)
     items, cur = {}, None
-    for line in (m.group(1) if m else "").splitlines():
+    for line in rc.section(body, "Requirements").splitlines():
         mm = re.match(r"^(\d+)\.\s+(.*)", line)
         if mm: cur = int(mm.group(1)); items[cur] = mm.group(2).strip()
         elif cur and line.startswith(" ") and line.strip(): items[cur] += " " + line.strip()

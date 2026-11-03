@@ -68,7 +68,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, brief_open_items, git, load_script, section
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section
 import ids
 
 sf = load_script("stale-findings.py")
@@ -515,7 +515,7 @@ def spec_facts(d, r, cs):
     settle = []
     for c in mine:
         settle += [ids.in_check(c["name"], q) for q in open_questions(d, c)[1]]
-    base = section(body, "Baseline").strip()
+    base = body_section(body, "Baseline")
     items = len(brief_open_items(body))
     missing = ([] if mine else ["no design check"]) + ([f"{len(settle)} settle-first open"] if settle else []) + ([] if base else ["no Baseline"])
     return {"checks": mine, "settle": settle, "baseline": bool(base), "items": items, "missing": missing}
