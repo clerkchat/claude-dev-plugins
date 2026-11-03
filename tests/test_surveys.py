@@ -185,5 +185,23 @@ class SurveyDigestTests(SurveyFileCase):
         self.assertNotIn("SURVEY-1", section(self.digest, "Open design questions"))
 
 
+class SurveyBoxCheckedButStatusOpenTests(SurveyFileCase):
+    def setUp(self):
+        super().setUp()
+        with open(self.survey) as f:
+            text = f.read()
+        write_file(self.survey, text.replace("- [ ] Q-1.", "- [x] Q-1."))
+
+    def test_the_index_counts_the_item_open(self):
+        self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | BRIEF-5 | 2 | 0 |", self.index())
+
+    def test_the_feature_counts_the_item_open(self):
+        self.assertIn("- survey items open in SURVEY-1 (survey of src/export): 2", self.status())
+
+    def test_the_digest_lists_the_item_open(self):
+        digest = run_ok("records", "digest", self.root)
+        self.assertIn("- SURVEY-1.Q-1 (do-first)", section(digest, "Open survey items"))
+
+
 if __name__ == "__main__":
     unittest.main()

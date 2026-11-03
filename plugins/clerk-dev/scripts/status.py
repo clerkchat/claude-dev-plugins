@@ -283,7 +283,7 @@ def relink_lines(wt, log):
     return lines, steps
 
 def open_questions(d, c):
-    qs = [q for q in load_script("items.py").read(load_script("records.py").check_path(d, c["name"])) if not q["done"]]
+    qs = load_script("records.py").open_check_items(d, c["name"])
     return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
 
 def is_design_check(c): return c["kind"] == DESIGN_CHECK

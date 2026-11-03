@@ -206,9 +206,14 @@ def checks(d):
         name = ids.check_from_file(f)
         text = open(os.path.join(cd, f), encoding="utf-8").read()
         kind, named = check_header(text)
-        out.append({"name": canon(name), "kind": kind, "records": [canon(x) for x in named], "open": len(re.findall(r"^[-*] \[ \]", text, re.M)),
-                    "closed": len(re.findall(r"^[-*] \[[xX]\]", text, re.M))})
+        every = items_mod().read(os.path.join(cd, f))
+        n_open = len(not_done(every))
+        out.append({"name": canon(name), "kind": kind, "records": [canon(x) for x in named], "open": n_open, "closed": len(every) - n_open})
     return out
+
+def not_done(items): return [i for i in items if not i["done"]]
+
+def open_check_items(d, name): return not_done(items_mod().read(check_path(d, name)))
 
 def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
 
@@ -677,7 +682,7 @@ def idea_status(i):
 
 def open_item_lines(d, c):
     return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
-            for i in items_mod().read(check_path(d, c["name"])) if not i["done"]]
+            for i in open_check_items(d, c["name"])]
 
 def digest(d):
     rs = records(d)
