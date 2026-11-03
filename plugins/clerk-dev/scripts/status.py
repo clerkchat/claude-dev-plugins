@@ -68,7 +68,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, brief_open_items, git, load_script
+from records import DESIGN_CHECK, OPEN_ITEMS, brief_open_items, git, load_script, section
 import ids
 
 sf = load_script("stale-findings.py")
@@ -469,10 +469,6 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     return steps
 
 def names_pass(step, e): return ids.key(e["id"]) in {ids.key(x) for x in ids.mentions(step, ids.PASS)}
-
-def section(text, heading, level=2):
-    m = re.search(rf"^{'#' * level} {re.escape(heading)}\n(.*?)(?=^#{{1,{level}}} |\Z)", text, re.S | re.M)
-    return m.group(1) if m else ""
 
 def bullets(text):
     out, cur = [], None

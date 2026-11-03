@@ -367,9 +367,12 @@ def rules(d, area=None):
     if area is not None: rs = [r for r in rs if not r.get("area") or r.get("area") == area]
     return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), ids.number(r["id"])))]
 
+def section(text, heading, level=2):
+    m = re.search(rf"^{'#' * level} {re.escape(heading)}\n(.*?)(?=^#{{2,{level}}} |\Z)", text, re.S | re.M)
+    return m.group(1) if m else ""
+
 def body_section(body, heading):
-    m = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", body, re.S | re.M)
-    return m.group(1).strip() if m else ""
+    return section(body, heading).strip()
 
 def labeled(label, text):
     """A bold label and its text: inline for one paragraph, below it for lists
@@ -480,9 +483,8 @@ def plan_pieces(d):
     first column starts with the piece's code ("C core harness")."""
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): return {}
-    m = re.search(r"^## Plan\n(.*?)(?=^## |\Z)", open(p, encoding="utf-8").read(), re.S | re.M)
     out = {}
-    for line in (m.group(1) if m else "").splitlines():
+    for line in section(open(p, encoding="utf-8").read(), "Plan").splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.strip().startswith("|") else []
         mm = re.match(r"^([A-Z][A-Z0-9]{0,3})\s+(.+)$", cells[0]) if cells else None
         if mm and mm.group(1) != "Piece": out[mm.group(1)] = re.sub(r"`", "", mm.group(2)).strip()
@@ -684,15 +686,13 @@ def open_item_lines(d, c):
             for i in open_check_items(d, c["name"])]
 
 def brief_open_items(body):
-    m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
-    return re.findall(r"^\s*[-*] \[ \] (.*)$", m.group(1) if m else "", re.M)
+    return re.findall(r"^\s*[-*] \[ \] (.*)$", section(body, "Open items"), re.M)
 
 def digest(d):
     rs = records(d)
     out = []
     fp = os.path.join(d, "feature.md")
-    m = re.search(r"^## Summary\n(.*?)(?=^## |\Z)", open(fp, encoding="utf-8").read(), re.S | re.M)
-    out += ["# Summary", "", (m.group(1).strip() if m else "(none)"), ""]
+    out += ["# Summary", "", body_section(open(fp, encoding="utf-8").read(), "Summary") or "(none)", ""]
     live = [r for r in rs if r.get("status") == "active" and r.get("type") != "brainstorm"]
     lines, built = build_log(d)
     for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, ids.number(r["id"]))):
