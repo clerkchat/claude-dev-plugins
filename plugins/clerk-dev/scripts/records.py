@@ -172,8 +172,9 @@ def set_fields(r, **kw):
 
 DESIGN_CHECK, SURVEY = "design check", "survey"
 OPEN_ITEMS = {DESIGN_CHECK: "design questions", SURVEY: "survey items"}
-SENTENCE_END = r"(?:\.\s|\.$|$)"
-HEADER_LINES = ((SURVEY, rf"^Surveyed [^:]*:.*?\bFor:\s*(.*?){SENTENCE_END}"), (DESIGN_CHECK, rf"^Checked [^:]*:\s*(.*?){SENTENCE_END}"))
+SENTENCE_END = r"(?:\.\s|\.$|\n\n|\Z)"
+IN_PARAGRAPH = r"(?:.|\n(?!\n))*?"
+HEADER_LINES = ((SURVEY, rf"^Surveyed [^:]*:{IN_PARAGRAPH}\bFor:\s*({IN_PARAGRAPH}){SENTENCE_END}"), (DESIGN_CHECK, rf"^Checked [^:]*:\s*({IN_PARAGRAPH}){SENTENCE_END}"))
 
 def check_header(text, name=""):
     named_kind = SURVEY if ids.kind_of(name) == ids.SURVEY else None

@@ -178,6 +178,20 @@ class SurveyForNoRecordTests(SurveyFileCase):
         self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | paths | 2 | 0 |", self.index())
 
 
+class WrappedHeaderTests(unittest.TestCase):
+    def test_a_surveyed_line_that_wraps_before_for_still_names_its_record(self):
+        text = "# Survey: x\n\nSurveyed 2026-11-03: BRIEF-85, src/a.py,\nsrc/b.py. For: BRIEF-85. Lenses: tech debt.\n"
+        self.assertEqual(records.check_header(text, "SURVEY-2"), (records.SURVEY, ["BRIEF-85"]))
+
+    def test_a_checked_line_that_wraps_in_its_record_list_names_every_record(self):
+        text = "# Check\n\nChecked 2026-11-03: BRIEF-85,\nBRIEF-86. Lenses: tech debt.\n"
+        self.assertEqual(records.check_header(text, "BRIEF-85-1"), (records.DESIGN_CHECK, ["BRIEF-85", "BRIEF-86"]))
+
+    def test_a_surveyed_line_does_not_read_a_for_from_the_next_paragraph(self):
+        text = "Surveyed 2026-11-03: src/a.py.\n\nFor: BRIEF-9.\n"
+        self.assertEqual(records.check_header(text, "SURVEY-2"), (records.SURVEY, []))
+
+
 class SurveyWithoutSurveyedLineTests(SurveyFileCase):
     def setUp(self):
         super().setUp()
