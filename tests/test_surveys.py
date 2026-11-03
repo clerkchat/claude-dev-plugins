@@ -111,6 +111,27 @@ class OverTheCapTests(SurveyFilesCase):
         self.assertFalse(os.path.exists(self.out))
 
 
+class StaleFileListTests(SurveyFilesCase):
+    def setUp(self):
+        super().setUp()
+        write_file(self.out, "stale\n")
+
+    def test_an_over_cap_run_removes_the_earlier_list(self):
+        self.resolve("src", "--cap", "1")
+        self.assertFalse(os.path.exists(self.out))
+
+    def test_a_failed_run_removes_the_earlier_list(self):
+        self.resolve("missing")
+        self.assertFalse(os.path.exists(self.out))
+
+
+class CapBelowOneTests(SurveyFilesCase):
+    def test_a_zero_cap_is_a_usage_error(self):
+        code, out = self.resolve("src", "--cap", "0")
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("--cap must be at least 1", out)
+
+
 class SurveyFileCase(TempCase):
     target = "BRIEF-5"
 
@@ -155,6 +176,21 @@ class SurveyForNoRecordTests(SurveyFileCase):
 
     def test_the_index_lists_paths_as_its_records(self):
         self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | paths | 2 | 0 |", self.index())
+
+
+class SurveyWithoutSurveyedLineTests(SurveyFileCase):
+    def setUp(self):
+        super().setUp()
+        write_file(self.survey, "# Survey: src/export\n\nSurveyed on some day.\n")
+
+    def test_the_header_reader_reads_the_file_as_a_survey_by_its_name(self):
+        self.assertEqual(records.check_header("Surveyed on some day.\n", "SURVEY-1"), (records.SURVEY, []))
+
+    def test_the_index_lists_it_as_a_survey_of_paths(self):
+        self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | paths | 0 | 0 |", self.index())
+
+    def test_a_design_check_without_a_checked_line_stays_a_design_check(self):
+        self.assertEqual(records.check_header("# Check\n", "BRIEF-5-1"), (records.DESIGN_CHECK, []))
 
 
 class SurveyStatusTests(SurveyFileCase):

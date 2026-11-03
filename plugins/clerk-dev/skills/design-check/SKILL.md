@@ -199,7 +199,12 @@ BRIEF-85").
 - **Area.** `FOR`'s area, or none.
 - **File.** `<run>` is `SURVEY-<k>` and `<subject>` the target as given.
   Format below.
-- **Report.** The counts by weight and by kind, and the do-first items.
+- **Report.** The counts by weight and by kind, and the do-first items. A
+  survey with no items still writes its file, with the header, `Surveyed` and
+  `Usage` lines and no items, and the report says per lens that it found
+  nothing. A lens whose reply has no usable `survey` block after the retry in
+  step 3 of "Running the lenses" is named in the report as not run, never
+  counted as no items.
 
 A survey file is a check file over code: cited as `SURVEY-2`, its items as
 `SURVEY-2.Q-3`.

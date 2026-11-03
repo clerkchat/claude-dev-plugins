@@ -6,7 +6,7 @@ from records import git, load_script
 DEFAULT_CAP = 40
 measure_patch = load_script("measure-patch.py")
 
-def tracked(repo, rel): return [f for f in git(repo, "ls-files", "-z", "--", rel).split("\0") if f]
+def tracked(repo, rel): return [f for f in git(repo, "ls-files", "-z", "--", rel, check=True).split("\0") if f]
 
 def repo_relative(repo, path):
     rel = os.path.relpath(os.path.realpath(os.path.join(repo, path)), repo)
@@ -22,7 +22,9 @@ def expand(repo, path):
 
 def as_added(repo, rel):
     full = os.path.join(repo, rel)
-    with open(full, "rb") as fh: lines = fh.read().count(b"\n")
+    try:
+        with open(full, "rb") as fh: lines = fh.read().count(b"\n")
+    except OSError as e: sys.exit(f"cannot read {full}: {e.strerror}")
     return {"file": rel, "bytes": os.path.getsize(full), "added": lines, "removed": 0}
 
 def kept(repo, rel, globs):
@@ -47,6 +49,8 @@ def main():
     ap.add_argument("--exclude", action="append", default=[])
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    if a.cap < 1: ap.error("--cap must be at least 1")
+    if os.path.exists(a.out): os.remove(a.out)
     repo = os.path.realpath(a.repo)
     files = resolve(repo, a.paths, a.exclude)
     if not files: sys.exit("no files to survey after exclusions")

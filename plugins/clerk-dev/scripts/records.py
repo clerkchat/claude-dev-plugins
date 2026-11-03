@@ -175,11 +175,13 @@ OPEN_ITEMS = {DESIGN_CHECK: "design questions", SURVEY: "survey items"}
 SENTENCE_END = r"(?:\.\s|\.$|$)"
 HEADER_LINES = ((SURVEY, rf"^Surveyed [^:]*:.*?\bFor:\s*(.*?){SENTENCE_END}"), (DESIGN_CHECK, rf"^Checked [^:]*:\s*(.*?){SENTENCE_END}"))
 
-def check_header(text):
+def check_header(text, name=""):
+    named_kind = SURVEY if ids.kind_of(name) == ids.SURVEY else None
     for kind, line in HEADER_LINES:
+        if named_kind and kind != named_kind: continue
         m = re.search(line, text, re.M)
         if m: return kind, ids.records_in(m.group(1))
-    return DESIGN_CHECK, []
+    return named_kind or DESIGN_CHECK, []
 
 def survey_target(text):
     m = re.search(r"^# Survey:\s*(.+)$", text, re.M)
@@ -205,7 +207,7 @@ def checks(d):
     for f in sorted(check_files(cd), key=check_order):
         name = ids.check_from_file(f)
         text = open(os.path.join(cd, f), encoding="utf-8").read()
-        kind, named = check_header(text)
+        kind, named = check_header(text, name)
         every = items_mod().read(os.path.join(cd, f))
         n_open = len(items_mod().not_done(every))
         out.append({"name": canon(name), "kind": kind, "records": [canon(x) for x in named], "open": n_open, "closed": len(every) - n_open})
