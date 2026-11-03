@@ -68,7 +68,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, git, load_script
+from records import DESIGN_CHECK, OPEN_ITEMS, brief_open_items, git, load_script
 import ids
 
 sf = load_script("stale-findings.py")
@@ -371,8 +371,7 @@ def feature_block(wt, rows, out):
     for r in recs:
         if r.get("type") == "brief" and r.get("status") == "active":
             body = open(r["path"], encoding="utf-8").read()
-            m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
-            n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
+            n = len(brief_open_items(body))
             if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {n} open item{plural(n)}")
     if settle: first.append(f"Settle the design questions marked settle-first before building on them: {'; '.join(settle)} (\"walk the design questions\").")
     elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural(open_q)} when convenient (\"walk the design questions\").")
@@ -451,8 +450,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
         if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
     for r in specs:
         body = open(r["path"], encoding="utf-8").read()
-        m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
-        n = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
+        n = len(brief_open_items(body))
         if n: out.append(f"- {r['id']} open items: {n}")
     mspecs = {canon(x) for x in (m["f"].get("Brief") for m in bd.milestones(entries)) if x}
     pass_steps = [s for s in pass_steps if not any(names_pass(s, e) and canon(e["f"].get("Piece") or "") in mspecs for e in (passes or []))]
@@ -521,8 +519,7 @@ def spec_facts(d, r, cs):
     for c in mine:
         settle += [ids.in_check(c["name"], q) for q in open_questions(d, c)[1]]
     base = section(body, "Baseline").strip()
-    m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
-    items = len(re.findall(r"^\s*[-*] \[ \]", m.group(1), re.M)) if m else 0
+    items = len(brief_open_items(body))
     missing = ([] if mine else ["no design check"]) + ([f"{len(settle)} settle-first open"] if settle else []) + ([] if base else ["no Baseline"])
     return {"checks": mine, "settle": settle, "baseline": bool(base), "items": items, "missing": missing}
 

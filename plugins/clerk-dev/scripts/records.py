@@ -684,6 +684,10 @@ def open_item_lines(d, c):
     return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
             for i in open_check_items(d, c["name"])]
 
+def brief_open_items(body):
+    m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
+    return re.findall(r"^\s*[-*] \[ \] (.*)$", m.group(1) if m else "", re.M)
+
 def digest(d):
     rs = records(d)
     out = []
@@ -708,8 +712,7 @@ def digest(d):
     for r in live:
         if r["type"] != "brief": continue
         _, body = parse(r["path"])
-        m = re.search(r"^## Open items\n(.*?)(?=^## |\Z)", body, re.S | re.M)
-        for item in re.findall(r"^\s*[-*] \[ \] (.*)$", m.group(1) if m else "", re.M): out.append(f"- {r['id']}: {item}")
+        out += [f"- {r['id']}: {item}" for item in brief_open_items(body)]
     return "\n".join(out) + "\n"
 
 def stamp_overview(d):
