@@ -32,48 +32,87 @@ and enums. Produce a table of contract, producer repo, consumer repos, and
 whether each side changed in this feature. Include it under Coverage so the
 reader can check your map.
 
-## Checklist
+## Concerns
 
-1. Unmatched changes: a producer changed a contract and a consumer in the
-   feature set did not change, or the reverse. Grep the consumer for the field
-   or route to confirm it reads it. A consumer repo not present in the feature
-   set at all is a finding when the contract it consumes changed. A finding
-   that names a consumer the feature set did not change states, in
-   `follow_up`, the contract and what the consumer must now handle, not the
-   change to make in it.
-2. Shape agreement: for each contract changed on both sides, compare the two
-   definitions field by field: names, types, nullability, enum members, date and
-   identifier formats, pagination shape.
-3. Deploy order: for each dependency edge, state which repo must ship first and
-   check that the intermediate state works (old consumer with new producer, and
-   new consumer with old producer). Where both orders break, the feature needs a
-   gate or a two-phase change; say so.
-4. Gates: a feature gate introduced in one repo has a counterpart check or safe
-   default in the repos that render or act on the gated behavior; gate names
-   match; default states agree.
-5. Vocabulary: the same concept named differently across repos in this feature
-   (one repo's `workspace` is another's `team`), or the same name meaning
-   different things. New names about to appear in a persisted or public contract
-   deserve the most scrutiny.
-6. Identifiers: an identifier that crosses repos keeps its type and uniqueness
-   assumptions (internal versus external IDs, zero or sentinel values, case).
-7. Error semantics: a consumer's handling of the producer's error shapes and
-   status codes after the change.
-8. Shared configuration: environment variables, secrets, queue or topic names,
-   index names, and URLs that must match across repos.
-9. Replication chain: a column added in the source database appears in the
-   replication configuration and in the derived store schema, and the consumer
-   of the derived store tolerates its absence during rollout.
-10. Specification: when `SPEC` is present, check that the feature as a whole,
-    across repos, satisfies it; per-repo spec conformance was reviewed
-    separately.
-11. Follow-ups: for each repository's `.clerk-dev/followups.md` in `DOCS`, check
-    each open item against that repository's diff. An item whose contract change
-    is now matched is resolved work left open; an item with no matching change
-    is still owed, and is a finding when the producing side has already shipped
-    the change in this feature.
-12. Missing repos: based on the contract graph, name any repo that should have
-    changed for this feature and has no diff in the set.
+1. **Unmatched changes.**
+   - Review: a producer changed a contract and a consumer in the feature set
+     did not change, or the reverse. Grep the consumer for the field or route
+     to confirm it reads it. A consumer repo not present in the feature set at
+     all is a finding when the contract it consumes changed. A finding that
+     names a consumer the feature set did not change states, in `follow_up`,
+     the contract and what the consumer must now handle, not the change to make
+     in it.
+   - Design: Is every contract one repository changes matched by the consuming
+     repository's piece, in the plan?
+2. **Shape agreement.**
+   - Review: for each contract changed on both sides, compare the two
+     definitions field by field: names, types, nullability, enum members, date
+     and identifier formats, pagination shape.
+   - Design: Do the records of both sides of a changed contract define it the
+     same way: names, types, nullability, enum members, date and identifier
+     formats, pagination shape?
+3. **Deploy order.**
+   - Review: for each dependency edge, state which repo must ship first and
+     check that the intermediate state works (old consumer with new producer,
+     and new consumer with old producer). Where both orders break, the feature
+     needs a gate or a two-phase change; say so.
+   - Design: Does the plan's repository order leave a working intermediate
+     state after each deploy?
+4. **Gates.**
+   - Review: a feature gate introduced in one repo has a counterpart check or
+     safe default in the repos that render or act on the gated behavior; gate
+     names match; default states agree.
+   - Design: Do feature gates agree across repositories: same name, same
+     default, same rollout order?
+5. **Vocabulary.**
+   - Review: the same concept named differently across repos in this feature
+     (one repo's `workspace` is another's `team`), or the same name meaning
+     different things. New names about to appear in a persisted or public
+     contract deserve the most scrutiny.
+   - Design: Is each shared concept named and defined the same way in every
+     repository's records?
+6. **Identifiers.**
+   - Review: an identifier that crosses repos keeps its type and uniqueness
+     assumptions (internal versus external IDs, zero or sentinel values, case).
+   - Design: Does an identifier that crosses repositories keep its type and
+     uniqueness assumptions in every repository's records (internal versus
+     external IDs, zero or sentinel values, case)?
+7. **Error semantics.**
+   - Review: a consumer's handling of the producer's error shapes and status
+     codes after the change.
+   - Design: Does the plan say how each consuming repository handles the
+     producer's changed error shapes and status codes?
+8. **Shared configuration.**
+   - Review: environment variables, secrets, queue or topic names, index names,
+     and URLs that must match across repos.
+   - Design: Do the records name the same environment variables, secrets, queue
+     or topic names, index names, and URLs in every repository that must match?
+9. **Replication chain.**
+   - Review: a column added in the source database appears in the replication
+     configuration and in the derived store schema, and the consumer of the
+     derived store tolerates its absence during rollout.
+   - Design: For a column the plan adds in the source database, does it update
+     the replication configuration and the derived store schema, and say how
+     the derived store's consumer tolerates its absence during rollout?
+10. **Specification.**
+   - Review: when `SPEC` is present, check that the feature as a whole, across
+     repos, satisfies it; per-repo spec conformance was reviewed separately.
+   - Design: When `SPEC` is present, do the plan's pieces across repositories
+     together satisfy it?
+11. **Follow-ups.**
+   - Review: for each repository's `.clerk-dev/followups.md` in `DOCS`, check
+     each open item against that repository's diff. An item whose contract
+     change is now matched is resolved work left open; an item with no matching
+     change is still owed, and is a finding when the producing side has already
+     shipped the change in this feature.
+   - Design: Does the plan have a piece for each open follow-up in a
+     repository's `.clerk-dev/followups.md` that owes a contract change this
+     feature makes?
+12. **Missing repos.**
+   - Review: based on the contract graph, name any repo that should have
+     changed for this feature and has no diff in the set.
+   - Design: Does the plan name every repository that the contract graph says
+     should change, with a piece for each?
 
 ## Scenario quality
 
@@ -85,17 +124,3 @@ exists.
 
 Changes confined to one repo with no contract impact belong to that repo's
 review. Do not re-report single-repo findings.
-
-## Design mode
-
-Asked of a design, plan, pieces, or brief record (see Design mode in
-the review protocol):
-
-- Does the plan's repository order leave a working intermediate state after
-  each deploy?
-- Is every contract one repository changes matched by the consuming
-  repository's piece, in the plan?
-- Do feature gates agree across repositories: same name, same default, same
-  rollout order?
-- Is each shared concept named and defined the same way in every repository's
-  records?

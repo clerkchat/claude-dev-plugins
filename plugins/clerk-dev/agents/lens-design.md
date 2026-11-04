@@ -29,60 +29,154 @@ not a precedent. When the codebase is split, say so in `uncertainty` and
 suggest recording the team's choice as guidance; once recorded, follow the
 guidance.
 
-## Checklist
+## Concerns
 
-1. Reuse: a helper, guard, decorator, serializer, validator, schema, query
-   scope, or test utility written fresh when one exists. Grep for the behavior,
-   not the name, starting with the project's shared libraries (`### Shared
-   libraries` in `CONTEXT` when it lists them). Cite the existing one with a
-   path.
-2. Pattern consistency: a new way of doing something the codebase does one
-   established way (error handling shape, dependency wiring, query construction,
-   module layout, configuration access). Introducing a second pattern is a
-   finding even when the new one is nicer; say so and let the author decide.
-3. One source of truth: two lists, enums, schemas, or constants that must be
-   kept in sync by hand; a type declared by hand that mirrors a schema; a string
-   list that must be updated whenever a new case is added elsewhere.
-4. Abstraction level: a generic framework built for one use; a parameter or
-   context field added to a shared type because one function needs it; logic in
-   a controller that belongs in the domain, or domain logic in a utility.
-5. Coupling: a new dependency between modules that did not depend on each other;
-   a service that reaches into another's internals; a one-line finder method on
-   a service that creates a module dependency where calling the entity would do.
-   Home of a helper: for each new free function, utility, or service method,
-   name the subject it operates on (the one type, entity, or resource its body
-   mostly reads or calls), then find where this codebase keeps operations on
-   that subject: what the subject's own definition holds (methods, statics, a
-   query or repository class, extensions, a module of the same name) and where
-   its closest sibling operations live. Report it when that home exists, the new
-   code works only with that subject, and it pulls in nothing the home avoids.
-   The fix is to move it into the home beside its siblings; cite the home and
-   two sibling operations already there.
-6. Redundant work: reloading an entity already in hand; re-validating what a
-   base class or guard validated; a lookup whose result is unused; a wrapper
-   around a single call.
-7. Dead code: unused exports, parameters, branches, flags, imports, and files
-   the diff adds or leaves behind after a removal; commented-out code.
-8. Comments: every comment the diff adds, in test files too, is a candidate.
-   Report ones a reader cannot act on or would ask "is this needed?" about,
-   ones that
-   restate the code, narrate the author's process, argue with a rejected
-   alternative, reference documents or plans not in the repo, or describe a
-   roadmap, and also ones whose point a better name or a smaller function
-   would make. Keep only those recording a constraint the code cannot express
-   (an external system's quirk, a deliberate ordering), and then only when the
-   repository's own conventions keep such comments.
-9. Completeness of removals: when the diff removes something, every reference,
-   registration, test, and configuration entry goes with it.
-10. Scope honesty: a refactor mixed into a feature change, or a feature change
-    that quietly widens into a refactor. Suggest the split.
+1. **Reuse.**
+   - Review: a helper, guard, decorator, serializer, validator, schema, query
+     scope, or test utility written fresh when one exists. Grep for the
+     behavior, not the name, starting with the project's shared libraries (`###
+     Shared libraries` in `CONTEXT` when it lists them). Cite the existing one
+     with a path.
+   - Design: Does the codebase already have a pattern, helper, or module for
+     what the design builds? Name it and say whether the design reuses it.
+   - Survey: Which of these files duplicates a pattern, helper, or module the
+     codebase already has? Name both.
+   - Pass: Reuse the helper, pattern, or module the codebase already has for
+     each thing the piece does; search by behavior before writing anything, and
+     extend an existing helper rather than add a near-copy.
+2. **Pattern consistency.**
+   - Review: a new way of doing something the codebase does one established way
+     (error handling shape, dependency wiring, query construction, module
+     layout, configuration access). Introducing a second pattern is a finding
+     even when the new one is nicer; say so and let the author decide.
+   - Design: Does the design introduce a new way of doing something the
+     codebase does one established way (error handling shape, dependency
+     wiring, query construction, module layout, configuration access)?
+   - Survey: Which code in these files does something the codebase does one
+     established way in a second way?
+   - Pass: Follow the codebase's established pattern for error handling,
+     dependency wiring, query construction, module layout, and configuration
+     access, even where a new one would be nicer.
+3. **One source of truth.**
+   - Review: two lists, enums, schemas, or constants that must be kept in sync
+     by hand; a type declared by hand that mirrors a schema; a string list that
+     must be updated whenever a new case is added elsewhere.
+   - Design: Does the design keep two lists, enums, schemas, or constants that
+     must be updated together by hand, or declare a type by hand that mirrors a
+     schema?
+   - Survey: Which code in these files keeps two lists, enums, schemas, or
+     constants in sync by hand, or declares a type by hand that mirrors a
+     schema?
+   - Pass: Derive one list, enum, schema, constant, or type from the other
+     instead of keeping both by hand, and fold duplicated code from this piece
+     into one place.
+4. **Abstraction level.**
+   - Review: a generic framework built for one use; a parameter or context
+     field added to a shared type because one function needs it; logic in a
+     controller that belongs in the domain, or domain logic in a utility.
+   - Design: Is each new abstraction at the right level, or does it wrap one
+     caller?
+   - Survey: Is each abstraction in these files at the right level, or does it
+     wrap one caller?
+   - Pass: Inline abstractions with one caller, and put logic in the layer it
+     belongs to: domain logic in the domain, not in a controller or utility.
+5. **Coupling.**
+   - Review: a new dependency between modules that did not depend on each
+     other; a service that reaches into another's internals; a one-line finder
+     method on a service that creates a module dependency where calling the
+     entity would do. Home of a helper: for each new free function, utility, or
+     service method, name the subject it operates on (the one type, entity, or
+     resource its body mostly reads or calls), then find where this codebase
+     keeps operations on that subject: what the subject's own definition holds
+     (methods, statics, a query or repository class, extensions, a module of
+     the same name) and where its closest sibling operations live. Report it
+     when that home exists, the new code works only with that subject, and it
+     pulls in nothing the home avoids. The fix is to move it into the home
+     beside its siblings; cite the home and two sibling operations already
+     there.
+   - Design: Does the design couple modules that are separate today, and does
+     each new helper live beside the operations on the subject it works on?
+   - Survey: Which modules in these files are coupled although they are
+     separate concerns, and which helpers live away from the operations on the
+     subject they work on?
+   - Pass: Keep new coupling between modules to what the piece needs, and put
+     each new helper in the home of the subject it works on, beside its sibling
+     operations.
+6. **Redundant work.**
+   - Review: reloading an entity already in hand; re-validating what a base
+     class or guard validated; a lookup whose result is unused; a wrapper
+     around a single call.
+   - Design: Does the design reload an entity already in hand, re-validate what
+     a base class or guard validates, look something up it does not use, or
+     wrap a single call?
+   - Survey: Which code in these files reloads an entity already in hand,
+     re-validates what a base class or guard validated, looks something up
+     without using the result, or wraps a single call?
+   - Pass: Use the entity already in hand, rely on what a base class or guard
+     validated, drop lookups whose result is unused, and call a function
+     directly instead of wrapping a single call.
+7. **Dead code.**
+   - Review: unused exports, parameters, branches, flags, imports, and files
+     the diff adds or leaves behind after a removal; commented-out code.
+   - Design: Does the design leave dead code behind: unused exports,
+     parameters, branches, flags, imports, or files after a removal?
+   - Survey: Which of these files hold unused exports, parameters, branches,
+     flags, imports, or commented-out code?
+   - Pass: Delete the code the piece made dead: unused exports, parameters,
+     branches, flags, imports, files, and commented-out code.
+8. **Comments.**
+   - Review: every comment the diff adds, in test files too, is a candidate.
+     Report ones a reader cannot act on or would ask "is this needed?" about,
+     ones that restate the code, narrate the author's process, argue with a
+     rejected alternative, reference documents or plans not in the repo, or
+     describe a roadmap, and also ones whose point a better name or a smaller
+     function would make. Keep only those recording a constraint the code
+     cannot express (an external system's quirk, a deliberate ordering), and
+     then only when the repository's own conventions keep such comments.
+   - Design: n/a: a design record holds no code comments to judge.
+   - Survey: Which comments in these files restate the code, narrate the
+     author's process, argue with a rejected alternative, reference documents
+     or plans not in the repo, describe a roadmap, or would be said better by a
+     name or a smaller function?
+   - Pass: Write no comments unless the repository's conventions or the user's
+     instructions call for them; a name or a smaller function says it instead.
+     Remove narrating comments the piece added.
+9. **Completeness of removals.**
+   - Review: when the diff removes something, every reference, registration,
+     test, and configuration entry goes with it.
+   - Design: When the design removes something, does it name every reference,
+     registration, test, and configuration entry that goes with it?
+   - Survey: Which code in these files still references, registers, tests, or
+     configures something that has been removed?
+   - Pass: When the piece removes something, remove every reference,
+     registration, test, and configuration entry with it.
+10. **Scope honesty.**
+   - Review: a refactor mixed into a feature change, or a feature change that
+     quietly widens into a refactor. Suggest the split.
+   - Design: Does the design mix a refactor into the feature, or let the
+     feature quietly widen into a refactor? Suggest the split.
+   - Survey: Which of these files mix a refactor into feature work, or would
+     let the next feature change here widen into a refactor? Suggest the
+     split.
+   - Pass: Keep a refactor and the feature change in separate commits; do not
+     let the feature quietly widen into a refactor.
+11. **Speculative building.**
+   - Review: a parameter, option, hook, or abstraction built for a future case
+     nothing in the change asks for; the fix is to remove it until a case
+     needs it.
+   - Design: Is any part speculative: built for a future case no record asks
+     for?
+   - Survey: Which code in these files was built for a future case nothing
+     uses?
+   - Pass: Build only what the piece's records ask for; leave out code for a
+     future case.
 
 ## Severity
 
-A reuse finding (item 1), a second pattern (item 2), and a hand-kept second
-source of truth (item 3) are `major`: they are what human reviewers send
-changes back for. Abstraction level and coupling (items 4 and 5) are `major`
-when the change would be clearly plainer reshaped; otherwise `minor`.
+A reuse finding (concern 1), a second pattern (concern 2), and a hand-kept
+second source of truth (concern 3) are `major`: they are what human reviewers
+send changes back for. Abstraction level and coupling (concerns 4 and 5) are
+`major` when the change would be clearly plainer reshaped; otherwise `minor`.
 
 ## Output
 
@@ -92,41 +186,3 @@ When the right fix is a restructure of the new code (an abstraction to extract,
 a module to split, a shape to change), propose it; the code is new and cheap to
 change. Restructuring code on main beyond what the change touches belongs to
 the tech-debt lens; note it there under "For other lenses".
-
-## Design mode
-
-Asked of a design, plan, pieces, or brief record (see Design mode in
-the review protocol):
-
-- Does the codebase already have a pattern, helper, or module for what the
-  design builds? Name it and say whether the design reuses it.
-- Is each new abstraction at the right level, or does it wrap one caller?
-- Does the design couple modules that are separate today?
-- Is any part speculative: built for a future case no record asks for?
-
-## Survey mode
-
-Asked of existing code before a change is defined (see Survey mode in
-the review protocol):
-
-- Which of these files duplicates a pattern, helper, or module the codebase
-  already has? Name both.
-- Is each abstraction in these files at the right level, or does it wrap one
-  caller?
-- Which modules in these files are coupled although they are separate
-  concerns?
-
-## Pass mode
-
-What the author does in a pass that uses this lens (the `pass` skill reads
-this section; reviewers ignore it):
-
-- Reuse the helper, pattern, or module the codebase already has for each thing
-  the piece does; search by behavior before writing anything, and extend an
-  existing helper rather than add a near-copy.
-- Fold duplicated code from this piece into one place; delete code it made dead.
-- Inline abstractions with one caller; keep new coupling between modules to what
-  the piece needs.
-- Write no comments unless the repository's conventions or the user's
-  instructions call for them; a name or a smaller function says it instead.
-  Remove narrating comments the piece added.
