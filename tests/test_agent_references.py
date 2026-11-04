@@ -1,24 +1,10 @@
-import glob
 import os
 import re
 import unittest
 
-from helpers import ROOT, TempCase, run_ok
+from helpers import PLUGIN, ROOT, TempCase, plugin_text_files, referring_files, run_ok
 
-PLUGIN = os.path.join(ROOT, "plugins", "clerk-dev")
 REFERENCE = re.compile(r"clerk-dev:([a-z0-9][a-z0-9-]*[a-z0-9])(-?<)?")
-
-
-def referring_files():
-    return [
-        *glob.glob(os.path.join(PLUGIN, "skills", "**", "*.md"), recursive=True),
-        *glob.glob(os.path.join(PLUGIN, "agents", "*.md")),
-        os.path.join(ROOT, "README.md"),
-    ]
-
-
-def plugin_text_files():
-    return [*referring_files(), *glob.glob(os.path.join(PLUGIN, "scripts", "*.py"))]
 
 
 def resolves(plugin, name):

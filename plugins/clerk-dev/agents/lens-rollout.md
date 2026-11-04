@@ -24,11 +24,11 @@ find the migration tooling from the package scripts.
 ## Revert policy
 
 When `### Deploy` in `CONTEXT`, or the guidance, says `Revert policy: roll
-forward only`, the team never reverts a deploy. Then skip checklist item 7,
-the down-migration part of item 1, and the revert questions of Design mode and
-Pass mode, and report nothing whose only exposure is a revert. The
-coexistence window still applies in full: a rolling deploy runs old and new
-code side by side whatever the policy. Otherwise reverts are assumed.
+forward only`, the team never reverts a deploy. Then skip concern 7 and the
+down-migration part of concern 1 in every mode, and raise nothing whose only
+exposure is a revert. The coexistence window still applies in full: a rolling
+deploy runs old and new code side by side whatever the policy. Otherwise
+reverts are assumed.
 
 ## The coexistence window
 
@@ -44,37 +44,86 @@ For each pair the change touches, state whether the intermediate state works.
 "Works" means no crash, no silent data loss, and no wrong result; degraded but
 correct is fine.
 
-## Checklist
+## Concerns
 
-1. Schema: additive and nullable, or with a default, before code depends on it;
-   drops and renames split across releases; backfills bounded and resumable;
-   lock behavior of each statement (lock timeouts, concurrent index builds
-   outside a transaction, table rewrites on large tables); down migration
-   present and correct, or explicitly absent with a reason.
-2. Jobs and events: a payload field added is read as optional by the new
-   consumer; a field removed is still tolerated; a renamed queue, topic, or job
-   name leaves the old one drained or still consumed; retry of an in-flight job
-   against the new code is idempotent.
-3. Replication and derived stores: new or renamed columns on replicated tables
-   have their sync configuration updated, and the consumer tolerates the column
-   arriving before or after.
-4. Feature gates: the new path is behind a gate when the change is user-visible
-   or risky; the off path still works and is tested; the gate is checked in
-   every execution context that reaches the new code (request handler and job,
-   not one of them); default state is the safe one; removal of a gate deletes
-   both the enum and the dead branch.
-5. Contracts with other deployables: response fields removed or retyped while a
-   client still reads them; required request fields added while an old client
-   omits them; shared enums extended where an old consumer treats unknown as
-   error.
-6. Configuration: new environment variables or secrets that must exist before
-   boot, and whether boot fails loudly or silently when they are missing.
-7. Revert (unless the revert policy is roll forward only): reverting the code after the migration ran, after jobs with the new
-   payload were enqueued, after a gate was enabled. Name the first thing that
-   breaks.
-8. Ordering across repos: when `CONTEXT` lists provides or consumes
-   relationships, state which side must ship first and whether the diff respects
-   it.
+1. **Schema.**
+   - Review: additive and nullable, or with a default, before code depends on
+     it; drops and renames split across releases; backfills bounded and
+     resumable; lock behavior of each statement (lock timeouts, concurrent
+     index builds outside a transaction, table rewrites on large tables); down
+     migration present and correct, or explicitly absent with a reason (unless
+     the revert policy is roll forward only).
+   - Design: What do the migrations lock, on which tables, and can they be
+     reversed (unless the revert policy is roll forward only)? Can new code
+     read old rows while drops, renames, and backfills wait for later releases?
+   - Pass: Write additive migrations that lock briefly and, unless the revert
+     policy is roll forward only, can be reversed; split long backfills, drops,
+     and renames from schema changes, and make new readers tolerate old rows.
+2. **Jobs and events.**
+   - Review: a payload field added is read as optional by the new consumer; a
+     field removed is still tolerated; a renamed queue, topic, or job name
+     leaves the old one drained or still consumed; retry of an in-flight job
+     against the new code is idempotent.
+   - Design: Can the change deploy while old workers read new payloads and new
+     workers read old ones, and what happens to jobs in flight on a renamed
+     queue or retried against the new code?
+   - Pass: Make new consumers read added payload fields as optional and
+     tolerate removed ones, keep an old queue, topic, or job name consumed
+     until it drains, and keep retries of in-flight jobs idempotent.
+3. **Replication and derived stores.**
+   - Review: new or renamed columns on replicated tables have their sync
+     configuration updated, and the consumer tolerates the column arriving
+     before or after.
+   - Design: Which replicated tables gain or rename columns, and does the plan
+     update their sync configuration and let the consumer take the column
+     arriving before or after?
+   - Pass: Update the sync configuration for new or renamed columns on
+     replicated tables, and make the consumer tolerate the column arriving
+     before or after.
+4. **Feature gates.**
+   - Review: the new path is behind a gate when the change is user-visible or
+     risky; the off path still works and is tested; the gate is checked in
+     every execution context that reaches the new code (request handler and
+     job, not one of them); default state is the safe one; removal of a gate
+     deletes both the enum and the dead branch.
+   - Design: Is it behind a feature gate, and what is the plan to turn it on
+     and off?
+   - Pass: Put user-visible or risky behavior behind a feature gate when the
+     codebase uses them, safe by default and checked in every execution context
+     that reaches the new code.
+5. **Contracts with other deployables.**
+   - Review: response fields removed or retyped while a client still reads
+     them; required request fields added while an old client omits them;
+     shared enums extended where an old consumer treats unknown as error.
+   - Design: Can old clients keep calling the new routes, and new clients the
+     old ones, through removed or retyped response fields, new required
+     request fields, and shared enums an old consumer rejects?
+   - Pass: Keep old clients working across the deploy: keep response fields a
+     client still reads, add request fields as optional, and extend shared
+     enums only where old consumers tolerate unknown values.
+6. **Configuration.**
+   - Review: new environment variables or secrets that must exist before boot,
+     and whether boot fails loudly or silently when they are missing.
+   - Design: Which new environment variables or secrets must exist before
+     boot, and does the plan put them in place before the deploy?
+   - Pass: Make boot fail loudly when a new environment variable or secret is
+     missing, and note that it must exist before the deploy.
+7. **Revert.**
+   - Review: unless the revert policy is roll forward only, reverting the code
+     after the migration ran, after jobs with the new payload were enqueued,
+     after a gate was enabled. Name the first thing that breaks.
+   - Design: What is the revert path once data has been written in the new
+     shape (unless the revert policy is roll forward only)?
+   - Pass: Unless the revert policy is roll forward only, keep the previous
+     release working against the rows, jobs, and gates the new one leaves
+     behind.
+8. **Ordering across repos.**
+   - Review: when `CONTEXT` lists provides or consumes relationships, state
+     which side must ship first and whether the diff respects it.
+   - Design: When other services or repositories provide or consume what this
+     changes, which side must ship first, and does the plan say so?
+   - Pass: Note the deploy order when other services or repositories depend on
+     it.
 
 ## Scenario quality
 
@@ -86,28 +135,3 @@ on deploy mechanics you cannot see; say what would confirm it.
 
 Changes that are purely additive and gated, with no migration and no payload
 change, usually produce an empty findings block. That is a valid result.
-
-## Design mode
-
-Asked of a design, plan, pieces, or brief record (see Design mode in
-the review protocol):
-
-- Can the change deploy while old code still runs: old workers reading new
-  payloads, old clients calling new routes, new code reading old rows?
-- What do the migrations lock, on which tables, and can they be reversed
-  (unless the revert policy is roll forward only)?
-- Is it behind a feature gate, and what is the plan to turn it on and off?
-- What is the revert path once data has been written in the new shape (unless
-  the revert policy is roll forward only)?
-
-## Pass mode
-
-What the author does in a pass that uses this lens (the `pass` skill reads
-this section; reviewers ignore it):
-
-- Make old and new code coexist: new readers tolerate old rows and payloads,
-  old readers tolerate new ones, or a gate separates them.
-- Write migrations that lock briefly and, unless the revert policy is roll
-  forward only, can be reversed; split long backfills from schema changes.
-- Put user-visible behavior behind a feature gate when the codebase uses them.
-- Note the deploy order when other services or repositories depend on it.

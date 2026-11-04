@@ -74,25 +74,92 @@ class SpecRequirementsTests(TempCase):
         self.assertEqual(self.requirements_of("## Shape\n\n1. One.\n"), {})
 
 
-class LensSectionTests(TempCase):
+LENS = """## Intro
+
+## Concerns
+
+### Inputs
+
+1. **One.**
+   - Review: checks one,
+     across two lines.
+   - Pass: n/a: nothing to write.
+
+### State
+
+2. **Two.**
+   - Review: checks two.
+   - Pass: do two.
+
+## Next
+text
+"""
+
+
+class LensModeTests(TempCase):
     def setUp(self):
         super().setUp()
-        self.lens = records.load_script("lens-section.py")
+        self.lens = records.load_script("lens-mode.py")
         self.lens.AGENTS = self.tmp
-        with open(self.path("lens-x.md"), "w", encoding="utf-8") as f:
-            f.write("## Empty\n\n## Pass mode\ntext\n")
+        self.write("x", LENS)
 
-    def test_prints_the_section(self):
-        self.assertEqual(self.lens.section("x", "Pass mode"), "text")
+    def write(self, lens, text):
+        with open(self.path(f"lens-{lens}.md"), "w", encoding="utf-8") as f:
+            f.write(text)
 
-    def test_an_empty_section_is_present(self):
-        self.assertEqual(self.lens.section("x", "Empty"), "")
+    def concern(self, number):
+        return self.lens.concerns("x")[number - 1]
 
-    def test_a_missing_section_is_none(self):
-        self.assertIsNone(self.lens.section("x", "Absent"))
+    def test_numbers_run_across_groups(self):
+        self.assertEqual([c.number for c in self.lens.concerns("x")], [1, 2])
 
-    def test_a_missing_lens_is_none(self):
-        self.assertIsNone(self.lens.section("nope", "Pass mode"))
+    def test_reads_the_title(self):
+        self.assertEqual(self.concern(1).title, "One.")
+
+    def test_joins_a_line_continued_under_its_label(self):
+        self.assertEqual(self.lens.line(self.concern(1), "Review"), "checks one, across two lines.")
+
+    def test_keeps_the_labels_in_file_order(self):
+        self.assertEqual(self.concern(2).lines, [("Review", "checks two."), ("Pass", "do two.")])
+
+    def test_reads_the_why_of_an_na_line(self):
+        self.assertEqual(self.lens.na(self.lens.line(self.concern(1), "Pass")), "nothing to write.")
+
+    def test_a_line_with_text_is_not_na(self):
+        self.assertIsNone(self.lens.na("do two."))
+
+    def test_mode_text_skips_na_lines(self):
+        self.assertEqual(self.lens.mode_text("x", "Pass"), f"## x: Pass mode\n\n{self.lens.OPENERS['Pass']}\n\n- **Two.** do two.")
+
+    def test_a_label_on_every_concern_is_carried(self):
+        self.assertTrue(self.lens.carries(self.lens.concerns("x"), "Pass"))
+
+    def test_a_label_on_some_concerns_is_not_carried(self):
+        self.write("y", "## Concerns\n\n1. **A.**\n   - Review: a\n   - Pass: p\n2. **B.**\n   - Review: b\n")
+        self.assertFalse(self.lens.carries(self.lens.concerns("y"), "Pass"))
+
+    def test_mode_text_for_a_label_not_carried_names_the_lens(self):
+        with self.assertRaisesRegex(self.lens.ConcernError, "lens-x.md .*'Design:'"):
+            self.lens.mode_text("x", "Design")
+
+    def test_mode_text_for_a_lens_without_concerns_says_so(self):
+        self.write("y", "## Checklist\n\n1. Schema.\n")
+        with self.assertRaisesRegex(self.lens.ConcernError, "lens-y.md has no concerns"):
+            self.lens.mode_text("y", "Pass")
+
+    def test_a_missing_lens_is_an_error(self):
+        with self.assertRaisesRegex(self.lens.ConcernError, "no lens nope"):
+            self.lens.concerns("nope")
+
+    def test_a_stray_line_names_the_lens_and_concern(self):
+        self.write("y", "## Concerns\n\n1. **A.**\n   - Review: a\nstray\n")
+        with self.assertRaisesRegex(self.lens.ConcernError, "lens-y.md concern 1: cannot read 'stray'"):
+            self.lens.concerns("y")
+
+    def test_an_unknown_label_names_the_lens_and_concern(self):
+        self.write("y", "## Concerns\n\n1. **A.**\n   - Fix: a\n")
+        with self.assertRaisesRegex(self.lens.ConcernError, "lens-y.md concern 1: unknown label 'Fix'"):
+            self.lens.concerns("y")
 
 
 if __name__ == "__main__":

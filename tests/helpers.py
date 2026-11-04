@@ -1,3 +1,4 @@
+import glob
 import os
 import json
 import re
@@ -6,7 +7,8 @@ import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCRIPTS = os.path.join(ROOT, "plugins", "clerk-dev", "scripts")
+PLUGIN = os.path.join(ROOT, "plugins", "clerk-dev")
+SCRIPTS = os.path.join(PLUGIN, "scripts")
 
 GIT_ENV = {
     **os.environ,
@@ -17,6 +19,19 @@ GIT_ENV = {
     "GIT_COMMITTER_NAME": "t",
     "GIT_COMMITTER_EMAIL": "t@t",
 }
+
+
+def referring_files():
+    return [
+        *glob.glob(os.path.join(PLUGIN, "skills", "**", "*.md"), recursive=True),
+        *glob.glob(os.path.join(PLUGIN, "agents", "*.md")),
+        os.path.join(ROOT, "README.md"),
+    ]
+
+
+def plugin_text_files():
+    return [*referring_files(), *glob.glob(os.path.join(SCRIPTS, "*.py"))]
+
 
 FEATURE_MD = "# Feature: test\n\n## Summary\n\nA test feature.\n"
 

@@ -13,8 +13,9 @@ The catalogue of passes, their lenses, and how to suggest them for a piece is
 `passes.md` next to this file. The log is `.clerk-dev/passes.md`, managed only
 through `${CLAUDE_PLUGIN_ROOT}/scripts/passes.py` (below, `passes.py`), which
 reads it strictly and refuses unsafe steps; when it refuses, say why in one line
-and ask, never edit the log around it. A lens's author-side text is printed by
-`${CLAUDE_PLUGIN_ROOT}/scripts/lens-section.py <lens>`; never read the agent
+and ask, never edit the log around it. A lens's author-side text, its Pass
+mode text (the `Pass` lines of its concerns), is printed by
+`${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py <lens>`; never read the agent
 files themselves, which are reviewer prompts.
 
 A pass covers one worktree. If this conversation was compacted mid-pass, re-read

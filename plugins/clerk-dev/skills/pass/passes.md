@@ -3,7 +3,7 @@
 A pass is a bounded stretch of writing with one focus on one piece of work,
 ending in commits and a pass review with only the pass's lenses over only the
 pass's commits. Each pass below names its lenses; the writing follows each
-lens's `## Pass mode` section (`scripts/lens-section.py <lens>`), and the check
+lens's Pass mode text (`scripts/lens-mode.py <lens>`), and the check
 runs the same lenses in review. `cross-repo` has no pass; it reviews and checks
 designs only.
 

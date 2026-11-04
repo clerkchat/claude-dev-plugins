@@ -273,8 +273,8 @@ What each handoff adds, pasted word for word:
 
 1. Piece: the requirements by brief id and number with the brief's path,
    and the later handoffs and pieces that touch the same code.
-2. Pass: the one lens's Pass mode text and the items as the goal; stay
-   inside the items.
+2. Pass: the one lens's Pass mode text (`scripts/lens-mode.py <lens>`) and
+   the items as the goal; stay inside the items.
 3. Finding: the run files to read (the merged entry's claim, scenario,
    steps, evidence, fix, and snippet; the verifier's note; the notes file;
    the guidance file), the review context sections for the finding's lens,

@@ -11,15 +11,17 @@ Your job is depth on your lens, not breadth. The orchestrator merges, dedupes,
 and verifies everything afterward, so report what you actually found and let the
 pipeline do the filtering.
 
-Your task is a review of a diff, unless the prompt says `TASK: design-check`:
-then you check a feature record (a design, plan, pieces, or brief record) and
-follow Design mode below and your agent's `## Design mode` section; or
-`TASK: survey`: then you read existing code before a change is defined and
-follow Survey mode below and your agent's `## Survey mode` section. Every
-task shares Reading budget, Discovery fallback, Paths, Conduct, and the
-meanings of `CONTEXT`, `GUIDANCE`, and `WORKSPACE` under Inputs; the rest,
-which is about diffs and findings, is for the review alone. In every task,
-your agent's `## Pass mode` section is for the `pass` skill; ignore it.
+Your agent's `## Concerns` section is a numbered list of concerns, each with
+one labeled line per task. Your task is a review of a diff, applying the
+`Review` line of each concern, unless the prompt says `TASK: design-check`:
+then you check a feature record (a design, plan, pieces, or brief record),
+follow Design mode below, and apply the `Design` lines; or `TASK: survey`:
+then you read existing code before a change is defined, follow Survey mode
+below, and apply the `Survey` lines. Every task shares Reading budget,
+Discovery fallback, Paths, Conduct, and the meanings of `CONTEXT`,
+`GUIDANCE`, and `WORKSPACE` under Inputs; the rest, which is about diffs and
+findings, is for the review alone. In every task, ignore the lines of the
+other tasks; the `Pass` lines are for the `pass` skill and the author.
 
 ## Inputs you receive
 
@@ -81,9 +83,9 @@ The orchestrator's prompt gives you:
   `pass` skill): its focus and the piece's brief record. The diff is that pass's
   commits only. Judge them against your lens as usual, but do not report
   requirements of other pieces or work that belongs to a different focus; other
-  passes and the full review cover those. Your agent's `## Pass mode` section
-  is for the author, not for you: report defects, never "the checklist was not
-  followed".
+  passes and the full review cover those. The `Pass` lines of your agent's
+  concerns are for the author, not for you: report defects, never "the
+  checklist was not followed".
 
 ## Final pass bar
 
@@ -375,9 +377,10 @@ feature's hub, which may be another repository.
 ## Design mode
 
 With `TASK: design-check` you check a feature record (a design, plan, pieces, or
-brief record; see `skills/feature/records.md`) before the code exists. Your
-agent's `## Design mode` section lists what your lens asks of a design; apply
-it, with the same depth you bring to a diff.
+brief record; see `skills/feature/records.md`) before the code exists. The
+`Design` line of each concern in your agent's `## Concerns` is what your lens
+asks of a design; apply them, with the same depth you bring to a diff, and
+ignore the other lines.
 
 Inputs:
 
@@ -436,9 +439,10 @@ never a `findings` block.
 ## Survey mode
 
 With `TASK: survey` you read existing code before any change to it is defined,
-for the refactors worth doing first and the traps already in it. Your agent's
-`## Survey mode` section lists what your lens asks of that code; apply it, with
-the same depth you bring to a diff.
+for the refactors worth doing first and the traps already in it. The `Survey`
+line of each concern in your agent's `## Concerns` is what your lens asks of
+that code; apply them, with the same depth you bring to a diff, and ignore the
+other lines.
 
 Inputs:
 
