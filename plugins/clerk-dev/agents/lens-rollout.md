@@ -94,7 +94,8 @@ the review protocol):
 
 - Can the change deploy while old code still runs: old workers reading new
   payloads, old clients calling new routes, new code reading old rows?
-- What do the migrations lock, on which tables, and can they be reversed?
+- What do the migrations lock, on which tables, and can they be reversed
+  (unless the revert policy is roll forward only)?
 - Is it behind a feature gate, and what is the plan to turn it on and off?
 - What is the revert path once data has been written in the new shape (unless
   the revert policy is roll forward only)?
@@ -106,7 +107,7 @@ this section; reviewers ignore it):
 
 - Make old and new code coexist: new readers tolerate old rows and payloads,
   old readers tolerate new ones, or a gate separates them.
-- Write migrations that lock briefly and can be reversed; split long backfills
-  from schema changes.
+- Write migrations that lock briefly and, unless the revert policy is roll
+  forward only, can be reversed; split long backfills from schema changes.
 - Put user-visible behavior behind a feature gate when the codebase uses them.
 - Note the deploy order when other services or repositories depend on it.

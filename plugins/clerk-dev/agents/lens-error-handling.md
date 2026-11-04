@@ -96,7 +96,8 @@ this section; reviewers ignore it):
 
 - For each call that can fail, decide: retry, surface, compensate, or stop;
   write that path instead of a broad catch.
-- Never swallow an error or replace it with a default that hides it; log with
-  context or rethrow.
+- Never swallow an error or replace it with a default that hides it; a log
+  line alone is swallowing. Rethrow it so it reaches the caller, or report it
+  to the error tracker where the repository uses one.
 - Leave no partial state on failure, or make it recoverable and visible.
 - Give users and operators an error that says what happened and what to do.

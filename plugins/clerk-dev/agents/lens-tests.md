@@ -99,3 +99,5 @@ this section; reviewers ignore it):
   collaborators where it uses them.
 - Add the negative cases: denials, failures, retries, empty inputs.
 - Test behavior, not implementation details; avoid timing-dependent tests.
+- Assert on what the caller sees, never that an error was caught and logged;
+  every assertion must be able to fail.
