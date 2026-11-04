@@ -27,36 +27,94 @@ notes), behavioral (events, locations, usage), financial, credentials, or
 derived (embeddings, summaries, classifications of the above). Derived data
 inherits the class of its source.
 
-## Checklist
+## Concerns
 
-1. Telemetry: personal data or content in log lines, metric tags, trace
-   attributes, error messages, or exception payloads sent to error tracking.
-2. Third parties: a new destination for personal data (model provider,
-   analytics, search, enrichment, messaging provider), or more fields sent to an
-   existing one than the feature needs. Note whether the destination is already
-   in use for that data class.
-3. Prompts and models: customer content placed in prompts that are cached,
-   logged, or used for evaluation datasets; model outputs about a person stored
-   without the same protections as the input.
-4. Retention: new tables, columns, caches, queues, or files holding personal
-   data with no retention or deletion path; copies that an existing deletion
-   flow does not reach (search indexes, vector stores, analytics, backups of
-   exports).
-5. Deletion and export: account or contact deletion still removes the new data;
-   data export includes it where required.
-6. Access breadth: a new read path that shows personal data to a wider audience
-   (all workspace members instead of assignees, public API instead of admin UI,
-   shared links). Report cross-tenant exposure to tenancy; you own within-tenant
-   breadth.
-7. Consent and opt-out: messaging or outreach paths that bypass opt-out state,
-   quiet hours, or consent records; imports that do not carry consent status.
-8. Minimization: fields collected or stored because they were available, not
-   because the feature uses them.
-9. Test data and fixtures: real-looking personal data committed in seeds,
-   samples, or recorded HTTP fixtures.
-10. Regulated channels: paths that send messages through carriers or voice
-    providers where content and consent rules apply, changed without the checks
-    the existing paths perform.
+1. **Telemetry.**
+   - Review: personal data or content in log lines, metric tags, trace
+     attributes, error messages, or exception payloads sent to error tracking.
+   - Design: What personal or customer data would the design put in logs,
+     metrics, traces, error messages, or analytics?
+   - Pass: Keep personal and message content out of logs, traces, metrics tags,
+     and error messages; log identifiers instead.
+2. **Third parties.**
+   - Review: a new destination for personal data (model provider, analytics,
+     search, enrichment, messaging provider), or more fields sent to an existing
+     one than the feature needs. Note whether the destination is already in use
+     for that data class.
+   - Design: Does anything get sent to a third party that was not sent before:
+     a new provider, or more fields to an existing one than the feature needs?
+     Is the destination already used for that data class?
+   - Pass: Send each third party only the fields it needs, and note when a
+     destination is new for that data class.
+3. **Prompts and models.**
+   - Review: customer content placed in prompts that are cached, logged, or used
+     for evaluation datasets; model outputs about a person stored without the
+     same protections as the input.
+   - Design: What customer content does the design put in prompts, are those
+     prompts cached, logged, or used for evaluation, and are model outputs about
+     a person stored with the protections of their input?
+   - Pass: Put only the customer content a prompt needs into it, keep prompts
+     out of caches, logs, and evaluation datasets, and protect stored model
+     outputs about a person like their input.
+4. **Retention.**
+   - Review: new tables, columns, caches, queues, or files holding personal data
+     with no retention or deletion path; copies that an existing deletion flow
+     does not reach (search indexes, vector stores, analytics, backups of
+     exports).
+   - Design: Is retention decided for each new store of personal data (table,
+     column, cache, queue, file), and for the copies in search indexes, vector
+     stores, analytics, and exports?
+   - Pass: Give new stores of personal data a retention rule and a deletion
+     path, including their copies in search indexes, vector stores, analytics,
+     and exports.
+5. **Deletion and export.**
+   - Review: account or contact deletion still removes the new data; data export
+     includes it where required.
+   - Design: Does tenant, account, or contact deletion reach the new data, and
+     does data export include it where required? What personal data does the
+     design send out in exports?
+   - Pass: Make tenant, account, and contact deletion reach the new data, and
+     include it in data export where required.
+6. **Access breadth.**
+   - Review: a new read path that shows personal data to a wider audience (all
+     workspace members instead of assignees, public API instead of admin UI,
+     shared links). Report cross-tenant exposure to tenancy; you own
+     within-tenant breadth.
+   - Design: Who can see personal data through each new read path, and is that
+     wider than before: all workspace members instead of assignees, a public API
+     instead of an admin UI, shared links? Cross-tenant exposure belongs to
+     tenancy.
+   - Pass: Show personal data on a new read path only to the audience that
+     already sees it, such as assignees or admins, not every workspace member.
+7. **Consent and opt-out.**
+   - Review: messaging or outreach paths that bypass opt-out state, quiet hours,
+     or consent records; imports that do not carry consent status.
+   - Design: Do consent, opt-out, or quiet-hours rules apply to a new messaging
+     or outreach path, and do imports carry consent status?
+   - Pass: Apply consent, opt-out, and quiet-hours checks on new messaging
+     paths, and carry consent status through imports.
+8. **Minimization.**
+   - Review: fields collected or stored because they were available, not because
+     the feature uses them.
+   - Design: Does the design collect or store any field the feature does not
+     use?
+   - Pass: Collect and store only the fields the feature uses.
+9. **Test data and fixtures.**
+   - Review: real-looking personal data committed in seeds, samples, or recorded
+     HTTP fixtures.
+   - Design: Does the plan add seeds, samples, or recorded fixtures, and what
+     data do they hold?
+   - Pass: Use obviously fake data in seeds, samples, and recorded HTTP
+     fixtures.
+10. **Regulated channels.**
+   - Review: paths that send messages through carriers or voice providers where
+     content and consent rules apply, changed without the checks the existing
+     paths perform.
+   - Design: Do regulated-messaging rules apply to a new path through a carrier
+     or voice provider, and does the design keep the checks the existing paths
+     perform?
+   - Pass: Keep the content and consent checks the existing carrier and voice
+     paths perform on any path you add or change through them.
 
 ## Scenario quality
 
@@ -64,26 +122,3 @@ Name the data item, its class, where it flows now that it did not before, and
 who can see it there. Score by breadth and sensitivity: content and financial
 data exposed in telemetry is major or blocker; an identifier in a log line is
 minor unless the volume is large.
-
-## Design mode
-
-Asked of a design, plan, pieces, or brief record (see Design mode in
-the review protocol):
-
-- What personal or customer data does the design read, store, or send
-  somewhere new (providers, prompts, logs, analytics, exports)?
-- Is retention and deletion decided for new stores, and does tenant deletion
-  reach them?
-- Do consent, opt-out, or regulated-messaging rules apply to a new path?
-- Does anything get sent to a third party that was not sent before?
-
-## Pass mode
-
-What the author does in a pass that uses this lens (the `pass` skill reads
-this section; reviewers ignore it):
-
-- Keep personal and message content out of logs, traces, metrics tags, and
-  error messages; log identifiers instead.
-- Send third parties and prompts only the fields they need.
-- Give new stores a retention rule and make tenant deletion reach them.
-- Apply consent and opt-out checks on new messaging paths.
