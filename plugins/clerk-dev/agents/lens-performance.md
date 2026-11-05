@@ -20,31 +20,77 @@ report where the path is hot: a request handler, a per-message or per-event
 handler, a render path, a loop body over real data. Say why you consider the
 path hot.
 
-## Checklist
+## Concerns
 
-1. Complexity: nested loops over collections that can both be large; linear
-   searches inside loops where a map would do; sorting inside a loop; repeated
-   `includes` or `find` on arrays built from queries.
-2. Repeated work: the same computation, parse, compile (regex, schema,
-   template), or lookup done per call when it is stable per process or per
-   input; memoization missing or keyed wrongly.
-3. Redundant I/O: the same record loaded twice in one request; a query inside a
-   loop whose result does not depend on the loop variable; data fetched and then
-   discarded.
-4. Serialization and copying: deep clones of large objects, JSON round-trips to
-   copy, spreading large arrays repeatedly, string concatenation in loops,
-   building large intermediate arrays with chained `map` and `filter` over big
-   inputs where one pass would do.
-5. Blocking: synchronous file or crypto calls on a request path; CPU-heavy work
-   on the event loop that should be offloaded or chunked; awaiting sequentially
-   what is independent and cheap to parallelize (but not database calls per row;
-   that is a capacity finding).
-6. Payload size: returning or serializing fields the caller does not use;
-   loading relations that are not read.
-7. UI paths: computation in render without memoization, effects that run every
-   render, lists rendered without keys or virtualization at realistic sizes,
-   re-renders caused by new object identities in props.
-8. Startup: expensive work at module load or boot that delays every instance.
+1. **Complexity.**
+   - Review: nested loops over collections that can both be large; linear
+     searches inside loops where a map would do; sorting inside a loop; repeated
+     `includes` or `find` on arrays built from queries.
+   - Design: Which paths in the design are hot, and what work does each do per
+     call? Does any step nest loops over collections that can both be large?
+   - Pass: Move work out of loops and hot paths: replace searches inside loops
+     with a map, and sort once outside the loop.
+2. **Repeated work.**
+   - Review: the same computation, parse, compile (regex, schema, template), or
+     lookup done per call when it is stable per process or per input; memoization
+     missing or keyed wrongly.
+   - Design: Does the design repeat work that could be computed once or cached,
+     such as a parse, a compile, or a lookup that is stable per process or per
+     input?
+   - Pass: Compute once what is stable per process or per input, and cache what
+     is reread, keyed by everything the result depends on.
+3. **Redundant I/O.**
+   - Review: the same record loaded twice in one request; a query inside a loop
+     whose result does not depend on the loop variable; data fetched and then
+     discarded.
+   - Design: Does the design load the same record more than once per request,
+     query inside a loop, or fetch data it then discards? Could the I/O be
+     batched?
+   - Pass: Batch I/O, load each record once per request, and drop fetches whose
+     result is not used.
+4. **Serialization and copying.**
+   - Review: deep clones of large objects, JSON round-trips to copy, spreading
+     large arrays repeatedly, string concatenation in loops, building large
+     intermediate arrays with chained `map` and `filter` over big inputs where
+     one pass would do.
+   - Design: Does the design copy, clone, or serialize large objects on a hot
+     path, or pass big inputs through several intermediate collections?
+   - Pass: Avoid copying or serializing large objects repeatedly: no JSON
+     round-trip copies, no repeated spreads, and one pass instead of chained
+     `map` and `filter` over big inputs.
+5. **Blocking.**
+   - Review: synchronous file or crypto calls on a request path; CPU-heavy work
+     on the event loop that should be offloaded or chunked; awaiting sequentially
+     what is independent and cheap to parallelize (but not database calls per
+     row; that is a capacity finding).
+   - Design: Are there blocking calls or CPU-heavy work on async or request
+     paths, or independent steps awaited one after another? Database calls per
+     row are capacity's, not this lens's.
+   - Pass: Use async calls on async paths with no blocking I/O in request
+     handlers, offload or chunk CPU-heavy work, and parallelize independent
+     awaits; leave database calls per row to capacity.
+6. **Payload size.**
+   - Review: returning or serializing fields the caller does not use; loading
+     relations that are not read.
+   - Design: Does the design return or serialize fields the caller does not use,
+     or load relations nothing reads, so payloads are larger than needed?
+   - Pass: Return only the fields the caller uses and load only the relations
+     that are read.
+7. **UI paths.**
+   - Review: computation in render without memoization, effects that run every
+     render, lists rendered without keys or virtualization at realistic sizes,
+     re-renders caused by new object identities in props.
+   - Design: For UI, does any design choice imply heavy re-rendering, such as
+     large lists, computation in render, or props that change identity every
+     render?
+   - Pass: In UI, keep renders cheap: memoize where props are stable, give lists
+     keys and virtualize large ones, and keep effects from running every render.
+8. **Startup.**
+   - Review: expensive work at module load or boot that delays every instance.
+   - Design: Does the design do expensive work at module load or boot that
+     delays every instance?
+   - Pass: Move expensive work out of module load and boot: do it lazily or on
+     first use.
 
 ## Scenario quality
 
@@ -56,25 +102,3 @@ no measurable effect at realistic sizes is not a finding.
 
 Code on cold paths (admin actions, one-off scripts, startup of a rare worker)
 and readability trade-offs that cost microseconds.
-
-## Design mode
-
-Asked of a design, plan, pieces, or brief record (see Design mode in
-the review protocol):
-
-- Which paths in the design are hot, and what work does each do per call?
-- Does the design repeat work that could be computed once, cached, or batched?
-- Are there blocking calls on async or request paths?
-- For UI, does any design choice imply heavy re-rendering or large payloads?
-
-## Pass mode
-
-What the author does in a pass that uses this lens (the `pass` skill reads
-this section; reviewers ignore it):
-
-- Move work out of loops and hot paths: compute once, batch I/O, cache what is
-  reread.
-- Use async calls on async paths; no blocking I/O in request handlers.
-- Avoid copying or serializing large objects repeatedly.
-- In UI, keep renders cheap: memoize where props are stable, avoid large
-  payloads.
