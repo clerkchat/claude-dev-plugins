@@ -159,7 +159,7 @@ Each stage's size comes from `git diff --numstat origin/<base>...HEAD --
 helpers, rounded as `style.md` says. A file in several stages is split evenly
 between them. Prep commits are not subtracted.
 
-Sort the commits into the groups of `style.md`'s Overview of commits by their
+Sort the commits into groups by their
 types, as `skills/review/commits.md` maps them (prep to refactors, live to
 changes to deployed code, new, tooling, tests, docs, and `!` to break). A
 commit with no type is sorted from its diff: extractions and renames the rest
@@ -171,13 +171,14 @@ callers rely on is a break. A mixed commit goes under its riskiest group, in
 the order `commits.md` gives. A type is a claim, not proof: when a stage
 writer finds that a commit typed refactor or chore changes behavior, the
 commit moves to changes to deployed code. Note whether the branch's subjects
-carry types, for the Conventions subsection. On a stacked base, changes to
+carry types, for the Commit conventions section. On a stacked base, changes to
 deployed code and changes to code on the base are separate groups and may
-both appear.
+both appear. The groups are not written into the draft; they drive the
+behavior changes check of step 6.
 
-A change that needs no spine (a fix in one place, a dependency bump, a few
-small edits, or a repository of a few hundred non-test lines in a larger
-unit) gets a short description, no walkthrough, as `style.md` says.
+A small change (a fix in one place, a dependency bump, a few small edits, or
+a repository of a few hundred non-test lines in a larger unit) still gets a
+walkthrough, of one stage named for what it changes.
 
 ## 6. Write the draft
 
@@ -189,15 +190,16 @@ the start: launch one `general-purpose` subagent per stage (a few small stages
 may share one), all in one message, with `model: opus`. In a unit of several
 repositories, a repository whose diff is not large gets one subagent that
 writes its whole draft, launched in the same message. Write what every writer
-shares (the spine, the stage list with each stage's files, the core terms,
-and the stage that owns each request and response type) to one brief in the scratchpad, and give each writer
+shares (the spine, the stage list with each stage's files, the terms several
+stages lean on with the stage that defines each, and the stage that owns each
+request and response type) to one brief in the scratchpad, and give each writer
 its path and its stage. Give each stage writer:
 
 - the worktree and `origin/<base>`;
 - the spine, the full stage list (so it knows its neighbors), its stage, and
   its files;
-- the core terms the Description defines, in the words it will use, and the
-  coined terms other stages define, so it links rather than redefines;
+- the shared terms its stage defines, and those other stages define, so it
+  links rather than redefines;
 - the open items that bear on its stage, already in reviewer language;
 - the notes for this repository and the open notes for this pull request
   that bear on its stage (step 10);
@@ -227,10 +229,11 @@ the stage whose code has it.
 
 **The rest.** From the stages, write the Walkthrough's intro, diagram, and
 contents table; the Other files table; Left out on purpose, from every
-stage's open items; the Description with its Overview of commits and the
-sections that apply; and the template sections last. Then check that they
-agree: the table, the diagram, and the sections name the same stages in the
-same order, and every anchor link resolves to a heading; each capability
+stage's open items; the Description with the sections that apply; and the
+template sections last. Then check that they agree: the table, the diagram,
+and the sections name the same stages in the same order, and every anchor
+link resolves to a heading; no section restates another (the Description
+lists no parts, the intro does not summarize the stages); each capability
 reviewers would ask about has one home, and a built one is not phrased as a
 design question; no open item contradicts a stage's After; every size is
 rounded. Any claim in the Description about the base is checked like the
@@ -239,10 +242,9 @@ stages' are.
 Two checks are written out, not only made, and their lists go in the report
 (step 9):
 
-- **Behavior changes.** Each commit or change Overview of commits lists under
-  changes to deployed code or to code on the base, with the stage and the
-  Before/After row that holds it. A change with no row gets one, and a row
-  with no entry in Overview of commits gets one there.
+- **Behavior changes.** Each commit step 5 sorted under changes to deployed
+  code or to code on the base, with the stage and the Before/After row that
+  holds it. A change with no row gets one.
 - **Fields.** Each request and response field the writers returned, with the
   Client-facing table and row that holds it. A field with no row gets one;
   a removed field's row names what replaces it.
@@ -255,7 +257,7 @@ pass over all the drafts:
 - each names its sibling pull requests as a bullet list, one per repository,
   with what each holds: number and link when `gh pr view` finds one in that
   worktree, else the branch name;
-- each defines the shared core terms in the same words;
+- each defines the terms it shares with its siblings in the same words;
 - a known bug is listed in the draft of the repository whose code has it,
   not repeated in its siblings';
 - each deployment section states the deploy order and what depends on what,
@@ -290,8 +292,8 @@ Per repository, in a few lines:
 - the claims that could not be checked and the sections that could not be
   filled, if any;
 - the warning from step 3, if any, in one line;
-- the Testing question: what was actually run (commands, manual or
-  end-to-end checks), since the draft can only list the test files;
+- the Testing question: how a reviewer can test the change by hand, since
+  the draft leaves Testing empty until the user says;
 - the two checks of step 6, as lists, with what was added to make them hold;
 - the user's edits and open notes carried over, and any that no longer fit
   the code.
@@ -307,7 +309,7 @@ left bare.
 When the user asks for a change to a draft ("in the PR draft, define pin
 earlier", "drop that section"), make it in `.clerk-dev/pr-description.md` of
 the repositories it concerns, and in their siblings when the change is to
-something every draft shares (a core term, the deploy order). Then log it in
+something every draft shares (a shared term, the deploy order). Then log it in
 `.clerk-dev/pr-draft-notes.md` of each repository changed, one entry per
 change:
 

@@ -11,16 +11,13 @@ and checked.
 ## Title
 ## Description
   base line                     (when the base is not the default branch)
-  core terms                    (a short paragraph)
-  what the base does, what this PR adds (a paragraph, then bold-led bullets)
+  why this PR exists            (a short paragraph)
   sibling pull requests         (a bullet list, for several repositories)
-  ### Overview of commits
-    #### Conventions             (when the commits carry subject markers)
-    #### Groups
+  ### Commit conventions        (when the commits carry subject markers)
   ### Scope change              (when it applies)
   ### Client-facing changes     (when it applies)
 ## Walkthrough
-  intro sentences, spine diagram, contents table
+  intro sentence, spine diagram, contents table
   ### <Stage> ...               (one per stage)
   ### Changes to <existing code> (code the base already runs, when any)
   Other files, outside any stage (collapsed)
@@ -33,10 +30,13 @@ and checked.
 The title is its own first section, apart from the body, so the user copies
 each into its own field on GitHub. When the template has a Description
 heading, the Description fills it and the Walkthrough follows it; the
-template's other sections come after, in the template's order. A short
-description (no spine, or a small repository in a larger unit) has no
-Walkthrough: Description, Overview of commits, Left out on purpose, and the
-template.
+template's other sections come after, in the template's order. Every
+description has a Walkthrough, however small the change.
+
+Each fact has one home. The Description says why the change exists; the
+Walkthrough's contents table lists its parts; each stage says what changes in
+it. No section summarizes another, and no list of the parts appears anywhere
+but the contents table.
 
 ## Title
 
@@ -52,63 +52,25 @@ from the code's owners to people new to it; err toward explaining.
 - **The base, once.** When the base is not the repository's default branch,
   open with one line saying so: "This PR targets `feat/x`, the branch that
   holds ..., not `master`." Elsewhere compare as Before and After.
-- **Core terms.** Before the change list, define only the nouns the whole PR
-  rests on (a sync, a conflict), one sentence each, and say whether each is
-  local to the feature or a general term ("'Sync' here means one import from
-  the CRM. It is not database replication."). Two or three at most, and only
-  nouns a reviewer meets in the product or the API; code names (types,
-  interfaces, internal roles such as `SyncCursor` or a "resolver") stay in
-  the walkthrough. Every other term waits for the bullet that introduces it.
-- **Coined terms.** A term the branch coins (one with no hits on the base,
-  such as "hold") is defined in the bullet where it first appears, in its own
-  sentence: what it is, where it is set, and what existing thing it relates to.
-  Naming it in passing ("unless a hold applies") is not a definition.
-- **Before and after.** A short paragraph on what the base does, introducing
-  the base by role ("On the base branch, `feat/x`, ..."), then "This PR ..."
-  and the parts as bullets. Each bullet leads with a bold short name, then says
-  in plain words what the thing is and why, then its mechanics. Four or five
-  bullets at most, grouped by what a reviewer or user gets, not one per
-  stage.
+- **Why this PR exists.** One short paragraph: the problem or goal, what the
+  base does about it today (introducing the base by role: "On the base branch,
+  `feat/x`, ..."), and what a reviewer or user gets from this PR, in plain
+  words. It does not list the parts; the contents table does. It defines no
+  terms beyond what the paragraph itself needs; the stages define the rest.
 - **Sibling pull requests**, for several repositories: a bullet list, one per
   repository, each with its number and link (else the branch) and what it
   holds.
 
-### Overview of commits
+### Commit conventions
 
-The group's purpose and a few examples; the full list is in the commits. No
-commit counts.
-
-- **Conventions** (`####`), only when the branch's commit subjects carry
-  types (`refactor(<area>):`, `change`, `!`, as `skills/review/commits.md`
-  lists them): what each type present means in reviewer terms, as bullets. Say why a refactor can be trusted (it
-  changes no behavior and existing tests guard it) and what it allows
-  (cherry-picking it on its own), not only what it does not touch.
-- **Groups** (`####`, or no heading when there are no Conventions): one
-  bold-led bullet per group present, in this order, each opened by a sentence
-  saying what the group is for:
-  - **Refactors.** Extractions and renames the rest builds on, behavior
-    unchanged.
-  - **Changes to deployed code.** Code that runs in production today and now
-    behaves differently. On a stacked base (a feature branch), code that exists
-    only on the base is not deployed: name the group "Changes to code on the
-    base" for it, and keep "deployed" for code the default branch has.
-  - **New code**, named for what it is ("New sync code"). Code nothing on
-    the base calls yet.
-  - **Tooling.** CI, checks, and housekeeping; nothing deployed
-    changes.
-  - **Tests.** Tests only.
-  - **Docs.** Docs only.
-  - **API break**, or the kind of break ("Schema break with backfill",
-    "Behavior break"). What breaks, whether it is public or customer-facing,
-    and who calls it. Only the repository that changes the contract has this
-    group; a client that follows the change says so in its other groups and
-    in its deployment section.
-- Detail goes where the review is: the new code and the changes to deployed
-  code get bullets; refactors, tooling, tests, and docs a line or a few
-  examples each.
-- Any list of two or more items is a bullet list.
-- Cut qualifiers the group heading already implies, especially one a sibling
-  repository's PR makes false ("nothing calls it", when the sibling does).
+Only when the branch's commit subjects carry types (`refactor(<area>):`,
+`change`, `!`, as `skills/review/commits.md` lists them): what each type
+present means in reviewer terms, as bullets. Say why a refactor can be trusted
+(it changes no behavior and existing tests guard it) and what it allows
+(cherry-picking it on its own), not only what it does not touch. Describe new
+code as net new code, never as code nothing calls. No list of commits and no
+commit counts: which changes alter behavior is in the stages' Before/After
+tables.
 
 ### Scope change
 
@@ -139,11 +101,10 @@ routes named.
 
 Ordered by the spine: the flow a reviewer follows to understand the diff.
 
-1. A few sentences tying the parts together: the stages are what every unit
-   of the flow passes through, the diagram shows how it moves between them,
-   the table lists them linked to their sections. Say which section is not a
-   stage of the flow when one is not (deployed code underneath it). Give the
-   paths' shared root.
+1. One or two sentences: the spine (what every unit of the flow passes
+   through), which section is not a stage of the flow when one is not
+   (deployed code underneath it), and the paths' shared root. Not a summary
+   of the stages; the table is that.
 2. With three or more stages, one mermaid diagram of the spine, one idea only,
    its nodes carrying the section names. Top to bottom (`flowchart TD`); left
    to right only when it is three or four short nodes, since GitHub shrinks a
@@ -158,7 +119,14 @@ Each stage is one section, in this shape:
 - A bare `###` heading, the stage's name only, so its GitHub anchor stays short
   and stable (`#conflict-resolution`). Sizes live in the contents table.
 - **Key idea:** one or two sentences, the concept a reviewer needs before the
-  rest.
+  rest. The first stage to lean on a term defines it here, in its own
+  sentence, and says whether it is local to the feature or a general term
+  ("'Sync' here means one import from the CRM. It is not database
+  replication."). This holds above all for a term the branch coins (one with
+  no hits on the base, such as "hold"): what it is, where it is set, and what
+  existing thing it relates to. Naming it in passing ("unless a hold
+  applies") is not a definition. Later stages link to the stage that defines
+  it.
 - A Before/After table, one row per aspect (blank first header, then Before,
   After); a side with nothing says "none". Every cell is a short phrase,
   about six words; detail goes in the groups below. The cells say what the
@@ -194,7 +162,8 @@ Each stage is one section, in this shape:
 
 A stage has no open items of its own; they go under Left out on purpose.
 
-About six stages at most. A stage under about 300 non-test lines folds into
+About six stages at most, and at least one: a small change (a fix in one
+place, a dependency bump) is one stage named for what it changes. A stage under about 300 non-test lines folds into
 the neighbor it serves (the stage for changes to existing code never folds); when it is something a user picks between (modes,
 options), it becomes a `####` subsection there.
 
@@ -257,7 +226,8 @@ lines only. No total for the PR and no exact counts.
 - **Named AI agents** (an assistant with a name) are referred to by name or "it", never a pronoun
   inferred from the name.
 - **One name per thing**, the same in every draft of a unit, and each draft
-  defines the shared core terms in the same words, so each PR stands alone.
+  defines the terms it shares with its siblings in the same words, so each PR
+  stands alone.
 - No internal ids (records, findings, follow-ups, passes, handoffs), no local
   tooling (`just` recipes, plugin scripts, `.clerk-dev/` paths), and no
   placeholders (`{{...}}`, "TBD", a template's sample text).
@@ -279,9 +249,9 @@ content; replace its sample text, keep its links.
 - Dependencies: only real deploy dependencies, with their order. For several
   repositories, the deploy order and what depends on what, in the same words
   in every description.
-- Testing: what the user says was run (commands, manual or end-to-end
-  checks). Without an answer, the test files and what they cover, as bullets.
-  No pass counts.
+- Testing: how a reviewer can test the change by hand, from what the user
+  says (the steps, and what to look for). Without an answer it stays empty.
+  Never a list of test files, and no pass counts.
 
 ### Default template
 
@@ -301,12 +271,12 @@ For a repository with no template:
 - [ ] Migrations
 - [ ] Other services must deploy first
 
-## Testing
+## How to test manually
 ```
 
 Under Deployment: each environment variable with what it sets; one line per
 migration per store; the other services and the order between them. Under
-Testing: as above.
+How to test manually: as Testing above.
 
 ## Worked example
 
@@ -322,41 +292,20 @@ Pipeline test harness: voice call scenarios
 
 This PR targets `feat/pipeline-test-merge`, the branch that holds the text-only pipeline test harness, not `master`.
 
-The harness tests a pipeline with scenarios. A scenario is a script of turns. A turn is one input to the pipeline (a customer message, or an event such as a call starting), followed by everything the pipeline does in response until it waits for the next input. "Turn" is a harness term here. It is not the same as an agent's LLM turn in the engine.
-
-On the base branch, `feat/pipeline-test-merge`, the harness drives text conversations only: voice triggers are rejected, every conversational turn starts a new pipeline run, and a turn reports the messages the contact received.
-
-This PR lets a scenario drive a voice pipeline as one call, turn by turn:
-
-- **Caller turns and call events.** A turn can be a line the caller says, or an event the call raises (call ended, voicemail). On a live call, the voice service runs an agent that answers the caller for the pipeline. In a test there is no voice service, so the scenario either scripts the agent's replies per turn (fixed replies, like a mock), or pins the agent to an LLM. A pin is a new fixture setting, `fixture.voiceAgent`, that puts the whole scenario in LLM mode and can name a model.
-- **One execution across turns.** On a live call, the whole call is one pipeline execution: it pauses while it waits for the caller and resumes on the voice service's next event. The harness now does the same.
+The harness tests a pipeline with scripted scenarios, but on the base branch, `feat/pipeline-test-merge`, it drives text conversations only, so voice pipelines cannot be tested before they take real calls. This PR lets a scenario drive a voice pipeline as one call, turn by turn, with the voice service's agent either scripted or played by an LLM.
 
 Sibling pull requests:
 
 - clerkai `feat/pipeline-test-voice`: the scenario editor and results for calls
 - agent-swarm `feat/pipeline-test-voice`: Belle authoring and running voice cases
 
-### Overview of commits
-
-#### Conventions
+### Commit conventions
 
 Commits are small and each has one kind of change, marked by its type:
 
 - `refactor(pipeline):` changes deployed pipeline code without changing behavior, relying on the existing pipeline tests to catch a regression. These commits touch no harness code, so they can be cherry-picked onto `master` on their own.
-- `fix` and `change` alter behavior production has today; `feat` adds code nothing deployed runs yet.
+- `fix` and `change` alter behavior production has today; `feat` adds net new code.
 - `test` adds or changes tests only, and a `!` marks a change to a contract callers rely on.
-
-#### Groups
-
-- **Refactors.** Behavior-preserving extractions the voice work builds on, such as:
-  - shared node path helpers
-  - a shared voice model resolver
-- **Changes to deployed code.** A few commits change how production code behaves, mostly to keep test runs isolated from live traffic. For example:
-  - the voice service's callback routes answer 404 for executions that belong to a test run, so a harness execution cannot be driven from outside
-  - the pipeline execution listing no longer shows executions created by test runs
-- **New harness code.** The walkthrough below covers it in detail.
-- **Tests.** Tests only.
-- **API break.** Turn results carry `interactions` instead of `responses` (see below). The scenario API is internal: only clerkai and agent-swarm call it, and both have sibling PRs that read the new shape.
 
 ### Client-facing changes
 
@@ -372,10 +321,11 @@ Turn results, on these routes:
 | `firstNodeExecutionId` | absent | where the turn's part begins |
 
 - **Checks can no longer read `responses`.** They read `interactions`, and `call` for a summary of the call.
+- **The scenario API is internal.** Only clerkai and agent-swarm call it, and both have sibling PRs that read the new shape.
 
 ## Walkthrough
 
-Every turn of a scenario passes through the stages below. The diagram shows how a turn moves between them. The table lists them again, linked to their sections, with what each changes. Paths are under `libs/modules/src/pipeline/`.
+Every turn of a scenario passes through the stages below. Paths are under `libs/modules/src/pipeline/`.
 
 ```mermaid
 flowchart TD
@@ -395,7 +345,7 @@ flowchart TD
 
 ### Scenario input
 
-**Key idea:** a scenario's turns now decide its channel. A script with a caller turn or a call event is a voice script, and anything else is text, as before. The run plan carries that channel, and the rest of the harness branches on it.
+**Key idea:** a scenario is a script of turns. A turn is one input to the pipeline (a customer message, or an event such as a call starting), followed by everything the pipeline does in response until it waits for the next input. "Turn" is a harness term here, not an agent's LLM turn in the engine. A scenario's turns now decide its channel. A script with a caller turn or a call event is a voice script, and anything else is text, as before. The run plan carries that channel, and the rest of the harness branches on it.
 
 What a scenario can say:
 
@@ -483,6 +433,6 @@ Each item below is open: it can be fixed on this branch or in a follow-up, and r
 
 # Testing
 
-- `testing/__tests__/voice-call.spec.ts`: voice calls end to end through VoiceBot subjects and voice events
-- `controllers/__tests__/voice-pipeline.controller.spec.ts`: the refusal of test-run executions
+1. In the pipeline builder, open a voice pipeline and add a scenario whose first turn is a caller line
+2. Run it, and check that every later turn continues the same execution in the results
 ````
