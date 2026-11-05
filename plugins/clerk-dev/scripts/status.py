@@ -343,6 +343,10 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
             later.append(f"Next handoff for {s}, from what is not started ({len(left)} requirement{plural(left)}; the plan and the brief's order decide): {nxt}.")
     return first, later, elsewhere
 
+def unsettled_brainstorms(recs):
+    cited = {i for r in recs for i in ids.records_in(r.get("from", ""))}
+    return [r for r in recs if r.get("type") == "brainstorm" and not any(ids.same(r["id"], c) for c in cited)]
+
 def feature_block(wt, rows, out):
     first, later = [], []
     rc = load_script("records.py")
@@ -360,7 +364,10 @@ def feature_block(wt, rows, out):
     hub = rc.hub(wt)
     where = "" if os.path.realpath(hub) == os.path.realpath(wt) else f", records in {hub}"
     out.append("")
-    out.append(f"**Feature:** {name}: {len(recs)} record{plural(recs)} ({', '.join(f'{active[k]} active {k}' + ('s' if active[k] != 1 and k != 'pieces' else '') for k in order if k in active) or 'none active'}){where}.")
+    open_storms = unsettled_brainstorms(recs)
+    counts = [f'{active[k]} active {k}' + ('s' if active[k] != 1 and k != 'pieces' else '') for k in order if k in active] or ['none active']
+    if open_storms: counts.append(f"{len(open_storms)} open brainstorm{plural(open_storms)}")
+    out.append(f"**Feature:** {name}: {len(recs)} record{plural(recs)} ({', '.join(counts)}){where}.")
     settle, open_q = [], 0
     for c in rc.checks(d):
         if not c["open"]: continue
@@ -374,6 +381,10 @@ def feature_block(wt, rows, out):
             body = open(r["path"], encoding="utf-8").read()
             n = len(brief_open_items(body))
             if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {n} open item{plural(n)}")
+    for r in open_storms:
+        out.append(f"- brainstorm {r['id']} {r.get('title', '')}{' (' + r['area'] + ')' if r.get('area') else ''}, nothing settled from it yet: {rc.gist(r)}")
+    if open_storms:
+        (later if active else first).append(f"Pick up the brainstorm{plural(open_storms)} {', '.join(r['id'] + ' ' + r.get('title', '') for r in open_storms)}: work through the open questions and settle a design or decisions from it (\"let's work on the brainstorm\").")
     if settle: first.append(f"Settle the design questions marked settle-first before building on them: {'; '.join(settle)} (\"walk the design questions\").")
     elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural(open_q)} when convenient (\"walk the design questions\").")
     others = []

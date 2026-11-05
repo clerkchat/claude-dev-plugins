@@ -10,7 +10,7 @@ import ids
 
 class FormatTests(unittest.TestCase):
     def test_records_take_their_types_prefix(self):
-        expected = {"brainstorm": "IDEAS-1", "design": "DESIGN-1", "decision": "DEC-1", "guidance": "GUIDE-1",
+        expected = {"brainstorm": "STORM-1", "design": "DESIGN-1", "decision": "DEC-1", "guidance": "GUIDE-1",
                     "pieces": "PIECES-1", "plan": "PLAN-1", "brief": "BRIEF-1"}
         self.assertEqual({rtype: ids.record(1, rtype) for rtype in ids.RECORD_TYPES}, expected)
 
@@ -167,7 +167,7 @@ class AliasTests(unittest.TestCase):
 
 class InputTests(unittest.TestCase):
     def test_normalize_uppercases_and_adds_the_missing_dash(self):
-        cases = {"dec39": "DEC-39", "brief-34.7": "BRIEF-34.7", "brief34.7": "BRIEF-34.7", "ideas1": "IDEAS-1",
+        cases = {"dec39": "DEC-39", "brief-34.7": "BRIEF-34.7", "brief34.7": "BRIEF-34.7", "storm1": "STORM-1", "ideas1": "IDEAS-1",
                  "idea29": "IDEA-29", "mile1": "MILE-1", "q3": "Q-3", " pass2 ": "PASS-2", "r7.2": "R7.2",
                  "b3": "B3", "f3": "F3", "brief13-1.q6": "BRIEF-13-1.Q6", "c": "C"}
         for text, want in cases.items():
@@ -214,6 +214,10 @@ class CanonicalTests(unittest.TestCase):
         self.assertEqual(ids.canonical("R99", self.TYPES), "R99")
         self.assertEqual(ids.canonical("C core harness", self.TYPES), "C core harness")
         self.assertEqual(ids.canonical("", self.TYPES), "")
+
+    def test_a_brainstorm_written_before_storm_takes_the_storm_prefix(self):
+        self.assertEqual(ids.canonical("IDEAS-1", {1: "brainstorm"}), "STORM-1")
+        self.assertEqual(ids.rewrite("From: IDEAS-1, IDEA-2", {1: "brainstorm"}), "From: STORM-1, IDEA-2")
 
     def test_items_take_their_new_form(self):
         self.assertEqual(ids.canonical("I30", {}), "IDEA-30")

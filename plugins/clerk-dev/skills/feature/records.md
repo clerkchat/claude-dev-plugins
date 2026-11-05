@@ -61,9 +61,9 @@ Record bodies and the overview carry diagrams as "Diagrams" in
   the check before writing, is "When a record changes another" in
   `skills/feature/SKILL.md`.
 - **Ids.** One sequence per feature, whatever the type, and each id is its
-  type's prefix and its number: IDEAS-1 (brainstorm), DESIGN-2, DEC-3
+  type's prefix and its number: STORM-1 (brainstorm), DESIGN-2, DEC-3
   (decision), GUIDE-4 (guidance), PIECES-5 (pieces), PLAN-6, BRIEF-7
-  (brief). The number alone finds the record, so older ids (R7) still resolve.
+  (brief). The number alone finds the record, so older ids (R7, and IDEAS-1 from before brainstorms were STORM-) still resolve. Parked ideas are items, not records: IDEA-1 in `ideas.md` is unrelated to STORM-1.
   Older records may say `type: spec` or `type: capabilities`: they read as a
   brief and a pieces record, and are not rewritten.
   The id is the handle in conversation ("DEC-3"), in other records (`from:`),
@@ -102,7 +102,7 @@ area; never revise an old one, even when it turned out wrong. That is the point
 of keeping it.
 
 ```markdown
-# IDEAS-1. Polling vs push for export status
+# STORM-1. Polling vs push for export status
 
 ## Context
 
@@ -437,7 +437,7 @@ record is described, never reported as missing.
 
 ## Explored
 
-One line per brainstorm: what it explored (IDEAS-1: how to split the harness branch
+One line per brainstorm: what it explored (STORM-1: how to split the harness branch
 into chunks).
 ````
 

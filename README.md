@@ -125,7 +125,7 @@ with "where are we?".
 > Capture this. / Park that idea. / What did we decide about polling?
 
 - A feature keeps its thinking as numbered records, each id naming its type
-  (IDEAS-1, DESIGN-2, DEC-3, ...): brainstorms, designs, decisions, pieces
+  (STORM-1, DESIGN-2, DEC-3, ...): brainstorms, designs, decisions, pieces
   (the design cut into units of work), plans, and briefs (one per piece, for
   whoever builds it).
 - Records are history. Each says what was true on its date; a change of mind is

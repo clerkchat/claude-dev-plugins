@@ -3,7 +3,7 @@
 
 A feature's records are point-in-time documents: brainstorms, designs,
 decisions, pieces, plans, and briefs. Each is one Markdown file under
-records/ with YAML-like frontmatter, numbered on one sequence (IDEAS-1,
+records/ with YAML-like frontmatter, numbered on one sequence (STORM-1,
 DESIGN-2, DEC-3, ...) so any record can be cited by id. A record is written
 once; afterwards only its status changes, and a revision is a new record that
 supersedes it. feature.md holds the feature's name and summary, and an index

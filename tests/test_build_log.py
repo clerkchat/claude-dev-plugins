@@ -104,7 +104,7 @@ class BuiltRefusalTests(FeatureRepoCase):
         self.refuses("BRIEF-5 is not a plan record", "R5.1", "--commit", self.c1)
 
     def test_a_type_that_is_not_decision_plan_or_spec(self):
-        self.refuses("IDEAS-7 is a brainstorm", "R7", "--commit", self.c1)
+        self.refuses("STORM-7 is a brainstorm", "R7", "--commit", self.c1)
 
     def test_a_commit_that_does_not_exist(self):
         self.refuses("is not a commit here", "R3", "--commit", "deadbeef")
