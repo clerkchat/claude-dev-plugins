@@ -9,6 +9,7 @@ from helpers import (
     init_repo,
     run_script,
     write_feature_md,
+    write_file,
     write_record,
 )
 
@@ -191,6 +192,19 @@ class AuditTests(StatusCase):
 
     def test_no_re_find_lines_before_a_rebase(self):
         self.assertNotIn("Build log:", self.implementation())
+
+
+class OtherRepositoryBriefTests(StatusCase):
+    def setUp(self):
+        super().setUp()
+        write_record(self.repo.path, "R12", "spec", "Spec twelve", extra="repo: elsewhere\n", body=SPEC_BODY.format(a="Twelve one", b="Twelve two"))
+
+    def test_is_out_of_scope_when_no_log_names_it(self):
+        self.assertNotIn("BRIEF-12", self.implementation())
+
+    def test_is_in_scope_when_a_pass_names_it(self):
+        write_file(os.path.join(self.repo.path, ".clerk-dev", "passes.md"), "- [ ] PASS-1. tests on BRIEF-12\n  - Piece: BRIEF-12\n  - Status: open\n")
+        self.assertIn("- BRIEF-12 Spec twelve: 2 requirements, none logged as built", self.implementation())
 
 
 class RebaseStatusTests(StatusCase):

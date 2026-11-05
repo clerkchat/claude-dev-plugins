@@ -409,6 +409,13 @@ def builders(wt, rows):
             out.append((f"{repo_name(p, [])} ({os.path.basename(p)})", p)); seen.add(p)
     return out
 
+def logged_briefs(canon, entries, passes=()):
+    return {canon(x) for x in [*(e["f"].get("Brief") or e["f"].get("Record") for e in entries), *(e["f"].get("Piece") for e in passes)] if x}
+
+def briefs_in_scope(recs, me, entries, passes):
+    named = logged_briefs(load_script("records.py").resolver(recs), entries, passes)
+    return [r for r in recs if r.get("type") == "brief" and r.get("status") == "active" and (r.get("repo") in ("", None, me) or r["id"] in named)]
+
 def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, theirs):
     bd = load_script("build.py"); rc = load_script("records.py")
     first, later, elsewhere = build_block(wt, out, unreviewed, mine, theirs, render=bd.checklist_lines)
@@ -418,8 +425,8 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     except SystemExit: d = None
     recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
     canon = rc.resolver(recs)
-    logged = {canon(x) for x in (e["f"].get("Brief") or e["f"].get("Record") for e in entries) if x}
-    specs = [r for r in recs if r.get("type") == "brief" and r.get("status") == "active" and (r.get("repo") in ("", None, me) or r["id"] in logged)]
+    logged = logged_briefs(canon, entries)
+    specs = briefs_in_scope(recs, me, entries, passes)
     accounted = logged.union(*elsewhere.values())
     unlogged_specs = [r for r in specs if r["id"] not in accounted]
     if unlogged_specs:
