@@ -123,6 +123,11 @@ class AnchorTest(PostCase):
         self.mark(1)
         self.assertEqual((self.thread_vars(1)["startLine"], self.thread_vars(1)["line"]), (11, 13))
 
+    def test_anchors_on_the_line_an_override_sets(self):
+        self.write("overrides/1.md", "line: 12\n")
+        self.mark(1)
+        self.assertEqual((self.thread_vars(1)["line"], "startLine" in self.thread_vars(1)), (12, False))
+
     def test_moves_a_line_outside_the_diff_to_the_nearest_hunk(self):
         self.mark(2)
         self.assertEqual((self.thread_vars(2)["line"], "startLine" in self.thread_vars(2)), (40, False))

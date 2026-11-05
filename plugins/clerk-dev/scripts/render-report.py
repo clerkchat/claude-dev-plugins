@@ -627,14 +627,24 @@ def write_posted(run, rows):
         fh.write("\t".join(("merged_id",) + POSTED_FIELDS) + "\n")
         for k in sorted(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in POSTED_FIELDS]) + "\n")
 
+def read_findings(run, mf):
+    overrides = read_overrides(run, mf)
+    merged = read_merged(os.path.join(run, "merged.md"), mf)
+    for e in merged:
+        over = overrides.get(e["id"], {})
+        for k, val in over.items():
+            e[k] = int(re.sub(r"\D", "", val) or 0) if k in ("line", "end_line") else val
+        if "line" in over and "end_line" not in over: e["end_line"] = e["line"]
+    return merged
+
 def posted_path(run, mid):
     return os.path.join(run, "posted", f"{mid}.md")
 
 def read_text(path):
     return open(path, encoding="utf-8").read().strip() if os.path.exists(path) else ""
 
-def posted_text(mid):
-    return read_text(posted_path(RUN, mid))
+def posted_text(run, mid):
+    return read_text(posted_path(run, mid))
 
 def record_posted(run, mid, text, state, today):
     os.makedirs(os.path.dirname(posted_path(run, mid)), exist_ok=True)
@@ -671,7 +681,7 @@ def posted_link(row):
     return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
 
 def posted_block(mid):
-    text = posted_text(mid)
+    text = posted_text(RUN, mid)
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
     else: body = [posted_fence(text), text, posted_fence(text)]
@@ -699,7 +709,7 @@ def import_posted_edits(run, today):
     if not os.path.exists(p): return
     snap = read_snapshot(run, "rendered-posted.tsv")
     for mid, text in posted_blocks(open(p, encoding="utf-8").read().split("\n")).items():
-        if flat(text) not in (snap.get(mid), flat(posted_text(mid))): record_posted(run, mid, text, "edited", today)
+        if flat(text) not in (snap.get(mid), flat(posted_text(run, mid))): record_posted(run, mid, text, "edited", today)
 
 def instruction_lines(i):
     """The checklist lines, as compared in the snapshot (notes excluded)."""
@@ -859,13 +869,14 @@ def read_numbers(run):
     if os.path.exists(p):
         for line in open(p, encoding="utf-8").read().splitlines()[1:]:
             f = line.split("\t")
-            if len(f) >= 2 and f[1].isdigit(): nums[f[0]] = int(f[1])
+            if len(f) >= 2 and f[0].isdigit() and f[1].isdigit(): nums[int(f[1])] = int(f[0])
     return nums
 
 def finding_id(spec, nums):
     if spec.startswith("#"): return int(spec[1:])
-    if spec not in nums: sys.exit(f"finding {spec} not in numbers.tsv")
-    return nums[spec]
+    by_number = {n: mid for mid, n in nums.items()}
+    if not spec.isdigit() or int(spec) not in by_number: sys.exit(f"finding {spec} not in numbers.tsv")
+    return by_number[int(spec)]
 
 def file_spec(flag, spec, nums):
     m = re.match(r"^(#?\d+)=(.+)$", spec.strip())
@@ -890,7 +901,7 @@ def main():
                     help="set a status by finding number (or #<merged id>): fixed, in-progress, wont-fix, deferred, open")
     a = ap.parse_args()
     mf = load_merge_module()
-    merged = read_merged(os.path.join(a.run, "merged.md"), mf)
+    merged = read_findings(a.run, mf)
     verdicts = read_verdicts(a.run); labels = read_labels(a.run); names = read_plain_names(a.routing)
     global NAMES; NAMES = names
     global TITLES, RUN; TITLES = read_titles(a.run); RUN = a.run
@@ -935,12 +946,8 @@ def main():
         mid, text = file_spec("--posted", spec, nums)
         if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
         record_posted(a.run, mid, text, "drafted", a.date or "")
-    overrides = read_overrides(a.run, mf)
-    for e in merged:
-        for k, val in overrides.get(e["id"], {}).items():
-            e[k] = int(re.sub(r"\D", "", val) or 0) if k in ("line", "end_line") else val
-        if "line" in overrides.get(e["id"], {}) and "end_line" not in overrides[e["id"]]: e["end_line"] = e["line"]
-        if "title" in overrides.get(e["id"], {}): TITLES[e["id"]] = overrides[e["id"]]["title"]
+    for mid, over in read_overrides(a.run, mf).items():
+        if "title" in over: TITLES[mid] = over["title"]
     for e in merged:
         opt = INSTR.get(e["id"], {}).get("option", "") if INSTR.get(e["id"], {}).get("choice") == "fix" else ""
         missing = [o for o in opt.split(",") if o and o not in recommendation_options(e.get("fix", ""))]
@@ -1011,7 +1018,7 @@ def main():
     # Numbers are stable across re-renders and incremental runs: an id that
     # already has a number keeps it; new ids get numbers after the highest
     # existing one, in document order.
-    prior_nums = {} if a.renumber else {mid: int(num) for num, mid in nums.items() if num.isdigit()}
+    prior_nums = {} if a.renumber else dict(nums)
     next_n = max(prior_nums.values(), default=0)
     prc.sort(key=lambda e: (e["file"], e["line"] or 0))
     for sec, lst in (("reopen", reopen), ("pr", prc), ("fix", fix), ("look", look), ("confirm", confirm), ("existing", existing), ("debt", debt), ("declined", declined), ("below", below)):

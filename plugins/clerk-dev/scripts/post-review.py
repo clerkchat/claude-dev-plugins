@@ -118,18 +118,13 @@ def row_anchor(row):
     num = lambda v: int(v) if v else None
     return anchor(row["kind"], row.get("path", ""), num(row.get("line")), num(row.get("end_line")))
 
-def numbers(run):
-    return {mid: n for n, mid in rr.read_numbers(run).items()}
-
 def findings(run):
-    mf = rr.load_merge_module()
-    overrides = rr.read_overrides(run, mf)
-    return {e["id"]: {**e, **overrides.get(e["id"], {})} for e in rr.read_merged(os.path.join(run, "merged.md"), mf)}
+    return {e["id"]: e for e in rr.read_findings(run, rr.load_merge_module())}
 
 def plan_items(run, ctx):
-    ins, rows, nums, found = rr.read_instructions(run), rr.read_posted(run), numbers(run), findings(run)
+    ins, rows, nums, found = rr.read_instructions(run), rr.read_posted(run), rr.read_numbers(run), findings(run)
     titles, hunks = rr.read_titles(run), read_hunks(run)
-    marked = sorted((m for m, i in ins.items() if i.get("choice") == "post"), key=lambda m: int(nums.get(m, 10 ** 6)))
+    marked = sorted((m for m, i in ins.items() if i.get("choice") == "post"), key=lambda m: nums.get(m, 10 ** 6))
     items = []
     for mid in marked:
         e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
@@ -144,7 +139,7 @@ def plan_items(run, ctx):
         else:
             it["anchor"], it["fallback"], it["problem"] = resolve(e, note, ctx["files"], hunks)
             it["action"] = "new"
-        raw = rr.read_text(rr.posted_path(run, mid))
+        raw = rr.posted_text(run, mid)
         if not raw: it["problem"] = it["problem"] or "it has no posted text"
         if it["action"] != "skip" and rr.stale_text(row, note):
             it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
@@ -159,7 +154,7 @@ def review_body(run, rows, review_id):
     for mid in sorted(rows):
         row = rows[mid]
         if row.get("kind") == "body" and str(row.get("review_id")) == str(review_id):
-            text = outgoing(rr.read_text(rr.posted_path(run, mid)), True)[0]
+            text = outgoing(rr.posted_text(run, mid), True)[0]
             parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
     return "\n\n".join(parts)
 
