@@ -76,6 +76,7 @@ TITLES = {}
 NAMES = {}
 STATUS = {}
 INSTR = {}
+POSTED = {}
 PR_LINKS = {}
 RECON = {"label": "", "matches": {}, "prior": {}, "since": {}, "unmatched": []}
 RUN = "."
@@ -265,7 +266,8 @@ def _card_tail(e):
     if os.path.exists(res):
         body = open(res, encoding="utf-8").read().strip()
         if body: out += ["##### Resolution", ""] + sum(([p, ""] for p in paragraphs(body)), [])
-    return out + ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]))
+    out += ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]))
+    return out + (posted_block(e["id"]) if INSTR.get(e["id"], {}).get("choice") == "post" else [])
 
 _APPENDED = None
 def is_new(mid):
@@ -542,7 +544,7 @@ def history_line(e):
         return f"Previously {word}{why}: {where}."
     return f"Also reported as {where}."
 
-CHOICES = [("fix", "Fix as recommended", "fix"), ("noted", "Fix as noted", "fix as noted"), ("discuss", "Discuss", "discuss"), ("defer", "Defer", "defer"), ("ignore", "Ignore", "ignore")]
+CHOICES = [("fix", "Fix as recommended", "fix"), ("noted", "Fix as noted", "fix as noted"), ("discuss", "Discuss", "discuss"), ("defer", "Defer", "defer"), ("ignore", "Ignore", "ignore"), ("post", "Post", "post")]
 CHOICE_LABEL = {key: lab for key, lab, _ in CHOICES}
 CHOICE_WORD = {key: word for key, _, word in CHOICES}
 LABEL_TO_CHOICE = {lab.lower(): key for key, lab in CHOICE_LABEL.items()}
@@ -611,6 +613,92 @@ def write_instructions(run, ins):
             os.makedirs(nd, exist_ok=True); open(f, "w", encoding="utf-8").write(i["text"].strip() + "\n")
         elif os.path.exists(f):
             os.remove(f)
+
+POSTED_FIELDS = ("state", "note", "date", "thread_id", "comment_id", "url", "path", "line", "end_line", "side", "kind", "review_id")
+
+def read_posted(run):
+    rows = {}
+    p = os.path.join(run, "posted.tsv")
+    if os.path.exists(p):
+        with open(p, encoding="utf-8") as fh: lines = fh.read().splitlines()[1:]
+        for line in lines:
+            f = line.split("\t")
+            if f[0].isdigit(): rows[int(f[0])] = dict(zip(POSTED_FIELDS, f[1:] + [""] * len(POSTED_FIELDS)))
+    return rows
+
+def write_posted(run, rows):
+    with open(os.path.join(run, "posted.tsv"), "w", encoding="utf-8") as fh:
+        fh.write("\t".join(("merged_id",) + POSTED_FIELDS) + "\n")
+        for k in sorted(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in POSTED_FIELDS]) + "\n")
+
+def posted_path(run, mid):
+    return os.path.join(run, "posted", f"{mid}.md")
+
+def posted_text(mid):
+    p = posted_path(RUN, mid)
+    return open(p, encoding="utf-8").read().strip() if os.path.exists(p) else ""
+
+def record_posted(run, mid, text, state, today):
+    os.makedirs(os.path.dirname(posted_path(run, mid)), exist_ok=True)
+    open(posted_path(run, mid), "w", encoding="utf-8").write(text.strip() + "\n")
+    POSTED[mid] = {**POSTED.get(mid, {}), "state": state, "note": INSTR.get(mid, {}).get("note", ""), "date": today}
+
+def note_changed(mid):
+    return mid in POSTED and POSTED[mid]["note"] != INSTR.get(mid, {}).get("note", "")
+
+def is_stale(mid):
+    return note_changed(mid) and POSTED[mid]["state"] != "edited"
+
+def check_posted_notes():
+    for mid in sorted(POSTED):
+        if INSTR.get(mid, {}).get("choice") != "post" or not note_changed(mid): continue
+        n = IDNUM.get(mid, f"#{mid}")
+        if POSTED[mid]["state"] == "edited":
+            print(f"warning: finding {n}: note changed after its posted text was edited; the edit stands", file=sys.stderr)
+            POSTED[mid]["note"] = INSTR[mid]["note"]
+        else:
+            print(f"finding {n}: note changed; redraft the posted text", file=sys.stderr)
+
+def posted_fence(text):
+    return "`" * max([4] + [len(r) + 1 for r in re.findall(r"^(`{3,})", text, re.M)])
+
+def posted_link(row):
+    if not row.get("kind"): return []
+    span = row["line"] + (f"-{row['end_line']}" if row.get("end_line") and row["end_line"] != row["line"] else "")
+    where = "in the review body" if row["kind"] == "body" else f"on `{row['path']}" + (f":{span}" if span else "") + "`"
+    link = f", [comment]({row['url']})" if row.get("url") else ""
+    return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
+
+def posted_block(mid):
+    text = posted_text(mid)
+    if not text: body = ["Posted text: not drafted yet."]
+    elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
+    else: body = [posted_fence(text), text, posted_fence(text)]
+    return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {}))
+
+def posted_blocks(lines):
+    blocks, mid, fence, inblock, body = {}, None, "", False, []
+    for line in lines:
+        if fence:
+            if closes_fence(line, fence): blocks[mid], fence, inblock = "\n".join(body), "", False
+            else: body.append(line)
+            continue
+        m = re.match(r"^<!-- finding \d+, merged (\d+),", line)
+        if m: mid, inblock = int(m.group(1)), False; continue
+        if line.startswith("#"): inblock = line.strip() == "##### Posted"; continue
+        m = FENCE_RE.match(line) if inblock and mid is not None else None
+        if m: fence, body = m.group(1), []
+    return blocks
+
+def flat(text):
+    return " ".join(text.split())
+
+def import_posted_edits(run, today):
+    p = os.path.join(run, "report.md")
+    if not os.path.exists(p): return
+    snap = read_snapshot(run, "rendered-posted.tsv")
+    for mid, text in posted_blocks(open(p, encoding="utf-8").read().split("\n")).items():
+        if flat(text) not in (snap.get(mid), flat(posted_text(mid))): record_posted(run, mid, text, "edited", today)
 
 def instruction_lines(i):
     """The checklist lines, as compared in the snapshot (notes excluded)."""
@@ -776,6 +864,11 @@ def finding_id(spec, nums):
     if spec not in nums: sys.exit(f"finding {spec} not in numbers.tsv")
     return nums[spec]
 
+def file_spec(flag, spec, nums):
+    m = re.match(r"^(#?\d+)=(.+)$", spec.strip())
+    if not m or not os.path.exists(m.group(2)): sys.exit(f"bad {flag} {spec!r}; use N=<path of a text file>")
+    return finding_id(m.group(1), nums), open(m.group(2), encoding="utf-8").read()
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("--target", required=True); ap.add_argument("--branch", default=""); ap.add_argument("--base", default=""); ap.add_argument("--head", default="HEAD")
@@ -788,6 +881,8 @@ def main():
     ap.add_argument("--instruct", action="append", default=[], metavar="N=CHOICE[:NOTE]", help=instruct_help())
     ap.add_argument("--note", action="append", default=[], metavar="N=FILE",
                     help="append the text of FILE as a new paragraph to finding N's Notes (#<id> for a merged id)")
+    ap.add_argument("--posted", action="append", default=[], metavar="N=FILE",
+                    help="use the text of FILE as finding N's posted text (#<id> for a merged id)")
     ap.add_argument("--set", action="append", default=[], metavar="N=STATUS[:REF]",
                     help="set a status by finding number (or #<merged id>): fixed, in-progress, wont-fix, deferred, open")
     a = ap.parse_args()
@@ -825,14 +920,16 @@ def main():
         elif ch == "defer" and cur in ("open", "in-progress"): STATUS[mid] = {"status": "deferred", "ref": note, "date": a.date or ""}
         elif ch in ("fix", "noted", "discuss", "") and cur in ("wont-fix", "deferred"): STATUS[mid] = {"status": "open", "ref": "", "date": a.date or ""}
     for spec in a.note:
-        m = re.match(r"^(#?\d+)=(.+)$", spec.strip())
-        if not m or not os.path.exists(m.group(2)): sys.exit(f"bad --note {spec!r}; use N=<path of a text file>")
-        mid = finding_id(m.group(1), nums)
-        add = open(m.group(2), encoding="utf-8").read().strip()
+        mid, add = file_spec("--note", spec, nums)
         cur = INSTR.setdefault(mid, {"choice": "", "note": "", "date": "", "also": ""})
-        cur["text"] = (cur.get("text", "").rstrip() + "\n\n" + add).strip()
+        cur["text"] = (cur.get("text", "").rstrip() + "\n\n" + add.strip()).strip()
     write_instructions(a.run, INSTR)
     write_status(a.run, STATUS)
+    global POSTED
+    POSTED = read_posted(a.run)
+    import_posted_edits(a.run, a.date or "")
+    for spec in a.posted:
+        record_posted(a.run, *file_spec("--posted", spec, nums), "drafted", a.date or "")
     overrides = read_overrides(a.run, mf)
     for e in merged:
         for k, val in overrides.get(e["id"], {}).items():
@@ -934,6 +1031,8 @@ def main():
     global IDNUM, TITLE_BY_ID
     IDNUM = {e["id"]: e["_n"] for e in numbered}
     TITLE_BY_ID = {e["id"]: title_of(e, TITLES) for e in merged}
+    check_posted_notes()
+    if POSTED: write_posted(a.run, POSTED)
     title = f"Review of {a.target}"
     fm = ["---", f"title: {title}", f"branch: {a.branch}", f"base: {a.base}", f"head: {a.head}", f"date: {a.date}", f"run: {os.path.relpath(a.run, a.repo)}", f"files: {a.files}", f"parts: {a.parts}", f"focuses: {a.focuses}", f"findings: {{ reopened: {len(reopen)}, fix: {len(fix)}, look: {len(look)}, confirm: {len(confirm)}, existing: {len(existing)}, cleanup: {len(debt)}, declined: {len(declined)}, below: {len(below)} }}", "---", ""]
     fm = [l.rstrip() for l in fm]
@@ -1017,14 +1116,15 @@ def main():
     rdir = os.path.join(a.run, ".render"); os.makedirs(rdir, exist_ok=True)
     gens = sorted(int(x) for x in os.listdir(rdir) if x.isdigit())
     gen = (gens[-1] + 1) if gens else 1
-    stamp = f"<!-- review generation {gen}. Edit the checkboxes and the Notes lines; everything else is regenerated. -->"
+    stamp = f"<!-- review generation {gen}. Edit the checkboxes, the Notes lines, and the Posted text; everything else is regenerated. -->"
     text = text.replace("\n# ", "\n" + stamp + "\n\n# ", 1) if text.startswith("---") else stamp + "\n\n" + text
     if os.path.exists(outp):
         import shutil
         shutil.copy2(outp, os.path.join(os.path.dirname(outp), "report.prev.md"))
     open(outp, "w", encoding="utf-8").write(text)
     snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(STATUS.get(e['id'], {'status': 'open'}))}\n" for e in numbered),
-             "rendered-instructions.tsv": "".join(f"{e['id']}\t{snapshot_key(INSTR.get(e['id']))}\n" for e in numbered)}
+             "rendered-instructions.tsv": "".join(f"{e['id']}\t{snapshot_key(INSTR.get(e['id']))}\n" for e in numbered),
+             "rendered-posted.tsv": "".join(f"{mid}\t{flat(t)}\n" for mid, t in sorted(posted_blocks(text.split("\n")).items()))}
     os.makedirs(os.path.join(rdir, str(gen)), exist_ok=True)
     for name, body in snaps.items():
         open(os.path.join(a.run, name), "w", encoding="utf-8").write(body)
