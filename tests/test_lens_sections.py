@@ -16,7 +16,8 @@ PROTOCOL = os.path.join(SKILLS, "review-protocol", "SKILL.md")
 ROUTING = os.path.join(SKILLS, "review", "routing.md")
 SURVEY_LENSES = ["concurrency", "design", "edge-cases", "naming-concepts", "tech-debt", "tenancy"]
 MODE_HEADINGS = ("Design mode", "Survey mode", "Pass mode")
-OLD_NAMES = re.compile(r"`## (?:Design|Survey|Pass) mode`|lens-section")
+OLD_NAMES = re.compile(r"## (?:Design|Survey|Pass) mode|(?:Design|Survey|Pass) mode section|lens-section")
+PROTOCOL_HEADINGS = {"## Design mode", "## Survey mode"}
 
 
 def read(path):
@@ -134,6 +135,9 @@ class PassModeTextTest(unittest.TestCase):
         out = run_ok("lens-mode", "rollout")
         self.assertTrue(out.startswith(f"## rollout: Pass mode\n\n{lens_mode.OPENERS['Pass']}\n\n"))
 
+    def test_pass_named_explicitly_prints_the_default(self):
+        self.assertEqual(run_ok("lens-mode", "rollout", "pass"), run_ok("lens-mode", "rollout"))
+
 
 class LensModeCommandTest(unittest.TestCase):
     def test_lists_the_six_survey_lenses(self):
@@ -164,7 +168,7 @@ class OldNamesTest(unittest.TestCase):
             if path.startswith(agents):
                 continue
             for number, line in enumerate(read(path).split("\n"), 1):
-                if OLD_NAMES.search(line):
+                if OLD_NAMES.search(line) and not (path == PROTOCOL and line in PROTOCOL_HEADINGS):
                     named.append(f"{os.path.relpath(path, ROOT)}:{number}")
         self.assertEqual(named, [])
 
