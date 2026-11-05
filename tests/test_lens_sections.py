@@ -28,10 +28,6 @@ def lens_text(lens):
     return read(os.path.join(lens_mode.AGENTS, f"lens-{lens}.md"))
 
 
-def converted_lenses():
-    return [lens for lens in lens_mode.lenses() if records.has_section(lens_text(lens), "Concerns")]
-
-
 def expected_labels(lens):
     carried = {"Review", "Design", *(["Survey"] if lens in SURVEY_LENSES else []), *([] if lens == "cross-repo" else ["Pass"])}
     return [label for label in lens_mode.LABELS if label in carried]
@@ -58,34 +54,30 @@ def catalogue_lenses():
 
 class EveryLensTest(unittest.TestCase):
     def test_has_concerns(self):
-        missing = [lens for lens in lens_mode.lenses() if lens not in converted_lenses()]
-        if missing:
-            self.skipTest(f"not yet converted to ## Concerns: {', '.join(missing)}")
-        self.assertEqual(converted_lenses(), lens_mode.lenses())
+        missing = [lens for lens in lens_mode.lenses() if not records.has_section(lens_text(lens), "Concerns")]
+        self.assertEqual(missing, [])
+        self.assertEqual(len(lens_mode.lenses()), 24)
 
 
-class ConvertedLensTest(unittest.TestCase):
+class LensConcernsTest(unittest.TestCase):
     def each_concern(self):
-        for lens in converted_lenses():
+        for lens in lens_mode.lenses():
             for concern in lens_mode.concerns(lens):
                 yield lens, concern
 
-    def test_at_least_one_lens_is_converted(self):
-        self.assertIn("rollout", converted_lenses())
-
     def test_has_no_mode_sections(self):
-        for lens in converted_lenses():
+        for lens in lens_mode.lenses():
             for heading in MODE_HEADINGS:
                 with self.subTest(lens=lens, heading=heading):
                     self.assertFalse(records.has_section(lens_text(lens), heading))
 
     def test_has_concerns_that_parse(self):
-        for lens in converted_lenses():
+        for lens in lens_mode.lenses():
             with self.subTest(lens=lens):
                 self.assertTrue(lens_mode.concerns(lens))
 
     def test_numbers_run_one_to_n(self):
-        for lens in converted_lenses():
+        for lens in lens_mode.lenses():
             with self.subTest(lens=lens):
                 numbers = [c.number for c in lens_mode.concerns(lens)]
                 self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
@@ -121,12 +113,12 @@ class PassModeTextTest(unittest.TestCase):
         self.assertNotIn("cross-repo", catalogue_lenses())
 
     def test_catalogue_lenses_carry_pass_lines(self):
-        for lens in sorted(catalogue_lenses() & set(converted_lenses())):
+        for lens in sorted(catalogue_lenses()):
             with self.subTest(lens=lens):
                 self.assertTrue(lens_mode.carries(lens_mode.concerns(lens), "Pass"))
 
     def test_prints_titles_with_only_the_lines_that_apply(self):
-        for lens in converted_lenses():
+        for lens in lens_mode.lenses():
             if lens == "cross-repo":
                 continue
             out = run_ok("lens-mode", lens)
@@ -144,13 +136,13 @@ class PassModeTextTest(unittest.TestCase):
 
 
 class LensModeCommandTest(unittest.TestCase):
-    def test_lists_the_converted_survey_lenses(self):
+    def test_lists_the_six_survey_lenses(self):
         out = run_ok("lens-mode", "--list", "survey")
-        self.assertEqual(out.split(), [lens for lens in SURVEY_LENSES if lens in converted_lenses()])
+        self.assertEqual(out.split(), SURVEY_LENSES)
 
     def test_lists_pass_lenses_by_default(self):
         out = run_ok("lens-mode", "--list")
-        self.assertEqual(out.split(), [lens for lens in converted_lenses() if lens != "cross-repo"])
+        self.assertEqual(out.split(), [lens for lens in lens_mode.lenses() if lens != "cross-repo"])
 
     def test_an_unknown_lens_exits_1(self):
         self.assertEqual(run_script("lens-mode", "nope"), (1, "no lens nope"))

@@ -28,45 +28,111 @@ paths, then happy paths. For each, find the test that exercises it. Report the
 gaps, highest priority first. A missing happy-path test is minor; a missing
 denial test for a new guarded route is major.
 
-## Checklist
+## Concerns
 
-1. Negative cases: invalid input, missing permission, wrong tenant, not found,
-   disabled feature, provider failure. The denial path of every new access
-   check.
-2. Edge cases that the code explicitly handles: if the code has a branch for it,
-   there should be a test that reaches the branch.
-3. Behavior over implementation: tests that assert on internal calls, private
-   state, or exact query strings, so a correct refactor breaks them; snapshot
-   tests of large structures that nobody will read when they fail.
-4. Real collaborators: a mock of a service, repository, or provider from the
-   repository's own code is a finding by default, as are mocks of things the
-   repo tests for real (database, guards, framework pipeline): they hide the
-   breaking changes those collaborators make. Mock only at the edges: third
-   party HTTP, model clients, and whatever the repo already stubs (queues,
-   clocks). The fix to propose: register the real provider in the test module,
-   watch it with a spy on its prototype (`vi.spyOn(Service.prototype,
-   'method')`), and assert the side effect, best a row in the database, else
-   that the spy was called with the expected arguments. Conversely, real network
-   calls to third parties where the repo mocks at the HTTP boundary.
-5. Determinism: time, randomness, ordering of unordered results, shared mutable
-   fixtures across tests, reliance on test execution order, sleeps.
-6. Shape, as Tests in the writing-code skill describes it: duplicated setup
-   that should be in a shared hook; a condition several tests share without a
-   nested group whose hook applies it; one test running several scenarios, or
-   so long that the specific assertion is buried; a test whose deciding input
-   is hidden in a distant hook. Report these as minor, and as one finding per
-   file.
-7. Assertions: a test that asserts an error is caught and logged pins a
-   swallowed error in place (see the error-handling lens); report the swallow
-   rather than asking for an assertion on the log. Tests with no assertion, assertions that cannot fail, assertions
-   on counts where the content matters, expected error messages that were
-   changed in production code without updating the test.
-8. Factories and fixtures: hand-built entities where factories exist; fixtures
-   that encode an invariant the production code no longer has.
-9. Changed tests: when the diff modifies an existing test, decide whether the
-   test was wrong or the behavior changed, and whether the change is
-   acknowledged.
-10. Deleted tests: a removed test with no replacement and no stated reason.
+1. **Coverage.**
+   - Review: a behavior the production diff adds or changes that no test
+     exercises, found by mapping behavior to tests above.
+   - Design: How will each requirement be tested, and at what level (unit,
+     integration, end to end)?
+   - Pass: Test each requirement at the level the repository prefers.
+2. **Negative cases.**
+   - Review: invalid input, missing permission, wrong tenant, not found,
+     disabled feature, provider failure. The denial path of every new access
+     check.
+   - Design: Which risky paths need a negative test: denials, failures,
+     retries?
+   - Pass: Add the negative cases: denials, failures, retries, empty inputs.
+3. **Handled edge cases.**
+   - Review: edge cases that the code explicitly handles: if the code has a
+     branch for it, there should be a test that reaches the branch.
+   - Design: Which edge cases does the design handle on purpose, and does the
+     plan say which test reaches each one?
+   - Pass: Write a test that reaches each branch the code adds for an edge
+     case.
+4. **Behavior over implementation.**
+   - Review: tests that assert on internal calls, private state, or exact query
+     strings, so a correct refactor breaks them; snapshot tests of large
+     structures that nobody will read when they fail.
+   - Design: Will the tests assert on what a caller sees, rather than on
+     internal calls, private state, exact query strings, or snapshots of large
+     structures?
+   - Pass: Test behavior, not implementation details: assert on what a caller
+     sees, not on internal calls, private state, or exact query strings, and
+     avoid snapshots of large structures.
+5. **Real collaborators.**
+   - Review: a mock of a service, repository, or provider from the repository's
+     own code is a finding by default, as are mocks of things the repo tests for
+     real (database, guards, framework pipeline): they hide the breaking
+     changes those collaborators make. Mock only at the edges: third party HTTP,
+     model clients, and whatever the repo already stubs (queues, clocks). The
+     fix to propose: register the real provider in the test module, watch it
+     with a spy on its prototype (`vi.spyOn(Service.prototype, 'method')`), and
+     assert the side effect, best a row in the database, else that the spy was
+     called with the expected arguments. Conversely, real network calls to third
+     parties where the repo mocks at the HTTP boundary.
+   - Design: Does the repository prefer real collaborators over mocks for this
+     kind of code, and does the plan mock anything but the edges (third party
+     HTTP, model clients, queues, clocks)?
+   - Pass: Use real collaborators where the repository uses them: register the
+     real provider in the test module, spy on its prototype, and assert the
+     side effect; mock only at the edges, and mock third party HTTP where the
+     repository does.
+6. **Determinism.**
+   - Review: time, randomness, ordering of unordered results, shared mutable
+     fixtures across tests, reliance on test execution order, sleeps.
+   - Design: Which tests depend on time, randomness, ordering of unordered
+     results, shared mutable fixtures, test execution order, or sleeps?
+   - Pass: Avoid timing-dependent tests: control time and randomness, sort
+     unordered results before asserting, give each test its own fixtures, and
+     replace sleeps with a wait on the condition.
+7. **Shape.**
+   - Review: as Tests in the writing-code skill describes it: duplicated setup
+     that should be in a shared hook; a condition several tests share without a
+     nested group whose hook applies it; one test running several scenarios, or
+     so long that the specific assertion is buried; a test whose deciding input
+     is hidden in a distant hook. Report these as minor, and as one finding per
+     file.
+   - Design: Does the plan shape its tests as Tests in the writing-code skill
+     describes: shared setup in a hook, a nested group for a shared condition,
+     one scenario per test?
+   - Pass: Shape tests as Tests in the writing-code skill describes: shared
+     setup in a hook, a nested group for a condition several tests share, one
+     scenario per test, and the deciding input visible in the test or its
+     nearest hook.
+8. **Assertions.**
+   - Review: a test that asserts an error is caught and logged pins a swallowed
+     error in place (see the error-handling lens); report the swallow rather
+     than asking for an assertion on the log. Tests with no assertion,
+     assertions that cannot fail, assertions on counts where the content
+     matters, expected error messages that were changed in production code
+     without updating the test.
+   - Design: What will each test assert: what the caller sees, with content
+     where it matters? A test that asserts an error was caught and logged pins a
+     swallowed error in place (see the error-handling lens).
+   - Pass: Assert on what the caller sees, never that an error was caught and
+     logged, which pins a swallowed error in place; every assertion must be able
+     to fail, assert content where it matters, and update expected error
+     messages with the production code.
+9. **Factories and fixtures.**
+   - Review: hand-built entities where factories exist; fixtures that encode an
+     invariant the production code no longer has.
+   - Design: Which factories and fixtures do the tests need, and does the plan
+     account for test setup (fixtures, containers) the repository already has?
+   - Pass: Build entities with the repository's factories where they exist, and
+     keep fixtures in line with the invariants the production code has now.
+10. **Changed tests.**
+   - Review: when the diff modifies an existing test, decide whether the test
+     was wrong or the behavior changed, and whether the change is acknowledged.
+   - Design: Which existing tests does the design change, and is each because
+     the test was wrong or because the behavior changes?
+   - Pass: When you modify an existing test, say whether the test was wrong or
+     the behavior changed, and update it only for one of those reasons.
+11. **Deleted tests.**
+   - Review: a removed test with no replacement and no stated reason.
+   - Design: Which existing tests does the plan remove, and what replaces each
+     one?
+   - Pass: Replace a test you remove, or state why it is no longer needed.
 
 ## Scenario quality
 
@@ -77,27 +143,3 @@ no test fails"). For a weak test: name the correct change that would break it.
 
 Coverage percentages, missing tests for trivial getters or pass-throughs, and
 style within test files unless it hides a failure.
-
-## Design mode
-
-Asked of a design, plan, pieces, or brief record (see Design mode in
-the review protocol):
-
-- How will each requirement be tested, and at what level (unit, integration,
-  end to end)?
-- Which risky paths need a negative test: denials, failures, retries?
-- Does the repository prefer real collaborators over mocks for this kind of
-  code, and does the plan account for test setup it needs (fixtures,
-  containers)?
-
-## Pass mode
-
-What the author does in a pass that uses this lens (the `pass` skill reads
-this section; reviewers ignore it):
-
-- Test each requirement at the level the repository prefers, with real
-  collaborators where it uses them.
-- Add the negative cases: denials, failures, retries, empty inputs.
-- Test behavior, not implementation details; avoid timing-dependent tests.
-- Assert on what the caller sees, never that an error was caught and logged;
-  every assertion must be able to fail.
