@@ -67,7 +67,7 @@ present, else shortened from the claim.
 """
 import argparse, os, re, subprocess, sys, textwrap
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from records import load_script
+from records import ROUTING, load_script, read_plain_names
 from importlib import import_module
 mf = import_module("merge-findings") if False else None
 
@@ -167,16 +167,6 @@ def read_labels(run):
         m = re.match(r"^\s+label:\s*(.+)$", line)
         if m and cur: labels[cur] = m.group(1).strip()
     return labels
-
-def read_plain_names(path):
-    names, inside = {}, False
-    if not path or not os.path.exists(path): return names
-    for line in open(path, encoding="utf-8"):
-        if line.startswith("## "): inside = line.strip() == "## Plain names"; continue
-        if not inside: continue
-        m = re.match(r"^\|\s*`([a-z-]+)`\s*\|\s*([^|]+)\|", line)
-        if m: names[m.group(1)] = m.group(2).strip()
-    return names
 
 def read_titles(run):
     t = {}
@@ -760,7 +750,7 @@ def wrap_markdown(text, width):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("--target", required=True); ap.add_argument("--branch", default=""); ap.add_argument("--base", default=""); ap.add_argument("--head", default="HEAD")
-    ap.add_argument("--repo", default="."); ap.add_argument("--routing", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skills", "review", "routing.md")); ap.add_argument("--threshold", type=int, default=80, help="confidence a blocker or major needs for Fix before merging")
+    ap.add_argument("--repo", default="."); ap.add_argument("--routing", default=ROUTING); ap.add_argument("--threshold", type=int, default=80, help="confidence a blocker or major needs for Fix before merging")
     ap.add_argument("--quick", action="store_true", help="quick mode: minors need 80 to be shown")
     ap.add_argument("--summary"); ap.add_argument("--not-reviewed"); ap.add_argument("--out"); ap.add_argument("--date", default="")
     ap.add_argument("--files", default=""); ap.add_argument("--parts", default=""); ap.add_argument("--focuses", default="")

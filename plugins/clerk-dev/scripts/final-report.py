@@ -24,9 +24,8 @@ final/verify/<new id>.md (the `bar:` line), final/below.md, raw/, report.md,
 summary.md.
 """
 import argparse, datetime, os, re
-from records import load_script
+from records import ROUTING, load_script, read_plain_names
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 sf = load_script("stale-findings.py")
 
 CATEGORIES = [
@@ -50,14 +49,6 @@ BELOW_LENSES = ["design", "naming-concepts", "user-facing-text", "tests", "perfo
 def read(path):
     return open(path, encoding="utf-8").read() if os.path.exists(path) else ""
 
-def plain_names(routing):
-    names, inside = {}, False
-    for line in read(routing).splitlines():
-        if line.startswith("## "): inside = line.strip() == "## Plain names"; continue
-        if not inside: continue
-        m = re.match(r"^\|\s*`([a-z-]+)`\s*\|\s*([^|]+?)\s*\|", line)
-        if m: names[m.group(1)] = m.group(2)
-    return names
 
 def category_of(text):
     t = text.lower()
@@ -174,9 +165,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("run")
     ap.add_argument("--child", action="append", default=[], metavar="NAME=CHILD_RUN")
-    ap.add_argument("--routing", default=os.path.join(HERE, "..", "skills", "review", "routing.md"))
+    ap.add_argument("--routing", default=ROUTING)
     a = ap.parse_args()
-    names = plain_names(a.routing)
+    names = read_plain_names(a.routing)
     run = os.path.realpath(a.run)
     res = analyze(run)
     if not a.child:
