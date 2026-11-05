@@ -23,8 +23,9 @@ renders inside the finding's card; an unlinked one renders as its own card in
 the "Pull request comments" section. Human comments are never filtered by any
 confidence bar.
 """
-import argparse, json, os, re, subprocess, sys
+import argparse, json, os, re, sys
 from records import load_script
+from gh_api import graphql, pr_number, repo_owner_name
 
 rc = load_script("reconcile.py"); mf = rc.mf
 
@@ -41,11 +42,6 @@ def words(e):
     t = e.get("title", "") + " " + e.get("claim", "")
     t = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", t).replace("_", " ")
     return {w for w in re.findall(r"[a-z][a-z0-9]{2,}", t.lower()) if w not in rc.STOP}
-
-def gh(args, cwd):
-    r = subprocess.run(["gh"] + args, capture_output=True, text=True, cwd=cwd)
-    if r.returncode != 0: sys.exit(f"gh {' '.join(args[:3])} failed: {r.stderr.strip()}")
-    return r.stdout
 
 def one_line(text, n=300):
     t = re.sub(r"<img[^>]*>", "[image]", text)
@@ -91,10 +87,9 @@ def main():
         rc.write_merged(mpath, header, entries)
         print(f"linked {links} pull request comments after judging", file=sys.stderr); return
 
-    repo_full = json.loads(gh(["repo", "view", "--json", "nameWithOwner"], a.repo))["nameWithOwner"]
-    owner, name = repo_full.split("/")
-    pr = a.pr or json.loads(gh(["pr", "view", "--json", "number"], a.repo))["number"]
-    data = json.loads(gh(["api", "graphql", "-f", f"query={Q}", "-F", f"o={owner}", "-F", f"r={name}", "-F", f"n={pr}"], a.repo))
+    owner, name = repo_owner_name(a.repo)
+    pr = a.pr or pr_number(a.repo)
+    data = graphql(Q, {"o": owner, "r": name, "n": pr}, a.repo)
     p = data["data"]["repository"]["pullRequest"]
     open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
     open(os.path.join(pd, "pr.txt"), "w").write(f"{pr}\t{p['url']}\n")
