@@ -1,13 +1,25 @@
 import json, subprocess, sys
 
-def gh(args, cwd):
-    r = subprocess.run(["gh"] + args, capture_output=True, text=True, cwd=cwd)
-    if r.returncode != 0: sys.exit(f"gh {' '.join(args[:3])} failed: {r.stderr.strip()}")
+class GhError(SystemExit):
+    pass
+
+def gh(args, cwd, stdin=None):
+    r = subprocess.run(["gh"] + args, capture_output=True, text=True, cwd=cwd, input=stdin)
+    if r.returncode != 0: raise GhError(f"gh {' '.join(args[:3])} failed: {r.stderr.strip()}")
     return r.stdout
 
+def send_json(args, payload, cwd):
+    out = gh(args + ["--input", "-"], cwd, json.dumps(payload)) if payload is not None else gh(args, cwd)
+    return json.loads(out) if out.strip() else None
+
 def graphql(query, variables, cwd):
-    fields = [x for k, v in variables.items() for x in ("-F", f"{k}={v}")]
-    return json.loads(gh(["api", "graphql", "-f", f"query={query}"] + fields, cwd))
+    return send_json(["api", "graphql"], {"query": query, "variables": variables}, cwd)
+
+def rest(method, path, fields, cwd):
+    return send_json(["api", "-X", method, path], fields or None, cwd)
+
+def rest_list(path, cwd):
+    return [json.loads(line) for line in gh(["api", "--paginate", path, "--jq", ".[]"], cwd).splitlines() if line.strip()]
 
 def repo_owner_name(cwd):
     return json.loads(gh(["repo", "view", "--json", "nameWithOwner"], cwd))["nameWithOwner"].split("/")

@@ -4,10 +4,7 @@
 Usage: carry.py PREV_RUN CUR_RUN
 
 Copies the previous run's review state into the new run directory so the new
-run only has to review the commits since the previous run's HEAD:
-merged.md, verify/, overrides/, titles.tsv, status.tsv, instructions.tsv,
-notes/, resolution/, numbers.tsv, slices.md, summary.md,
-not-reviewed.md, stale.tsv, commits.tsv. First it imports any ticks and notes made in the previous
+run only has to review the commits since the previous run's HEAD. First it imports any ticks and notes made in the previous
 report since its last render, so triage done there is not left behind. Then
 writes CUR_RUN/reconcile/matches.tsv with one `carried` row per earlier
 finding and CUR_RUN/reconcile/previous.txt. Nothing is copied over an
@@ -24,6 +21,7 @@ def import_pending(prev):
     st = rr.import_hand_edits(prev, rr.read_status(prev), today); rr.write_status(prev, st)
     ins = rr.read_instructions(prev); changed = rr.import_instruction_edits(prev, ins, today)
     rr.write_instructions(prev, ins)
+    rr.import_posted_edits(prev, today)
     return len(changed)
 
 def main():
@@ -32,10 +30,10 @@ def main():
     if n: print(f"imported {n} triage edits made in the previous report", file=sys.stderr)
     os.makedirs(cur, exist_ok=True)
     for name in ("merged.md", "titles.tsv", "status.tsv", "instructions.tsv", "numbers.tsv",
-                 "slices.md", "summary.md", "not-reviewed.md", "stale.tsv", "commits.tsv"):
+                 "slices.md", "summary.md", "not-reviewed.md", "stale.tsv", "commits.tsv", "posted.tsv"):
         src, dst = os.path.join(prev, name), os.path.join(cur, name)
         if os.path.exists(src) and not os.path.exists(dst): shutil.copy2(src, dst)
-    for d in ("verify", "overrides", "resolution", "recheck", "pr", "notes"):
+    for d in ("verify", "overrides", "resolution", "recheck", "pr", "notes", "posted"):
         src, dst = os.path.join(prev, d), os.path.join(cur, d)
         if os.path.isdir(src) and not os.path.exists(dst): shutil.copytree(src, dst)
     status = {}

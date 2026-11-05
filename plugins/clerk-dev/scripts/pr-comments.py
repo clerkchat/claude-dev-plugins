@@ -32,7 +32,7 @@ rc = load_script("reconcile.py"); mf = rc.mf
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName
 reviewThreads(first:100){nodes{id isResolved isOutdated path line originalLine
-  comments(first:50){nodes{databaseId author{login} body url createdAt}}}}
+  comments(first:50){nodes{databaseId author{login} body url createdAt state}}}}
 reviews(first:100){nodes{databaseId author{login} body state url}}
 comments(first:100){nodes{databaseId author{login} body url}}}}}"""
 
@@ -65,6 +65,24 @@ def entry(mid, kind, gid, author, body, url, path="", line=None, oline=None, rep
         "evidence": f"Comment by @{author} on the pull request" + (f", originally at line {oline}" if oline and oline != line else ""),
     }
     return "\n".join([f"- id: {mid}"] + [f"  {k}: {v}" for k, v in f.items() if v not in ("", None)])
+
+def github_items(p):
+    items = []
+    for t in p["reviewThreads"]["nodes"]:
+        cs = t["comments"]["nodes"]
+        if not cs or cs[0].get("state") == "PENDING": continue
+        root = cs[0]
+        items.append(("thread", root["databaseId"], (root["author"] or {}).get("login", "ghost"), root["body"], root["url"],
+                      dict(path=t["path"], line=t["line"], oline=t["originalLine"],
+                           replies=[((c["author"] or {}).get("login", "ghost"), c["body"]) for c in cs[1:]],
+                           resolved=t["isResolved"], outdated=t["isOutdated"])))
+    for r in p["reviews"]["nodes"]:
+        if r["body"].strip() and r["state"] != "PENDING":
+            items.append(("review", r["databaseId"], (r["author"] or {}).get("login", "ghost"), r["body"], r["url"], dict(state=r["state"])))
+    for c in p["comments"]["nodes"]:
+        if c["body"].strip():
+            items.append(("comment", c["databaseId"], (c["author"] or {}).get("login", "ghost"), c["body"], c["url"], {}))
+    return items
 
 def main():
     ap = argparse.ArgumentParser()
@@ -102,22 +120,7 @@ def main():
             if len(f) == 2 and f[1].isdigit(): seen[f[0]] = int(f[1])
     next_id = max([int(re.match(r"^- id: (\d+)", c).group(1)) for c in entries] or [0]) + 1
     new_ids, updated = [], 0
-    items = []
-    for t in p["reviewThreads"]["nodes"]:
-        cs = t["comments"]["nodes"]
-        if not cs: continue
-        root = cs[0]
-        items.append(("thread", root["databaseId"], (root["author"] or {}).get("login", "ghost"), root["body"], root["url"],
-                      dict(path=t["path"], line=t["line"], oline=t["originalLine"],
-                           replies=[((c["author"] or {}).get("login", "ghost"), c["body"]) for c in cs[1:]],
-                           resolved=t["isResolved"], outdated=t["isOutdated"])))
-    for r in p["reviews"]["nodes"]:
-        if r["body"].strip():
-            items.append(("review", r["databaseId"], (r["author"] or {}).get("login", "ghost"), r["body"], r["url"], dict(state=r["state"])))
-    for c in p["comments"]["nodes"]:
-        if c["body"].strip():
-            items.append(("comment", c["databaseId"], (c["author"] or {}).get("login", "ghost"), c["body"], c["url"], {}))
-    for kind, gid, author, body, url, extra in items:
+    for kind, gid, author, body, url, extra in github_items(p):
         key = f"{kind}:{gid}"
         if key in seen:
             mid = seen[key]

@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+import argparse, datetime, json, os, re, sys
+import gh_api
+from records import load_script
+
+rr = load_script("render-report.py")
+
+VERDICTS = {"comment": "COMMENT", "request-changes": "REQUEST_CHANGES", "approve": "APPROVE"}
+DEFAULT_BODY = "Comments from my review of this pull request."
+BLOCK_START = re.compile(r"^\s{0,3}(#|>|\||[-*+]\s|\d+[.)]\s)")
+SUGGESTION = re.compile(r"^(\s*(?:`{3,}|~{3,}))suggestion\b", re.M)
+PLACEHOLDER = re.compile(r"^\{(\w+)\.(\w+)\}$")
+LINE_KINDS = ("line", "range")
+
+ADD_THREAD = """mutation($pullRequestReviewId:ID!,$path:String!,$body:String!,$subjectType:PullRequestReviewThreadSubjectType,
+$line:Int,$side:DiffSide,$startLine:Int,$startSide:DiffSide){addPullRequestReviewThread(input:{
+pullRequestReviewId:$pullRequestReviewId,path:$path,body:$body,subjectType:$subjectType,
+line:$line,side:$side,startLine:$startLine,startSide:$startSide}){thread{id comments(first:1){nodes{id databaseId url}}}}}"""
+UPDATE_COMMENT = """mutation($pullRequestReviewCommentId:ID!,$body:String!){updatePullRequestReviewComment(input:{
+pullRequestReviewCommentId:$pullRequestReviewCommentId,body:$body}){pullRequestReviewComment{id url}}}"""
+DELETE_COMMENT = """mutation($id:ID!){deletePullRequestReviewComment(input:{id:$id}){clientMutationId}}"""
+
+def thread_result(data):
+    t = data["addPullRequestReviewThread"]["thread"]; c = t["comments"]["nodes"][0]
+    return {"thread_id": t["id"], "comment_id": c["databaseId"], "comment_node": c["id"], "url": c["url"]}
+
+MUTATIONS = {"addPullRequestReviewThread": (ADD_THREAD, thread_result),
+             "updatePullRequestReviewComment": (UPDATE_COMMENT, lambda d: d),
+             "deletePullRequestReviewComment": (DELETE_COMMENT, lambda d: d)}
+
+def unwrap(text):
+    out, fence, joinable = [], "", False
+    for line in text.strip("\n").split("\n"):
+        if fence:
+            out.append(line)
+            if rr.closes_fence(line, fence): fence = ""
+            continue
+        m = rr.FENCE_RE.match(line)
+        if m:
+            fence, joinable = m.group(1), False
+            out.append(line); continue
+        if not line.strip():
+            joinable = False; out.append(""); continue
+        if joinable and not BLOCK_START.match(line): out[-1] = out[-1].rstrip() + " " + line.strip()
+        else: out.append(line)
+        joinable = not line.lstrip().startswith(("#", "|"))
+    return "\n".join(out)
+
+def read_text(path):
+    return open(path, encoding="utf-8").read().strip() if os.path.exists(path) else ""
+
+def outgoing(text, plain):
+    sent = unwrap(text)
+    return (SUGGESTION.sub(r"\1", sent), True) if plain and SUGGESTION.search(sent) else (sent, False)
+
+def read_hunks(run):
+    hunks, path, old_left, new_left, line = {}, None, 0, 0, 0
+    p = os.path.join(run, "patch", "all.patch")
+    for raw in (open(p, encoding="utf-8").read().split("\n") if os.path.exists(p) else []):
+        if old_left > 0 or new_left > 0:
+            if raw.startswith("\\"): continue
+            if not raw.startswith("+"): old_left -= 1
+            if not raw.startswith("-"): new_left -= 1
+            continue
+        if raw.startswith("+++ "):
+            path = None if raw[4:].strip() == "/dev/null" else re.sub(r"^b/", "", raw[4:].strip())
+            continue
+        m = re.match(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", raw)
+        if m and path:
+            old_left, start, new_left = int(m.group(1) or 1), int(m.group(2)), int(m.group(3) or 1)
+            if new_left: hunks.setdefault(path, []).append((start, start + new_left - 1))
+    return hunks
+
+def span(lo, hi):
+    return f"{lo}" + (f"-{hi}" if hi != lo else "")
+
+def nearest_lines(hunks, line, end):
+    for s, e in hunks:
+        if s <= line and end <= e: return (line, end), False
+    s, e = min(hunks, key=lambda h: max(0, h[0] - end, line - h[1]))
+    lo, hi = max(line, s), min(end, e)
+    if lo > hi: lo = hi = s if s > end else e
+    return (lo, hi), True
+
+def placement(note):
+    if re.search(r"\bin the review body\b", note, re.I): return {"kind": "body"}
+    for token in re.findall(r"\bon\s+`?([^\s`,;]+)", note):
+        m = re.match(r"^([^:]*[/.][^:]*?)(?::(\d+)(?:-(\d+))?)?$", token.rstrip(".:;)"))
+        if m:
+            line = int(m.group(2)) if m.group(2) else None
+            return {"path": m.group(1), "line": line, "end_line": int(m.group(3) or line or 0) or None}
+    return None
+
+def anchor(kind, path="", line=None, end_line=None):
+    return {"kind": kind, "path": path, "line": line, "end_line": end_line}
+
+def resolve(e, note, files, hunks):
+    p = placement(note)
+    if p and p.get("kind") == "body": return anchor("body", e.get("file", "")), None, None
+    path, line, end = (p["path"], p["line"], p["end_line"]) if p else (e.get("file"), e.get("line"), e.get("end_line"))
+    if not path: return anchor("body"), "fallback: no file; sent in the review body", None
+    if path not in files: return None, None, f"its file {path} is not in the pull request"
+    if line is None: return anchor("file", path), None, None
+    if not hunks.get(path): return anchor("file", path), f"fallback: {path} has no lines in the reviewed diff; sent on the file", None
+    (lo, hi), moved = nearest_lines(hunks[path], line, end or line)
+    moved_to = f"fallback: {path}:{span(line, end or line)} is outside the diff; moved to {span(lo, hi)}" if moved else None
+    return anchor("line" if lo == hi else "range", path, lo, hi), moved_to, None
+
+def row_anchor(row):
+    num = lambda v: int(v) if v else None
+    return anchor(row["kind"], row.get("path", ""), num(row.get("line")), num(row.get("end_line")))
+
+def numbers(run):
+    return {mid: n for n, mid in rr.read_numbers(run).items()}
+
+def findings(run):
+    mf = rr.load_merge_module()
+    overrides = rr.read_overrides(run, mf)
+    return {e["id"]: {**e, **overrides.get(e["id"], {})} for e in rr.read_merged(os.path.join(run, "merged.md"), mf)}
+
+def plan_items(run, ctx):
+    ins, rows, nums, found = rr.read_instructions(run), rr.read_posted(run), numbers(run), findings(run)
+    titles, hunks = rr.read_titles(run), read_hunks(run)
+    marked = sorted((m for m, i in ins.items() if i.get("choice") == "post"), key=lambda m: int(nums.get(m, 10 ** 6)))
+    items = []
+    for mid in marked:
+        e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
+        it = {"id": mid, "number": nums.get(mid, f"#{mid}"), "title": rr.title_of(e, titles) if e else "(not in merged.md)",
+              "note": note, "row": row, "fallback": None, "problem": None}
+        if row.get("kind"):
+            it["anchor"], it["action"] = row_anchor(row), "skip" if row["state"] == "posted" else "update"
+        elif e is None:
+            it["anchor"], it["action"], it["problem"] = None, "new", "it is not in merged.md"
+        else:
+            it["anchor"], it["fallback"], it["problem"] = resolve(e, note, ctx["files"], hunks)
+            it["action"] = "new"
+        raw = read_text(rr.posted_path(run, mid))
+        if not raw: it["problem"] = it["problem"] or "it has no posted text"
+        plain = bool(it["fallback"]) or (it["anchor"] or {}).get("kind") not in LINE_KINDS
+        it["text"], it["downgraded"] = outgoing(raw, plain)
+        items.append(it)
+    return items
+
+def review_body(run, rows, review_id):
+    head = read_text(os.path.join(run, "posted", "review.md"))
+    parts = [unwrap(head) if head else DEFAULT_BODY]
+    for mid in sorted(rows):
+        row = rows[mid]
+        if row.get("kind") == "body" and str(row.get("review_id")) == str(review_id):
+            text = outgoing(read_text(rr.posted_path(run, mid)), True)[0]
+            parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
+    return "\n\n".join(parts)
+
+def pulls_path(ctx):
+    return f"repos/{ctx['owner']}/{ctx['name']}/pulls/{ctx['pr']}"
+
+def thread_call(it, review_node):
+    a = it["anchor"]
+    v = {"pullRequestReviewId": review_node, "path": a["path"], "body": it["text"]}
+    if a["kind"] == "file": v["subjectType"] = "FILE"
+    else: v.update(subjectType="LINE", line=a["end_line"], side="RIGHT")
+    if a["kind"] == "range": v.update(startLine=a["line"], startSide="RIGHT")
+    return {"graphql": "addPullRequestReviewThread", "variables": v, "finding": it["id"], "as": f"finding{it['id']}"}
+
+def update_call(ctx, it):
+    comment = int(it["row"]["comment_id"])
+    node = ((ctx["pending"] or {}).get("comments") or {}).get(comment)
+    if node:
+        return {"graphql": "updatePullRequestReviewComment", "finding": it["id"],
+                "variables": {"pullRequestReviewCommentId": node, "body": it["text"]}}
+    return {"method": "PATCH", "path": f"repos/{ctx['owner']}/{ctx['name']}/pulls/comments/{comment}",
+            "fields": {"body": it["text"]}, "finding": it["id"]}
+
+def planned_rows(rows, sending, review_id, today):
+    out = dict(rows)
+    for it in sending:
+        a, row = it["anchor"], it["row"]
+        new = {"state": "posted", "date": today, "note": row.get("note", it["note"])}
+        if a["kind"] == "body":
+            new.update(thread_id="", comment_id="", url="{review.html_url}")
+        elif it["action"] == "new":
+            new.update({k: f"{{finding{it['id']}.{k}}}" for k in ("thread_id", "comment_id", "url")})
+        if it["action"] == "new" or a["kind"] == "body":
+            new.update(kind=a["kind"], path=a["path"], line=str(a["line"] or ""), end_line=str(a["end_line"] or ""),
+                       side="RIGHT" if a["kind"] in LINE_KINDS else "", review_id=review_id)
+        out[it["id"]] = {**row, **new}
+    return out
+
+def post_calls(ctx, sending, body, reviewed):
+    base, pending = pulls_path(ctx), ctx["pending"]
+    calls = [] if pending else [{"method": "POST", "path": f"{base}/reviews", "fields": {"commit_id": reviewed, "body": body}, "as": "review"}]
+    review_node = pending["node_id"] if pending else "{review.node_id}"
+    calls += [thread_call(it, review_node) for it in sending if it["action"] == "new" and it["anchor"]["kind"] != "body"]
+    calls += [update_call(ctx, it) for it in sending if it["action"] == "update" and it["anchor"]["kind"] != "body"]
+    if pending: calls.append({"method": "PUT", "path": f"{base}/reviews/{pending['id']}", "fields": {"body": body}})
+    return calls
+
+def resolve_refs(value, results):
+    if isinstance(value, dict): return {k: resolve_refs(v, results) for k, v in value.items()}
+    m = PLACEHOLDER.match(value) if isinstance(value, str) else None
+    return results[m.group(1)][m.group(2)] if m else value
+
+def send(call, results, repo):
+    if "graphql" in call:
+        query, shape = MUTATIONS[call["graphql"]]
+        return shape(gh_api.graphql(query, resolve_refs(call["variables"], results), repo)["data"])
+    return gh_api.rest(call["method"], call["path"], resolve_refs(call.get("fields", {}), results), repo)
+
+def rollback(calls, results, repo):
+    undo = [{"graphql": "deletePullRequestReviewComment", "variables": {"id": results[c["as"]]["comment_node"]}}
+            for c in calls if c.get("graphql") == "addPullRequestReviewThread" and c["as"] in results]
+    created = next((c for c in calls if c.get("as") == "review"), None)
+    if created and "review" in results: undo.append({"method": "DELETE", "path": f"{created['path']}/{results['review']['id']}"})
+    failed = []
+    for call in undo:
+        try: send(call, results, repo)
+        except gh_api.GhError as err: failed.append(str(err))
+    done = f"deleted {len(undo) - len(failed)} of {len(undo)} added threads and reviews"
+    return done + ("; could not undo: " + "; ".join(failed) if failed else "")
+
+def execute(calls, repo):
+    results = {}
+    try:
+        for call in calls:
+            r = send(call, results, repo)
+            if "as" in call: results[call["as"]] = r
+    except gh_api.GhError as err:
+        sys.exit(f"{err}\nGitHub rejected the batch; {rollback(calls, results, repo)}")
+    return results
+
+def write_payload(run, calls):
+    os.makedirs(os.path.join(run, "posted"), exist_ok=True)
+    p = os.path.join(run, "posted", "payload.json")
+    with open(p, "w", encoding="utf-8") as fh: json.dump({"calls": calls}, fh, indent=1)
+    print(f"dry run: wrote {len(calls)} calls to {p}", file=sys.stderr)
+
+def same_commit(a, b):
+    return bool(a and b) and (a.startswith(b) or b.startswith(a))
+
+def reviewed_commit(run):
+    target = read_text(os.path.join(run, "target.txt")).splitlines()
+    if len(target) < 3: sys.exit("target.txt has no HEAD line")
+    return target[2].strip()
+
+def pr_from_run(run):
+    line = read_text(os.path.join(run, "pr", "pr.txt"))
+    return int(line.split("\t")[0]) if line[:1].isdigit() else None
+
+def fetch_pr(repo, run, pr):
+    owner, name = gh_api.repo_owner_name(repo)
+    pr = pr or pr_from_run(run) or gh_api.pr_number(repo)
+    ctx = {"owner": owner, "name": name, "pr": pr, "pending": None}
+    base = pulls_path(ctx)
+    ctx["head"] = json.loads(gh_api.gh(["pr", "view", str(pr), "--json", "headRefOid"], repo))["headRefOid"]
+    ctx["files"] = [f["filename"] for f in gh_api.rest_list(f"{base}/files", repo)]
+    pending = next((r for r in gh_api.rest_list(f"{base}/reviews", repo) if r["state"] == "PENDING"), None)
+    if pending:
+        comments = gh_api.rest_list(f"{base}/reviews/{pending['id']}/comments", repo)
+        ctx["pending"] = {"id": pending["id"], "node_id": pending["node_id"], "commit_id": pending["commit_id"],
+                          "html_url": pending.get("html_url", ""), "comments": {c["id"]: c["node_id"] for c in comments}}
+    return ctx
+
+def current_review(ctx):
+    return str(ctx["pending"]["id"]) if ctx["pending"] else "{review.id}"
+
+def pending_line(ctx, reviewed, verb):
+    p = ctx["pending"]
+    if not p: return f"pending review: none; {verb} creates one on {reviewed[:9]}"
+    if same_commit(p["commit_id"], reviewed): return f"pending review: {p['id']} on {reviewed[:9]} exists; {verb} adds to it"
+    return (f"pending review: {p['id']} exists on {p['commit_id'][:9]}, another commit than the reviewed {reviewed[:9]}; "
+            f"{verb} adds to it anyway")
+
+def indent(text):
+    return "\n".join("    " + l if l else "" for l in text.split("\n"))
+
+def preview(run, ctx, items, reviewed):
+    out = []
+    for it in items:
+        out.append(f"finding {it['number']}: {it['title']}")
+        a = it["anchor"]
+        if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
+        if it["fallback"]: out.append(f"  {it['fallback']}")
+        if it["downgraded"]: out.append("  suggestion sent as a plain code block")
+        if it["action"] == "skip": out.append(f"  already posted: {it['row'].get('url', '')}"); continue
+        if it["action"] == "update": out.append("  changed since posting: --post updates the comment")
+        if it["problem"]: out.append(f"  cannot post: {it['problem']}"); continue
+        out += ["  text:", indent(it["text"])]
+    review_id = current_review(ctx)
+    rows = planned_rows(rr.read_posted(run), [it for it in items if it["action"] != "skip" and not it["problem"]], review_id, "")
+    out += ["review body:", indent(review_body(run, rows, review_id))]
+    if not same_commit(ctx["head"], reviewed):
+        out.append(f"head moved: the pull request head is {ctx['head'][:9]}, the review judged {reviewed[:9]}; comments anchor on the reviewed commit")
+    out.append(pending_line(ctx, reviewed, "--post"))
+    print("\n".join(out))
+
+def post(a, ctx, items, reviewed):
+    blocked = [f"finding {it['number']}: {it['problem']}" for it in items if it["action"] != "skip" and it["problem"]]
+    if blocked: sys.exit("nothing sent; " + "; ".join(blocked))
+    sending = [it for it in items if it["action"] != "skip"]
+    if not sending: print("nothing to post: every Post-marked finding is already posted", file=sys.stderr); return
+    review_id = current_review(ctx)
+    rows = planned_rows(rr.read_posted(a.run), sending, review_id, datetime.date.today().isoformat())
+    calls = post_calls(ctx, sending, review_body(a.run, rows, review_id), reviewed)
+    print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
+    if a.dry_run: write_payload(a.run, calls); return
+    results = execute(calls, a.repo)
+    if ctx["pending"]: results["review"] = ctx["pending"]
+    rr.write_posted(a.run, {mid: {k: str(resolve_refs(v, results)) for k, v in row.items()} for mid, row in rows.items()})
+    new = sum(it["action"] == "new" for it in sending)
+    print(f"posted {new} comments and updated {len(sending) - new} on review {results['review']['id']}; "
+          f"skipped {len(items) - len(sending)} already posted", file=sys.stderr)
+
+def submit(a, ctx, verdict):
+    p = ctx["pending"]
+    if not p: sys.exit("no pending review on the pull request; run --post first")
+    body = review_body(a.run, rr.read_posted(a.run), p["id"])
+    calls = [{"method": "POST", "path": f"{pulls_path(ctx)}/reviews/{p['id']}/events", "fields": {"event": VERDICTS[verdict], "body": body}}]
+    if a.dry_run: write_payload(a.run, calls); return
+    execute(calls, a.repo)
+    print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Preview, post, and submit a run's Post-marked findings as a pending GitHub review.")
+    ap.add_argument("run"); ap.add_argument("--repo", default="."); ap.add_argument("--pr", type=int)
+    action = ap.add_mutually_exclusive_group()
+    action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
+    action.add_argument("--submit", choices=list(VERDICTS), help="submit the pending review with this verdict")
+    ap.add_argument("--dry-run", action="store_true", help="write the calls to <run>/posted/payload.json instead of making them")
+    a = ap.parse_args(argv)
+    if a.dry_run and not (a.post or a.submit): ap.error("--dry-run goes with --post or --submit")
+    reviewed = reviewed_commit(a.run)
+    ctx = fetch_pr(a.repo, a.run, a.pr)
+    if a.submit: return submit(a, ctx, a.submit)
+    items = plan_items(a.run, ctx)
+    return post(a, ctx, items, reviewed) if a.post else preview(a.run, ctx, items, reviewed)
+
+if __name__ == "__main__": main()
