@@ -115,6 +115,24 @@ crosses.
      identifiers, or whether a record exists across tenants?
    - Pass: Return generic errors without stack traces or internal identifiers,
      and answer the same way whether or not a record exists across tenants.
+11. **Safety that rests on a check somewhere else.**
+   - Review: values or fragments the diff interpolates into SQL, shell, or
+     templates whose safety depends on validation in another layer (a schema,
+     an enum, a bounds check, a comment, a "never from users" convention)
+     rather than on a bound parameter or a type the codebase's builder or
+     escaping helpers produce. Also raw-text fields on types that also carry
+     request data, safe only because a validator strips them. Report it even
+     when nothing is exploitable today: the risk is the next caller or field
+     that skips the check. Name the check it relies on. Before writing the
+     fix, search the codebase for a query builder, parameter helpers, or
+     escaping primitives for that interpreter, and point the fix at what you
+     find, or say you found none.
+   - Design: Does the design build queries or commands by interpolation whose
+     safety relies on earlier validation, and could it bind parameters or use
+     the codebase's builder instead?
+   - Pass: Bind values as parameters and pass identifiers and trusted fragments
+     through the codebase's builder or typed helpers, so safety does not depend
+     on a check in another layer.
 
 ## Scenario quality
 
@@ -122,8 +140,16 @@ A security scenario names the actor, the request or payload they send, and what
 they obtain. "Could be exploited" is not a scenario. If you cannot construct the
 request, score the finding at or below 40 and say what you could not confirm.
 
+Concern 11 is the exception: its scenario is the change that would break the
+check (a new entry point that skips the validator, a field added to the
+schema, a registry value moved into the request), and what the interpolation
+would then let a request do. Score its confidence on whether the safety really
+rests on that remote check, not on whether an attack works today, and give it
+severity `minor` unless the check is already fragile.
+
 ## Noise to avoid
 
 Theoretical issues behind an authenticated admin boundary with no new exposure,
 and generic hardening suggestions that the diff does not make worse, go under
-"Noticed, out of scope" at most.
+"Noticed, out of scope" at most. Interpolation the diff adds or extends that
+falls under concern 11 is not generic hardening; report it as a finding.
