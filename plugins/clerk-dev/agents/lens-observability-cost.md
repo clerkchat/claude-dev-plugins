@@ -19,12 +19,6 @@ Read `### Observability` in `CONTEXT` for the logging and metrics conventions
 and known cost traps. Without context, find the logger and metrics client from
 imports.
 
-## Conventions
-
-Report deviations from the repo's logging conventions (static versus instance
-loggers, context object shape) only when they would break log search or
-aggregation, not as style.
-
 ## Concerns
 
 ### Visibility
@@ -78,9 +72,18 @@ aggregation, not as style.
    - Pass: Pass the request's identifier into the jobs it enqueues and log it
      in both.
 
+7. **Logging conventions.**
+   - Review: deviations from the repo's logging conventions (static versus
+     instance loggers, context object shape), reported only when they would
+     break log search or aggregation, not as style.
+   - Design: Does the design log through the repo's logger and context shape,
+     so its lines can be searched and aggregated with the rest?
+   - Pass: Log through the repo's logger with its context object shape, so the
+     new lines can be searched and aggregated; leave style alone.
+
 ### Cost and noise
 
-7. **Metric tags.**
+8. **Metric tags.**
    - Review: any tag whose value is unbounded (tenant, user, entity, URL,
      message content). Metrics bill and index per tag permutation. A new metric
      tagged with a tenant identifier is a finding at confidence 80 unless
@@ -90,7 +93,7 @@ aggregation, not as style.
      checked.
    - Pass: Keep metric tags bounded: no tenant, user, entity, URL, or message
      content as a tag value, unless the cardinality was checked.
-8. **Log volume.**
+9. **Log volume.**
    - Review: a log line per row inside a loop over a growing collection;
      logging full payloads, prompts, or responses; logs in a hot path at info
      level.
@@ -99,14 +102,14 @@ aggregation, not as style.
      info level on a hot path?
    - Pass: Keep log volume proportionate: nothing per row on hot paths, no full
      payloads, prompts, or responses.
-9. **Trace size.**
+10. **Trace size.**
    - Review: full prompts, documents, or large tool results attached to spans;
      spans created per row.
    - Design: What does the design attach to spans, and is any of it large
      (prompts, documents, tool results) or created per row?
    - Pass: Keep spans small: attach no full prompts, documents, or large tool
      results, and create no span per row.
-10. **Sensitive content in telemetry.**
+11. **Sensitive content in telemetry.**
    - Review: sensitive content in telemetry: report to data-privacy, not here,
      unless it is also a volume problem.
    - Design: Does any telemetry the design adds carry sensitive content? That is
