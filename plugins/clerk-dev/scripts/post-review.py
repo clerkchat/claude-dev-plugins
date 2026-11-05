@@ -46,9 +46,6 @@ def unwrap(text):
         joinable = not line.lstrip().startswith(("#", "|"))
     return "\n".join(out)
 
-def read_text(path):
-    return open(path, encoding="utf-8").read().strip() if os.path.exists(path) else ""
-
 def outgoing(text, plain):
     sent = unwrap(text)
     return (SUGGESTION.sub(r"\1", sent), True) if plain and SUGGESTION.search(sent) else (sent, False)
@@ -134,7 +131,7 @@ def plan_items(run, ctx):
         else:
             it["anchor"], it["fallback"], it["problem"] = resolve(e, note, ctx["files"], hunks)
             it["action"] = "new"
-        raw = read_text(rr.posted_path(run, mid))
+        raw = rr.read_text(rr.posted_path(run, mid))
         if not raw: it["problem"] = it["problem"] or "it has no posted text"
         plain = bool(it["fallback"]) or (it["anchor"] or {}).get("kind") not in LINE_KINDS
         it["text"], it["downgraded"] = outgoing(raw, plain)
@@ -142,12 +139,12 @@ def plan_items(run, ctx):
     return items
 
 def review_body(run, rows, review_id):
-    head = read_text(os.path.join(run, "posted", "review.md"))
+    head = rr.read_text(os.path.join(run, "posted", "review.md"))
     parts = [unwrap(head) if head else DEFAULT_BODY]
     for mid in sorted(rows):
         row = rows[mid]
         if row.get("kind") == "body" and str(row.get("review_id")) == str(review_id):
-            text = outgoing(read_text(rr.posted_path(run, mid)), True)[0]
+            text = outgoing(rr.read_text(rr.posted_path(run, mid)), True)[0]
             parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
     return "\n\n".join(parts)
 
@@ -238,12 +235,12 @@ def same_commit(a, b):
     return bool(a and b) and (a.startswith(b) or b.startswith(a))
 
 def reviewed_commit(run):
-    target = read_text(os.path.join(run, "target.txt")).splitlines()
+    target = rr.read_text(os.path.join(run, "target.txt")).splitlines()
     if len(target) < 3: sys.exit("target.txt has no HEAD line")
     return target[2].strip()
 
 def pr_from_run(run):
-    line = read_text(os.path.join(run, "pr", "pr.txt"))
+    line = rr.read_text(os.path.join(run, "pr", "pr.txt"))
     return int(line.split("\t")[0]) if line[:1].isdigit() else None
 
 def fetch_pr(repo, run, pr):

@@ -65,7 +65,7 @@ replaced by that finding's current number. Titles come from the finding's
 `title` field, overridden by RUN_DIR/titles.tsv (merged id, tab, title) when
 present, else shortened from the claim.
 """
-import argparse, os, re, subprocess, sys, textwrap
+import argparse, os, re, shutil, subprocess, sys, textwrap
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, read_plain_names
 from importlib import import_module
@@ -435,10 +435,6 @@ def read_snapshot(run, name):
             if len(parts) == 2 and parts[0].isdigit(): snap[int(parts[0])] = parts[1]
     return snap
 
-def write_snapshot(run, lines):
-    with open(os.path.join(run, "rendered-status.tsv"), "w", encoding="utf-8") as fh:
-        for k in sorted(lines): fh.write(f"{k}\t{lines[k]}\n")
-
 def import_hand_edits(run, st, today):
     """Read checkbox lines from the existing report.md. A ticked box the
     status file does not know about becomes fixed, won't fix, or deferred by
@@ -634,9 +630,11 @@ def write_posted(run, rows):
 def posted_path(run, mid):
     return os.path.join(run, "posted", f"{mid}.md")
 
+def read_text(path):
+    return open(path, encoding="utf-8").read().strip() if os.path.exists(path) else ""
+
 def posted_text(mid):
-    p = posted_path(RUN, mid)
-    return open(p, encoding="utf-8").read().strip() if os.path.exists(p) else ""
+    return read_text(posted_path(RUN, mid))
 
 def record_posted(run, mid, text, state, today):
     os.makedirs(os.path.dirname(posted_path(run, mid)), exist_ok=True)
@@ -728,8 +726,11 @@ def instruction_block(i):
     out += [""]
     return out
 
-def snapshot_key(i):
-    return " | ".join(instruction_lines(i)) + " || " + " ".join((i or {}).get("text", "").split())
+def snapshot_key(lines, text):
+    return " | ".join(lines) + " || " + " ".join(text.split())
+
+def instruction_key(i):
+    return snapshot_key(instruction_lines(i), (i or {}).get("text", ""))
 
 def import_instruction_edits(run, ins, today):
     """Read Instruction blocks from the existing report.md. A block counts as a
@@ -744,8 +745,7 @@ def import_instruction_edits(run, ins, today):
     def flush():
         if mid is None or not lines: return
         text = "\n".join(notes).strip()
-        joined = " | ".join(lines) + " || " + " ".join(text.split())
-        if snap.get(mid) == joined: return
+        if snap.get(mid) == snapshot_key(lines, text): return
         ticked, note, any_note, option = [], "", "", ""
         for l in lines:
             m = re.match(r"^- \[( |x|X)\] ([^:]+?)(?::\s*(.*))?$", l)
@@ -1006,12 +1006,7 @@ def main():
     # Numbers are stable across re-renders and incremental runs: an id that
     # already has a number keeps it; new ids get numbers after the highest
     # existing one, in document order.
-    prior_nums = {}
-    np0 = os.path.join(a.run, "numbers.tsv")
-    if os.path.exists(np0) and not a.renumber:
-        for line in open(np0).read().splitlines()[1:]:
-            f = line.split("\t")
-            if len(f) > 1 and f[0].isdigit() and f[1].isdigit(): prior_nums[int(f[1])] = int(f[0])
+    prior_nums = {} if a.renumber else {mid: int(num) for num, mid in nums.items() if num.isdigit()}
     next_n = max(prior_nums.values(), default=0)
     prc.sort(key=lambda e: (e["file"], e["line"] or 0))
     for sec, lst in (("reopen", reopen), ("pr", prc), ("fix", fix), ("look", look), ("confirm", confirm), ("existing", existing), ("debt", debt), ("declined", declined), ("below", below)):
@@ -1119,17 +1114,15 @@ def main():
     stamp = f"<!-- review generation {gen}. Edit the checkboxes, the Notes lines, and the Posted text; everything else is regenerated. -->"
     text = text.replace("\n# ", "\n" + stamp + "\n\n# ", 1) if text.startswith("---") else stamp + "\n\n" + text
     if os.path.exists(outp):
-        import shutil
         shutil.copy2(outp, os.path.join(os.path.dirname(outp), "report.prev.md"))
     open(outp, "w", encoding="utf-8").write(text)
     snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(STATUS.get(e['id'], {'status': 'open'}))}\n" for e in numbered),
-             "rendered-instructions.tsv": "".join(f"{e['id']}\t{snapshot_key(INSTR.get(e['id']))}\n" for e in numbered),
+             "rendered-instructions.tsv": "".join(f"{e['id']}\t{instruction_key(INSTR.get(e['id']))}\n" for e in numbered),
              "rendered-posted.tsv": "".join(f"{mid}\t{flat(t)}\n" for mid, t in sorted(posted_blocks(text.split("\n")).items()))}
     os.makedirs(os.path.join(rdir, str(gen)), exist_ok=True)
     for name, body in snaps.items():
         open(os.path.join(a.run, name), "w", encoding="utf-8").write(body)
         open(os.path.join(rdir, str(gen), name), "w", encoding="utf-8").write(body)
-    import shutil
     for g in gens[:-19]: shutil.rmtree(os.path.join(rdir, str(g)), ignore_errors=True)
     # Numbers are never released: ids numbered before but not shown in this
     # render keep their rows (section "hidden"), so they get the same number

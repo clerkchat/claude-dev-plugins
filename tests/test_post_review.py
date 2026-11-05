@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from helpers import SCRIPTS, TempCase, run_ok, write_file
+from helpers import SCRIPTS, RunCase, TempCase, merged_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import gh_api
@@ -35,27 +35,22 @@ def thread_data(n):
         {"id": f"PRRC_{n}", "databaseId": 900 + n, "url": f"https://gh/c/{900 + n}"}]}}}}}
 
 
-class PostCase(TempCase):
+class PostCase(RunCase):
     def setUp(self):
         super().setUp()
-        self.run_dir = self.path("run")
-        self.write("merged.md", "```findings\n" + "".join(finding(m, *f) for m, f in FINDINGS.items()) + "```\n")
-        self.write("numbers.tsv", "number\tmerged_id\tsection\n" + "".join(f"{m}\t{m}\tfix\n" for m in FINDINGS))
+        self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()))
+        self.write_numbers(FINDINGS)
         self.write("patch/all.patch", PATCH)
-        self.write("target.txt", f"pr 7\n{'b' * 40}\n{HEAD}\n")
+        self.write_target("pr 7", "b" * 40, HEAD)
         self.marks = {}
         self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "files": ["src/a.py", "src/b.py"], "pending": None}
         patcher = mock.patch.object(post, "fetch_pr", side_effect=lambda *a: self.ctx)
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def write(self, name, text):
-        write_file(os.path.join(self.run_dir, name), text)
-
     def mark(self, mid, note="", text=None):
         self.marks[mid] = note
-        self.write("instructions.tsv", "merged_id\tchoice\tnote\tdate\talso\toption\n"
-                   + "".join(f"{m}\tpost\t{n}\t\t\t\n" for m, n in sorted(self.marks.items())))
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
         if text is not False: self.write(f"posted/{mid}.md", text or f"Finding {mid} text.")
 
     def pend(self, commit=HEAD, comments=None):
@@ -295,7 +290,7 @@ class FetchPrTest(unittest.TestCase):
 class CarryTest(TempCase):
     def test_carries_posted_texts_and_posted_tsv(self):
         prev, cur = self.path("prev"), self.path("cur")
-        write_file(os.path.join(prev, "merged.md"), "```findings\n" + finding(1, "a.py", "3") + "```\n")
+        write_file(os.path.join(prev, "merged.md"), merged_md(finding(1, "a.py", "3")))
         write_file(os.path.join(prev, "posted", "1.md"), "Text.\n")
         write_file(os.path.join(prev, "posted.tsv"), "merged_id\tstate\n1\tdrafted\n")
         run_ok("carry", prev, cur)

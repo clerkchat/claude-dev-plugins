@@ -272,3 +272,33 @@ class FeatureRepoCase(TempCase):
         write_record(root, "R6", "spec", "Spec six", body="## Requirements\n\n1. Six one.\n2. Six two.")
         write_record(root, "R7", "brainstorm", "A brainstorm", body="Ideas.")
         write_record(root, "R8", "plan", "Old plan", "superseded", "superseded_by: R4\n", "1. Old step. Done when old.")
+
+
+def merged_md(*entries):
+    return "```findings\n" + "".join(entries) + "```\n"
+
+
+class RunCase(TempCase):
+    def setUp(self):
+        super().setUp()
+        self.run_dir = self.path("run")
+
+    def write(self, name, text):
+        write_file(os.path.join(self.run_dir, name), text)
+
+    def read(self, name):
+        with open(os.path.join(self.run_dir, name), encoding="utf-8") as f:
+            return f.read()
+
+    def write_merged(self, *entries):
+        self.write("merged.md", merged_md(*entries))
+
+    def write_numbers(self, merged_ids):
+        self.write("numbers.tsv", "number\tmerged_id\tsection\n" + "".join(f"{m}\t{m}\tfix\n" for m in merged_ids))
+
+    def write_instructions(self, rows):
+        self.write("instructions.tsv", "merged_id\tchoice\tnote\tdate\talso\toption\n"
+                   + "".join(f"{m}\t{choice}\t{note}\t\t\t\n" for m, (choice, note) in sorted(rows.items())))
+
+    def write_target(self, *lines):
+        self.write("target.txt", "".join(l + "\n" for l in lines))

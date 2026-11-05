@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from helpers import SCRIPTS, TempCase, run_ok, run_script, write_file
+from helpers import SCRIPTS, RunCase, run_ok, run_script, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -20,25 +20,13 @@ def finding(mid, path, lens="correctness", extra=""):
     )
 
 
-def merged(*entries):
-    return "```findings\n" + "".join(entries) + "```\n"
-
-
-class RenderCase(TempCase):
+class RenderCase(RunCase):
     def setUp(self):
         super().setUp()
-        self.run_dir = self.path("run")
-        self.write("merged.md", merged(finding(7, "a.py"), finding(8, "b.py")))
+        self.write_merged(finding(7, "a.py"), finding(8, "b.py"))
         for mid in (7, 8):
             self.write(f"verify/{mid}.md", "verdict: confirmed | confidence: 90 | severity: major")
         self.render()
-
-    def write(self, name, text):
-        write_file(os.path.join(self.run_dir, name), text)
-
-    def read(self, name):
-        with open(os.path.join(self.run_dir, name), encoding="utf-8") as f:
-            return f.read()
 
     def args(self, *extra):
         return (self.run_dir, "--target", "t", "--repo", self.tmp, "--date", DATE, "--wrap", "0", *extra)
@@ -217,7 +205,7 @@ class PullRequestCardTailTest(RenderCase):
     def setUp(self):
         super().setUp()
         pr = finding(9, "c.py", lens="pr-review", extra="  author: bob\n")
-        self.write("merged.md", merged(finding(7, "a.py"), finding(8, "b.py"), pr))
+        self.write_merged(finding(7, "a.py"), finding(8, "b.py"), pr)
         self.write("verify/9.md", "verdict: confirmed | confidence: 90 | severity: major | note: The comment holds.")
         self.write("resolution/9.md", "Answered on the thread.\n")
         self.render()
