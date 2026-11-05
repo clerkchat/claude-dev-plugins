@@ -185,7 +185,7 @@ The points where you speak, and what you say at each:
 - The end: the report, and nothing after it, except the first time in a
   repository (First runs in a repository), when three lines follow it: "Tick
   an instruction on each card (Fix as recommended, Fix as noted, Discuss,
-  Defer, Ignore), then say 'work the queue'. Or say 'fix finding N' for one
+  Defer, Ignore, Post), then say 'work the queue'. Or say 'fix finding N' for one
   finding. Say 'where are we' any time for the status." Send one desktop notification with
   the PushNotification tool when the report is written, under 200 characters,
   leading with the count of things to fix: "Review done: 3 to fix before
@@ -1232,8 +1232,9 @@ arguments and follow it.
 
 Every card ends with an "Instruction" checklist: Fix as recommended, Fix as
 noted (fix following the Notes, which replace the recommendation), Discuss,
-Defer, Ignore, each optionally followed by `: <note>`, and a `Notes:` line for
-free text of any length. When the recommendation labels alternatives (a), (b),
+Defer, Ignore, Post (send it to the pull request's author as a review comment),
+each optionally followed by `: <note>`, and a `Notes:` line for free text of
+any length. When the recommendation labels alternatives (a), (b),
 the user picks one by writing it after the label, "Fix as recommended (a)" (or
 "(a, c)"); it is stored in the `option` column of `instructions.tsv`, and a pick
 the recommendation does not label draws a render warning to relay. The user
@@ -1241,12 +1242,30 @@ ticks one and writes notes in the report; the renderer imports them into
 `<run>/instructions.tsv` and `<run>/notes/<merged id>.md` at the next render,
 and shows a Triage column and count in the glance section.
 
+A card marked Post also gets a `##### Posted` block after the checklist: the
+text that goes to the author, from `<run>/posted/<merged id>.md`, in a
+four-backtick fence; or "Posted text: not drafted yet."; or "Posted text: to be
+redrafted; the note changed." The user edits the fenced text in the report like
+Notes: an edit is saved to `posted/<merged id>.md` at the next render and marks
+the text `edited` in `<run>/posted.tsv`. Agents set it with `--posted
+N=<file>`, never by editing the report. The Post note steers the text (tone,
+length, a suggestion or not), and a placement in it (`on <path>:<line>[-<line>]`,
+`on <path>`, `in the review body`) moves the comment. When the note changes, a
+drafted text becomes stale and the render says to redraft it; an edited text
+stands, and the render warns; relay that warning. Once posted, the block adds
+where it went ("Posted on `path:12-14`, [comment](url).", or "in the review
+body"), and "changed since posting" after a later edit, which the next post
+sends as an update of that comment. Post leaves the status alone. The
+`review-triage` skill's posting pass drafts the texts and posts them with
+`post-review.py`; nothing goes to GitHub without the user's yes.
+
 The report is regenerated on every render, so the renderer protects edits: each
 render stamps the report with a generation number and keeps what it wrote under
 `.render/<generation>/`; a saved report is compared with the render it came
 from, so a buffer saved after a later render contributes only the lines the user
-changed. The previous report is kept as `report.prev.md`. Two ticked boxes use
-the first, and the card and the render's warning say so; relay that warning to
+changed. The stamp names what survives a render: the checkboxes, the Notes
+lines, and the Posted text. The previous report is kept as `report.prev.md`.
+Two ticked boxes use the first, and the card and the render's warning say so; relay that warning to
 the user. Edits anywhere else in the report are not kept. Agents set
 instructions with `--instruct N=<choice>[:note]` and add notes with
 `--note N=<file>`, never by editing the report; the `review-triage` skill's
@@ -1255,7 +1274,7 @@ status (deferred, won't fix, with the note as the reason) when the finding is
 open.
 
 The `review-triage` skill works through them: fixes first, each in its own
-session, then discussions with the user.
+session, then discussions with the user, then posting.
 
 ## Render mode
 
@@ -1389,8 +1408,12 @@ unverified), `merged.md` (and `merged-new.md` in incremental runs),
 `verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
 `reconcile/`, `pr/`, `titles.tsv`, `overrides/`, `summary.md`,
 `not-reviewed.md`, `numbers.tsv`, `status.tsv`, `instructions.tsv`,
-`notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `.render/<generation>/` with
-the `rendered-*.tsv` snapshots, `report.md`, `report.prev.md`, `stale.tsv`
+`notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `posted/` (`<id>.md` posted
+texts, `draft-<id>.md` drafts, `review.md` the review body, `payload.json` from
+a dry run), `posted.tsv` (per Post-marked finding: drafted, edited, or posted,
+the note followed, and once posted the comment's ids, URL, and anchor),
+`.render/<generation>/` with the `rendered-*.tsv` snapshots (`rendered-posted.tsv`
+among them), `report.md`, `report.prev.md`, `stale.tsv`
 (cross-check judgments), `commits.tsv` (every commit a status named, kept when a
 later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the

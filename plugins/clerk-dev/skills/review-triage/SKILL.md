@@ -1,7 +1,7 @@
 ---
 name: review-triage
-description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", and records outcomes in the report.
-argument-hint: "[fixes | discuss | check | all] [run label]"
+description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", records outcomes in the report, then drafts the posted text of findings marked "Post" by its drafting rules and posts them to the user's pending GitHub review. "post the review", "draft the posted text", or "submit the review" runs only that posting pass.
+argument-hint: "[fixes | discuss | post | check | all] [run label]"
 allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 ---
 
@@ -10,9 +10,9 @@ allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The user marks each finding in a review report with an instruction: Fix as
-recommended (optionally with a note), Discuss, Defer, or Ignore. This skill
-works through those instructions. You coordinate; you never edit code, and you
-never hold the details of more than one fix in your context.
+recommended (optionally with a note), Discuss, Defer, Ignore, or Post. This
+skill works through those instructions. You coordinate; you never edit code,
+and you never hold the details of more than one fix in your context.
 
 Everything runs in this session: each fix through its own builder and recheck
 agents, which the user can follow in the task panel. The run files are the
@@ -27,8 +27,10 @@ items separate and commits clean.
 
 Run directory: `.clerk-dev/latest` unless the user names a label. The instructions
 live in `<run>/instructions.tsv` (`merged_id`, choice, note, date, also,
-option), statuses in `<run>/status.tsv`, numbers in `<run>/numbers.tsv`. Read
-them; do not parse the report. Render through
+option), statuses in `<run>/status.tsv`, numbers in `<run>/numbers.tsv`
+(`number`, `merged_id`, `section`), posted texts in `<run>/posted/<merged
+id>.md` and their state in `<run>/posted.tsv`. Read them; do not parse the
+report. Render through
 `${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py` with the arguments from the
 run's `scope.md` and `plan.md` plus
 `--summary <run>/summary.md
@@ -38,10 +40,12 @@ once at the start before reading the instruction file. If the render warns that
 a finding has more than one instruction ticked, ask the user which one before
 queueing it.
 
-With no argument, do both passes in order. `fixes` or `discuss` runs one. Either
-way, run the checks under Before the passes first. `check`, or a request to
-cross-check the findings against the follow-ups or later commits, runs only
-Before the passes and stops after its report.
+With no argument, do the three passes in order; the posting pass only when a
+finding is marked Post. `fixes`, `discuss`, or `post` runs one. Run the checks
+under Before the passes first, except for `post` or a request to post or submit
+the review: posting changes no code. `check`, or a request to cross-check the
+findings against the follow-ups or later commits, runs only Before the passes
+and stops after its report.
 
 ## Before the passes
 
@@ -183,6 +187,105 @@ from a discussion" in `skills/review/tracking.md` describes, from the decisions
 recorded in the report when the conversation was cleared partway. Then
 run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
+## Pass 3: posting
+
+The list is every finding whose instruction is `post`, in number order. Posting
+is outward-facing: it notifies a real person, so nothing is sent or submitted
+without the user's explicit yes to that step, and a yes to posting is not a yes
+to submitting.
+
+Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py <run> --repo
+<worktree>` (add `--pr N` when the run has no `pr/pr.txt` and the branch has no
+pull request) for the preview. With no action it sends nothing; it prints per
+finding its number, title, and anchor (`path:line`, a file, or the review
+body), any fallback ("outside the diff; moved to ...", "sent on the file",
+"sent in the review body", a suggestion sent as a plain code block), "cannot
+post: ..." when a text is missing or the file is not in the pull request,
+"already posted" or "changed since posting", and the text as it will be sent;
+then the review body, a "head moved" line when the pull request's head is not
+the reviewed commit, and whether a pending review exists.
+
+1. Render, so the user's edits in the report are imported. The findings to
+   draft are the Post-marked ones without a posted text and those the render
+   says to redraft ("note changed; redraft the posted text"). A text marked
+   `edited` in `posted.tsv` is the user's and is never redrafted. With none to
+   draft, go to step 4, and with `posted/review.md` written too, to step 6.
+2. Run the preview for the anchors.
+3. Draft with one `general-purpose` agent with `model: sonnet` per batch of up
+   to eight findings, findings about the same issue in one batch. Give it per
+   finding: the card fields from `merged.md` with `overrides/<merged id>.md`
+   laid over them, the section from `numbers.tsv`, the verifier's note in
+   `verify/<id>.md`, the Post note, the free text in `notes/<merged id>.md`,
+   the anchor from the preview with the hunk lines around it from
+   `patch/all.patch`, and the previous text when redrafting; and the rules
+   under Drafting rules. It edits nothing else and writes each text to
+   `<run>/posted/draft-<merged id>.md`, and answers one line per finding with
+   the text's form (comment, question, suggestion) and, for a repeat, whether
+   it proposes one general comment or one per place. Apply them in one render
+   with `--posted N=<run>/posted/draft-<merged id>.md` each.
+4. Draft the review body in `<run>/posted/review.md`: one or two sentences on
+   what the review looked at and what the comments are about, under the same
+   rules; the script appends the comments that fell back to the review body. Keep
+   one the user wrote.
+5. Tell the user which texts were drafted, any proposed general comment, and
+   that they can edit the Posted blocks in the report and `posted/review.md` in
+   place, or change a note and have it redrafted; wait for them to say they are
+   done.
+6. Render, then run the preview again and show it: the comments with their
+   anchors, every fallback, the review body, the head-moved line, and the
+   pending-review line. When a finding cannot be posted, say why and what would
+   settle it (a text to draft, a placement in its note), and stop there;
+   `--post` would refuse the whole batch.
+7. Ask "Post these N comments to your pending review on pull request #<n>?",
+   counting the comments that are new or changed since posting. On yes, run the
+   same command with `--post`. It adds every comment to the user's pending
+   review, creating one on the reviewed commit when there is none, and updates
+   comments whose text changed since posting; findings already posted and
+   unchanged are skipped. If GitHub rejects any part, it deletes what the batch
+   added and nothing stays posted; relay its error.
+8. Render, and report what went where, one line per finding from its Posted
+   line ("4 on `src/a.ts:12-14`", "9 in the review body"), and whether the
+   pending review already existed or was created. The comments are visible
+   only to the user until the review is submitted.
+9. Ask whether to submit the review now, and with which verdict: Comment,
+   Request changes, or Approve. Propose none and recommend none; the verdict is
+   the user's. Only when the user names one, run the command with `--submit
+   comment`, `--submit request-changes`, or `--submit approve`, and say it was
+   submitted. Leaving it pending, to submit later or on GitHub, is fine.
+
+`--dry-run` with `--post` or `--submit` writes the calls to
+`<run>/posted/payload.json` instead of making them; use it when the user asks
+to see what would be sent.
+
+### Drafting rules
+
+- Written for the author of the pull request, as one reviewer to another: what
+  goes wrong (the claim), why it matters, and what to do about it. Short; plain
+  words; no headings.
+- No internal material: no confidence, lens names, finding numbers or merged
+  ids, local paths, run directories, other worktrees, or this repository's
+  `.clerk-dev` records. Name code by its path in the repository and its
+  symbols.
+- A finding in Needs confirmation (section `confirm`), or one whose card or
+  verifier's note leaves the outcome uncertain, is asked as a question ("Can
+  `retry` run after the lock is released here?"), not stated.
+- When the fix is a small edit within the anchored lines, add a
+  ```` ```suggestion ```` block holding those lines as they should read. Never
+  for an edit outside them, or for a file or review-body comment.
+- One issue in several places: either one general comment that says it
+  is one example of something that applies elsewhere, kept general, or a
+  separate self-contained comment at each place. The drafter proposes which,
+  case by case; the note or the user's edit settles it. Comments never refer to
+  each other and never list the other files or lines. When one general comment
+  covers several Post-marked findings, the session asks the user whether to
+  change the others' instruction, and does not change it itself.
+- The Post note steers tone, length, severity, a suggestion or not, and
+  general or per place. A placement in the note (`on <path>:<line>`,
+  `on <path>`, `in the review body`) is the script's; the text does not mention
+  it.
+- Write paragraphs as plain lines; the script joins wrapped lines before
+  sending.
+
 ## Recording a decision
 
 Two fields hold what was decided, and each has one job:
@@ -250,6 +353,9 @@ correct it.
 - No edits to code in this session; fixes go through the fix skill.
 - No commits except through the fix skill, which follows the user's commit
   rules.
+- Nothing posted to or submitted on GitHub without the user's yes to that step,
+  and no verdict proposed; edits to a posted text after posting go out only on
+  the next `--post`, after its preview.
 - No changes to an instruction the user set, except: the fix skill moves a `fix`
   to `discuss` on any stop (scope, size, tests, a question), with the reason
   as the note; and the check under Findings whose code moved marks a finding
