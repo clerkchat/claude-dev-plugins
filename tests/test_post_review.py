@@ -88,9 +88,9 @@ class PostCase(RunCase):
     def review_body(self):
         return next(c["fields"]["body"] for c in self.calls() if c.get("method") in ("POST", "PUT") and "finding" not in c)
 
-    def refusal(self):
+    def refusal(self, *args):
         with self.assertRaises(SystemExit) as raised:
-            self.main("--post", "--dry-run")
+            self.main(*(args or ("--post", "--dry-run")))
         return str(raised.exception)
 
 
@@ -203,6 +203,89 @@ class RefusalTest(PostCase):
         self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "payload.json")))
 
 
+class LocalPathTest(PostCase):
+    def test_refuses_a_text_naming_the_run_directory(self):
+        self.mark(1, text=f"See {self.run_dir}/merged.md.")
+        self.assertIn(f"finding 1: its text names a local path of this machine ({self.run_dir})", self.refusal())
+
+    def test_refuses_a_text_naming_the_home_directory(self):
+        with mock.patch.dict(os.environ, {"HOME": "/Users/reviewer"}):
+            self.mark(1, text="It reads /Users/reviewer/notes.txt.")
+            self.assertIn("its text names a local path of this machine (/Users/reviewer)", self.refusal())
+
+    def test_refuses_a_review_body_naming_a_local_path(self):
+        self.mark(1)
+        self.write("posted/review.md", f"Reviewed in {self.run_dir}.")
+        self.assertIn("the review body: its text names a local path", self.refusal())
+
+    def test_says_so_in_the_preview(self):
+        self.mark(1, text=f"See {self.run_dir}.")
+        self.assertIn("cannot post: its text names a local path", self.main())
+
+
+class InternalMaterialWarningTest(PostCase):
+    CASES = {".clerk-dev/latest/merged.md": "a .clerk-dev path", "~/code/x": "a home-directory path", "DEC-17": "a record id",
+             "confidence 90": "a confidence", "the security lens": "a lens", "finding 12": "a finding number",
+             "20261105-1200-branch": "a run label"}
+
+    def test_warns_on_each_kind_in_the_preview(self):
+        for text, what in self.CASES.items():
+            with self.subTest(text):
+                self.mark(1, text=f"Look at {text} here.")
+                self.assertIn(f"warning: the text names {what}", self.main())
+
+    def test_still_posts_the_text(self):
+        self.mark(1, text="Per DEC-17 this breaks.")
+        self.assertEqual(self.thread_vars(1)["body"], "Per DEC-17 this breaks.")
+
+
+class MentionWarningTest(PostCase):
+    def test_warns_that_a_mention_notifies(self):
+        self.mark(1, text="Ask @octocat and @acme/core.")
+        self.assertIn("warning: the text mentions @acme/core, @octocat; GitHub notifies them", self.main())
+
+    def test_ignores_a_mention_in_inline_code(self):
+        self.mark(1, text="Use the `@octocat` decorator.")
+        self.assertNotIn("mentions", self.main())
+
+    def test_ignores_a_mention_in_a_code_fence(self):
+        self.mark(1, text="Use:\n```suggestion\n@decorator\n```")
+        self.assertNotIn("mentions", self.main())
+
+    def test_ignores_an_email_address(self):
+        self.mark(1, text="Mail dev@example.com.")
+        self.assertNotIn("mentions", self.main())
+
+    def test_warns_on_a_mention_in_the_review_body(self):
+        self.mark(1)
+        self.write("posted/review.md", "Thanks @octocat.")
+        self.assertIn("warning: the text mentions @octocat", self.main().split("review body:")[1])
+
+
+class NoWriteCallTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.pend()
+        self.posted_row(1, state="edited")
+        self.writes = [self.stub("rest"), self.stub("graphql")]
+
+    def assertNoWriteCall(self):
+        self.assertEqual([w.call_count for w in self.writes], [0, 0])
+
+    def test_the_preview_makes_none(self):
+        self.main()
+        self.assertNoWriteCall()
+
+    def test_a_dry_run_of_post_makes_none(self):
+        self.main("--post", "--dry-run")
+        self.assertNoWriteCall()
+
+    def test_a_dry_run_of_submit_makes_none(self):
+        self.main("--submit", "comment", "--dry-run")
+        self.assertNoWriteCall()
+
+
 class NewReviewTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -283,6 +366,12 @@ class DeletedOnGitHubTest(PostCase):
 
 
 class SubmitTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.pend()
+        self.posted_row(1)
+
     def submit(self, *args):
         self.main("--submit", *args, "--dry-run")
         with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
@@ -294,18 +383,25 @@ class SubmitTest(PostCase):
         self.assertEqual(raised.exception.code, 2)
 
     def test_refuses_without_a_pending_review(self):
+        self.ctx["pending"] = None
         with self.assertRaises(SystemExit):
             self.submit("approve")
 
+    def test_refuses_a_pending_review_this_run_did_not_post_to(self):
+        self.posted_row(1, review_id="54")
+        self.assertIn("pending review 55 holds nothing this run posted", self.refusal("--submit", "comment", "--dry-run"))
+
+    def test_refuses_a_review_body_naming_a_local_path(self):
+        self.write("posted/review.md", f"Reviewed in {self.run_dir}.")
+        self.assertIn("the review body: its text names a local path", self.refusal("--submit", "comment", "--dry-run"))
+
     def test_says_nothing_changed_when_github_rejects_it(self):
-        self.pend()
         self.stub("rest", side_effect=gh_api.GhError("cannot approve your own pull request"))
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
             post.main([self.run_dir, "--submit", "approve"])
         self.assertIn("GitHub rejected the request; nothing changed on GitHub", str(raised.exception))
 
     def test_sends_the_verdict_with_the_review_body(self):
-        self.pend()
         self.assertEqual(self.submit("request-changes"), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
                                                            "fields": {"event": "REQUEST_CHANGES", "body": post.DEFAULT_BODY}}])
 
@@ -329,6 +425,9 @@ class LiveCase(PostCase):
             return {"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"}
         self.rest.side_effect = answer
 
+    def posted_body(self):
+        return next(c.args[1]["body"] for c in self.graphql.call_args_list if c.args[1].get("path") == "src/a.py")
+
     def rejected(self):
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
             post.main([self.run_dir, "--post"])
@@ -349,6 +448,18 @@ class LivePostTest(LiveCase):
             post.main([self.run_dir, "--post"])
         self.assertEqual((self.graphql.call_args_list[-1].args[1], self.rest.call_args.args[:2]),
                          ({"id": "PRRC_1"}, ("DELETE", "repos/acme/widgets/pulls/7/reviews/55")))
+
+
+class PlaceholderLookalikeTest(LiveCase):
+    def test_sends_a_text_that_looks_like_a_placeholder_as_written(self):
+        self.mark(1, text="{review.id}")
+        self.main("--post")
+        self.assertEqual(self.posted_body(), "{review.id}")
+
+    def test_records_the_batch_when_a_note_looks_like_a_placeholder(self):
+        self.mark(1, note="{unknown.key}")
+        self.main("--post")
+        self.assertEqual(post.rr.read_posted(self.run_dir)[1]["note"], "{unknown.key}")
 
 
 class LiveRollbackTest(LiveCase):
@@ -403,6 +514,7 @@ class FetchPrTest(unittest.TestCase):
                  "repos/o/r/pulls/7/comments": [{"id": 8}],
                  "repos/o/r/pulls/7/reviews/2/comments": [{"id": 9, "node_id": "C9"}]}
         with mock.patch.object(gh_api, "repo_owner_name", return_value=["o", "r"]), \
+             mock.patch.object(gh_api, "pr_number", return_value=7), \
              mock.patch.object(gh_api, "gh", return_value=json.dumps({"headRefOid": HEAD})), \
              mock.patch.object(gh_api, "rest_list", side_effect=lambda path, cwd: lists[path]):
             self.ctx = post.fetch_pr("/w", "/nowhere", 7)
@@ -415,6 +527,62 @@ class FetchPrTest(unittest.TestCase):
 
     def test_knows_which_comments_are_on_github_submitted_or_pending(self):
         self.assertEqual(self.ctx["comment_ids"], {"8", "9"})
+
+
+class ReviewedPrCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(gh_api, "pr_number", return_value=7)
+        self.branch_pr = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def reviewed(self, asked=None, repo="o/r"):
+        return post.reviewed_pr("/w", self.run_dir, asked, repo)
+
+    def refusal(self, asked=None, repo="o/r"):
+        with self.assertRaises(SystemExit) as raised:
+            self.reviewed(asked, repo)
+        return str(raised.exception)
+
+
+class WhenTheRunRecordedAPullRequestTest(ReviewedPrCase):
+    def setUp(self):
+        super().setUp()
+        self.write("pr/pr.txt", "9\thttps://github.com/o/r/pull/9\n")
+
+    def test_posts_to_it(self):
+        self.assertEqual(self.reviewed(), 9)
+
+    def test_accepts_the_same_pr(self):
+        self.assertEqual(self.reviewed(9), 9)
+
+    def test_refuses_another_pr(self):
+        self.assertIn("--pr 8 is not the reviewed pull request #9", self.refusal(8))
+
+    def test_refuses_another_repository(self):
+        self.assertIn("the run reviewed a pull request of o/r, but --repo is o/fork", self.refusal(repo="o/fork"))
+
+
+class WhenTheRunReviewedAPullRequestNumberTest(ReviewedPrCase):
+    def test_posts_to_that_number(self):
+        self.write_target("#9", "b" * 40, HEAD)
+        self.assertEqual(self.reviewed(), 9)
+
+
+class WhenTheRunRecordedNoPullRequestTest(ReviewedPrCase):
+    def test_posts_to_the_branch_pull_request(self):
+        self.assertEqual(self.reviewed(), 7)
+
+    def test_refuses_a_pr_other_than_the_branch_pull_request(self):
+        self.assertIn("--pr 8 is not the reviewed pull request #7", self.refusal(8))
+
+    def test_takes_the_pr_when_the_branch_has_none(self):
+        self.branch_pr.side_effect = gh_api.GhError("no pull requests found")
+        self.assertEqual(self.reviewed(8), 8)
+
+    def test_asks_for_a_pr_when_nothing_names_one(self):
+        self.branch_pr.side_effect = gh_api.GhError("no pull requests found")
+        self.assertIn("pass --pr N", self.refusal())
 
 
 class CarryTest(TempCase):
