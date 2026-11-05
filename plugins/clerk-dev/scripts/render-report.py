@@ -883,6 +883,11 @@ def file_spec(flag, spec, nums):
     if not m or not os.path.exists(m.group(2)): sys.exit(f"bad {flag} {spec!r}; use N=<path of a text file>")
     return finding_id(m.group(1), nums), open(m.group(2), encoding="utf-8").read()
 
+def posted_draft(spec, nums):
+    mid, text = file_spec("--posted", spec, nums)
+    if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
+    return mid, text
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("--target", required=True); ap.add_argument("--branch", default=""); ap.add_argument("--base", default=""); ap.add_argument("--head", default="HEAD")
@@ -908,6 +913,7 @@ def main():
     global STATUS
     STATUS = import_hand_edits(a.run, read_status(a.run), a.date or "")
     nums = read_numbers(a.run)
+    drafts = [posted_draft(spec, nums) for spec in a.posted]
     for spec in a.set:
         m = re.match(r"^(#?\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
         if not m or m.group(2) not in STATUS_WORDS:
@@ -942,9 +948,7 @@ def main():
     global POSTED
     POSTED = read_posted(a.run)
     import_posted_edits(a.run, a.date or "")
-    for spec in a.posted:
-        mid, text = file_spec("--posted", spec, nums)
-        if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
+    for mid, text in drafts:
         record_posted(a.run, mid, text, "drafted", a.date or "")
     for mid, over in read_overrides(a.run, mf).items():
         if "title" in over: TITLES[mid] = over["title"]

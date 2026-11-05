@@ -271,6 +271,19 @@ class PostedFlagTest(PostCase):
         self.assertIn("the file is empty", self.render_fails("--posted", f"1={self.draft}"))
 
 
+class WhenABatchHoldsAnEmptyDraftTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--posted", f"1={self.draft}")
+        redraft, empty = self.path("redraft.md"), self.path("empty.md")
+        write_file(redraft, "Say it better.\n")
+        write_file(empty, "  \n")
+        self.render_fails("--posted", f"1={redraft}", "--posted", f"2={empty}")
+
+    def test_records_none_of_the_batch(self):
+        self.assertEqual(self.read("posted/7.md"), "Say it plainly.\n")
+
+
 class DraftedNoteChangeTest(PostCase):
     def setUp(self):
         super().setUp()

@@ -35,6 +35,17 @@ def thread_data(n):
         {"id": f"PRRC_{n}", "databaseId": 900 + n, "url": f"https://gh/c/{900 + n}"}]}}}}}
 
 
+NO_COMMENT = {"data": {"addPullRequestReviewThread": {"thread": None}}}
+
+
+def thread_answer(variables):
+    return thread_data(1 if variables.get("path") == "src/a.py" else 3)
+
+
+def review_comment(n, path):
+    return {"id": 900 + n, "node_id": f"PRRC_{n}", "html_url": f"https://gh/c/{900 + n}", "path": path, "body": f"Finding {n} text."}
+
+
 class PostCase(RunCase):
     def setUp(self):
         super().setUp()
@@ -410,20 +421,37 @@ class LiveCase(PostCase):
     def setUp(self):
         super().setUp()
         self.mark(1); self.mark(3)
-        self.graphql = self.stub("graphql", side_effect=lambda q, v, cwd: thread_data(1 if v.get("path") == "src/a.py" else 3))
+        self.graphql = self.stub("graphql", side_effect=lambda q, v, cwd: thread_answer(v))
         self.rest = self.stub("rest", return_value={"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"})
+        self.listed = self.stub("rest_list", return_value=[])
 
     def graphql_rejects(self, refused):
         def answer(query, variables, cwd):
             if refused(query, variables): raise gh_api.GhError("rejected")
-            return thread_data(1 if variables.get("path") == "src/a.py" else 3)
+            return thread_answer(variables)
         self.graphql.side_effect = answer
 
-    def rest_rejects(self, method):
+    def graphql_answers(self, path, reply):
+        def answer(query, variables, cwd):
+            if variables.get("path") != path: return thread_answer(variables)
+            if isinstance(reply, BaseException): raise reply
+            return reply
+        self.graphql.side_effect = answer
+
+    def rest_rejects(self, method, error=None):
         def answer(m, path, fields, cwd):
-            if m == method: raise gh_api.GhError("refused")
+            if m == method: raise error or gh_api.GhError("refused")
             return {"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"}
         self.rest.side_effect = answer
+
+    def deleted_comments(self):
+        return [c.args[1] for c in self.graphql.call_args_list if "deletePullRequestReviewComment" in c.args[0]]
+
+    def stopped(self, error):
+        err = io.StringIO()
+        with self.assertRaises(error), redirect_stderr(err):
+            post.main([self.run_dir, "--post"])
+        return err.getvalue()
 
     def posted_body(self):
         return next(c.args[1]["body"] for c in self.graphql.call_args_list if c.args[1].get("path") == "src/a.py")
@@ -471,8 +499,8 @@ class LiveRollbackTest(LiveCase):
         self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py")
         self.assertIn("nothing from this batch is left on GitHub", self.rejected())
 
-    def test_treats_an_answer_without_a_comment_as_a_rejection(self):
-        self.graphql.side_effect = [thread_data(1), {"data": {"addPullRequestReviewThread": {"thread": None}}}, {"data": {}}]
+    def test_deletes_the_review_it_created_when_an_answer_names_no_comment(self):
+        self.graphql.side_effect = [thread_data(1), NO_COMMENT, {"data": {}}]
         self.rejected()
         self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/55"))
 
@@ -489,6 +517,81 @@ class LiveRollbackTest(LiveCase):
     def test_leaves_out_comments_the_deleted_review_took_with_it(self):
         self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py" or "deletePullRequestReviewComment" in q)
         self.assertIn("nothing from this batch is left on GitHub", self.rejected())
+
+
+class WhenAnAnswerNamesNoCommentOnAnExistingReviewTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.pend()
+        self.graphql_answers("src/b.py", NO_COMMENT)
+
+    def test_deletes_the_comment_it_finds_on_the_pending_review(self):
+        self.listed.return_value = [review_comment(3, "src/b.py")]
+        self.rejected()
+        self.assertIn({"id": "PRRC_3"}, self.deleted_comments())
+
+    def test_says_nothing_is_left_once_it_deleted_it(self):
+        self.listed.return_value = [review_comment(3, "src/b.py")]
+        self.assertIn("rolled back; nothing from this batch is left on GitHub", self.rejected())
+
+    def test_leaves_a_comment_that_was_on_the_review_before(self):
+        self.pend(comments={903: "PRRC_3"})
+        self.listed.return_value = [review_comment(3, "src/b.py")]
+        self.rejected()
+        self.assertNotIn({"id": "PRRC_3"}, self.deleted_comments())
+
+    def test_says_the_comment_may_be_left_when_it_finds_none(self):
+        self.assertIn("rolled back; possibly on GitHub: finding 3's comment on pending review 55; posted.tsv is unchanged", self.rejected())
+
+    def test_never_says_nothing_changed_when_the_first_answer_names_none(self):
+        self.graphql_answers("src/a.py", NO_COMMENT)
+        self.assertIn("the batch stopped; possibly on GitHub: finding 1's comment on pending review 55", self.rejected())
+
+
+class WhenTheBatchIsInterruptedTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.graphql_answers("src/b.py", KeyboardInterrupt())
+
+    def test_deletes_the_review_it_created(self):
+        self.stopped(KeyboardInterrupt)
+        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/55"))
+
+    def test_says_what_it_rolled_back(self):
+        self.assertIn("the batch stopped; rolled back; nothing from this batch is left on GitHub", self.stopped(KeyboardInterrupt))
+
+
+class WhenAReplyIsMalformedTest(LiveCase):
+    def test_deletes_the_review_it_created(self):
+        self.graphql_answers("src/b.py", json.JSONDecodeError("Expecting value", "", 0))
+        self.stopped(ValueError)
+        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/55"))
+
+
+class WhenInterruptedWhileCreatingTheReviewTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.rest_rejects("POST", KeyboardInterrupt())
+
+    def test_deletes_the_pending_review_it_finds(self):
+        self.listed.return_value = [{"id": 56, "node_id": "PRR_56", "state": "PENDING"}]
+        self.stopped(KeyboardInterrupt)
+        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/56"))
+
+    def test_says_a_review_may_be_left_when_it_finds_none(self):
+        self.assertIn("possibly on GitHub: a pending review this batch began", self.stopped(KeyboardInterrupt))
+
+
+class WhenPostedTsvCannotBeWrittenTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        patcher = mock.patch.object(post.rr, "write_posted", side_effect=OSError("disk full"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_names_what_it_posted(self):
+        self.assertIn("posted.tsv was not updated; this batch is on GitHub:\n  review 55 https://gh/r/55\n"
+                      "  finding 1: comment 901 https://gh/c/901\n  finding 3: comment 903 https://gh/c/903", self.stopped(OSError))
 
 
 class LiveUpdateRollbackTest(LiveCase):
