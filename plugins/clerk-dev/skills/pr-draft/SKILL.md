@@ -170,8 +170,7 @@ tests; docs only is docs; removing or changing a route, field, table, or check
 callers rely on is a break. A mixed commit goes under its riskiest group, in
 the order `commits.md` gives. A type is a claim, not proof: when a stage
 writer finds that a commit typed refactor or chore changes behavior, the
-commit moves to changes to deployed code. Note whether the branch's subjects
-carry types, for the Commit conventions section. On a stacked base, changes to
+commit moves to changes to deployed code. On a stacked base, changes to
 deployed code and changes to code on the base are separate groups and may
 both appear. The groups are not written into the draft; they drive the
 behavior changes check of step 6.

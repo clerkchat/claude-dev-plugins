@@ -13,7 +13,6 @@ and checked.
   base line                     (when the base is not the default branch)
   why this PR exists            (a short paragraph)
   sibling pull requests         (a bullet list, for several repositories)
-  ### Commit conventions        (when the commits carry subject markers)
   ### Scope change              (when it applies)
   ### Client-facing changes     (when it applies)
 ## Walkthrough
@@ -60,17 +59,6 @@ from the code's owners to people new to it; err toward explaining.
 - **Sibling pull requests**, for several repositories: a bullet list, one per
   repository, each with its number and link (else the branch) and what it
   holds.
-
-### Commit conventions
-
-Only when the branch's commit subjects carry types (`refactor(<area>):`,
-`change`, `!`, as `skills/review/commits.md` lists them): what each type
-present means in reviewer terms, as bullets. Say why a refactor can be trusted
-(it changes no behavior and existing tests guard it) and what it allows
-(cherry-picking it on its own), not only what it does not touch. Describe new
-code as net new code, never as code nothing calls. No list of commits and no
-commit counts: which changes alter behavior is in the stages' Before/After
-tables.
 
 ### Scope change
 
@@ -298,14 +286,6 @@ Sibling pull requests:
 
 - clerkai `feat/pipeline-test-voice`: the scenario editor and results for calls
 - agent-swarm `feat/pipeline-test-voice`: Belle authoring and running voice cases
-
-### Commit conventions
-
-Commits are small and each has one kind of change, marked by its type:
-
-- `refactor(pipeline):` changes deployed pipeline code without changing behavior, relying on the existing pipeline tests to catch a regression. These commits touch no harness code, so they can be cherry-picked onto `master` on their own.
-- `fix` and `change` alter behavior production has today; `feat` adds net new code.
-- `test` adds or changes tests only, and a `!` marks a change to a contract callers rely on.
 
 ### Client-facing changes
 
