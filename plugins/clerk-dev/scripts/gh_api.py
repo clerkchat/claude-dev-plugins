@@ -1,9 +1,10 @@
-import json, subprocess, sys
+import json, shutil, subprocess, sys
 
 class GhError(SystemExit):
     pass
 
 def gh(args, cwd, stdin=None):
+    if not shutil.which("gh"): raise GhError("gh is not installed; install the GitHub CLI and sign in with gh auth login")
     r = subprocess.run(["gh"] + args, capture_output=True, text=True, cwd=cwd, input=stdin)
     if r.returncode != 0: raise GhError(f"gh {' '.join(args[:3])} failed: {r.stderr.strip()}")
     return r.stdout

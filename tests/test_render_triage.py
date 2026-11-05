@@ -266,6 +266,10 @@ class PostedFlagTest(PostCase):
     def test_rejects_a_missing_file(self):
         self.assertIn("bad --posted", self.render_fails("--posted", "1=nope.md"))
 
+    def test_rejects_an_empty_file(self):
+        write_file(self.draft, "  \n\n")
+        self.assertIn("the file is empty", self.render_fails("--posted", f"1={self.draft}"))
+
 
 class DraftedNoteChangeTest(PostCase):
     def setUp(self):

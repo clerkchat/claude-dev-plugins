@@ -21,7 +21,10 @@ pullRequestReviewCommentId:$pullRequestReviewCommentId,body:$body}){pullRequestR
 DELETE_COMMENT = """mutation($id:ID!){deletePullRequestReviewComment(input:{id:$id}){clientMutationId}}"""
 
 def thread_result(data):
-    t = data["addPullRequestReviewThread"]["thread"]; c = t["comments"]["nodes"][0]
+    t = ((data or {}).get("addPullRequestReviewThread") or {}).get("thread") or {}
+    nodes = (t.get("comments") or {}).get("nodes") or []
+    if not nodes: raise gh_api.GhError("GitHub's answer named no new comment; if one was added, it is on the pending review")
+    c = nodes[0]
     return {"thread_id": t["id"], "comment_id": c["databaseId"], "comment_node": c["id"], "url": c["url"]}
 
 MUTATIONS = {"addPullRequestReviewThread": (ADD_THREAD, thread_result),
@@ -50,10 +53,14 @@ def outgoing(text, plain):
     sent = unwrap(text)
     return (SUGGESTION.sub(r"\1", sent), True) if plain and SUGGESTION.search(sent) else (sent, False)
 
+def patch_lines(run):
+    p = os.path.join(run, "patch", "all.patch")
+    if not os.path.exists(p): return []
+    with open(p, encoding="utf-8", newline="") as fh: return fh.read().split("\n")
+
 def read_hunks(run):
     hunks, path, old_left, new_left, line = {}, None, 0, 0, 0
-    p = os.path.join(run, "patch", "all.patch")
-    for raw in (open(p, encoding="utf-8").read().split("\n") if os.path.exists(p) else []):
+    for raw in patch_lines(run):
         if old_left > 0 or new_left > 0:
             if raw.startswith("\\"): continue
             if not raw.startswith("+"): old_left -= 1
@@ -98,10 +105,14 @@ def resolve(e, note, files, hunks):
     if not path: return anchor("body"), "fallback: no file; sent in the review body", None
     if path not in files: return None, None, f"its file {path} is not in the pull request"
     if line is None: return anchor("file", path), None, None
+    line, end = sorted((line, end or line))
     if not hunks.get(path): return anchor("file", path), f"fallback: {path} has no lines in the reviewed diff; sent on the file", None
-    (lo, hi), moved = nearest_lines(hunks[path], line, end or line)
-    moved_to = f"fallback: {path}:{span(line, end or line)} is outside the diff; moved to {span(lo, hi)}" if moved else None
+    (lo, hi), moved = nearest_lines(hunks[path], line, end)
+    moved_to = f"fallback: {path}:{span(line, end)} is outside the diff; moved to {span(lo, hi)}" if moved else None
     return anchor("line" if lo == hi else "range", path, lo, hi), moved_to, None
+
+def on_github(row, ctx):
+    return row["review_id"] in ctx["review_ids"] if row["kind"] == "body" else row["comment_id"] in ctx["comment_ids"]
 
 def row_anchor(row):
     num = lambda v: int(v) if v else None
@@ -123,8 +134,10 @@ def plan_items(run, ctx):
     for mid in marked:
         e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
         it = {"id": mid, "number": nums.get(mid, f"#{mid}"), "title": rr.title_of(e, titles) if e else "(not in merged.md)",
-              "note": note, "row": row, "fallback": None, "problem": None}
-        if row.get("kind"):
+              "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
+        if row.get("kind") and not on_github(row, ctx):
+            it["gone"] = f"its earlier comment is no longer on GitHub (review {row['review_id']}); --post posts it again"
+        if row.get("kind") and not it["gone"]:
             it["anchor"], it["action"] = row_anchor(row), "skip" if row["state"] == "posted" else "update"
         elif e is None:
             it["anchor"], it["action"], it["problem"] = None, "new", "it is not in merged.md"
@@ -133,6 +146,8 @@ def plan_items(run, ctx):
             it["action"] = "new"
         raw = rr.read_text(rr.posted_path(run, mid))
         if not raw: it["problem"] = it["problem"] or "it has no posted text"
+        if it["action"] != "skip" and rr.stale_text(row, note):
+            it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
         plain = bool(it["fallback"]) or (it["anchor"] or {}).get("kind") not in LINE_KINDS
         it["text"], it["downgraded"] = outgoing(raw, plain)
         items.append(it)
@@ -200,29 +215,40 @@ def resolve_refs(value, results):
 def send(call, results, repo):
     if "graphql" in call:
         query, shape = MUTATIONS[call["graphql"]]
-        return shape(gh_api.graphql(query, resolve_refs(call["variables"], results), repo)["data"])
+        return shape((gh_api.graphql(query, resolve_refs(call["variables"], results), repo) or {}).get("data"))
     return gh_api.rest(call["method"], call["path"], resolve_refs(call.get("fields", {}), results), repo)
 
-def rollback(calls, results, repo):
-    undo = [{"graphql": "deletePullRequestReviewComment", "variables": {"id": results[c["as"]]["comment_node"]}}
-            for c in calls if c.get("graphql") == "addPullRequestReviewThread" and c["as"] in results]
-    created = next((c for c in calls if c.get("as") == "review"), None)
-    if created and "review" in results: undo.append({"method": "DELETE", "path": f"{created['path']}/{results['review']['id']}"})
-    failed = []
-    for call in undo:
-        try: send(call, results, repo)
-        except gh_api.GhError as err: failed.append(str(err))
-    done = f"deleted {len(undo) - len(failed)} of {len(undo)} added threads and reviews"
-    return done + ("; could not undo: " + "; ".join(failed) if failed else "")
+def undo_of(call, results, items):
+    it = items.get(call.get("finding"), {})
+    name = f"finding {it.get('number', call.get('finding'))}"
+    if call.get("graphql") == "addPullRequestReviewThread":
+        added = results[call["as"]]
+        return {"graphql": "deletePullRequestReviewComment", "variables": {"id": added["comment_node"]}}, f"{name}'s comment {added['url']}"
+    if call.get("as") == "review":
+        return {"method": "DELETE", "path": f"{call['path']}/{results['review']['id']}"}, f"pending review {results['review']['id']}"
+    return None, f"{name}'s comment {it.get('row', {}).get('url', '')}, which keeps its new text"
 
-def execute(calls, repo):
-    results = {}
+def rollback(done, results, repo, items):
+    if not done: return "nothing changed on GitHub"
+    left = []
+    for call in reversed(done):
+        undo, what = undo_of(call, results, items)
+        if undo is None: left.append((call, what)); continue
+        try: send(undo, results, repo)
+        except gh_api.GhError as err: left.append((call, f"{what} (could not delete it: {err})")); continue
+        if call.get("as") == "review": left = [(c, w) for c, w in left if c.get("graphql") != "addPullRequestReviewThread"]
+    kept = "; ".join(w for _, w in reversed(left))
+    return "rolled back; " + (f"still on GitHub: {kept}" if kept else "nothing from this batch is left on GitHub") + "; posted.tsv is unchanged"
+
+def execute(calls, repo, items=()):
+    results, done = {}, []
     try:
         for call in calls:
             r = send(call, results, repo)
+            done.append(call)
             if "as" in call: results[call["as"]] = r
     except gh_api.GhError as err:
-        sys.exit(f"{err}\nGitHub rejected the batch; {rollback(calls, results, repo)}")
+        sys.exit(f"{err}\nGitHub rejected the request; {rollback(done, results, repo, {it['id']: it for it in items})}")
     return results
 
 def write_payload(run, calls):
@@ -250,11 +276,15 @@ def fetch_pr(repo, run, pr):
     base = pulls_path(ctx)
     ctx["head"] = json.loads(gh_api.gh(["pr", "view", str(pr), "--json", "headRefOid"], repo))["headRefOid"]
     ctx["files"] = [f["filename"] for f in gh_api.rest_list(f"{base}/files", repo)]
-    pending = next((r for r in gh_api.rest_list(f"{base}/reviews", repo) if r["state"] == "PENDING"), None)
+    reviews = gh_api.rest_list(f"{base}/reviews", repo)
+    ctx["review_ids"] = {str(r["id"]) for r in reviews}
+    ctx["comment_ids"] = {str(c["id"]) for c in gh_api.rest_list(f"{base}/comments", repo)}
+    pending = next((r for r in reviews if r["state"] == "PENDING"), None)
     if pending:
         comments = gh_api.rest_list(f"{base}/reviews/{pending['id']}/comments", repo)
         ctx["pending"] = {"id": pending["id"], "node_id": pending["node_id"], "commit_id": pending["commit_id"],
                           "html_url": pending.get("html_url", ""), "comments": {c["id"]: c["node_id"] for c in comments}}
+        ctx["comment_ids"] |= {str(c) for c in ctx["pending"]["comments"]}
     return ctx
 
 def current_review(ctx):
@@ -276,6 +306,7 @@ def preview(run, ctx, items, reviewed):
         out.append(f"finding {it['number']}: {it['title']}")
         a = it["anchor"]
         if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
+        if it["gone"]: out.append(f"  {it['gone']}")
         if it["fallback"]: out.append(f"  {it['fallback']}")
         if it["downgraded"]: out.append("  suggestion sent as a plain code block")
         if it["action"] == "skip": out.append(f"  already posted: {it['row'].get('url', '')}"); continue
@@ -300,7 +331,7 @@ def post(a, ctx, items, reviewed):
     calls = post_calls(ctx, sending, review_body(a.run, rows, review_id), reviewed)
     print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
     if a.dry_run: write_payload(a.run, calls); return
-    results = execute(calls, a.repo)
+    results = execute(calls, a.repo, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
     rr.write_posted(a.run, {mid: {k: str(resolve_refs(v, results)) for k, v in row.items()} for mid, row in rows.items()})
     new = sum(it["action"] == "new" for it in sending)

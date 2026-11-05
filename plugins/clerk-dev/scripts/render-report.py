@@ -644,8 +644,11 @@ def record_posted(run, mid, text, state, today):
 def note_changed(mid):
     return mid in POSTED and POSTED[mid]["note"] != INSTR.get(mid, {}).get("note", "")
 
+def stale_text(row, note):
+    return bool(row) and row["note"] != note and row["state"] != "edited"
+
 def is_stale(mid):
-    return note_changed(mid) and POSTED[mid]["state"] != "edited"
+    return stale_text(POSTED.get(mid), INSTR.get(mid, {}).get("note", ""))
 
 def check_posted_notes():
     for mid in sorted(POSTED):
@@ -929,7 +932,9 @@ def main():
     POSTED = read_posted(a.run)
     import_posted_edits(a.run, a.date or "")
     for spec in a.posted:
-        record_posted(a.run, *file_spec("--posted", spec, nums), "drafted", a.date or "")
+        mid, text = file_spec("--posted", spec, nums)
+        if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
+        record_posted(a.run, mid, text, "drafted", a.date or "")
     overrides = read_overrides(a.run, mf)
     for e in merged:
         for k, val in overrides.get(e["id"], {}).items():

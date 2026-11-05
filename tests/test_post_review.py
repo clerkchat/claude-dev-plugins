@@ -43,10 +43,16 @@ class PostCase(RunCase):
         self.write("patch/all.patch", PATCH)
         self.write_target("pr 7", "b" * 40, HEAD)
         self.marks = {}
-        self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "files": ["src/a.py", "src/b.py"], "pending": None}
+        self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "files": ["src/a.py", "src/b.py"], "pending": None,
+                    "review_ids": {"55"}, "comment_ids": {"901"}}
         patcher = mock.patch.object(post, "fetch_pr", side_effect=lambda *a: self.ctx)
         patcher.start()
         self.addCleanup(patcher.stop)
+
+    def stub(self, name, **kw):
+        patcher = mock.patch.object(gh_api, name, **kw)
+        self.addCleanup(patcher.stop)
+        return patcher.start()
 
     def mark(self, mid, note="", text=None):
         self.marks[mid] = note
@@ -99,11 +105,23 @@ class UnwrapTest(unittest.TestCase):
         self.assertEqual(post.unwrap("- one\n  more\n- two"), "- one more\n- two")
 
 
+class ReadHunksTest(RunCase):
+    def test_counts_a_line_with_a_bare_carriage_return_as_one_line(self):
+        self.write("patch/all.patch", "diff --git a/x b/x\n--- a/x\n+++ b/x\n"
+                   "@@ -1,2 +1,3 @@\n a\rb\n c\n+++ y\n@@ -9 +10 @@\n+d\n")
+        self.assertEqual(post.read_hunks(self.run_dir), {"x": [(1, 3), (10, 10)]})
+
+
 class AnchorTest(PostCase):
     def test_anchors_a_range_on_the_right_side(self):
         self.mark(1)
         self.assertEqual({k: v for k, v in self.thread_vars(1).items() if k not in ("pullRequestReviewId", "body")},
                          {"path": "src/a.py", "subjectType": "LINE", "line": 13, "side": "RIGHT", "startLine": 11, "startSide": "RIGHT"})
+
+    def test_orders_a_range_whose_end_comes_before_its_start(self):
+        self.write_merged(finding(1, "src/a.py", "13-11"))
+        self.mark(1)
+        self.assertEqual((self.thread_vars(1)["startLine"], self.thread_vars(1)["line"]), (11, 13))
 
     def test_moves_a_line_outside_the_diff_to_the_nearest_hunk(self):
         self.mark(2)
@@ -125,6 +143,10 @@ class AnchorTest(PostCase):
 class NotePlacementTest(PostCase):
     def test_a_line_in_the_note_wins(self):
         self.mark(1, note="on src/a.py:41-42, keep it short")
+        self.assertEqual((self.thread_vars(1)["startLine"], self.thread_vars(1)["line"]), (41, 42))
+
+    def test_a_reversed_range_in_the_note_is_ordered(self):
+        self.mark(1, note="on src/a.py:42-41")
         self.assertEqual((self.thread_vars(1)["startLine"], self.thread_vars(1)["line"]), (41, 42))
 
     def test_a_file_in_the_note_makes_a_file_comment(self):
@@ -160,6 +182,15 @@ class RefusalTest(PostCase):
     def test_refuses_a_finding_without_posted_text(self):
         self.mark(1, text=False)
         self.assertIn("finding 1: it has no posted text", self.refusal())
+
+    def test_refuses_a_whitespace_only_posted_text(self):
+        self.mark(1, text="  \n\n")
+        self.assertIn("finding 1: it has no posted text", self.refusal())
+
+    def test_refuses_a_text_drafted_for_another_note(self):
+        self.mark(1, note="as a question")
+        self.posted_row(1, state="drafted", note="keep it short", kind="", comment_id="", review_id="")
+        self.assertIn("finding 1: its posted text is to be redrafted; the note changed", self.refusal())
 
     def test_sends_nothing_when_it_refuses(self):
         self.mark(4)
@@ -227,6 +258,25 @@ class RepostTest(PostCase):
         self.assertEqual((self.call_for(1)["method"], self.call_for(1)["path"]), ("PATCH", "repos/acme/widgets/pulls/comments/901"))
 
 
+class DeletedOnGitHubTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx["comment_ids"] = set()
+
+    def test_posts_a_comment_deleted_on_github_again(self):
+        self.mark(1); self.posted_row(1)
+        self.assertEqual(self.call_for(1)["graphql"], "addPullRequestReviewThread")
+
+    def test_says_so_in_the_preview(self):
+        self.mark(1); self.posted_row(1)
+        self.assertIn("its earlier comment is no longer on GitHub (review 55)", self.main())
+
+    def test_posts_a_body_comment_of_a_deleted_review_again(self):
+        self.mark(1, note="in the review body")
+        self.posted_row(1, kind="body", comment_id="", review_id="54")
+        self.assertIn("Finding 1 text.", self.review_body())
+
+
 class SubmitTest(PostCase):
     def submit(self, *args):
         self.main("--submit", *args, "--dry-run")
@@ -242,24 +292,45 @@ class SubmitTest(PostCase):
         with self.assertRaises(SystemExit):
             self.submit("approve")
 
+    def test_says_nothing_changed_when_github_rejects_it(self):
+        self.pend()
+        self.stub("rest", side_effect=gh_api.GhError("cannot approve your own pull request"))
+        with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
+            post.main([self.run_dir, "--submit", "approve"])
+        self.assertIn("GitHub rejected the request; nothing changed on GitHub", str(raised.exception))
+
     def test_sends_the_verdict_with_the_review_body(self):
         self.pend()
         self.assertEqual(self.submit("request-changes"), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
                                                            "fields": {"event": "REQUEST_CHANGES", "body": post.DEFAULT_BODY}}])
 
 
-class LivePostTest(PostCase):
+class LiveCase(PostCase):
     def setUp(self):
         super().setUp()
         self.mark(1); self.mark(3)
         self.graphql = self.stub("graphql", side_effect=lambda q, v, cwd: thread_data(1 if v.get("path") == "src/a.py" else 3))
         self.rest = self.stub("rest", return_value={"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"})
 
-    def stub(self, name, **kw):
-        patcher = mock.patch.object(gh_api, name, **kw)
-        self.addCleanup(patcher.stop)
-        return patcher.start()
+    def graphql_rejects(self, refused):
+        def answer(query, variables, cwd):
+            if refused(query, variables): raise gh_api.GhError("rejected")
+            return thread_data(1 if variables.get("path") == "src/a.py" else 3)
+        self.graphql.side_effect = answer
 
+    def rest_rejects(self, method):
+        def answer(m, path, fields, cwd):
+            if m == method: raise gh_api.GhError("refused")
+            return {"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"}
+        self.rest.side_effect = answer
+
+    def rejected(self):
+        with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
+            post.main([self.run_dir, "--post"])
+        return str(raised.exception)
+
+
+class LivePostTest(LiveCase):
     def test_records_each_posted_comment_in_posted_tsv(self):
         self.main("--post")
         row = post.rr.read_posted(self.run_dir)[1]
@@ -275,16 +346,70 @@ class LivePostTest(PostCase):
                          ({"id": "PRRC_1"}, ("DELETE", "repos/acme/widgets/pulls/7/reviews/55")))
 
 
+class LiveRollbackTest(LiveCase):
+    def test_says_nothing_changed_when_the_first_call_fails(self):
+        self.rest_rejects("POST")
+        self.assertIn("nothing changed on GitHub", self.rejected())
+
+    def test_says_nothing_is_left_after_a_full_rollback(self):
+        self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py")
+        self.assertIn("nothing from this batch is left on GitHub", self.rejected())
+
+    def test_treats_an_answer_without_a_comment_as_a_rejection(self):
+        self.graphql.side_effect = [thread_data(1), {"data": {"addPullRequestReviewThread": {"thread": None}}}, {"data": {}}]
+        self.rejected()
+        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/55"))
+
+    def test_names_the_created_review_it_could_not_delete(self):
+        self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py")
+        self.rest_rejects("DELETE")
+        self.assertIn("still on GitHub: pending review 55 (could not delete it", self.rejected())
+
+    def test_names_a_comment_it_could_not_delete_while_its_review_stays(self):
+        self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py" or "deletePullRequestReviewComment" in q)
+        self.rest_rejects("DELETE")
+        self.assertIn("finding 1's comment https://gh/c/901 (could not delete it", self.rejected())
+
+    def test_leaves_out_comments_the_deleted_review_took_with_it(self):
+        self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py" or "deletePullRequestReviewComment" in q)
+        self.assertIn("nothing from this batch is left on GitHub", self.rejected())
+
+
+class LiveUpdateRollbackTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1, state="edited")
+
+    def test_deletes_the_new_comments_when_an_update_fails(self):
+        self.rest_rejects("PATCH")
+        self.rejected()
+        self.assertEqual(self.graphql.call_args_list[-1].args[1], {"id": "PRRC_3"})
+
+    def test_names_an_update_made_before_the_failure(self):
+        self.pend(comments={901: "PRRC_901"})
+        self.rest_rejects("PUT")
+        self.assertIn("still on GitHub: finding 1's comment https://gh/c/901, which keeps its new text", self.rejected())
+
+
 class FetchPrTest(unittest.TestCase):
-    def test_finds_the_pending_review_and_its_comment_nodes(self):
+    def setUp(self):
         lists = {"repos/o/r/pulls/7/files": [{"filename": "a.py"}],
                  "repos/o/r/pulls/7/reviews": [{"id": 1, "state": "COMMENTED"}, {"id": 2, "node_id": "N2", "state": "PENDING", "commit_id": HEAD}],
+                 "repos/o/r/pulls/7/comments": [{"id": 8}],
                  "repos/o/r/pulls/7/reviews/2/comments": [{"id": 9, "node_id": "C9"}]}
         with mock.patch.object(gh_api, "repo_owner_name", return_value=["o", "r"]), \
              mock.patch.object(gh_api, "gh", return_value=json.dumps({"headRefOid": HEAD})), \
              mock.patch.object(gh_api, "rest_list", side_effect=lambda path, cwd: lists[path]):
-            ctx = post.fetch_pr("/w", "/nowhere", 7)
-        self.assertEqual((ctx["pending"]["id"], ctx["pending"]["comments"]), (2, {9: "C9"}))
+            self.ctx = post.fetch_pr("/w", "/nowhere", 7)
+
+    def test_finds_the_pending_review_and_its_comment_nodes(self):
+        self.assertEqual((self.ctx["pending"]["id"], self.ctx["pending"]["comments"]), (2, {9: "C9"}))
+
+    def test_knows_which_reviews_are_on_github(self):
+        self.assertEqual(self.ctx["review_ids"], {"1", "2"})
+
+    def test_knows_which_comments_are_on_github_submitted_or_pending(self):
+        self.assertEqual(self.ctx["comment_ids"], {"8", "9"})
 
 
 class CarryTest(TempCase):

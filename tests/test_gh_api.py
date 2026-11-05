@@ -22,6 +22,9 @@ class GhApiTest(unittest.TestCase):
         patcher = mock.patch.object(gh_api.subprocess, "run")
         self.run = patcher.start()
         self.addCleanup(patcher.stop)
+        which = mock.patch.object(gh_api.shutil, "which", return_value="/usr/bin/gh")
+        self.which = which.start()
+        self.addCleanup(which.stop)
 
     def test_gh_returns_stdout(self):
         self.run.return_value = completed("out")
@@ -34,6 +37,12 @@ class GhApiTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised:
             gh_api.gh(["pr", "view"], "/w")
         self.assertIn("boom", str(raised.exception))
+
+    def test_gh_says_when_gh_is_not_installed(self):
+        self.which.return_value = None
+        with self.assertRaises(gh_api.GhError) as raised:
+            gh_api.gh(["pr", "view"], "/w")
+        self.assertIn("gh is not installed", str(raised.exception))
 
     def test_graphql_sends_query_and_variables_as_json_on_stdin(self):
         self.run.return_value = completed(json.dumps({"data": 1}))
