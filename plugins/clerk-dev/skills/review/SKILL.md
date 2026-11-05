@@ -1,7 +1,7 @@
 ---
 name: review
 description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", "give this change a code review", "code review this", "do a code review", or /clerk-dev:review. In a worktree with a .clerk-dev/ directory, use this rather than the built-in code-review skill for any of these. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
-argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass PASS-<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --report-only | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk] [--comment]"
+argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass PASS-<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --render | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk]"
 allowed-tools: Bash(git *), Bash(gh pr *), Bash(gh repo *), Bash(gh api *), Bash(python3 *), Bash(claude *), Bash(ln *), Bash(mkdir *), Read, Grep, Glob, Agent, Write, Monitor, TaskStop
 ---
 
@@ -388,13 +388,12 @@ need to read it unless debugging agent output.
   target; `--previous <label>` names a different one.
 - `--resume [label]`: continue an unfinished run, by default the one
   `.clerk-dev/latest` points at. See Resuming below.
-- `--report-only [label]`: re-render the report of a finished run from its
+- `--render [label]`: re-render the report of a finished run from its
   merged findings and verdicts, without running any reviewer. Use it to iterate
   on the report after changing titles, the summary, or the template.
 - `--recheck N[,M...] [label]`: after a fix, run only the lens that raised
   finding N against the diff of the fix and say whether the finding is resolved.
   See Rechecking below.
-- `--comment`: post the final report to the PR when the target is a PR.
 - `--no-pr-comments`: skip the pull request's review comments, which are
   otherwise brought in by default (Step 7b).
 - `--pr-comments-only [label]`: bring the pull request's comments into an
@@ -1159,7 +1158,7 @@ What the document contains, so you can check it:
 
 Read the rendered report once. If a title is a long sentence, a card is missing
 its mechanism or impact, or a snippet is unhelpful, fix the input and re-render;
-do not hand-edit `report.md`, because `--report-only` would overwrite it. Field
+do not hand-edit `report.md`, because `--render` would overwrite it. Field
 fixes go in `<run>/overrides/<merged id>.md` as `key: value` lines (`title`,
 `context`, `steps`, `impact`, `snippet`, `fix`); the renderer overlays them on
 the merged entry. Never edit `merged.md` by hand; the merge step regenerates it.
@@ -1258,16 +1257,13 @@ open.
 The `review-triage` skill works through them: fixes first, each in its own
 session, then discussions with the user.
 
-## Report-only mode
+## Render mode
 
-With `--report-only [label]`, skip steps 1 through 7. Read the run directory,
+With `--render [label]`, skip steps 1 through 7. Read the run directory,
 check that `merged.md` and `verify/` exist, write or update `titles.tsv`,
 `summary.md`, and `not-reviewed.md` as needed, run the renderer, and show the
 report. The run's `target.txt` supplies the target and commits (or, for older
 runs, `scope.md`), and `plan.md` and `numbers.tsv` the counts.
-
-With `--comment` and a PR target, post the report as one PR comment via
-`gh pr comment`, after showing it here.
 
 ## Feature mode
 
