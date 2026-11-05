@@ -526,7 +526,7 @@ def main():
         if not spec or not piece: sys.exit(f"step {step} names no brief; add --brief" if step else "give --step, or --brief and --piece")
         spec = spec_id(a.wt, spec)
         plan = [x.strip() for x in a.passes.split(",") if x.strip()]
-        known = catalogue()
+        known = list(catalogue())
         bad = [x for x in plan if known and x not in known]
         if bad: sys.exit(f"not in the pass catalogue: {', '.join(bad)}; known: {', '.join(known)}")
         req = [x.strip() for x in a.required.split(",")] if a.required else [x for x in plan if x == "security"]
@@ -594,14 +594,13 @@ def main():
         write(p, entries); print(f"{e['id']} abandoned")
 
 def catalogue():
-    """Pass names from the catalogue table in skills/pass/passes.md."""
     p = os.path.join(HERE, "..", "skills", "pass", "passes.md")
-    if not os.path.exists(p): return []
-    names = []
+    if not os.path.exists(p): return {}
+    lenses = {}
     for line in open(p, encoding="utf-8"):
-        m = re.match(r"^\|\s*([a-z][a-z-]*)\s*\|", line)
-        if m and m.group(1) not in ("pass", "category"): names.append(m.group(1))
-    return names
+        m = re.match(r"^\|\s*([a-z][a-z-]*)\s*\|([^|]*)\|", line)
+        if m and m.group(1) not in ("pass", "category"): lenses[m.group(1)] = [x.strip() for x in m.group(2).split(",") if x.strip()]
+    return lenses
 
 def branch_base(wt):
     """The merge base with the remote main branch, or "" when there is none."""

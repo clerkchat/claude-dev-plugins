@@ -9,9 +9,9 @@ sys.path.insert(0, SCRIPTS)
 import records
 
 lens_mode = records.load_script("lens-mode.py")
+build = records.load_script("build.py")
 
 SKILLS = os.path.join(PLUGIN, "skills")
-PASSES = os.path.join(SKILLS, "pass", "passes.md")
 PROTOCOL = os.path.join(SKILLS, "review-protocol", "SKILL.md")
 ROUTING = os.path.join(SKILLS, "review", "routing.md")
 SURVEY_LENSES = ["concurrency", "design", "edge-cases", "naming-concepts", "tech-debt", "tenancy"]
@@ -43,14 +43,7 @@ def heading_names(text):
 
 
 def catalogue_lenses():
-    lines = read(PASSES).split("\n")
-    start = next(i for i, line in enumerate(lines) if line.startswith("| Pass "))
-    table = []
-    for line in lines[start + 2:]:
-        if not line.startswith("|"):
-            break
-        table.append(line.split("|")[2])
-    return {name.strip() for cell in table for name in cell.split(",")}
+    return {lens for lenses in build.catalogue().values() for lens in lenses}
 
 
 class EveryLensTest(unittest.TestCase):
