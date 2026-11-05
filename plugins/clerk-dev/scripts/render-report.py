@@ -259,15 +259,13 @@ def code_spans(text):
 def paragraphs(text):
     return [code_spans(t.strip()) for t in re.split(r"\n\s*\n", text) if t.strip()]
 
-def _card_tail(out, e, v, section):
-    if v.get("note") and (v.get("verdict") in ("confirmed", "adjusted", "rejected") or is_pr(e)):
-        out += ["##### Second opinion", "", code_spans(v["note"]), ""]
+def _card_tail(e):
+    out = []
     res = os.path.join(RUN, "resolution", f"{e['id']}.md")
     if os.path.exists(res):
         body = open(res, encoding="utf-8").read().strip()
         if body: out += ["##### Resolution", ""] + sum(([p, ""] for p in paragraphs(body)), [])
-    out += ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]))
-    return out
+    return out + ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]))
 
 _APPENDED = None
 def is_new(mid):
@@ -325,7 +323,9 @@ def card(n, e, v, labels, names, repo, head, section):
         out += _sections(e, repo, head)
         if e.get("fix") and e["fix"].lower() != "none obvious":
             out += ["##### Recommendation", ""] + sum(([p, ""] for p in paragraphs(e["fix"])), [])
-        return "\n".join(_card_tail(out, e, v, section))
+        if v.get("note"):
+            out += ["##### Second opinion", "", code_spans(v["note"]), ""]
+        return "\n".join(out + _card_tail(e))
     if e.get("claim") and title_of(e, TITLES) != unquote(e["claim"]).rstrip("."):
         out += [code_spans(unquote(e["claim"]).rstrip(".") + "."), ""]
     for c in PR_LINKS.get(e["id"], []):
@@ -337,13 +337,7 @@ def card(n, e, v, labels, names, repo, head, section):
         out += ["##### Recommendation", ""] + sum(([p, ""] for p in paragraphs(e["fix"])), [])
     if v["verdict"] in ("adjusted", "rejected") and v.get("note") and section != "confirm":
         out += ["##### Second opinion", "", code_spans(v["note"]), ""]
-    res = os.path.join(RUN, "resolution", f"{e['id']}.md")
-    if os.path.exists(res):
-        body = open(res, encoding="utf-8").read().strip()
-        if body:
-            out += ["##### Resolution", ""] + sum(([p, ""] for p in paragraphs(body)), [])
-    out += ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]))
-    return "\n".join(out)
+    return "\n".join(out + _card_tail(e))
 
 def _sections(e, repo, head):
     """Why it matters, Context, How it goes wrong, and the snippet. A pull
@@ -430,10 +424,9 @@ def snapshot_path(run, name):
         if os.path.exists(p): return p
     return os.path.join(run, name)
 
-def read_snapshot(run):
-    """rendered-status.tsv: merged id, the exact checkbox line rendered."""
+def read_snapshot(run, name):
     snap = {}
-    p = snapshot_path(run, "rendered-status.tsv")
+    p = snapshot_path(run, name)
     if os.path.exists(p):
         for line in open(p, encoding="utf-8"):
             parts = line.rstrip("\n").split("\t", 1)
@@ -451,7 +444,7 @@ def import_hand_edits(run, st, today):
     a done status reopens it."""
     p = os.path.join(run, "report.md")
     if not os.path.exists(p): return st
-    snap = read_snapshot(run)
+    snap = read_snapshot(run, "rendered-status.tsv")
     mid = None
     for line in open(p, encoding="utf-8"):
         m = re.match(r"^<!-- finding \d+, merged (\d+),", line)
@@ -549,8 +542,24 @@ def history_line(e):
         return f"Previously {word}{why}: {where}."
     return f"Also reported as {where}."
 
-CHOICES = [("fix", "Fix as recommended"), ("noted", "Fix as noted"), ("discuss", "Discuss"), ("defer", "Defer"), ("ignore", "Ignore")]
-LABEL_TO_CHOICE = {lab.lower(): key for key, lab in CHOICES}
+CHOICES = [("fix", "Fix as recommended", "fix"), ("noted", "Fix as noted", "fix as noted"), ("discuss", "Discuss", "discuss"), ("defer", "Defer", "defer"), ("ignore", "Ignore", "ignore")]
+CHOICE_LABEL = {key: lab for key, lab, _ in CHOICES}
+CHOICE_WORD = {key: word for key, _, word in CHOICES}
+LABEL_TO_CHOICE = {lab.lower(): key for key, lab in CHOICE_LABEL.items()}
+INSTRUCT_NOTE = {"defer": "ref", "ignore": "reason"}
+INSTRUCT_RE = re.compile(r"^(#?\d+)=(" + "|".join(CHOICE_LABEL) + r"|none)(\([a-z ,+]+\))?(?::(.*))?$")
+
+def instruct_usage():
+    forms = []
+    for key in CHOICE_LABEL:
+        forms.append(f"N={key}[:{INSTRUCT_NOTE.get(key, 'note')}]")
+        if key == "fix": forms.append("N=fix(a)[:note]")
+    return ", ".join(forms + ["N=none"])
+
+def instruct_help():
+    keys = [key + (", fix(a) for one labeled alternative" if key == "fix" else "") for key in CHOICE_LABEL]
+    return "set a triage instruction: " + ", ".join(keys) + ", or none"
+
 # "Fix as recommended (a)" picks one labeled alternative of a recommendation
 # that offers several; "(a, c)" picks more than one.
 OPTION_RE = re.compile(r"\s*\(\s*([a-z](?:\s*(?:,|\+|and)\s*[a-z])*)\s*\)\s*$")
@@ -610,7 +619,7 @@ def instruction_lines(i):
     also = [x for x in i.get("also", "").split(",") if x]
     opt = i.get("option", "") if choice == "fix" else ""
     out = []
-    for key, lab in CHOICES:
+    for key, lab in CHOICE_LABEL.items():
         box = "[x]" if key == choice or key in also else "[ ]"
         if key == "fix" and opt: lab += " (" + ", ".join(opt.split(",")) + ")"
         out.append(f"- {box} {lab}" + (f": {note}" if key == choice and note else ""))
@@ -623,7 +632,7 @@ def instruction_block(i):
     i = i or {}
     out = instruction_lines(i) + [""]
     if i.get("also"):
-        used = dict(CHOICES).get(i.get("choice", ""), "")
+        used = CHOICE_LABEL.get(i.get("choice", ""), "")
         out += [f"More than one instruction is ticked; using {used} until the others are cleared.", ""]
     text = i.get("text", "").strip()
     out += ["Notes:" + ((" " + text.split("\n", 1)[0]) if text else "")]
@@ -641,12 +650,7 @@ def import_instruction_edits(run, ins, today):
     through --instruct. Returns the changed ids."""
     p = os.path.join(run, "report.md")
     if not os.path.exists(p): return set()
-    snap = {}
-    sp = snapshot_path(run, "rendered-instructions.tsv")
-    if os.path.exists(sp):
-        for l in open(sp, encoding="utf-8"):
-            f = l.rstrip("\n").split("\t", 1)
-            if len(f) == 2 and f[0].isdigit(): snap[int(f[0])] = f[1]
+    snap = read_snapshot(run, "rendered-instructions.tsv")
     changed, mid, inblock, lines = set(), None, False, []
     notes, in_notes = [], False
     def flush():
@@ -714,11 +718,17 @@ def md_table(rows):
     sep = "| " + " | ".join("-" * max(3, w) for w in widths) + " |"
     return [line(rows[0]), sep] + [line(r) for r in rows[1:]]
 
+FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+
+def closes_fence(line, fence):
+    s = line.rstrip()
+    return len(s) >= len(fence) and s == fence[0] * len(s)
+
 def wrap_markdown(text, width):
     """Wrap prose paragraphs and list items; leave headings, tables, code,
     front matter, HTML comments, and bare location lines untouched."""
     if not width: return text
-    out, in_code, in_fm = [], False, False
+    out, fence, in_fm = [], "", False
     lines = text.split("\n")
     for i, line in enumerate(lines):
         if i == 0 and line == "---": in_fm = True; out.append(line); continue
@@ -726,8 +736,13 @@ def wrap_markdown(text, width):
             out.append(line)
             if line == "---": in_fm = False
             continue
-        if line.startswith("```"): in_code = not in_code; out.append(line); continue
-        if in_code or not line.strip() or line.startswith("#") or line.startswith("|") or line.startswith("<!--") or line == "---" or len(line) <= width:
+        if fence:
+            out.append(line)
+            if closes_fence(line, fence): fence = ""
+            continue
+        m = FENCE_RE.match(line)
+        if m: fence = m.group(1); out.append(line); continue
+        if not line.strip() or line.startswith("#") or line.startswith("|") or line.startswith("<!--") or line == "---" or len(line) <= width:
             out.append(line); continue
         if re.match(r"^\S+:\d+(\s|$)", line) and " " not in line.split("  ")[0]:
             out.append(line); continue
@@ -747,6 +762,20 @@ def wrap_markdown(text, width):
         out.extend(w.replace(NB, " ") for w in wrapped)
     return "\n".join(out)
 
+def read_numbers(run):
+    nums = {}
+    p = os.path.join(run, "numbers.tsv")
+    if os.path.exists(p):
+        for line in open(p, encoding="utf-8").read().splitlines()[1:]:
+            f = line.split("\t")
+            if len(f) >= 2 and f[1].isdigit(): nums[f[0]] = int(f[1])
+    return nums
+
+def finding_id(spec, nums):
+    if spec.startswith("#"): return int(spec[1:])
+    if spec not in nums: sys.exit(f"finding {spec} not in numbers.tsv")
+    return nums[spec]
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("--target", required=True); ap.add_argument("--branch", default=""); ap.add_argument("--base", default=""); ap.add_argument("--head", default="HEAD")
@@ -756,8 +785,7 @@ def main():
     ap.add_argument("--files", default=""); ap.add_argument("--parts", default=""); ap.add_argument("--focuses", default="")
     ap.add_argument("--wrap", type=int, default=80, help="wrap prose at this width; 0 disables")
     ap.add_argument("--renumber", action="store_true", help="assign numbers afresh in document order, ignoring numbers.tsv")
-    ap.add_argument("--instruct", action="append", default=[], metavar="N=CHOICE[:NOTE]",
-                    help="set a triage instruction: fix, fix(a) for one labeled alternative, noted, discuss, defer, ignore, or none")
+    ap.add_argument("--instruct", action="append", default=[], metavar="N=CHOICE[:NOTE]", help=instruct_help())
     ap.add_argument("--note", action="append", default=[], metavar="N=FILE",
                     help="append the text of FILE as a new paragraph to finding N's Notes (#<id> for a merged id)")
     ap.add_argument("--set", action="append", default=[], metavar="N=STATUS[:REF]",
@@ -770,33 +798,23 @@ def main():
     global TITLES, RUN; TITLES = read_titles(a.run); RUN = a.run
     global STATUS
     STATUS = import_hand_edits(a.run, read_status(a.run), a.date or "")
-    if a.set:
-        num_to_id = {}
-        np_ = os.path.join(a.run, "numbers.tsv")
-        if os.path.exists(np_):
-            for line in open(np_).read().splitlines()[1:]:
-                f = line.split("\t")
-                if len(f) >= 2: num_to_id[f[0]] = int(f[1])
-        for spec in a.set:
-            m = re.match(r"^(#?)(\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
-            if not m or m.group(3) not in STATUS_WORDS:
-                sys.exit(f"bad --set {spec!r}; use N=fixed:<sha>, N=wont-fix:<reason>, N=deferred:<ref>, N=in-progress:<files>, N=open")
-            mid = int(m.group(2)) if m.group(1) else num_to_id.get(m.group(2))
-            if mid is None: sys.exit(f"finding {m.group(2)} not in numbers.tsv")
-            STATUS[mid] = {"status": m.group(3), "ref": (m.group(4) or "").strip(), "date": a.date or ""}
-            log_commits(a.run, a.repo, mid, STATUS[mid])
+    nums = read_numbers(a.run)
+    for spec in a.set:
+        m = re.match(r"^(#?\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
+        if not m or m.group(2) not in STATUS_WORDS:
+            sys.exit(f"bad --set {spec!r}; use N=fixed:<sha>, N=wont-fix:<reason>, N=deferred:<ref>, N=in-progress:<files>, N=open")
+        mid = finding_id(m.group(1), nums)
+        STATUS[mid] = {"status": m.group(2), "ref": (m.group(3) or "").strip(), "date": a.date or ""}
+        log_commits(a.run, a.repo, mid, STATUS[mid])
     global INSTR
     INSTR = read_instructions(a.run)
     changed = import_instruction_edits(a.run, INSTR, a.date or "")
     for spec in a.instruct:
-        m = re.match(r"^(#?)(\d+)=(fix|noted|discuss|defer|ignore|none)(\([a-z ,+]+\))?(?::(.*))?$", spec.strip())
-        if not m or (m.group(4) and m.group(3) != "fix"): sys.exit(f"bad --instruct {spec!r}; use N=fix[:note], N=fix(a)[:note], N=noted[:note], N=discuss[:note], N=defer[:ref], N=ignore[:reason], N=none")
-        np_ = os.path.join(a.run, "numbers.tsv")
-        num_to_id = {l.split("\t")[0]: int(l.split("\t")[1]) for l in open(np_).read().splitlines()[1:]} if os.path.exists(np_) else {}
-        mid = int(m.group(2)) if m.group(1) else num_to_id.get(m.group(2))
-        if mid is None: sys.exit(f"finding {m.group(2)} not in numbers.tsv")
-        INSTR[mid] = {**INSTR.get(mid, {}), "choice": "" if m.group(3) == "none" else m.group(3), "note": (m.group(5) or "").strip(), "date": a.date or "", "also": "",
-                      "option": split_option("x" + (m.group(4) or ""))[1]}
+        m = INSTRUCT_RE.match(spec.strip())
+        if not m or (m.group(3) and m.group(2) != "fix"): sys.exit(f"bad --instruct {spec!r}; use {instruct_usage()}")
+        mid = finding_id(m.group(1), nums)
+        INSTR[mid] = {**INSTR.get(mid, {}), "choice": "" if m.group(2) == "none" else m.group(2), "note": (m.group(4) or "").strip(), "date": a.date or "", "also": "",
+                      "option": split_option("x" + (m.group(3) or ""))[1]}
         changed.add(mid)
     # Ignore and Defer are decisions about the outcome: mirror them into status
     # when the finding is still open; undoing them reopens it.
@@ -807,13 +825,10 @@ def main():
         elif ch == "defer" and cur in ("open", "in-progress"): STATUS[mid] = {"status": "deferred", "ref": note, "date": a.date or ""}
         elif ch in ("fix", "noted", "discuss", "") and cur in ("wont-fix", "deferred"): STATUS[mid] = {"status": "open", "ref": "", "date": a.date or ""}
     for spec in a.note:
-        m = re.match(r"^(#?)(\d+)=(.+)$", spec.strip())
-        if not m or not os.path.exists(m.group(3)): sys.exit(f"bad --note {spec!r}; use N=<path of a text file>")
-        np_ = os.path.join(a.run, "numbers.tsv")
-        num_to_id = {l.split("\t")[0]: int(l.split("\t")[1]) for l in open(np_).read().splitlines()[1:]} if os.path.exists(np_) else {}
-        mid = int(m.group(2)) if m.group(1) else num_to_id.get(m.group(2))
-        if mid is None: sys.exit(f"finding {m.group(2)} not in numbers.tsv")
-        add = open(m.group(3), encoding="utf-8").read().strip()
+        m = re.match(r"^(#?\d+)=(.+)$", spec.strip())
+        if not m or not os.path.exists(m.group(2)): sys.exit(f"bad --note {spec!r}; use N=<path of a text file>")
+        mid = finding_id(m.group(1), nums)
+        add = open(m.group(2), encoding="utf-8").read().strip()
         cur = INSTR.setdefault(mid, {"choice": "", "note": "", "date": "", "also": ""})
         cur["text"] = (cur.get("text", "").rstrip() + "\n\n" + add).strip()
     write_instructions(a.run, INSTR)
@@ -927,8 +942,7 @@ def main():
     def glance_title(e):
         t = title_of(e, TITLES)
         return t + " (also on the PR)" if e["id"] in PR_LINKS else t
-    word = {"fix": "fix", "noted": "fix as noted", "discuss": "discuss", "defer": "defer", "ignore": "ignore", "": ""}
-    rows = [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(names.get(l, l) for l in sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), word.get(INSTR.get(e["id"], {}).get("choice", ""), ""), status_cell(STATUS.get(e["id"], {"status": "open"}))] for e in numbered]
+    rows = [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(names.get(l, l) for l in sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), CHOICE_WORD.get(INSTR.get(e["id"], {}).get("choice", ""), ""), status_cell(STATUS.get(e["id"], {"status": "open"}))] for e in numbered]
     done = {k: sum(1 for e in numbered if e["_sec"] == k and STATUS.get(e["id"], {}).get("status") in DONE) for k in ("reopen", "pr", "fix", "look", "confirm")}
     tot = {k: sum(1 for e in numbered if e["_sec"] == k) for k in ("reopen", "pr", "fix", "look", "confirm")}
     prog = f"Progress: {done['fix']} of {tot['fix']} to fix before merging resolved, {done['look']} of {tot['look']} worth a look resolved."
@@ -962,10 +976,10 @@ def main():
             lines += ["Open in the previous review and not found this time; confirm before closing:", ""] + [code_spans(f"- {u['title']} (finding {u['prev_number']} there, {u['location']})") for u in notfound] + [""]
         out += ["## Since the previous review", ""] + lines
     main = [e for e in numbered if e["_sec"] != "below"]
-    tri = {k: sum(1 for e in numbered if INSTR.get(e["id"], {}).get("choice") == k) for k, _ in CHOICES}
+    tri = {k: sum(1 for e in numbered if INSTR.get(e["id"], {}).get("choice") == k) for k in CHOICE_WORD}
     undecided = sum(1 for e in main if not INSTR.get(e["id"], {}).get("choice"))
     below_open = sum(1 for e in numbered if e["_sec"] == "below" and not INSTR.get(e["id"], {}).get("choice"))
-    triage = f"Triage: {tri['fix']} fix, {tri['noted']} fix as noted, {tri['discuss']} discuss, {tri['defer']} defer, {tri['ignore']} ignore, {undecided} not decided" + (f", {below_open} below the bar left as is." if below_open else ".")
+    triage = "Triage: " + ", ".join(f"{tri[k]} {word}" for k, word in CHOICE_WORD.items()) + f", {undecided} not decided" + (f", {below_open} below the bar left as is." if below_open else ".")
     out += ["## Findings at a glance", "", prog, "", triage, ""] + md_table(rows) + [""]
     saved = sum(e.get("_saves", 0) for e in debt)
     intros = {"debt": "Ways to make the code this change touches smaller and easier to change: cleanups within a function, simplifications that keep the behavior in fewer lines, and refactors that change the structure. None of them holds the merge. Each recommendation says whether it fits in this pull request or belongs in its own." + (f" Together they would remove about {saved} lines." if saved else ""),
