@@ -30,11 +30,12 @@ current line and exits. The script exits when every watched run has its report.
 """
 import argparse, os, re, time
 
+INSTANCE_ROW = re.compile(r"^\|[^|\n]*\|\s*([^|\n]*?)\s*\|.*\|\s*(raw/[^|\s]+\.md)\s*\|", re.M)
+
 def instances(run):
-    """Raw files the plan committed to, from the instance table in plan.md."""
     p = os.path.join(run, "plan.md")
     if not os.path.exists(p): return None
-    return re.findall(r"\|\s*(raw/[^|\s]+\.md)\s*\|", open(p, encoding="utf-8").read())
+    return INSTANCE_ROW.findall(open(p, encoding="utf-8").read())
 
 def mtime(path):
     return os.path.getmtime(path) if os.path.exists(path) else None
@@ -48,7 +49,7 @@ def state(run):
     merged = mtime(os.path.join(run, "merged.md"))
     if checked: return ("verifying", f"{checked} checked", merged)
     inst = instances(run)
-    raws = [m for m in (mtime(os.path.join(run, r)) for r in inst or []) if m]
+    raws = [m for m in (mtime(os.path.join(run, raw)) for _, raw in inst or []) if m]
     if merged: return ("merging", "", max(raws, default=None))
     if inst is None: return ("planning", "", None)
     return ("reviewing", f"{len(raws)}/{len(inst)}", mtime(os.path.join(run, "plan.md")))
