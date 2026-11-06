@@ -538,6 +538,20 @@ class FencedLinesTest(unittest.TestCase):
         self.assertEqual(self.kinds("```", "a", "##### Instruction"), ["fence", "body", "body"])
 
 
+class FenceAroundTest(unittest.TestCase):
+    def test_uses_the_shortest_length_when_the_text_has_no_fence(self):
+        self.assertEqual(render.fence_around("plain", 3), "```")
+
+    def test_outgrows_a_fence_in_the_text(self):
+        self.assertEqual(render.fence_around("a\n```\nb", 3), "````")
+
+    def test_outgrows_an_indented_fence_in_the_text(self):
+        self.assertEqual(render.fence_around("a\n  ````\nb", 3), "`````")
+
+    def test_posted_fence_starts_at_four(self):
+        self.assertEqual(render.posted_fence("plain"), "````")
+
+
 class UnbalancedFenceInSnippetTest(RenderCase):
     def setUp(self):
         super().setUp()

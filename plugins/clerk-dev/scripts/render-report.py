@@ -873,12 +873,12 @@ def choice_counts(entries, choices=CHOICES):
 def without_credits(numbered):
     return [e for e in numbered if e["_sec"] != "credit"]
 
-def triage_line(numbered, choices=CHOICES):
+def triage_line(numbered):
     numbered = without_credits(numbered)
-    counts = choice_counts(numbered, choices)
+    counts = choice_counts(numbered, CHOICES)
     undecided = sum(1 for e in numbered if e["_sec"] != "below" and not choice_of(e["id"]))
     below_open = sum(1 for e in numbered if e["_sec"] == "below" and not choice_of(e["id"]))
-    return ("Triage: " + ", ".join(f"{counts[c.key]} {c.word}" for c in choices) + f", {undecided} not decided"
+    return ("Triage: " + ", ".join(f"{counts[c.key]} {c.word}" for c in CHOICES) + f", {undecided} not decided"
             + (f", {below_open} below the bar left as is." if below_open else "."))
 
 def instruction_fields(block):
