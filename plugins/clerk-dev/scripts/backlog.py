@@ -13,7 +13,8 @@ OPEN_STATUS, OWED, IN_PROGRESS, ADOPTED, DONE, DROPPED = "open", "owed", "in-pro
 STATUSES = {IDEA: (OPEN_STATUS, ADOPTED, DROPPED), CLEANUP: (OWED, IN_PROGRESS, DONE, DROPPED), FOLLOWUP: (OWED, IN_PROGRESS, DONE, DROPPED)}
 OPEN = (OPEN_STATUS, OWED, IN_PROGRESS)
 OUTCOMES = {ADOPTED: "adopted as {}", DONE: "done in {}", DROPPED: "dropped: {}"}
-WORDS = {IDEA: "an idea", CLEANUP: "a cleanup", FOLLOWUP: "a follow-up"}
+NAMES = {IDEA: "idea", CLEANUP: "cleanup", FOLLOWUP: "follow-up"}
+WORDS = {kind: ("an " if name[0] in "aeiou" else "a ") + name for kind, name in NAMES.items()}
 FIELDS = ("id", "kind", "title", "status", "scope", "repos", "area", "repo", "branch", "date", "from",
           "trigger", "removes", "origin", "contract", "finding", "instruction", "ref", "outcome")
 PROVENANCE = ("repo", "branch", "date", "from")
@@ -61,12 +62,11 @@ def locate(wt, name):
 def same_store(a, b): return os.path.realpath(a.dir) == os.path.realpath(b.dir)
 
 def split_id(text):
-    repo, _, raw = text.rpartition(":")
-    iid = ids.normalize(raw)
-    if ids.kind_of(iid) != ids.BACKLOG: sys.exit(f"{text} is not a backlog id (BL-n or <repo>:BL-n)")
-    return repo or None, iid
+    p = ids.parse(ids.normalize(text))
+    if not p or p.kind != ids.BACKLOG: sys.exit(f"{text} is not a backlog id (BL-n or <repo>:BL-n)")
+    return p.repo, ids.item(ids.BACKLOG, p.n)
 
-def qualify(store, own, iid): return iid if same_store(store, own) else f"{store.name}:{iid}"
+def qualify(store, own, iid): return ids.qualified(None if same_store(store, own) else store.name, iid)
 
 def item_path(store, n): return os.path.join(store.dir, f"{n:03d}.md")
 
@@ -77,6 +77,8 @@ def numbers(store):
 def read_item(path):
     meta, body = records.parse(path)
     return {**meta, "body": body}
+
+def prose(it, arg): return re.sub(r"\s+", " ", records.body_section(it.get("body", ""), dict(SECTIONS)[arg]))
 
 def write_item(path, it):
     records.write_atomic(path, records.render(it, it["body"], FIELDS))
@@ -118,6 +120,13 @@ def my_names(reader, cfg):
     me = config.by_common_dir(cfg, records.common_dir(reader.wt))
     return {reader.own.name} | ({me.name} if me else set())
 
+def hub_ideas(reader, hub, branch): return [it for it in reader.items(hub) if it.get("kind") == IDEA and it.get("scope") == branch]
+
+def feature_ideas(wt, include_closed=False):
+    reader = Reader(wt)
+    hub = hub_store(wt, reader.own)
+    return [it for it in hub_ideas(reader, hub, branch_of(hub.wt)) if include_closed or it.get("status") in OPEN]
+
 def read(wt, kind=None, scope=None, include_closed=False, repo=None):
     reader = Reader(wt)
     if repo:
@@ -129,7 +138,7 @@ def read(wt, kind=None, scope=None, include_closed=False, repo=None):
         in_view = lambda it: include_closed or it["orphaned"] or it.get("scope") in views
         found = [it for it in reader.items(reader.own) if in_view(it)]
         if kind in (None, IDEA) and not same_store(hub, reader.own):
-            found += [it for it in reader.items(hub) if it.get("kind") == IDEA and it.get("scope") == branch]
+            found += hub_ideas(reader, hub, branch)
         if kind != FOLLOWUP:
             cfg = config.load()
             mine = my_names(reader, cfg)
@@ -148,6 +157,13 @@ def find_in(wt, text):
     path = item_path(store, ids.number(iid))
     if not os.path.exists(path): sys.exit(f"{qualify(store, own, iid)} not found in {store.dir}")
     return store, own, path
+
+def lookup(wt, text):
+    repo, iid = split_id(text)
+    own = own_store(wt)
+    stores = [locate(wt, repo)] if repo else [own, hub_store(wt, own)]
+    path = next((p for p in (item_path(s, ids.number(iid)) for s in stores) if os.path.exists(p)), None)
+    return read_item(path) if path else None
 
 def find(wt, text):
     store, _, path = find_in(wt, text)
@@ -239,10 +255,13 @@ def main_of(store):
     if not main: sys.exit(f"no remote main in {store.wt} (no origin/HEAD, origin/main, or origin/master); run git remote set-head origin --auto there, or register the repository with its main branch in {config.path()}")
     return main
 
-def grep_line(store, main, it):
+def removed(store, main, it):
     r = records.git_run(store.wt, "grep", "-F", "-q", "-e", it["removes"], main)
     if r.returncode > 1: sys.exit(records.git_failure(store.wt, ("grep", "-F", "-q", "-e", it["removes"], main), r))
-    state = f"gone from {main}" if r.returncode == 1 else f"still present on {main}"
+    return r.returncode == 1
+
+def grep_line(store, main, it):
+    state = f"gone from {main}" if removed(store, main, it) else f"still present on {main}"
     progress = f" (in progress: {it['ref']})" if it.get("ref") else ""
     return f"{it['qualified']} {it['title']}: {it['removes']} {state}{progress}"
 
@@ -255,6 +274,14 @@ def fetch_line(store):
     fetched = records.last_fetch(records.common_dir(store.wt))
     return f"last fetch: {fetched[0]} ({fetched[1]})" if fetched else "last fetch: none (no FETCH_HEAD)"
 
+def owed_cleanups(reader, store):
+    return [it for it in reader.items(store) if it.get("kind") == CLEANUP and it.get("status") in (OWED, IN_PROGRESS)]
+
+def gone_cleanups(reader):
+    greppable = [it for it in owed_cleanups(reader, reader.own) if it.get("removes")]
+    main = main_of(reader.own) if greppable else ""
+    return main, [it for it in greppable if removed(reader.own, main, it)]
+
 def check(wt, text=None):
     reader = Reader(wt)
     if text:
@@ -263,7 +290,7 @@ def check(wt, text=None):
         cleanups = [it for it in reader.items(store) if it["path"] == path]
     else:
         store = reader.own
-        cleanups = [it for it in reader.items(store) if it.get("kind") == CLEANUP and it.get("status") in (OWED, IN_PROGRESS)]
+        cleanups = owed_cleanups(reader, store)
     main = main_of(store) if any(it.get("removes") for it in cleanups) else ""
     lines = [grep_line(store, main, it) if it.get("removes") else trigger_line(it) for it in cleanups]
     return lines + [fetch_line(store)]

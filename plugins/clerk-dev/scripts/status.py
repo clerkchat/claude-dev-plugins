@@ -74,6 +74,7 @@ import ids
 import run_files as rf
 
 sf = load_script("stale-findings.py")
+bl = load_script("backlog.py")
 not_done = load_script("items.py").not_done
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
@@ -92,11 +93,16 @@ def short(text, n=90):
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
-def parse_followups(wt):
-    fu = load_script("followups.py")
-    return [{"id": ids.number(it["id"]), "done": it["done"], "text": it["text"],
-             "from": it["fields"].get("From", ""), "added": it["fields"].get("Added", "")}
-            for it in fu.read(os.path.join(wt, ".clerk-dev", "followups.md"))]
+def branch_followups(wt, include_closed=False):
+    branch = bl.branch_of(wt)
+    if not branch: return []
+    try: found = bl.read(wt, bl.FOLLOWUP, branch, include_closed)
+    except SystemExit: return []
+    return [it for it in found if it.get("scope") == branch]
+
+def still_open(its): return [it for it in its if it.get("status") in bl.OPEN]
+
+def origin_repo(it): return re.split(r"[ @]", it.get("origin", ""))[0]
 
 def workspace_rows(wt):
     """(repo name, real worktree path) for each row of the workspace table in
@@ -126,7 +132,7 @@ def other_repos(wt, rows, d):
     follow-ups name."""
     rc = load_script("records.py"); me = repo_name(wt, rows)
     named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
-    named |= {re.split(r"[ @]", i["from"])[0] for i in not_done(parse_followups(wt)) if i["from"]}
+    named |= {origin_repo(i) for i in branch_followups(wt)}
     return sorted(n for n in named if n and n != me)
 
 def plan_gaps(d):
@@ -248,16 +254,71 @@ def pass_line(e):
 
 def seen_path(wt): return os.path.join(wt, ".clerk-dev", "status-seen")
 
-def seen_followups(wt):
-    return int(open(seen_path(wt)).read().strip() or 0) if os.path.exists(seen_path(wt)) else 0
+def read_seen(wt):
+    p = seen_path(wt)
+    pairs = [line.split() for line in open(p, encoding="utf-8").read().splitlines()] if os.path.exists(p) else []
+    return {pair[0]: int(pair[1]) for pair in pairs if len(pair) == 2 and pair[1].isdigit()}
+
+def write_seen(wt, seen):
+    try: open(seen_path(wt), "w", encoding="utf-8").write("".join(f"{repo} {n}\n" for repo, n in sorted(seen.items())))
+    except OSError: pass
+
+def highest(its):
+    out = {}
+    for it in its: out[it["owner"]] = max(out.get(it["owner"], 0), ids.number(it["id"]))
+    return out
+
+def is_new(it, seen): return it["owner"] in seen and ids.number(it["id"]) > seen[it["owner"]]
 
 def followup_lines(open_items, seen):
-    new = [i for i in open_items if i["id"] > seen]
-    lines = [f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if seen and new else "") + "."]
+    new = [i for i in open_items if is_new(i, seen)]
+    lines = [f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if new else "") + "."]
     for i in open_items:
-        tag = " (new)" if seen and i["id"] > seen else ""
-        lines.append(f"- {ids.item(ids.FOLLOWUP, i['id'])}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
+        tag = " (new)" if is_new(i, seen) else ""
+        lines.append(f"- {i['qualified']}: {short(i['title'])} ({i.get('origin') or 'source unknown'}){tag}")
     return lines
+
+def kind_name(it): return bl.NAMES.get(it.get("kind"), it.get("kind", ""))
+
+def item_line(it, *notes): return f"{it['qualified']}: {short(it.get('title', ''), 80)} ({', '.join([kind_name(it), *notes])})"
+
+def them(xs): return "it" if len(xs) == 1 else "them"
+
+def listed(its): return ", ".join(it["qualified"] for it in its)
+
+def kind_counts(its):
+    counts = [(bl.NAMES[k], sum(1 for it in its if it.get("kind") == k)) for k in bl.KINDS]
+    return ", ".join(f"{n} {name}{plural(n)}" for name, n in counts if n)
+
+def gone_line(it, main): return f"- gone: {item_line(it, it['removes'] + ' is gone from ' + main)}"
+
+def cleanup_lines(reader):
+    try: main, gone = bl.gone_cleanups(reader)
+    except SystemExit as e: return [f"- cleanups not checked: {e}"], []
+    if not gone: return [], []
+    lines = [gone_line(it, main) for it in gone] + [f"- {bl.fetch_line(reader.own)}"]
+    return lines, [f"Mark the cleanup{plural(gone)} {listed(gone)} done: {'its' if len(gone) == 1 else 'their'} code is gone from {main}."]
+
+def oldest(its): return sorted(its, key=lambda it: (it.get("date", ""), ids.number(it["id"])))[:3]
+
+def takeable(its):
+    return [it for it in its if it.get("kind") == bl.FOLLOWUP and (it.get("scope") == bl.NEW or it["orphaned"])]
+
+def backlog_lines(wt, reader, own):
+    its = still_open(own)
+    if not its: return [], []
+    lines = [f"**Backlog:** {len(its)} open ({kind_counts(its)})."]
+    lines += [f"- oldest: {item_line(it, 'since ' + (it.get('date') or 'an unknown date'))}" for it in oldest(its)]
+    orphans = [it for it in its if it["orphaned"]]
+    lines += [f"- orphaned: {item_line(it, 'from ' + it['scope'] + ', branch gone')}" for it in orphans]
+    steps = [f"Rescope the orphaned item{plural(orphans)} {listed(orphans)} to new work, or drop {them(orphans)} with a reason."] if orphans else []
+    clines, csteps = cleanup_lines(reader)
+    lines += clines; steps += csteps
+    branch = bl.branch_of(wt)
+    up = takeable(its) if branch else []
+    lines += [f"- could take up here: {item_line(it, 'new work' if it.get('scope') == bl.NEW else 'orphaned', it.get('origin') or 'source unknown')}" for it in up]
+    if up: steps.append(f"Take up the follow-up{plural(up)} {listed(up)} on this branch by rescoping {them(up)} to {branch}, or leave {them(up)} for later.")
+    return lines, steps
 
 def number_list(nums):
     return f"{', '.join(nums[:12])}{', …' if len(nums) > 12 else ''}"
@@ -617,10 +678,10 @@ def design_view(wt, out, logs):
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d))]
     gl = rc.rules(d)
     if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural(gl)}; say \"what guidance have I given\" to list them."]
-    parked = not_done(rc.ideas(d))
+    parked = bl.feature_ideas(wt)
     if parked:
         by = {}
-        for i in parked: by.setdefault(i["fields"].get("Area") or "feature-wide", []).append(i["id"])
+        for i in parked: by.setdefault(i.get("area") or "feature-wide", []).append(i["id"])
         out += ["", f"**Parked ideas:** {len(parked)} ({'; '.join(f'{a}: {len(v)}' for a, v in by.items())}); say \"what ideas did we park\" to list them with why and when."]
     settle_all = list(dict.fromkeys(settle_all))
     first = [f"Settle the settle-first design questions: {', '.join(settle_all)} (\"walk the design questions\")."] if settle_all else []
@@ -672,8 +733,8 @@ def area_view(wt, out, name, logs):
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
     gl = [(r, rule) for r, rule in rc.rules(d, area or None) if (r.get("area") or "") == area]
     if gl: out += ["", f"**Guidance:** {len(gl)}"] + [f"- {r['id']}: {short(rule, 110)}" for r, rule in gl]
-    parked = [i for i in not_done(rc.ideas(d)) if (i["fields"].get("Area") or "") == area]
-    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['id']}: {short(i['text'], 90)}" + (f" When: {i['fields']['When']}." if i["fields"].get("When") else "") for i in parked]
+    parked = [i for i in bl.feature_ideas(wt) if (i.get("area") or "") == area]
+    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['qualified']}: {short(i['title'], 90)}" + (f" When: {bl.prose(i, 'when').rstrip('.')}." if bl.prose(i, "when") else "") for i in parked]
     specs = [spec] if spec else [r for r in live if r.get("type") == "brief"]
     prog, pas = [], []
     for log in logs:
@@ -736,7 +797,7 @@ def blockers_view(wt, out, logs, run, have_run):
         if not c["open"]: continue
         sfq = open_questions(d, c)[1]
         if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
-    open_items = not_done(parse_followups(wt))
+    open_items = branch_followups(wt)
     fix = []
     if have_run:
         status, instr, numbers = sf.state(run)
@@ -749,7 +810,7 @@ def blockers_view(wt, out, logs, run, have_run):
         out += ["", "**Settle-first design questions:**"] + [f"- {name}: {', '.join(qs)}" for name, qs in settle]
         steps.append(f"Settle {', '.join(q for _, qs in settle for q in qs)} (\"walk the design questions\").")
     if open_items:
-        out += [""] + followup_lines(open_items, seen_followups(wt))
+        out += [""] + followup_lines(open_items, read_seen(wt))
         steps.append(f"Work the open follow-up{plural(open_items)} ({len(open_items)}): \"go through the follow-ups\".")
     if fix:
         out += ["", f"**Findings to fix before merging:** {len(fix)} ({number_list(fix)})"]
@@ -846,27 +907,29 @@ def main():
         out.append(f"**Working tree:** {len(staged)} files staged, {len(unstaged)} with unstaged changes.")
 
     # Follow-ups here
-    items = parse_followups(wt)
-    seen = seen_followups(wt)
-    open_items = not_done(items)
+    items = branch_followups(wt, include_closed=True)
+    open_items = still_open(items)
+    reader = bl.Reader(wt)
+    own = reader.items(reader.own)
     out.append("")
     if open_items:
-        out += followup_lines(open_items, seen)
+        out += followup_lines(open_items, read_seen(wt))
     else:
         out.append(f"**Follow-ups owed here:** none open ({len(items)} done)." if items else "**Follow-ups owed here:** none.")
-    if items and not a.no_mark:
-        try: open(seen_path(wt), "w").write(str(max(i["id"] for i in items)) + "\n")
-        except OSError: pass
+    if own and not a.no_mark: write_seen(wt, {**read_seen(wt), **highest(own)})
     out += deferred_lines(wt)
 
     # Follow-ups elsewhere
     me = repo_name(wt, rows)
     rel = []
     for name, other in related_worktrees(wt, rows):
-        its = not_done(parse_followups(other))
-        from_me = [i for i in its if re.split(r"[ @]", i["from"])[0] == me]
+        its = branch_followups(other)
+        from_me = [i for i in its if origin_repo(i) == me]
         rel.append(f"{name} {len(its)} open" + (f" ({len(from_me)} from {me})" if its else ""))
     if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")
+    blines, bsteps = backlog_lines(wt, reader, own)
+    if blines: out += [""] + blines
+    steps += bsteps
 
     # Passes here
     passes, perr = read_passes(wt)

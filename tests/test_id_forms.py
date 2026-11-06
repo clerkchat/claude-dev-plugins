@@ -1,4 +1,3 @@
-import datetime
 import hashlib
 import os
 import re
@@ -8,7 +7,6 @@ from helpers import (
     TempCase,
     init_repo,
     run_ok,
-    run_script,
     write_feature_md,
     write_file,
     write_log,
@@ -61,13 +59,13 @@ class RecordsTests(OldRecordsCase):
                 self.assertEqual(self.records("path", text), want)
 
     def test_a_new_record_is_written_in_the_new_form(self):
-        out = self.records("new", "decision", "Decision three", "--from", "r1,brief2,I4,this session", "--supersedes", "R1")
+        out = self.records("new", "decision", "Decision three", "--from", "r1,brief2,p4,this session", "--supersedes", "R1")
         path = out.split()[1]
         self.assertTrue(out.startswith("DEC-3 "), out)
         self.assertTrue(path.endswith("003-decision-decision-three.md"))
         meta = frontmatter(path)
         self.assertEqual(meta["id"], "DEC-3")
-        self.assertEqual(meta["from"], "DEC-1, BRIEF-2, IDEA-4, this session")
+        self.assertEqual(meta["from"], "DEC-1, BRIEF-2, PASS-4, this session")
         self.assertEqual(meta["supersedes"], "DEC-1")
         self.assertIn("# DEC-3. Decision three", read_file(path))
 
@@ -83,10 +81,10 @@ class RecordsTests(OldRecordsCase):
         self.assertTrue(out.startswith("PLAN-4 "), out)
 
     def test_old_citations_read_in_the_new_form(self):
-        write_record(self.root, "R3", "decision", "Decision three", "superseded", "from: R1, I4\nsuperseded_by: R5\n")
+        write_record(self.root, "R3", "decision", "Decision three", "superseded", "from: R1, P4\nsuperseded_by: R5\n")
         write_record(self.root, "R5", "decision", "Decision five", "active", "supersedes: R3\n")
         line = next(l for l in self.records("list").splitlines() if l.startswith("DEC-3 "))
-        self.assertIn("from: DEC-1, IDEA-4; superseded_by: DEC-5", line)
+        self.assertIn("from: DEC-1, PASS-4; superseded_by: DEC-5", line)
 
     def test_names_reads_old_and_new_forms(self):
         out = self.records("names", "R1", "dec-1", "BRIEF-2.1", "R2.2", "R9").splitlines()
@@ -179,23 +177,6 @@ class OverviewTests(OldRecordsCase):
         self.assertIn("current (through none)", self.records("overview-status"))
 
 
-class IdeaTests(OldRecordsCase):
-    def setUp(self):
-        super().setUp()
-        write_file(
-            os.path.join(feature_dir(self.root), "ideas.md"),
-            "# Ideas\n\n- [ ] I1. An old idea.\n  - Added: 2026-10-01\n  - Status: open\n",
-        )
-
-    def test_a_new_idea_follows_the_old_numbers_in_the_new_form(self):
-        self.assertEqual(self.records("idea", "A new idea", "--from", "R1"), "IDEA-2 parked")
-        self.assertIn("- [ ] IDEA-2. A new idea.\n  - From: DEC-1\n", read_file(os.path.join(feature_dir(self.root), "ideas.md")))
-
-    def test_an_old_idea_is_adopted_by_any_form_and_cites_the_record_newly(self):
-        self.assertEqual(self.records("adopt", "idea1", "--by", "r2"), "I1 adopted")
-        self.assertIn("adopted as BRIEF-2", read_file(os.path.join(feature_dir(self.root), "ideas.md")))
-
-
 class BuildLogTests(TempCase):
     def setUp(self):
         super().setUp()
@@ -272,42 +253,6 @@ class ItemListTests(TempCase):
                 run_ok("deferred", "reopen", self.root, text)
                 run_ok("deferred", "close", self.root, text, "--ref", "done")
                 self.assertIn("- [x] D3. An old gap.", read_file(os.path.join(self.root, ".clerk-dev", "deferred.md")))
-
-    def test_follow_ups_keep_their_form(self):
-        out = run_ok("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", "changed: GET /a: x to y")
-        self.assertTrue(out.startswith("F1 added"), out)
-
-    def test_a_follow_up_takes_either_form_of_contract(self):
-        for n, contract in enumerate(("changed: GET /a: x to y", "wanted: GET /a?q= matches z; today it does not"), 1):
-            with self.subTest(contract=contract):
-                out = run_ok("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", contract)
-                self.assertTrue(out.startswith(f"F{n} added"), out)
-                self.assertIn(f"  - Contract: {contract}\n", read_file(os.path.join(self.root, ".clerk-dev", "followups.md")))
-
-    def test_a_follow_up_grown_into_a_brief_stays_open_until_closed_with_the_commit(self):
-        run_ok("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", "changed: GET /a: x to y")
-        followups = os.path.join(self.root, ".clerk-dev", "followups.md")
-        today = datetime.date.today().isoformat()
-        run_ok("items", "status", followups, "F1", "in-progress", "--ref", "BRIEF-62")
-        listed = run_ok("followups", "list", self.root, "--open")
-        self.assertRegex(listed, rf"(?m)^  F1\. Owed work.*Status: in-progress; Outcome: {today} BRIEF-62\]$")
-        run_ok("followups", "close", self.root, "F1", "--ref", "in 1a2b3c4 (BRIEF-62)")
-        text = read_file(followups)
-        self.assertIn("- [x] F1. Owed work", text)
-        self.assertIn(f"  - Outcome: {today} in 1a2b3c4 (BRIEF-62)\n", text)
-        self.assertNotIn("F1.", run_ok("followups", "list", self.root, "--open"))
-
-    def test_a_follow_up_without_a_contract_is_refused(self):
-        code, out = run_script("followups", "add", self.root, "Owed work", "--from", "api abc1234")
-        self.assertNotEqual(code, 0, out)
-        self.assertIn("--contract", out)
-        self.assertFalse(os.path.exists(os.path.join(self.root, ".clerk-dev", "followups.md")))
-
-    def test_a_follow_up_with_a_blank_contract_is_refused(self):
-        code, out = run_script("followups", "add", self.root, "Owed work", "--from", "api abc1234", "--contract", "  ")
-        self.assertNotEqual(code, 0, out)
-        self.assertIn("--contract must not be blank", out)
-        self.assertFalse(os.path.exists(os.path.join(self.root, ".clerk-dev", "followups.md")))
 
 
 class PassStepTests(TempCase):

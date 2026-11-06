@@ -4,7 +4,7 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import SCRIPTS, TempCase, git, init_repo, run_ok, run_script, write_file
+from helpers import SCRIPTS, TempCase, add_backlog_item, git, init_repo, run_ok, run_script, write_file
 
 sys.path.insert(0, SCRIPTS)
 import backlog
@@ -63,7 +63,7 @@ class BacklogCase(TempCase):
         return out
 
     def add(self, kind, title="An item", wt=None, *extra):
-        return self.ok("add", wt or self.feat, title, "--kind", kind, *extra)
+        return add_backlog_item(wt or self.feat, kind, title, *extra, env=self.env)
 
     def idea(self, title="An idea", *extra, wt=None):
         return self.add("idea", title, wt, *extra)
@@ -287,6 +287,10 @@ class SetTests(BacklogCase):
         self.ok("set", self.feat, "BL-2", "done", "--ref", "1a2b3c4")
         m = self.meta("BL-2")
         self.assertEqual((m["status"], m["outcome"], m.get("ref")), ("done", "done in 1a2b3c4", None))
+
+    def test_done_keeps_the_brief_a_grown_follow_up_names(self):
+        self.ok("set", self.feat, "BL-2", "done", "--ref", "1a2b3c4 (BRIEF-62)")
+        self.assertEqual(self.meta("BL-2")["outcome"], "done in 1a2b3c4 (BRIEF-62)")
 
     def test_dropped_writes_the_reason(self):
         self.ok("set", self.feat, "BL-1", "dropped", "--ref", "not worth it")

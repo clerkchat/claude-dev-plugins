@@ -76,14 +76,16 @@ def fix_commits(repo, status, run=None):
     return set(rf.commits_named(repo, "\n".join(text)))
 
 def followup_labels(repo):
-    """Commits that closed a follow-up, by full sha, to its id (F3)."""
-    fu = load_script("followups.py")
+    """Commits that closed a follow-up, by full sha, to its id."""
+    bl = load_script("backlog.py")
+    try: its = bl.read(repo, bl.FOLLOWUP, include_closed=True)
+    except SystemExit: return {}
     labels = {}
-    for it in fu.read(os.path.join(repo, ".clerk-dev", "followups.md")):
-        m = re.search(r"\bin ([0-9a-f]{7,40})\b", it["fields"].get("Outcome", "") or it["fields"].get("Done", ""))
+    for it in its:
+        m = re.search(r"\bin ([0-9a-f]{7,40})\b", it.get("outcome", ""))
         if not m: continue
         full = git(repo, "rev-parse", "--verify", "-q", m.group(1) + "^{commit}", check=False)
-        if full: labels[full] = it["id"]
+        if full: labels[full] = it["qualified"]
     return labels
 
 def narrow_covered(repo):

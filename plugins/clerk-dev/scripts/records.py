@@ -36,11 +36,6 @@ Usage:
   records.py names WORKTREE PLAN-31 S C BRIEF-52.19 BUILD-15 ...   a short name for each id or code
   records.py guidance WORKTREE [--area A | --for BRIEF-33|BRIEF-33.4|BRIEF-18-1.Q-6] [--context REVIEW-CONTEXT.md] [--out FILE]
                                         branch scope, branch guidance, the feature's active guidance, and the repository's Known noise
-  records.py idea WORKTREE "text" [--area A] [--from DEC-12|"this session"] [--why ...] [--when ...]
-  records.py ideas WORKTREE [--all] [--area A | --area -]
-  records.py adopt WORKTREE IDEA-3 --by DEC-60   the record the idea became
-  records.py drop WORKTREE IDEA-3 --why "..."
-  records.py unpark WORKTREE IDEA-3           back to parked
 
 Record frontmatter:
   ---
@@ -77,7 +72,7 @@ def git(wt, *args, check=False):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 def exclude(wt):
-    """Create .clerk-dev/ and its .git/info/exclude entry, as followups.py does."""
+    """Create .clerk-dev/ and its .git/info/exclude entry."""
     os.makedirs(os.path.join(wt, ".clerk-dev"), exist_ok=True)
     if subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"]).returncode != 0:
         common = git(wt, "rev-parse", "--git-common-dir")
@@ -147,6 +142,8 @@ def hub(wt):
     return os.path.abspath(h or wt)
 
 def fdir(wt): return os.path.join(hub(wt), ".clerk-dev", "feature")
+
+def hub_of(d): return os.path.dirname(os.path.dirname(d))
 
 def parse(p):
     text = open(p, encoding="utf-8").read()
@@ -371,10 +368,10 @@ def index(d):
             for r in ordered(grp): rows += entry(r, d, repos)
             rows.append("")
         if not live: rows += ["No active records.", ""]
-    parked = items_mod().not_done(ideas(d))
+    parked = backlog_mod().feature_ideas(hub_of(d))
     if parked:
-        rows += ["## Ideas", "", f"Parked, {len(parked)}; all of them, with why and when, in [ideas.md](ideas.md).", ""]
-        rows += [f"- **{i['id']}**{' (' + i['fields']['Area'] + ')' if i['fields'].get('Area') else ''}: {i['text']}" for i in parked] + [""]
+        rows += ["## Ideas", "", f"Parked, {len(parked)}, in the backlog; `backlog.py list <worktree> --kind idea` shows them with why and when.", ""]
+        rows += [f"- **{i['id']}**{' (' + i['area'] + ')' if i.get('area') else ''}: {i['title']}" for i in parked] + [""]
     cs = checks(d)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
@@ -574,26 +571,25 @@ def names(wt, wanted):
             elif kind == ids.SURVEY:
                 survey_of = lambda cp: f"survey of {survey_target(open(cp, encoding='utf-8').read())}"
                 name = check_gloss(d, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
-            elif kind == ids.IDEA:
-                it = next((i for i in ideas(d) if ids.same(i["id"], X)), None)
-                if it: name = f"idea ({idea_word(it)}): {it['text']}"
+            elif kind == ids.BACKLOG:
+                bl = backlog_mod(); it = bl.lookup(here, X)
+                if it: name = f"{bl.NAMES.get(it.get('kind'), it.get('kind'))} ({it.get('status')}): {it.get('title')}"
             elif kind in (ids.BUILD, ids.MILESTONE):
                 e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
                 if e: name = ("milestone: " if kind == ids.MILESTONE else f"handoff for {e['f']['Record']}: " if e["f"].get("Record") else "handoff: ") + e["title"]
             elif kind == ids.PASS:
                 e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if ids.same(e["id"], X)), None)
                 if e: name = f"pass: {e['title']}"
-            elif kind in (ids.FOLLOWUP, ids.DEFERRED):
-                what, file = ("follow-up", "followups") if kind == ids.FOLLOWUP else ("deferred item", "deferred")
-                e = next((i for i in load(f"{file}.py").read(os.path.join(here, ".clerk-dev", f"{file}.md")) if ids.same(i["id"], X)), None)
-                if e: name = f"{what}: {e['text']}"
+            elif kind == ids.DEFERRED:
+                e = next((i for i in load("deferred.py").read(os.path.join(here, ".clerk-dev", "deferred.md")) if ids.same(i["id"], X)), None)
+                if e: name = f"deferred item: {e['text']}"
             if name is None and x in pieces: name = f"plan piece: {pieces[x]}"
         except SystemExit:
             pass
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
-ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.SURVEY, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
+ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.SURVEY, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.BACKLOG, ids.DEFERRED)})(?![\w.]?\d)('s)?")
 
 def gloss(wt, text, n=50):
     """The text with each id's first plain mention followed by its short name,
@@ -668,7 +664,7 @@ def cited(refs):
 
 def build_log(d):
     bm = load_script("build.py")
-    hub_wt = os.path.dirname(os.path.dirname(d))
+    hub_wt = hub_of(d)
     _, repos = workspace(hub_wt)
     lines, direct, built = [], [], Built(set(), {}, [])
     canon = resolver(records(d))
@@ -727,11 +723,10 @@ def built_mark(r, built):
     if built.unread and len(done) < total: return f"; built: unknown (at least {count}" + (f": {which})" if done else ")")
     return f"; built: {count}" + (f" ({which})" if done else "")
 
-def idea_status(i):
-    outcome = re.sub(r"^\d{4}-\d{2}-\d{2} ", "", i["fields"].get("Outcome", ""))
-    if i["done"] and outcome: return f"Status: {outcome}."
-    f = i["fields"]
-    return f"Status: {idea_word(i)}. Why: {f.get('Why', '-')}. When: {f.get('When', '-')}."
+def idea_line(it):
+    bl = backlog_mod()
+    state = it.get("outcome") or f"parked. Why: {bl.prose(it, 'why').rstrip('.') or '-'}. When: {bl.prose(it, 'when').rstrip('.') or '-'}"
+    return f"- {it['id']} ({it.get('area') or 'feature-wide'}): {it['title']}. Status: {state}."
 
 def open_item_lines(d, c):
     return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
@@ -758,7 +753,7 @@ def digest(d):
         out += [f"# Open {words}", ""] + [line for c in cs if c["kind"] == kind for line in open_item_lines(d, c)] + [""]
     out += ["# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
-    out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} {idea_status(i)}" for i in ideas(d)] or ["none"]
+    out += [idea_line(it) for it in backlog_mod().feature_ideas(hub_of(d), include_closed=True)] or ["none"]
     out += ["", "# Open items in active briefs", ""]
     for r in live:
         if r["type"] != "brief": continue
@@ -781,28 +776,9 @@ def stamp_overview(d):
     index(d)
     return last
 
-IDEA_FIELDS = ("Area", "From", "Why", "When", "Added", "Instruction", "Status", "Outcome")
-IDEAS_HEADER = """# Ideas
-
-Ideas set aside for later: each says what it is, where it came from, why it is
-worth having, and when to look at it again. Kept by records.py; an idea is
-parked while open, adopted when it becomes a record (Outcome names it), and
-dropped when it will not be done (Outcome says why).
-
-"""
-
 def items_mod(): return load_script("items.py")
 
-def ideas(d):
-    p = os.path.join(d, "ideas.md")
-    return items_mod().read(p, list(IDEA_FIELDS)) if os.path.exists(p) else []
-
-def idea_word(i):
-    st = i["fields"].get("Status", "open")
-    return {"open": "parked", "in-progress": "being explored", "fixed": "adopted", "wont-fix": "dropped", "deferred": "parked"}.get(st, st)
-
-def write_ideas(d, its):
-    items_mod().write(os.path.join(d, "ideas.md"), its, IDEAS_HEADER, order=IDEA_FIELDS)
+def backlog_mod(): return load_script("backlog.py")
 
 def area_for(wt, ref):
     x = ids.normalize(ref)
@@ -831,12 +807,6 @@ def main():
     re_ = sp.add_parser("reactivate"); re_.add_argument("wt"); re_.add_argument("rid")
     sp.add_parser("index").add_argument("wt")
     for c in ("digest", "stamp-overview", "overview-status", "suggest"): sp.add_parser(c).add_argument("wt")
-    ia = sp.add_parser("idea"); ia.add_argument("wt"); ia.add_argument("text"); ia.add_argument("--area"); ia.add_argument("--from", dest="src")
-    ia.add_argument("--why"); ia.add_argument("--when")
-    il = sp.add_parser("ideas"); il.add_argument("wt"); il.add_argument("--all", action="store_true"); il.add_argument("--area")
-    iad = sp.add_parser("adopt"); iad.add_argument("wt"); iad.add_argument("iid"); iad.add_argument("--by", required=True)
-    idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
-    ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
     nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
     gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--for", dest="ref"); gd.add_argument("--context"); gd.add_argument("--out")
     a = ap.parse_args()
@@ -928,28 +898,5 @@ def main():
         print("\n".join(suggestions(d)) or "nothing to suggest")
     elif a.cmd == "names":
         print("\n".join(names(a.wt, a.ids)))
-    elif a.cmd == "idea":
-        its = ideas(d); iid = ids.item(ids.IDEA, ids.next_number([i["id"] for i in its], ids.IDEA))
-        src = ids.rewrite(a.src or "", types_of(records(d)))
-        cited = ids.records_in(src)
-        area = a.area if a.area is not None else (area_of(d, cited) if cited else "")
-        f = {"Area": slug(area) if area else "", "From": src, "Why": (a.why or "").rstrip("."), "When": (a.when or "").rstrip("."),
-             "Added": today, "Status": "open"}
-        its.append({"done": False, "id": iid, "text": a.text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
-        write_ideas(d, its); index(d); print(f"{iid} parked" + (f" (area {f['Area']})" if f.get("Area") else ""))
-    elif a.cmd == "ideas":
-        for i in ideas(d):
-            if not a.all and i["done"]: continue
-            if a.area is not None and i["fields"].get("Area", "") != ("" if a.area == "-" else a.area): continue
-            f = i["fields"]
-            print(f"{i['id']} {idea_word(i)}{' (' + f['Area'] + ')' if f.get('Area') else ''}: {i['text']}"
-                  + "".join(f"  {k}: {f[k]}." for k in ("Why", "When", "From", "Outcome") if f.get(k)))
-    elif a.cmd in ("adopt", "drop", "unpark"):
-        im = items_mod(); its = ideas(d); i = im.find(its, a.iid)
-        if a.cmd == "adopt":
-            im.set_status(i, "fixed", f"adopted as {find(d, a.by)['id']}")
-        elif a.cmd == "drop": im.set_status(i, "wont-fix", f"dropped: {a.why}")
-        else: im.set_status(i, "open")
-        write_ideas(d, its); index(d); print(f"{i['id']} {idea_word(i)}")
 
 if __name__ == "__main__": main()

@@ -61,6 +61,10 @@ def run_ok(name, *args, env=None):
     return out
 
 
+def add_backlog_item(wt, kind, title, *extra, env=None):
+    return run_ok("backlog", "add", wt, title, "--kind", kind, *extra, env=env)
+
+
 def git(path, *args):
     done = subprocess.run(
         ["git", "-C", str(path), *map(str, args)],

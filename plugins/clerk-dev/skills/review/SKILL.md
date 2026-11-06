@@ -19,7 +19,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/carry.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/final-report.py *)
-  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/followups.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)

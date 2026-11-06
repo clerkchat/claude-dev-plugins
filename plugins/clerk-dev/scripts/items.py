@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and write item files: follow-ups (F3), deferred items (DEFER-3), and design-check questions (Q-3).
+"""Read and write item files: deferred items (DEFER-3) and design-check questions (Q-3).
 
 An item file is a Markdown checkbox list, one item per top-level checkbox with
 its fields as a nested bullet list, so a Markdown formatter keeps the layout.
@@ -14,9 +14,7 @@ Usage:
   items.py status FILE ID STATUS [--ref "commit, record, or reason"]
   items.py validate FILE
 
-Other scripts import read(), write(), and the constants. WorktreeList is the
-worktree-list layer `followups.py` and `deferred.py` are thin over: add, list,
-close, reopen, and set on `<worktree>/.clerk-dev/<file>`.
+Other scripts import read(), write(), and the constants.
 """
 import argparse, datetime, os, re, sys
 from records import load_script
@@ -141,8 +139,8 @@ def set_instruction(it, value, note=None):
     it["fields"]["Instruction"] = instruction(value) + (f": {note}" if note else "")
 
 class WorktreeList:
-    def __init__(self, filename, kind, header, extras=(), required=(), closes=DONE, legacy_outcome=None):
-        self.filename, self.kind, self.header, self.required, self.closes, self.legacy_outcome = filename, kind, header, tuple(required), closes, legacy_outcome
+    def __init__(self, filename, kind, header, extras=(), required=(), closes=DONE):
+        self.filename, self.kind, self.header, self.required, self.closes = filename, kind, header, tuple(required), closes
         self.extras = tuple(extras)
         self.fields = ("From", *self.extras, "Added", "Instruction", "Status", "Outcome")
 
@@ -151,11 +149,9 @@ class WorktreeList:
         return os.path.join(wt, ".clerk-dev", self.filename)
 
     def read(self, p):
-        its = read(p, list(self.fields) + ([self.legacy_outcome] if self.legacy_outcome else []))
+        its = read(p, list(self.fields))
         for it in its:
             f = it["fields"]
-            if self.legacy_outcome in f:
-                f.setdefault("Outcome", f.pop(self.legacy_outcome)); f["Status"] = "fixed"; it["done"] = True
             it["meta"] = [f"{k}: {f[k]}" for k in self.fields if f.get(k)]
         return its
 

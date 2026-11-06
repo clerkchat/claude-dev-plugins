@@ -11,7 +11,7 @@ allowed-tools:
   - Bash(git status *)
   - Bash(gh pr view *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build.py *)
-  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/followups.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/items.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
