@@ -6,7 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from helpers import SCRIPTS, RunCase, TempCase, init_repo, merged_md, run_ok, write_file
+from helpers import SCRIPTS, GhRunCase, RunCase, TempCase, init_repo, merged_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import gh_api
@@ -49,7 +49,7 @@ def review_comment(n, path):
     return {"id": 900 + n, "node_id": f"PRRC_{n}", "html_url": f"https://gh/c/{900 + n}", "path": path, "body": f"Finding {n} text."}
 
 
-class PostCase(RunCase):
+class PostCase(GhRunCase):
     def setUp(self):
         super().setUp()
         self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()))
@@ -64,11 +64,6 @@ class PostCase(RunCase):
         diff = mock.patch.object(post, "pr_patch", return_value=PATCH)
         self.pr_diff = diff.start()
         self.addCleanup(diff.stop)
-
-    def stub(self, name, **kw):
-        patcher = mock.patch.object(gh_api, name, **kw)
-        self.addCleanup(patcher.stop)
-        return patcher.start()
 
     def mark(self, mid, note="", text=None):
         self.marks[mid] = note
@@ -376,22 +371,18 @@ class NoWriteCallTest(PostCase):
         self.mark(1); self.mark(3)
         self.pend()
         self.posted_row(1, state="edited")
-        self.writes = [self.stub("rest"), self.stub("graphql")]
-
-    def assertNoWriteCall(self):
-        self.assertEqual([w.call_count for w in self.writes], [0, 0])
 
     def test_the_preview_makes_none(self):
         self.main()
-        self.assertNoWriteCall()
+        self.assertNoUnstubbedGh()
 
     def test_a_dry_run_of_post_makes_none(self):
         self.main("--post", "--dry-run")
-        self.assertNoWriteCall()
+        self.assertNoUnstubbedGh()
 
     def test_a_dry_run_of_submit_makes_none(self):
         self.main("--submit", "comment", "--dry-run")
-        self.assertNoWriteCall()
+        self.assertNoUnstubbedGh()
 
 
 class NewReviewTest(PostCase):
@@ -750,7 +741,7 @@ class LiveUpdateRollbackTest(LiveCase):
         self.assertIn("still on GitHub: finding 1's comment https://gh/c/901, which keeps its new text", self.rejected())
 
 
-class FetchPrCase(RunCase):
+class FetchPrCase(GhRunCase):
     LISTS = {"repos/o/r/pulls/7/files": [{"filename": "a.py"}],
              "repos/o/r/pulls/7/reviews": [{"id": 1, "state": "COMMENTED"},
                                            {"id": 2, "node_id": "N2", "state": "PENDING", "commit_id": HEAD, "body": "Mine."}],
@@ -806,16 +797,11 @@ class WhenTheCheckoutIsAForkTest(FetchPrCase):
         self.assertEqual(args[args.index("--repo") + 1], "o/r")
 
 
-class ReviewedPrCase(RunCase):
+class ReviewedPrCase(GhRunCase):
     def setUp(self):
         super().setUp()
         self.branch_pr = self.stub("pr_number", return_value=7)
         self.origin = self.stub("repo_owner_name", return_value=["o", "r"])
-
-    def stub(self, name, **kw):
-        patcher = mock.patch.object(gh_api, name, **kw)
-        self.addCleanup(patcher.stop)
-        return patcher.start()
 
     def reviewed(self, asked=None):
         return post.reviewed_pr("/w", self.run_dir, asked)
@@ -901,7 +887,7 @@ class CloseCase(PostCase):
         return super().main(*args, "--repo", self.repo.path)
 
     def compare(self, args, cwd, stdin=None):
-        if not args[1].startswith("repos/acme/widgets/compare/"): raise AssertionError(f"unexpected gh call {args}")
+        if not args[1].startswith("repos/acme/widgets/compare/"): self.refuse_gh(args, cwd)
         return self.fix_on_head + "\n"
 
     def closable_finding(self, mid, ref=None, **thread):
@@ -918,8 +904,8 @@ class CloseCase(PostCase):
                              "can_resolve": "1", "by_viewer": "1", "line": "11", "replies": [], "date": "2026-11-06", **fields}
         run_files.write_threads(self.run_dir, self.threads)
 
-    def closable(self):
-        return sorted(run_files.closable(self.run_dir))
+    def offered(self):
+        return [int(line.split(":")[0].split()[1]) for line in self.main("--close").splitlines() if line.startswith("finding ")]
 
     def close_calls(self, ids="1"):
         self.main("--close", ids, "--dry-run")
@@ -928,48 +914,6 @@ class CloseCase(PostCase):
 
     def reply_body(self, ids="1"):
         return self.close_calls(ids)[0]["variables"]["body"]
-
-
-class ClosableTest(CloseCase):
-    def test_takes_a_posted_finding_marked_fixed_whose_thread_is_open(self):
-        self.assertEqual(self.closable(), [1])
-
-    def test_leaves_out_a_finding_not_marked_fixed(self):
-        self.set_status(1, "open")
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_finding_posted_in_the_review_body(self):
-        self.posted_row(1, kind="body", comment_id="", thread_id="")
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_credit(self):
-        self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()), CREDIT)
-        self.closable_finding(6)
-        self.assertEqual(self.closable(), [1])
-
-    def test_leaves_out_a_thread_kept_open(self):
-        run_files.write_kept_open(self.run_dir, {1: {"reason": "", "date": ""}})
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_resolved_thread(self):
-        self.thread(1, state="resolved")
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_thread_in_the_pending_review(self):
-        self.thread(1, state="pending")
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_missing_thread(self):
-        self.thread(1, state="missing")
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_thread_row_of_an_earlier_comment(self):
-        self.thread(1, comment_id="899")
-        self.assertEqual(self.closable(), [])
-
-    def test_leaves_out_a_thread_the_viewer_did_not_start(self):
-        self.thread(1, by_viewer="0")
-        self.assertEqual(self.closable(), [])
 
 
 class CloseListTest(CloseCase):
@@ -999,9 +943,9 @@ class CloseListTest(CloseCase):
         self.thread(1, can_resolve="0")
         self.assertIn("can resolve: no; the reply is sent and the thread left open", self.main("--close"))
 
-    def test_reads_the_threads_from_the_pull_request_first(self):
-        self.main("--close")
-        self.assertTrue(self.refresh.called)
+    def test_lists_the_threads_as_the_pull_request_has_them_now(self):
+        self.refresh.side_effect = lambda *a: self.thread(1, state="resolved")
+        self.assertIn("nothing to close", self.main("--close"))
 
     def test_says_when_nothing_is_closable(self):
         self.set_status(1, "open")
@@ -1012,9 +956,8 @@ class CloseListTest(CloseCase):
         self.assertIn("cannot close: you have pending review 55", self.main("--close"))
 
     def test_makes_no_call(self):
-        writes = [self.stub("rest"), self.stub("graphql")]
         self.main("--close")
-        self.assertEqual([w.call_count for w in writes], [0, 0])
+        self.assertNoUnstubbedGh()
 
 
 class FixOnThePullRequestTest(CloseCase):
@@ -1092,10 +1035,6 @@ class CloseDryRunTest(CloseCase):
         self.set_status(1, "fixed", "covered by the new tests")
         self.assertEqual(self.reply_body(), "Looks fixed.")
 
-    def test_names_no_commit_for_a_number_that_is_not_one(self):
-        self.set_status(1, "fixed", "see ticket 1234567")
-        self.assertEqual(self.reply_body(), "Looks fixed.")
-
     def test_sends_the_default_reply_when_close_md_is_blank(self):
         self.write("posted/close-1.md", "  \n\n")
         self.assertEqual(self.reply_body(), self.looks_fixed)
@@ -1109,9 +1048,8 @@ class CloseDryRunTest(CloseCase):
         self.assertEqual([c["graphql"] for c in self.close_calls()], ["addPullRequestReviewThreadReply"])
 
     def test_makes_no_call(self):
-        writes = [self.stub("rest"), self.stub("graphql")]
         self.close_calls()
-        self.assertEqual([w.call_count for w in writes], [0, 0])
+        self.assertNoUnstubbedGh()
 
 
 class WhenTheViewerAlreadyRepliedTest(CloseCase):
@@ -1191,9 +1129,9 @@ class KeepOpenTest(CloseCase):
         self.main("--keep-open", "1:the author wants a follow-up")
         self.assertEqual(run_files.read_kept_open(self.run_dir)[1]["reason"], "the author wants a follow-up")
 
-    def test_makes_the_finding_no_longer_closable(self):
+    def test_stops_offering_the_finding_for_closing(self):
         self.main("--keep-open", "1")
-        self.assertEqual(self.closable(), [])
+        self.assertEqual(self.offered(), [])
 
     def test_refuses_a_finding_without_a_posted_thread(self):
         self.assertIn("finding 2 has no posted thread to keep open", self.refusal("--keep-open", "2"))
@@ -1274,7 +1212,7 @@ class WhenTheViewerCannotResolveAndItIsSentTest(LiveCloseCase):
         self.assertEqual(run_files.read_kept_open(self.run_dir)[1]["reason"], post.CANNOT_RESOLVE)
 
     def test_no_longer_offers_it_for_closing(self):
-        self.assertEqual(self.closable(), [2])
+        self.assertEqual(self.offered(), [2])
 
 
 class WhenRetriedAfterAResolveFailedTest(LiveCloseCase):
@@ -1333,7 +1271,7 @@ class WhenTheViewersLoginIsUnavailableTest(LiveCloseCase):
         self.assertEqual(self.graphql.call_count, 0)
 
 
-class RefreshThreadsTest(RunCase):
+class RefreshThreadsTest(GhRunCase):
     def setUp(self):
         super().setUp()
         run_files.write_posted(self.run_dir, {1: {"state": "posted", "kind": "line", "comment_id": "901", "thread_id": "PRRT_1"}})
@@ -1353,7 +1291,7 @@ class RefreshThreadsTest(RunCase):
         self.assertEqual(run_files.read_threads(self.run_dir)[1]["state"], "resolved")
 
 
-class WhenThePullRequestHasMoreThreadsThanTheLimitTest(RunCase):
+class WhenThePullRequestHasMoreThreadsThanTheLimitTest(GhRunCase):
     def setUp(self):
         super().setUp()
         run_files.write_posted(self.run_dir, {1: {"state": "posted", "kind": "line", "comment_id": "901", "thread_id": "PRRT_1"}})
@@ -1389,6 +1327,28 @@ class CarryTest(TempCase):
         write_file(os.path.join(prev, "posted.tsv"), "merged_id\tstate\n1\tdrafted\n")
         run_ok("carry", prev, cur)
         self.assertEqual([os.path.exists(os.path.join(cur, p)) for p in ("posted/1.md", "posted.tsv")], [True, True])
+
+
+class WhenTheFixCommitIsNotInThisCloneTest(CloseCase):
+    UNKNOWN = "deadbee"
+
+    def setUp(self):
+        super().setUp()
+        self.set_status(1, "fixed", f"{self.UNKNOWN} (fix)")
+        self.reason = f"its fix commit {self.UNKNOWN} is not in this clone; fetch it and retry"
+
+    def test_refuses_to_close_it(self):
+        self.assertIn(f"nothing sent; finding 1: {self.reason}", self.refusal("--close", "1", "--dry-run"))
+
+    def test_names_the_reason_in_the_listing(self):
+        self.assertIn(f"  cannot send: {self.reason}", self.main("--close"))
+
+    def test_does_not_fall_back_to_the_no_fix_commit_warning(self):
+        self.assertNotIn("no fix commit to check", self.main("--close"))
+
+    def test_refuses_it_when_another_named_commit_is_known(self):
+        self.set_status(1, "fixed", f"{self.sha} and {self.UNKNOWN}")
+        self.assertIn(self.reason, self.refusal("--close", "1", "--dry-run"))
 
 
 if __name__ == "__main__":

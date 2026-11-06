@@ -548,7 +548,11 @@ def off_head(ctx, sha, repo):
     except gh_api.GhError as err: return f"GitHub cannot compare its fix {sha[:7]} with {where}, so the fix may not be pushed ({err})"
     return None if on_head else f"its fix {sha[:7]} is not on {where}; close it once the fix is on the pull request"
 
-def fix_check(ctx, shas, repo):
+def unfetched(tokens):
+    return f"its fix commit {tokens[0]} is not in this clone; fetch it and retry" if tokens else None
+
+def fix_check(ctx, shas, unknown, repo):
+    if unknown: return unfetched(unknown), []
     if not shas: return None, [NO_FIX_COMMIT]
     return next(filter(None, (off_head(ctx, sha, repo) for sha in shas)), None), []
 
@@ -566,7 +570,7 @@ def close_items(run, ctx, repo, viewer):
         shas = rf.commits_named(repo, c.status["ref"])
         text = unwrap(close_text(run, mid, shas))
         replied = already_replied(c.thread, text, viewer)
-        off, fix_warnings = fix_check(ctx, shas, repo)
+        off, fix_warnings = fix_check(ctx, shas, rf.commits_unknown(repo, c.status["ref"]), repo)
         problem, warnings = (None, []) if replied else screen(text, ctx["local"])
         items.append({**item_head(mid, nums, found, titles), "ref": c.status["ref"], "url": c.posted["url"], "thread": c.thread,
                       "text": text, "replied": replied, "problem": off or problem, "warnings": fix_warnings + warnings})

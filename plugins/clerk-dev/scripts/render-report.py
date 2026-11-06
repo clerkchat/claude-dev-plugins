@@ -506,8 +506,11 @@ def pr_block(c, heading, with_location=True):
 THREAD_STATE_WORDS = {"resolved": "marked resolved on GitHub", "outdated": "outdated on GitHub: the code it was attached to has changed",
                       "pending": "in your pending review, not yet submitted", "missing": "the comment is no longer on the pull request"}
 
+def quoted_line(text):
+    return "> " + code_spans(" ".join(text.split()).replace("<!--", "&lt;!--"))
+
 def quoted_replies(replies):
-    return "> " + code_spans("Replies: " + " ".join(replies.split()).replace("<!--", "&lt;!--"))
+    return quoted_line("Replies: " + replies)
 
 def thread_lines(replies, state_words):
     out = [quoted_replies(replies), ""] if replies else []
@@ -631,7 +634,7 @@ def close_lines(mid):
         return [words[:1].upper() + words[1:] + ".", ""]
     if mid in KEPT_OPEN and THREADS.get(mid, {}).get("state") == "open":
         reason = KEPT_OPEN[mid]["reason"].strip()
-        return ["Thread kept open" + (f": {code_spans(reason)}" if reason else "") + ".", ""]
+        return [quoted_line("Thread kept open" + (f": {reason}" if reason else "") + "."), ""]
     return []
 
 def thread_states(row):

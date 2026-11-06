@@ -1293,7 +1293,9 @@ When a render prints that line, or the user asks to close posted threads:
    the fix is there; relay it, and list again once the fix is on the pull
    request. A fix whose status names no commit (a recheck against the working
    tree) is listed with the warning "no fix commit to check against the pull
-   request" and can still be closed; name it in the question. When the user's
+   request" and can still be closed; name it in the question. A status that names
+   a commit this clone does not have shows "cannot send: its fix commit <sha> is
+   not in this clone; fetch it and retry", and `--close` refuses it. When the user's
    own "looks fixed" reply is already the latest word on the thread (nobody
    replied after it), the listing says "reply: already sent" instead: `--close`
    then only resolves the thread, or, when the user cannot resolve it, keeps

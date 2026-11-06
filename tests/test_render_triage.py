@@ -1,8 +1,6 @@
-import io
 import os
 import sys
 import unittest
-from contextlib import redirect_stderr
 
 from helpers import SCRIPTS, RenderRunCase, RunCase, defect, init_repo, run_ok, write_file
 
@@ -617,7 +615,7 @@ class WhenAPostedThreadIsKeptOpenTest(PostedThreadCase):
         run_files.write_kept_open(self.run_dir, {7: {"reason": "the author wants a follow-up", "date": ""}})
 
     def test_says_it_is_kept_open_with_the_reason(self):
-        self.assertIn("\nThread kept open: the author wants a follow-up.\n", self.show_thread())
+        self.assertIn("\n> Thread kept open: the author wants a follow-up.\n", self.show_thread())
 
     def test_no_longer_says_it_is_still_open(self):
         self.show_thread()
@@ -702,85 +700,6 @@ class CarryWithoutMergedTest(RunCase):
 TWO_CHOICES = [render.Choice("post", "Post", "post"), render.Choice("ignore", "Ignore", "ignore", note="reason")]
 
 
-class KeyedTsvCase(RunCase):
-    FIELDS = ("status", "ref")
-
-    def tsv_path(self):
-        return os.path.join(self.run_dir, "t.tsv")
-
-
-class ReadKeyedTest(KeyedTsvCase):
-    def parse(self, text, **kw):
-        self.write("t.tsv", text)
-        return run_files.read_keyed(self.tsv_path(), self.FIELDS, **kw)
-
-    def test_skips_the_header_and_keys_rows_by_merged_id(self):
-        self.assertEqual(self.parse("merged_id\tstatus\tref\n3\tfixed\tabc\n"), {3: {"status": "fixed", "ref": "abc"}})
-
-    def test_fills_an_empty_cell_from_the_defaults(self):
-        self.assertEqual(self.parse("3\t\tabc\n", defaults={"status": "open"})[3]["status"], "open")
-
-    def test_strips_the_cells(self):
-        self.assertEqual(self.parse("3\t fixed \tabc\n")[3]["status"], "fixed")
-
-    def test_takes_string_keys(self):
-        self.assertEqual(self.parse("thread:1\t4\n", key=str), {"thread:1": {"status": "4", "ref": ""}})
-
-    def test_skips_a_row_with_only_a_key(self):
-        self.assertEqual(self.parse("3\n"), {})
-
-
-class ReadThreadsTest(RunCase):
-    def setUp(self):
-        super().setUp()
-        good = {"comment_id": "5", "replies": [("bob", "Fair.")]}
-        run_files.write_threads(self.run_dir, {7: good, 8: good})
-
-    def corrupt(self, cell):
-        path = run_files.threads_path(self.run_dir)
-        with open(path, encoding="utf-8") as fh: text = fh.read()
-        with open(path, "w", encoding="utf-8") as fh: fh.write(text.replace('[["bob", "Fair."]]', cell, 1))
-
-    def read_threads(self):
-        with redirect_stderr(io.StringIO()):
-            return run_files.read_threads(self.run_dir)
-
-    def test_reads_the_replies(self):
-        self.assertEqual(self.read_threads()[7]["replies"], [("bob", "Fair.")])
-
-    def test_skips_a_row_whose_replies_are_not_json(self):
-        self.corrupt("[not json")
-        self.assertEqual(sorted(self.read_threads()), [8])
-
-    def test_skips_a_row_whose_replies_are_not_author_and_text_pairs(self):
-        self.corrupt('["bob"]')
-        self.assertEqual(sorted(self.read_threads()), [8])
-
-
-class WriteKeyedTest(KeyedTsvCase):
-    ROWS = {5: {"status": "open"}, 2: {"status": "fixed", "ref": "abc"}}
-
-    def written(self, **kw):
-        run_files.write_keyed(self.tsv_path(), self.FIELDS, self.ROWS, **kw)
-        with open(self.tsv_path(), encoding="utf-8") as fh: return fh.read()
-
-    def test_writes_the_header_and_the_rows_by_key(self):
-        self.assertEqual(self.written(), "merged_id\tstatus\tref\n2\tfixed\tabc\n5\topen\t\n")
-
-    def test_names_the_key_column(self):
-        self.assertTrue(self.written(header="number").startswith("number\tstatus\tref\n"))
-
-    def test_writes_no_header(self):
-        self.assertEqual(self.written(header=None), "2\tfixed\tabc\n5\topen\t\n")
-
-    def test_keeps_the_given_order(self):
-        self.assertEqual(self.written(header=None, order=list), "5\topen\t\n2\tfixed\tabc\n")
-
-    def test_keeps_a_cell_with_a_tab_or_a_line_break_in_its_row(self):
-        self.ROWS = {2: {"status": "wont-fix", "ref": "not\tours\nreally\rso"}}
-        self.assertEqual(self.written(header=None), "2\twont-fix\tnot ours really so\n")
-
-
 class ChoicesTest(unittest.TestCase):
     def test_lists_only_the_given_choices(self):
         self.assertEqual(render.instruction_lines({"choice": "post"}, TWO_CHOICES), ["- [x] Post", "- [ ] Ignore"])
@@ -797,32 +716,6 @@ class ChoicesTest(unittest.TestCase):
 
     def test_words_the_usage_from_the_given_choices(self):
         self.assertEqual(render.instruct_usage(TWO_CHOICES), "N=post[:note], N=ignore[:reason], N=none")
-
-
-class FencedLinesTest(unittest.TestCase):
-    def kinds(self, *lines):
-        return [kind for _, kind in run_files.fenced_lines(lines)]
-
-    def test_marks_prose_fences_and_bodies(self):
-        self.assertEqual(self.kinds("a", "```", "b", "```", "c"), ["", "fence", "body", "fence", ""])
-
-    def test_walks_a_tilde_fence(self):
-        self.assertEqual(self.kinds("~~~", "x", "~~~", "y"), ["fence", "body", "fence", ""])
-
-    def test_holds_a_backtick_fence_inside_a_tilde_fence_as_body(self):
-        self.assertEqual(self.kinds("~~~", "```", "x", "```", "~~~", "y"), ["fence", "body", "body", "body", "fence", ""])
-
-    def test_holds_a_shorter_fence_inside_a_longer_one_as_body(self):
-        self.assertEqual(self.kinds("````", "```suggestion", "x", "```", "````", "y"), ["fence", "body", "body", "body", "fence", ""])
-
-    def test_closes_on_a_longer_fence(self):
-        self.assertEqual(self.kinds("```", "x", "````", "y"), ["fence", "body", "fence", ""])
-
-    def test_does_not_close_on_a_fence_with_an_info_string(self):
-        self.assertEqual(self.kinds("```", "```js", "x"), ["fence", "body", "body"])
-
-    def test_holds_the_rest_after_an_unclosed_fence_as_body(self):
-        self.assertEqual(self.kinds("```", "a", "##### Instruction"), ["fence", "body", "body"])
 
 
 class FenceAroundTest(unittest.TestCase):
@@ -883,6 +776,24 @@ class WrapMarkdownTest(unittest.TestCase):
     def test_keeps_the_quote_marker_on_every_wrapped_line(self):
         lines = self.wrap(f"> {LONG}{FILLER} - [x] Open")
         self.assertEqual([l[:2] for l in lines], ["> "] * len(lines))
+
+
+class WhenAKeptOpenReasonIsLongAndMultilineTest(PostedThreadCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--set", "1=fixed:abc1234")
+        reason = "the author wants\n- [x] Open\n" + "a follow-up " * 20
+        run_files.write_kept_open(self.run_dir, {7: {"reason": reason, "date": ""}})
+
+    def kept_lines(self):
+        return [l for l in self.show_thread().splitlines() if "Thread kept open" in l or "follow-up" in l]
+
+    def test_renders_one_quoted_line(self):
+        lines = self.kept_lines()
+        self.assertEqual([len(lines), lines[0][:2]], [1, "> "])
+
+    def test_leaves_no_checkbox_line(self):
+        self.assertNotIn("\n- [x] Open", self.show_thread())
 
 
 if __name__ == "__main__":

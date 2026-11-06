@@ -151,6 +151,10 @@ def commits_named(repo, text):
                        input="".join(t + "^{commit}\n" for t in toks), capture_output=True, text=True)
     return [p[0] for p in (l.split() for l in r.stdout.splitlines()) if len(p) == 2 and p[1] == "commit"]
 
+def commits_unknown(repo, text):
+    known = commits_named(repo, text)
+    return [t for t in COMMIT_TOKEN.findall(text) if not any(k.startswith(t) for k in known)]
+
 def commits_path(run):
     return os.path.join(run, "commits.tsv")
 
