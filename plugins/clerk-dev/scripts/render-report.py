@@ -66,6 +66,7 @@ replaced by that finding's current number. Titles come from the finding's
 present, else shortened from the claim.
 """
 import argparse, os, re, shutil, subprocess, sys, textwrap
+from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, read_plain_names
 from importlib import import_module
@@ -124,7 +125,34 @@ ORIGIN_WORDS = {"new": "New on this branch", "worsened": "Made worse by this bra
 SIZES = ("trivial", "small", "medium", "large")
 DEBT_ORIGIN_WORDS = {"new": "In code new on this branch", "worsened": "In code on main this branch extended", "existing": "In code already on main"}
 DEBT_WORDS = {"cleanup": "Cleanup", "simplify": "Simplify", "refactor": "Refactor"}
-ACTIONS = {"pr": "pull request comment", "reopen": "reopened", "fix": "fix before merging", "look": "worth a look", "confirm": "needs confirmation", "existing": "separate pull request", "debt": "cleanup", "declined": "previously declined", "below": "below the bar"}
+
+def debt_intro(entries):
+    saved = sum(e.get("_saves", 0) for e in entries)
+    return ("Ways to make the code this change touches smaller and easier to change: cleanups within a function, simplifications that keep the behavior in fewer lines, and refactors that change the structure. None of them holds the merge. Each recommendation says whether it fits in this pull request or belongs in its own."
+            + (f" Together they would remove about {saved} lines." if saved else ""))
+
+def existing_intro(entries):
+    return "Defects that are already on the remote main branch: this branch did not introduce them or make them worse, so they do not hold the merge. Each recommendation is a fix in its own pull request. Fix as recommended records the finding as deferred to that pull request; to fix one on this branch anyway, choose Fix as noted."
+
+def below_intro(entries):
+    return "Major findings the bar left out: the reviewers or the verifier were not sure enough that they exist as described, or no verifier checked them. Each may still be real. Nothing here is acted on unless you tick an instruction."
+
+Section = namedtuple("Section", "key heading action count_label intro")
+SECTIONS = [
+    Section("reopen", "Reopened", "reopened", "reopened", None),
+    Section("pr", "Pull request comments", "pull request comment", None, None),
+    Section("fix", "Fix before merging", "fix before merging", "fix", None),
+    Section("look", "Worth a look", "worth a look", "look", None),
+    Section("confirm", "Needs confirmation", "needs confirmation", "confirm", None),
+    Section("existing", "Already on main", "separate pull request", "existing", existing_intro),
+    Section("debt", "Cleanup and refactoring", "cleanup", "cleanup", debt_intro),
+    Section("declined", "Previously declined", "previously declined", "declined", None),
+    Section("below", "Below the bar", "below the bar", "below", below_intro),
+]
+ACTIONS = {s.key: s.action for s in SECTIONS}
+
+def section_counts(routed, separator):
+    return ", ".join(f"{s.count_label}{separator}{len(routed[s.key])}" for s in SECTIONS if s.count_label)
 
 def action_of(e, section):
     """The action for a finding in a section, as the glance table words it; a
@@ -546,15 +574,22 @@ def history_line(e):
     return f"Also reported as {where}."
 
 CHOICES = [("fix", "Fix as recommended", "fix"), ("noted", "Fix as noted", "fix as noted"), ("discuss", "Discuss", "discuss"), ("defer", "Defer", "defer"), ("ignore", "Ignore", "ignore"), ("post", "Post", "post")]
-CHOICE_LABEL = {key: lab for key, lab, _ in CHOICES}
+def choice_labels(choices):
+    return {key: lab for key, lab, _ in choices}
+
+CHOICE_LABEL = choice_labels(CHOICES)
 CHOICE_WORD = {key: word for key, _, word in CHOICES}
 LABEL_TO_CHOICE = {lab.lower(): key for key, lab in CHOICE_LABEL.items()}
 INSTRUCT_NOTE = {"defer": "ref", "ignore": "reason"}
-INSTRUCT_RE = re.compile(r"^(#?\d+)=(" + "|".join(CHOICE_LABEL) + r"|none)(\([a-z ,+]+\))?(?::(.*))?$")
 
-def instruct_usage():
+def instruct_re(choices):
+    return re.compile(r"^(#?\d+)=(" + "|".join(key for key, _, _ in choices) + r"|none)(\([a-z ,+]+\))?(?::(.*))?$")
+
+INSTRUCT_RE = instruct_re(CHOICES)
+
+def instruct_usage(choices=CHOICES):
     forms = []
-    for key in CHOICE_LABEL:
+    for key, _, _ in choices:
         forms.append(f"N={key}[:{INSTRUCT_NOTE.get(key, 'note')}]")
         if key == "fix": forms.append("N=fix(a)[:note]")
     return ", ".join(forms + ["N=none"])
@@ -716,27 +751,27 @@ def import_posted_edits(run, today):
     for mid, text in posted_blocks(open(p, encoding="utf-8").read().split("\n")).items():
         if flat(text) not in (snap.get(mid), flat(posted_text(run, mid))): record_posted(run, mid, text, "edited", today)
 
-def instruction_lines(i):
+def instruction_lines(i, choices=CHOICES):
     """The checklist lines, as compared in the snapshot (notes excluded)."""
     i = i or {}
     choice, note = i.get("choice", ""), i.get("note", "")
     also = [x for x in i.get("also", "").split(",") if x]
     opt = i.get("option", "") if choice == "fix" else ""
     out = []
-    for key, lab in CHOICE_LABEL.items():
+    for key, lab, _ in choices:
         box = "[x]" if key == choice or key in also else "[ ]"
         if key == "fix" and opt: lab += " (" + ", ".join(opt.split(",")) + ")"
         out.append(f"- {box} {lab}" + (f": {note}" if key == choice and note else ""))
     if note and not choice: out[0] += f": {note}"
     return out
 
-def instruction_block(i):
+def instruction_block(i, choices=CHOICES):
     """Checklist, a conflict line when two boxes are ticked, and the free-text
     notes. Everything in this block survives re-rendering."""
     i = i or {}
-    out = instruction_lines(i) + [""]
+    out = instruction_lines(i, choices) + [""]
     if i.get("also"):
-        used = CHOICE_LABEL.get(i.get("choice", ""), "")
+        used = choice_labels(choices).get(i.get("choice", ""), "")
         out += [f"More than one instruction is ticked; using {used} until the others are cleared.", ""]
     text = i.get("text", "").strip()
     out += ["Notes:" + ((" " + text.split("\n", 1)[0]) if text else "")]
@@ -747,8 +782,18 @@ def instruction_block(i):
 def snapshot_key(lines, text):
     return " | ".join(lines) + " || " + " ".join(text.split())
 
-def instruction_key(i):
-    return snapshot_key(instruction_lines(i), (i or {}).get("text", ""))
+def instruction_key(i, choices=CHOICES):
+    return snapshot_key(instruction_lines(i, choices), (i or {}).get("text", ""))
+
+def choice_counts(entries, choices=CHOICES):
+    return {key: sum(1 for e in entries if INSTR.get(e["id"], {}).get("choice") == key) for key, _, _ in choices}
+
+def triage_line(numbered, choices=CHOICES):
+    counts = choice_counts(numbered, choices)
+    undecided = sum(1 for e in numbered if e["_sec"] != "below" and not INSTR.get(e["id"], {}).get("choice"))
+    below_open = sum(1 for e in numbered if e["_sec"] == "below" and not INSTR.get(e["id"], {}).get("choice"))
+    return ("Triage: " + ", ".join(f"{counts[key]} {word}" for key, _, word in choices) + f", {undecided} not decided"
+            + (f", {below_open} below the bar left as is." if below_open else "."))
 
 def import_instruction_edits(run, ins, today):
     """Read Instruction blocks from the existing report.md. A block counts as a
@@ -961,11 +1006,10 @@ def main():
         if missing:
             print(f"warning: finding with merged id {e['id']} picks ({', '.join(missing)}), which its recommendation does not label", file=sys.stderr)
     global RECON; RECON = read_reconcile(a.run)
-    fix, look, confirm, unverified, rejected = [], [], [], [], []
-    reopen, declined, below, hidden_minor, existing, debt = [], [], [], [], [], []
+    unverified, rejected, hidden_minor = [], [], []
+    routed = {s.key: [] for s in SECTIONS}
     global PR_LINKS
     PR_LINKS = {}
-    prc = []
     by_id = {e["id"]: e for e in merged}
     for e in merged:
         if not is_pr(e): continue
@@ -974,7 +1018,7 @@ def main():
         else:
             e["_conf"], e["_sev"] = 100, "major"
             e["_v"] = verdicts.get(e["id"], {"verdict": "", "confidence": 0, "severity": "", "note": ""})
-            prc.append(e)
+            routed["pr"].append(e)
     for e in merged:
         if is_pr(e): continue
         v = verdicts.get(e["id"])
@@ -983,10 +1027,10 @@ def main():
             unverified.append(e)
             if e["id"] in PR_LINKS:
                 e["_conf"], e["_sev"], e["_v"] = e["confidence"], e["severity"], {"verdict": "unverified", "confidence": 0, "severity": "", "note": ""}
-                look.append(e); continue
+                routed["look"].append(e); continue
             if (e["severity"] in ("blocker", "major") and e["confidence"] >= 40) or decided(e["id"]):
                 e["_conf"], e["_sev"], e["_v"] = e["confidence"], e["severity"], {"verdict": "unverified", "confidence": 0, "severity": "", "note": ""}
-                below.append(e)
+                routed["below"].append(e)
             continue
         if v["verdict"] == "rejected" and not decided(e["id"]): rejected.append(e); continue
         if v["verdict"] == "rejected":
@@ -1000,21 +1044,21 @@ def main():
         scope_of(e, v)
         m = RECON["matches"].get(e["id"])
         if m and m.get("how") == "reopened" or (m and m["prev_status"] == "fixed" and m.get("how") != "carried" and conf >= 60):
-            reopen.append(e); continue
+            routed["reopen"].append(e); continue
         if m and m.get("how") != "carried" and m["prev_status"] in ("wont-fix", "deferred") and RECON["prior"].get(e["id"], {}).get("outcome") != "answered":
-            declined.append(e); continue
+            routed["declined"].append(e); continue
         minor_bar = 80 if a.quick else 60
-        if sev in ("blocker", "major") and conf >= a.threshold: dest = fix
-        elif sev == "major" and conf >= 60: dest = look
-        elif sev == "minor" and conf >= minor_bar: dest = look
-        elif sev == "blocker": dest = confirm
-        elif e["id"] in PR_LINKS: dest = look
-        elif sev == "major" and conf >= 40: dest = below
-        elif decided(e["id"]): dest = below
-        else: dest = hidden_minor
-        if e["_debt"] and any(dest is l for l in (fix, look, confirm)): dest = debt
-        elif e["_origin"] == "existing" and any(dest is l for l in (fix, look, confirm)): dest = existing
-        dest.append(e)
+        if sev in ("blocker", "major") and conf >= a.threshold: dest = "fix"
+        elif sev == "major" and conf >= 60: dest = "look"
+        elif sev == "minor" and conf >= minor_bar: dest = "look"
+        elif sev == "blocker": dest = "confirm"
+        elif e["id"] in PR_LINKS: dest = "look"
+        elif sev == "major" and conf >= 40: dest = "below"
+        elif decided(e["id"]): dest = "below"
+        else: hidden_minor.append(e); continue
+        if e["_debt"] and dest in ("fix", "look", "confirm"): dest = "debt"
+        elif e["_origin"] == "existing" and dest in ("fix", "look", "confirm"): dest = "existing"
+        routed[dest].append(e)
     key = lambda e: (-SEV[e["_sev"]], -e["_conf"], e["file"], e["line"] or 0)
     # Document order: sections by action; within a section, areas ranked by
     # their most important finding; within an area, by severity then
@@ -1027,8 +1071,9 @@ def main():
     # existing one, in document order.
     prior_nums = {} if a.renumber else dict(nums)
     next_n = max(prior_nums.values(), default=0)
-    prc.sort(key=lambda e: (e["file"], e["line"] or 0))
-    for sec, lst in (("reopen", reopen), ("pr", prc), ("fix", fix), ("look", look), ("confirm", confirm), ("existing", existing), ("debt", debt), ("declined", declined), ("below", below)):
+    routed["pr"].sort(key=lambda e: (e["file"], e["line"] or 0))
+    for s in SECTIONS:
+        sec, lst = s.key, routed[s.key]
         if sec != "pr": lst.sort(key=key)
         by_area = {}
         for e in lst: by_area.setdefault(area_of(e, labels), []).append(e)
@@ -1048,7 +1093,7 @@ def main():
     check_posted_notes()
     if POSTED: write_posted(a.run, POSTED)
     title = f"Review of {a.target}"
-    fm = ["---", f"title: {title}", f"branch: {a.branch}", f"base: {a.base}", f"head: {a.head}", f"date: {a.date}", f"run: {os.path.relpath(a.run, a.repo)}", f"files: {a.files}", f"parts: {a.parts}", f"focuses: {a.focuses}", f"findings: {{ reopened: {len(reopen)}, fix: {len(fix)}, look: {len(look)}, confirm: {len(confirm)}, existing: {len(existing)}, cleanup: {len(debt)}, declined: {len(declined)}, below: {len(below)} }}", "---", ""]
+    fm = ["---", f"title: {title}", f"branch: {a.branch}", f"base: {a.base}", f"head: {a.head}", f"date: {a.date}", f"run: {os.path.relpath(a.run, a.repo)}", f"files: {a.files}", f"parts: {a.parts}", f"focuses: {a.focuses}", "findings: { " + section_counts(routed, ": ") + " }", "---", ""]
     fm = [l.rstrip() for l in fm]
     out = fm + [f"# {title}", "", "## Summary", ""]
     out += [open(a.summary, encoding="utf-8").read().strip() if a.summary and os.path.exists(a.summary) else "(summary pending)", ""]
@@ -1075,11 +1120,11 @@ def main():
         answered = sum(1 for e in numbered if RECON["prior"].get(e["id"], {}).get("outcome") == "answered")
         lines = [f"Compared with the previous review, {RECON['label']}:", "",
                  f"- New: {new}",
-                 f"- Reopened (marked fixed, found again or failed recheck): {len(reopen)}",
+                 f"- Reopened (marked fixed, found again or failed recheck): {len(routed['reopen'])}",
                  f"- Still open: {still}",
                  f"- Resolved, confirmed by recheck: {len(resolved)}",
                  f"- Not found again, never marked fixed: {len(notfound)}",
-                 f"- Previously declined and raised again: {len(declined) + answered}" + (f", of which {answered} with evidence that may answer the reason" if answered else ""),
+                 f"- Previously declined and raised again: {len(routed['declined']) + answered}" + (f", of which {answered} with evidence that may answer the reason" if answered else ""),
                  ""]
         if resolved:
             lines += ["Resolved since the previous review:", ""] + [code_spans(f"- {u['title']} (finding {u['prev_number']} there, {u['prev_ref'] or 'no commit recorded'})") for u in resolved] + [""]
@@ -1088,20 +1133,11 @@ def main():
         if notfound:
             lines += ["Open in the previous review and not found this time; confirm before closing:", ""] + [code_spans(f"- {u['title']} (finding {u['prev_number']} there, {u['location']})") for u in notfound] + [""]
         out += ["## Since the previous review", ""] + lines
-    main = [e for e in numbered if e["_sec"] != "below"]
-    tri = {k: sum(1 for e in numbered if INSTR.get(e["id"], {}).get("choice") == k) for k in CHOICE_WORD}
-    undecided = sum(1 for e in main if not INSTR.get(e["id"], {}).get("choice"))
-    below_open = sum(1 for e in numbered if e["_sec"] == "below" and not INSTR.get(e["id"], {}).get("choice"))
-    triage = "Triage: " + ", ".join(f"{tri[k]} {word}" for k, word in CHOICE_WORD.items()) + f", {undecided} not decided" + (f", {below_open} below the bar left as is." if below_open else ".")
-    out += ["## Findings at a glance", "", prog, "", triage, ""] + md_table(rows) + [""]
-    saved = sum(e.get("_saves", 0) for e in debt)
-    intros = {"debt": "Ways to make the code this change touches smaller and easier to change: cleanups within a function, simplifications that keep the behavior in fewer lines, and refactors that change the structure. None of them holds the merge. Each recommendation says whether it fits in this pull request or belongs in its own." + (f" Together they would remove about {saved} lines." if saved else ""),
-              "existing": "Defects that are already on the remote main branch: this branch did not introduce them or make them worse, so they do not hold the merge. Each recommendation is a fix in its own pull request. Fix as recommended records the finding as deferred to that pull request; to fix one on this branch anyway, choose Fix as noted.",
-              "below": "Major findings the bar left out: the reviewers or the verifier were not sure enough that they exist as described, or no verifier checked them. Each may still be real. Nothing here is acted on unless you tick an instruction."}
-    for sec, heading in (("reopen", "Reopened"), ("pr", "Pull request comments"), ("fix", "Fix before merging"), ("look", "Worth a look"), ("confirm", "Needs confirmation"), ("existing", "Already on main"), ("debt", "Cleanup and refactoring"), ("declined", "Previously declined"), ("below", "Below the bar")):
-        areas = ordered_areas.get(sec, [])
+    out += ["## Findings at a glance", "", prog, "", triage_line(numbered), ""] + md_table(rows) + [""]
+    for s in SECTIONS:
+        sec, areas = s.key, ordered_areas[s.key]
         if not areas: continue
-        out += ["---", "", f"## {heading}", ""] + ([intros[sec], ""] if sec in intros else [])
+        out += ["---", "", f"## {s.heading}", ""] + ([s.intro(routed[sec]), ""] if s.intro else [])
         for area, es in areas:
             if sec != "pr": out += [f"### {area}", ""]
             for i, e in enumerate(es):
@@ -1149,6 +1185,6 @@ def main():
     shown = {e["id"] for e in numbered}
     kept = [(n, mid) for mid, n in prior_nums.items() if mid not in shown]
     open(os.path.join(a.run, "numbers.tsv"), "w").write("number\tmerged_id\tsection\n" + "".join(f"{e['_n']}\t{e['id']}\t{e['_sec']}\n" for e in numbered) + "".join(f"{n}\t{mid}\thidden\n" for n, mid in sorted(kept)))
-    print(f"report: {outp}; reopened {len(reopen)}, fix {len(fix)}, look {len(look)}, confirm {len(confirm)}, existing {len(existing)}, cleanup {len(debt)}, declined {len(declined)}, below {len(below)}, unverified {len(unverified)}, rejected {len(rejected)}", file=sys.stderr)
+    print(f"report: {outp}; {section_counts(routed, ' ')}, unverified {len(unverified)}, rejected {len(rejected)}", file=sys.stderr)
 
 if __name__ == "__main__": main()

@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 from helpers import SCRIPTS, RunCase, run_ok, run_script, write_file
 
@@ -430,6 +431,32 @@ class CarryPostedTest(PostCase):
         self.edit_report("Say it plainly.", "Say it gently.")
         self.carry()
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
+
+
+TWO_CHOICES = [("post", "Post", "post"), ("ignore", "Ignore", "ignore")]
+
+
+class ChoicesTest(unittest.TestCase):
+    def test_lists_only_the_given_choices(self):
+        self.assertEqual(render.instruction_lines({"choice": "post"}, TWO_CHOICES), ["- [x] Post", "- [ ] Ignore"])
+
+    def test_names_the_chosen_label_of_the_given_choices_on_a_conflict(self):
+        block = render.instruction_block({"choice": "ignore", "also": "post"}, TWO_CHOICES)
+        self.assertIn("More than one instruction is ticked; using Ignore until the others are cleared.", block)
+
+    def test_matches_a_given_choice(self):
+        self.assertTrue(render.instruct_re(TWO_CHOICES).match("1=post"))
+
+    def test_refuses_a_choice_outside_the_given_ones(self):
+        self.assertIsNone(render.instruct_re(TWO_CHOICES).match("1=fix"))
+
+    def test_words_the_usage_from_the_given_choices(self):
+        self.assertEqual(render.instruct_usage(TWO_CHOICES), "N=post[:note], N=ignore[:reason], N=none")
+
+    def test_counts_only_the_given_choices_in_the_triage_line(self):
+        numbered = [{"id": 7, "_sec": "fix"}, {"id": 8, "_sec": "fix"}]
+        with mock.patch.object(render, "INSTR", {7: {"choice": "post"}}):
+            self.assertEqual(render.triage_line(numbered, TWO_CHOICES), "Triage: 1 post, 0 ignore, 1 not decided.")
 
 
 class WrapMarkdownTest(unittest.TestCase):

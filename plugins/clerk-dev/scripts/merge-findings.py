@@ -106,10 +106,15 @@ def norm(e):
     e["saves"] = int(sv.group()) if sv and e["debt"] else 0
     return e
 
-def overlaps(a, b, slack=3):
+def same_lines(a, b, slack=3):
     if a["file"] != b["file"] or a["line"] is None or b["line"] is None: return False
-    if bool(a["debt"]) != bool(b["debt"]): return False
     return a["line"] <= b["end_line"] + slack and b["line"] <= a["end_line"] + slack
+
+def same_kind(a, b):
+    return bool(a["debt"]) == bool(b["debt"])
+
+def overlaps(a, b, slack=3):
+    return same_lines(a, b, slack) and same_kind(a, b)
 
 def merge(into, e):
     if e["confidence"] > into["confidence"]:
