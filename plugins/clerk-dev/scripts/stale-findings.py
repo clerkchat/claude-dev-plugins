@@ -35,10 +35,8 @@ instruction other than defer or ignore.
 """
 import argparse, datetime, os, re, subprocess, sys
 from records import load_script
+import run_files as rf
 
-rr = load_script("render-report.py")
-
-CLOSED_STATUS = {"fixed", "wont-fix", "deferred"}
 CLOSED_CHOICE = {"defer", "ignore"}
 QUEUED_CHOICE = {"fix", "noted", "discuss"}
 VERDICTS = {"still", "resolved", "changed"}
@@ -50,25 +48,19 @@ def git(repo, *args, check=True):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 def load_findings(run):
-    mf = load_script("merge-findings.py")
-    out = {}
-    text = open(os.path.join(run, "merged.md"), encoding="utf-8").read()
-    for block in mf.parse_blocks(text):
-        for e in mf.parse_entries(block, "merged"):
-            mid = re.sub(r"\D", "", str(e.get("id", "")))
-            if mid and not mf.is_credit(e): out[int(mid)] = e
-    return out
+    return {rf.entry_id(e): e for e in rf.raw_entries(rf.merged_path(run)) if rf.entry_id(e) is not None and not rf.mf.is_credit(e)}
 
 def state(run):
-    status = rr.read_status(run)
-    instr = {mid: i["choice"] for mid, i in rr.read_instructions(run).items()}
-    numbers = {mid: str(n) for mid, n in rr.read_numbers(run).items()}
+    status = rf.read_status(run)
+    instr = {mid: i["choice"] for mid, i in rf.read_instructions(run).items()}
+    numbers = {mid: str(n) for mid, n in rf.read_numbers(run).items()}
     return status, instr, numbers
 
+def plain_choice(instr, mid):
+    return re.sub(r"\(.*\)$", "", instr.get(mid, ""))
+
 def is_open(mid, status, instr):
-    st = status.get(mid, {}).get("status", "open")
-    choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
-    return st not in CLOSED_STATUS and choice not in CLOSED_CHOICE
+    return rf.status_of(status, mid) not in rf.CLOSED_STATUSES and plain_choice(instr, mid) not in CLOSED_CHOICE
 
 def fix_commits(repo, status, run=None):
     """Every commit made to fix a finding. status.tsv keeps one ref per
@@ -77,15 +69,11 @@ def fix_commits(repo, status, run=None):
     a status ever named, and RUN/resolution/, which names each attempt."""
     text = [row["ref"] for row in status.values()]
     if run:
-        text += [r[1] for r in rr.read_rows(os.path.join(run, "commits.tsv")) if len(r) > 1]
+        text += [r[1] for r in rf.read_rows(rf.commits_path(run)) if len(r) > 1]
         rdir = os.path.join(run, "resolution")
         for name in sorted(os.listdir(rdir)) if os.path.isdir(rdir) else []:
             text.append(open(os.path.join(rdir, name), encoding="utf-8").read())
-    toks = {t for ref in text for t in re.findall(r"\b[0-9a-f]{7,40}\b", ref)}
-    if not toks: return set()
-    r = subprocess.run(["git", "-C", repo, "cat-file", "--batch-check=%(objectname) %(objecttype)"],
-                       input="".join(t + "^{commit}\n" for t in sorted(toks)), capture_output=True, text=True)
-    return {p[0] for p in (l.split() for l in r.stdout.splitlines()) if len(p) == 2 and p[1] == "commit"}
+    return set(rf.commits_named(repo, "\n".join(text)))
 
 def followup_labels(repo):
     """Commits that closed a follow-up, by full sha, to its id (F3)."""
@@ -169,13 +157,7 @@ def stale_path(run):
     return os.path.join(run, "stale.tsv")
 
 def through_map(run):
-    return {mid: r["through"] for mid, r in rr.read_keyed(stale_path(run), STALE_FIELDS).items() if r["through"]}
-
-def resolve_id(spec, numbers):
-    by_num = {v: k for k, v in numbers.items()}
-    if spec.startswith("#"): return int(spec[1:])
-    if spec not in by_num: sys.exit(f"finding {spec} not in numbers.tsv")
-    return by_num[spec]
+    return {mid: r["through"] for mid, r in rf.read_keyed(stale_path(run), STALE_FIELDS).items() if r["through"]}
 
 def candidates(run, repo, queued=False):
     """(reviewed commit, rows): one row per open finding whose file a commit
@@ -197,7 +179,7 @@ def candidates(run, repo, queued=False):
     for mid in sorted(findings, key=lambda m: int(numbers.get(m, 10**6))):
         if mid not in numbers or not is_open(mid, status, instr): continue
         choice = instr.get(mid, "")
-        if queued and re.sub(r"\(.*\)$", "", choice) not in QUEUED_CHOICE: continue
+        if queued and plain_choice(instr, mid) not in QUEUED_CHOICE: continue
         f = str(findings[mid].get("file", "")).strip()
         if not f: continue
         start = reviewed
@@ -230,18 +212,18 @@ def cmd_open_in(a, run, repo):
 
 def cmd_record(a, run, repo):
     if not a.through: sys.exit("--record needs --through <sha>")
-    _, _, numbers = state(run)
+    numbers = rf.read_numbers(run)
     sha = git(repo, "rev-parse", a.through)
     path = stale_path(run)
-    rows = rr.read_keyed(path, STALE_FIELDS)
+    rows = rf.read_keyed(path, STALE_FIELDS)
     today = datetime.date.today().isoformat()
     for spec in a.record:
         m = re.match(r"^(#?\d+)=([a-z]+)(?::(.*))?$", spec.strip())
         if not m or m.group(2) not in VERDICTS:
             sys.exit(f"bad --record {spec!r}; use N=still, N=resolved:<note>, N=changed:<note>")
-        mid = resolve_id(m.group(1), numbers)
+        mid = rf.finding_id(m.group(1), numbers)
         rows[mid] = dict(through=sha, verdict=m.group(2), note=(m.group(3) or "").replace("\t", " "), date=today)
-    rr.write_keyed(path, STALE_FIELDS, rows)
+    rf.write_keyed(path, STALE_FIELDS, rows)
     print(f"recorded {len(a.record)} in {path}")
 
 def main():

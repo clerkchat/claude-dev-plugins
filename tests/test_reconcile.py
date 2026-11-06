@@ -5,16 +5,14 @@ import unittest
 from helpers import SCRIPTS, RunCase, defect, merged_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
-import records
-
-render = records.load_script("render-report.py")
+import run_files
 
 
 def posted_row(comment_id, kind="line"):
     return {"state": "posted", "kind": kind, "comment_id": str(comment_id), "thread_id": f"T{comment_id}", "path": "a.py", "line": "3"}
 
 
-class SeedCase(RunCase):
+class TwoRunsCase(RunCase):
     def setUp(self):
         super().setUp()
         self.prev, self.cur = self.run_dir, self.path("cur")
@@ -24,8 +22,10 @@ class SeedCase(RunCase):
         write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
                    "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\tline\t7\topen\t\n")
 
+
+class SeedCase(TwoRunsCase):
     def post(self, rows):
-        render.write_posted(self.prev, rows)
+        run_files.write_posted(self.prev, rows)
         for mid in rows: self.write(f"posted/{mid}.md", f"Posted text of {mid}.\n")
 
     def seed(self):
@@ -49,13 +49,13 @@ class SeedPostedTest(SeedCase):
         self.out = self.seed()
 
     def test_re_keys_the_posted_row_to_the_current_id(self):
-        self.assertEqual(render.read_posted(self.cur)[1]["comment_id"], "5")
+        self.assertEqual(run_files.read_posted(self.cur)[1]["comment_id"], "5")
 
     def test_copies_the_posted_text_under_the_current_id(self):
         self.assertEqual(self.cur_text("posted/1.md"), "Posted text of 7.\n")
 
     def test_leaves_an_unmatched_posted_finding_out(self):
-        self.assertEqual(list(render.read_posted(self.cur)), [1])
+        self.assertEqual(list(run_files.read_posted(self.cur)), [1])
 
     def test_counts_the_seeded_posted_findings(self):
         self.assertIn("seeded 0 statuses and 1 posted findings from", self.out)
@@ -74,12 +74,12 @@ class SeedOverACurrentPostingTest(SeedCase):
     def setUp(self):
         super().setUp()
         self.post({7: posted_row(5)})
-        render.write_posted(self.cur, {1: posted_row(9)})
+        run_files.write_posted(self.cur, {1: posted_row(9)})
         write_file(os.path.join(self.cur, "posted", "1.md"), "Current text.\n")
         self.seed()
 
     def test_keeps_the_current_row(self):
-        self.assertEqual(render.read_posted(self.cur)[1]["comment_id"], "9")
+        self.assertEqual(run_files.read_posted(self.cur)[1]["comment_id"], "9")
 
     def test_keeps_the_current_text(self):
         self.assertEqual(self.cur_text("posted/1.md"), "Current text.\n")
@@ -89,6 +89,20 @@ class SeedUnmatchedBodyPostingTest(SeedCase):
     def test_does_not_name_a_body_posting_as_lost(self):
         self.post({8: posted_row("", kind="body")})
         self.assertNotIn("not found again", self.seed())
+
+
+class JudgedTest(TwoRunsCase):
+    def setUp(self):
+        super().setUp()
+        judged = self.path("judged.tsv")
+        write_file(judged, "cur_id\tprev_id\tverdict\nfinding 2\t8\tsame\n2\t8\tsame\n")
+        self.out = run_ok("reconcile", self.prev, self.cur, "--judged", judged)
+
+    def test_skips_a_row_whose_id_is_not_a_number_with_a_warning(self):
+        self.assertIn("judged row 'finding 2', '8': an id is not a number; skipped", self.out)
+
+    def test_applies_the_rows_with_numbers(self):
+        self.assertEqual(run_files.read_matches(self.cur)[2]["how"], "judge")
 
 
 if __name__ == "__main__":

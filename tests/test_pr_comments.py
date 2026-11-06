@@ -7,9 +7,9 @@ from helpers import SCRIPTS, RunCase, merged_md
 
 sys.path.insert(0, SCRIPTS)
 import records
+import run_files
 
 pr_comments = records.load_script("pr-comments.py")
-render = records.load_script("render-report.py")
 
 DATE = "2026-11-06"
 
@@ -139,7 +139,7 @@ class FoldInTest(FoldInCase):
 
     def test_writes_no_threads_file_without_posted_findings(self):
         self.fold(thread(1))
-        self.assertFalse(os.path.exists(render.threads_path(self.run_dir)))
+        self.assertFalse(os.path.exists(run_files.threads_path(self.run_dir)))
 
 
 class WhenAKnownCommentChangesTest(FoldInCase):
@@ -165,10 +165,10 @@ class WhenAKnownCommentChangesTest(FoldInCase):
 class PostedThreadCase(FoldInCase):
     def setUp(self):
         super().setUp()
-        render.write_posted(self.run_dir, {40: posted_row(1), 41: posted_row(2, kind="range"), 42: posted_row(3, kind="body")})
+        run_files.write_posted(self.run_dir, {40: posted_row(1), 41: posted_row(2, kind="range"), 42: posted_row(3, kind="body")})
 
     def row(self, mid):
-        return render.read_threads(self.run_dir)[mid]
+        return run_files.read_threads(self.run_dir)[mid]
 
 
 class PostedThreadTest(PostedThreadCase):
@@ -193,21 +193,21 @@ class PostedThreadTest(PostedThreadCase):
 
     def test_writes_its_row_under_the_finding(self):
         self.assertEqual(self.row(40), {"comment_id": "1", "thread_id": "T1", "state": "open", "outdated": "0", "can_resolve": "1",
-                                        "line": "3", "replies": "@you: Fair.", "date": DATE})
+                                        "line": "3", "replies": [("you", "Fair.")], "date": DATE})
 
     def test_marks_a_posting_the_fetch_did_not_return_missing(self):
         self.assertEqual((self.row(41)["state"], self.row(41)["thread_id"]), ("missing", "T2"))
 
     def test_writes_no_row_for_a_body_posting(self):
-        self.assertNotIn(42, render.read_threads(self.run_dir))
+        self.assertNotIn(42, run_files.read_threads(self.run_dir))
 
 
 class PostedReviewTest(PostedThreadCase):
     def setUp(self):
         super().setUp()
-        posted = render.read_posted(self.run_dir)
+        posted = run_files.read_posted(self.run_dir)
         posted[42]["review_id"] = "2"
-        render.write_posted(self.run_dir, posted)
+        run_files.write_posted(self.run_dir, posted)
         self.folded = self.fold(reviews=[review(2, "COMMENTED", "Our summary."), review(4, "COMMENTED", "Their summary.")])
 
     def test_does_not_import_it(self):
@@ -245,6 +245,31 @@ class PostedThreadStateTest(PostedThreadCase):
         self.fold(thread(1, isResolved=True))
         self.fold()
         self.assertEqual(self.row(40)["state"], "missing")
+
+
+class ThreadsPastTheLimitCase(PostedThreadCase):
+    def fold_past_the_limit(self):
+        pr_comments.fold_in(self.run_dir, pull_request([thread(1)], total=pr_comments.THREAD_LIMIT + 1), DATE)
+
+
+class WhenThePullRequestHasMoreThreadsThanWereReadTest(ThreadsPastTheLimitCase):
+    def test_writes_no_missing_row_for_a_posted_thread_it_did_not_read(self):
+        self.fold_past_the_limit()
+        self.assertNotIn(41, run_files.read_threads(self.run_dir))
+
+    def test_still_writes_the_row_of_a_thread_it_read(self):
+        self.fold_past_the_limit()
+        self.assertEqual(self.row(40)["state"], "open")
+
+
+class WhenAThreadPastTheLimitWasReadBeforeTest(ThreadsPastTheLimitCase):
+    def setUp(self):
+        super().setUp()
+        self.fold(thread(2, isResolved=True))
+        self.fold_past_the_limit()
+
+    def test_keeps_its_last_read_row(self):
+        self.assertEqual(self.row(41)["state"], "resolved")
 
 
 class ApplyJudgedCase(FoldInCase):
@@ -318,7 +343,7 @@ class SummaryTest(unittest.TestCase):
         self.assertIn(", 2 threads of your own pending review left out, ", self.summary(left_out=2))
 
     def test_adds_the_threads_past_the_first_page(self):
-        self.assertIn(", 30 review threads past the first page not read; ", self.summary(unread=30))
+        self.assertIn(", 30 review threads past the first 100 not read; ", self.summary(unread=30))
 
 
 class MainTest(RunCase):

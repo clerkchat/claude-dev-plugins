@@ -71,10 +71,10 @@ import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
 from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section
 import ids
+import run_files as rf
 
 sf = load_script("stale-findings.py")
 not_done = load_script("items.py").not_done
-rr = sf.rr
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
@@ -712,18 +712,15 @@ def area_view(wt, out, name, logs):
     return steps
 
 def awaits_posting(row, note):
-    return not rr.is_posted(row) or rr.stale_text(row, note)
+    return not rf.is_posted(row) or rf.stale_text(row, note)
 
 def finding_groups(run, status, instr, numbers):
-    sections = rr.read_sections(run)
+    sections = rf.read_sections(run)
     unmarked, queue, discuss, post, inprog, new, by_section = {}, [], [], [], [], [], {}
-    posted, marks = rr.read_posted(run), rr.read_instructions(run)
-    ap = os.path.join(run, "reconcile", "appended.tsv")
-    appended = {int(x) for x in open(ap).read().split()[1:] if x.isdigit()} if os.path.exists(ap) else set()
+    posted, marks, appended = rf.read_posted(run), rf.read_instructions(run), rf.read_appended(run)
     for mid in sf.load_findings(run):
         if mid not in numbers or not sf.is_open(mid, status, instr): continue
-        choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
-        st = status.get(mid, {}).get("status", "open")
+        choice, st = sf.plain_choice(instr, mid), rf.status_of(status, mid)
         sec = sections.get(mid, "")
         if sec in SECTION_NAMES: by_section.setdefault(sec, []).append(numbers[mid])
         if st == "in-progress": inprog.append(numbers[mid])
@@ -733,7 +730,7 @@ def finding_groups(run, status, instr, numbers):
         elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
     for mid in sections:
-        if sections[mid] == "credit" and mid in numbers and re.sub(r"\(.*\)$", "", instr.get(mid, "")) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")):
+        if sections[mid] == "credit" and mid in numbers and sf.plain_choice(instr, mid) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")):
             post.append(numbers[mid])
     return unmarked, queue, discuss, post, inprog, new, by_section
 
@@ -952,7 +949,7 @@ def main():
         if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
         if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
         if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")
-        closable = sorted((numbers[m] for m in rr.closable(run) if m in numbers), key=int)
+        closable = sorted((numbers[m] for m in rf.closable(run) if m in numbers), key=int)
         if closable: steps.append(f"Close the posted thread{plural(closable)} of finding{plural(closable)} {number_list(closable)}; see Closing posted threads in the `review` skill.")
         if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")
         # Fixes are rechecked one finding at a time, never re-reviewed as a

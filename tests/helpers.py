@@ -13,8 +13,8 @@ SCRIPTS = os.path.join(PLUGIN, "scripts")
 
 sys.path.insert(0, SCRIPTS)
 import records
+import run_files
 
-render_report = records.load_script("render-report.py")
 
 GIT_ENV = {
     **os.environ,
@@ -347,7 +347,7 @@ class RenderRunCase(RunCase):
         return self.report().split(f"#### {number}. ", 1)[1].split("\n#### ", 1)[0].split("\n## ", 1)[0]
 
     def instruction(self, mid):
-        return render_report.read_instructions(self.run_dir).get(mid, {})
+        return run_files.read_instructions(self.run_dir).get(mid, {})
 
     def status(self, mid):
-        return render_report.read_status(self.run_dir).get(mid)
+        return run_files.read_status(self.run_dir).get(mid)

@@ -84,6 +84,33 @@ def parse_entries(lines, source):
     if cur: entries.append(cur)
     return entries
 
+def format_entry(pairs):
+    return "\n".join(("- " if i == 0 else "  ") + f"{k}: {v}" for i, (k, v) in enumerate(pairs))
+
+def normalize_merged(text):
+    """Return (header, entries) with every `- id:` entry in the file, inside
+    or outside a fenced block, in id order. Entries written after the closing
+    fence by an earlier hand edit are recovered here."""
+    i = text.find("```findings")
+    header = text[:i] if i >= 0 else ""
+    body = text[i:] if i >= 0 else text
+    body = re.sub(r"^```[a-z]*\s*$", "", body, flags=re.M)
+    chunks = [c.strip("\n") for c in re.split(r"\n(?=- id: \d+\n)", "\n" + body) if re.match(r"^- id: \d+\n", c.strip("\n") + "\n")]
+    byid = {}
+    for c in chunks:
+        byid[int(re.match(r"^- id: (\d+)", c).group(1))] = c
+    return header, dict(sorted(byid.items()))
+
+def read_entries(path):
+    with open(path, encoding="utf-8") as fh: return normalize_merged(fh.read())
+
+def write_entries(path, header, entries):
+    text = header.rstrip("\n") + "\n\n```findings\n" + "\n\n".join(entries[k] for k in sorted(entries)) + "\n```\n"
+    with open(path, "w", encoding="utf-8") as fh: fh.write(text)
+
+def next_entry_id(entries):
+    return max(entries, default=0) + 1
+
 def norm(e):
     e["file"] = re.sub(r"^\./", "", e.get("file","")).strip("`")
     try: e["confidence"] = int(re.sub(r"\D","", str(e.get("confidence","0"))) or 0)
@@ -167,7 +194,7 @@ def entry_text(i, m):
                ("steps", m.get("steps", "").replace("\n", "\n    ")), ("impact", m.get("impact", "")), ("uncertainty", m.get("uncertainty", "")),
                ("snippet", m.get("snippet", "")), ("fix", m.get("fix", "")), ("evidence", " | ".join(m["evidence_all"])), ("sources", ", ".join(m["sources"]))]
     if is_credit(m): fields = [(k, v) for k, v in fields if k in CREDIT_FIELDS]
-    return "- " + "\n  ".join(f"{k}: {v}" for k, v in fields) + "\n"
+    return format_entry(fields) + "\n"
 
 def main():
     ap = argparse.ArgumentParser()

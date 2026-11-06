@@ -11,6 +11,7 @@ from helpers import SCRIPTS, RunCase, TempCase, init_repo, merged_md, run_ok, wr
 sys.path.insert(0, SCRIPTS)
 import gh_api
 import records
+import run_files
 
 post = records.load_script("post-review.py")
 REAL_PR_PATCH = post.pr_patch
@@ -81,8 +82,8 @@ class PostCase(RunCase):
     def posted_row(self, mid, state="posted", **fields):
         row = {"state": state, "note": self.marks.get(mid, ""), "kind": "line", "path": "src/a.py", "line": "11", "end_line": "11",
                "side": "RIGHT", "thread_id": "PRRT_1", "comment_id": "901", "url": "https://gh/c/901", "review_id": "55", **fields}
-        rows = post.rr.read_posted(self.run_dir); rows[mid] = row
-        post.rr.write_posted(self.run_dir, rows)
+        rows = run_files.read_posted(self.run_dir); rows[mid] = row
+        run_files.write_posted(self.run_dir, rows)
 
     def main(self, *args):
         out, err = io.StringIO(), io.StringIO()
@@ -597,7 +598,7 @@ class LiveCase(PostCase):
 class LivePostTest(LiveCase):
     def test_records_each_posted_comment_in_posted_tsv(self):
         self.main("--post")
-        row = post.rr.read_posted(self.run_dir)[1]
+        row = run_files.read_posted(self.run_dir)[1]
         self.assertEqual({k: row[k] for k in ("state", "thread_id", "comment_id", "url", "kind", "line", "end_line", "side", "review_id")},
                          {"state": "posted", "thread_id": "PRRT_1", "comment_id": "901", "url": "https://gh/c/901", "kind": "range",
                           "line": "11", "end_line": "13", "side": "RIGHT", "review_id": "55"})
@@ -626,7 +627,7 @@ class PlaceholderLookalikeTest(LiveCase):
     def test_records_the_batch_when_a_note_looks_like_a_placeholder(self):
         self.mark(1, note="{unknown.key}")
         self.main("--post")
-        self.assertEqual(post.rr.read_posted(self.run_dir)[1]["note"], "{unknown.key}")
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["note"], "{unknown.key}")
 
 
 class LiveRollbackTest(LiveCase):
@@ -724,7 +725,7 @@ class WhenInterruptedWhileCreatingTheReviewTest(LiveCase):
 class WhenPostedTsvCannotBeWrittenTest(LiveCase):
     def setUp(self):
         super().setUp()
-        patcher = mock.patch.object(post.rr, "write_posted", side_effect=OSError("disk full"))
+        patcher = mock.patch.object(post.rf, "write_posted", side_effect=OSError("disk full"))
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -908,11 +909,11 @@ class CloseCase(PostCase):
 
     def thread(self, mid, **fields):
         self.threads[mid] = {"comment_id": str(900 + mid), "thread_id": f"PRRT_{mid}", "state": "open", "outdated": "0",
-                             "can_resolve": "1", "line": "11", "replies": "", "date": "2026-11-06", **fields}
-        post.rr.write_threads(self.run_dir, self.threads)
+                             "can_resolve": "1", "line": "11", "replies": [], "date": "2026-11-06", **fields}
+        run_files.write_threads(self.run_dir, self.threads)
 
     def closable(self):
-        return sorted(post.rr.closable(self.run_dir))
+        return sorted(run_files.closable(self.run_dir))
 
     def close_calls(self, ids="1"):
         self.main("--close", ids, "--dry-run")
@@ -941,7 +942,7 @@ class ClosableTest(CloseCase):
         self.assertEqual(self.closable(), [1])
 
     def test_leaves_out_a_thread_kept_open(self):
-        post.rr.write_kept_open(self.run_dir, {1: {"reason": "", "date": ""}})
+        run_files.write_kept_open(self.run_dir, {1: {"reason": "", "date": ""}})
         self.assertEqual(self.closable(), [])
 
     def test_leaves_out_a_resolved_thread(self):
@@ -966,15 +967,15 @@ class CloseListTest(CloseCase):
         self.assertIn(f"finding 1: Finding 1\n  fixed in: {self.sha}\n  thread: https://gh/c/901\n", self.main("--close"))
 
     def test_shows_the_last_reply(self):
-        self.thread(1, replies="@amy: Why?; @bob: Done, see the new guard.")
+        self.thread(1, replies=[("amy", "Why?"), ("bob", "Done, see the new guard.")])
         self.assertIn("  last reply: @bob: Done, see the new guard.\n", self.main("--close"))
 
     def test_skips_the_viewers_own_replies(self):
-        self.thread(1, replies="@bob: Done, see the new guard.; @me: Looks fixed in abc1234.")
+        self.thread(1, replies=[("bob", "Done, see the new guard."), ("me", "Looks fixed in abc1234.")])
         self.assertIn("  last reply: @bob: Done, see the new guard.\n", self.main("--close"))
 
     def test_says_none_when_only_the_viewer_replied(self):
-        self.thread(1, replies="@me: Looks fixed in abc1234.")
+        self.thread(1, replies=[("me", "Looks fixed in abc1234.")])
         self.assertIn("  last reply: none\n", self.main("--close"))
 
     def test_shows_the_reply_it_would_send(self):
@@ -1045,13 +1046,45 @@ class CloseDryRunTest(CloseCase):
 class WhenTheViewerAlreadyRepliedTest(CloseCase):
     def setUp(self):
         super().setUp()
-        self.thread(1, replies=f"@me: {self.looks_fixed}; @bob: Thanks.")
+        self.thread(1, replies=[("bob", "Done, see the new guard."), ("me", self.looks_fixed)])
 
     def test_only_resolves_the_thread(self):
         self.assertEqual([c["graphql"] for c in self.close_calls()], ["resolveReviewThread"])
 
     def test_says_so_in_the_listing(self):
         self.assertIn("  reply: already sent; --close only resolves the thread", self.main("--close"))
+
+
+class WhenTheViewerAlreadyRepliedAndCannotResolveTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.thread(1, replies=[("me", self.looks_fixed)], can_resolve="0")
+
+    def test_says_the_listing_keeps_the_thread_open(self):
+        self.assertIn("  reply: already sent; you cannot resolve the thread, so --close keeps it open and no longer offers it",
+                      self.main("--close"))
+
+    def test_sends_nothing(self):
+        self.assertEqual(self.close_calls(), [])
+
+
+class WhenTheViewersReplyHoldsTheReplySeparatorTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/close-1.md", "Fixed; @bob the guard covers it.")
+        self.thread(1, replies=[("me", "Fixed; @bob the guard covers it.")])
+
+    def test_counts_the_reply_as_sent(self):
+        self.assertEqual([c["graphql"] for c in self.close_calls()], ["resolveReviewThread"])
+
+
+class WhenSomeoneAnsweredTheViewersReplyTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.thread(1, replies=[("me", self.looks_fixed), ("bob", "Not yet, one path is left.")])
+
+    def test_replies_again(self):
+        self.assertEqual([c["graphql"] for c in self.close_calls()], ["addPullRequestReviewThreadReply", "resolveReviewThread"])
 
 
 class CloseRefusalTest(CloseCase):
@@ -1081,7 +1114,7 @@ class CloseRefusalTest(CloseCase):
 class KeepOpenTest(CloseCase):
     def test_records_the_reason_in_keep_tsv(self):
         self.main("--keep-open", "1:the author wants a follow-up")
-        self.assertEqual(post.rr.read_kept_open(self.run_dir)[1]["reason"], "the author wants a follow-up")
+        self.assertEqual(run_files.read_kept_open(self.run_dir)[1]["reason"], "the author wants a follow-up")
 
     def test_makes_the_finding_no_longer_closable(self):
         self.main("--keep-open", "1")
@@ -1094,7 +1127,7 @@ class KeepOpenTest(CloseCase):
 class LiveCloseCase(CloseCase):
     def setUp(self):
         super().setUp()
-        self.closable_finding(2, replies="@bob: Fixed it.")
+        self.closable_finding(2, replies=[("bob", "Fixed it.")])
         self.graphql = self.stub("graphql", side_effect=self.answer)
 
     def answer(self, query, variables, cwd):
@@ -1102,7 +1135,7 @@ class LiveCloseCase(CloseCase):
         return reply_data(n) if "addPullRequestReviewThreadReply" in query else RESOLVED
 
     def thread_row(self, mid):
-        return post.rr.read_threads(self.run_dir)[mid]
+        return run_files.read_threads(self.run_dir)[mid]
 
     def stopped(self):
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
@@ -1119,7 +1152,7 @@ class LiveCloseTest(LiveCloseCase):
         self.assertEqual([self.thread_row(m)["state"] for m in (1, 2)], ["resolved", "resolved"])
 
     def test_adds_the_reply_to_the_threads_replies(self):
-        self.assertEqual(self.thread_row(2)["replies"], f"@bob: Fixed it.; @me: {self.looks_fixed}")
+        self.assertEqual(self.thread_row(2)["replies"], [("bob", "Fixed it."), ("me", self.looks_fixed)])
 
     def test_says_what_it_closed(self):
         self.assertIn("closed:\n  finding 1: replied and resolved\n  finding 2: replied and resolved", self.err)
@@ -1132,7 +1165,7 @@ class WhenTheViewerCannotResolveTest(LiveCloseCase):
         self.main("--close", "1")
 
     def test_keeps_the_thread_open_in_threads_tsv(self):
-        self.assertEqual((self.thread_row(1)["state"], self.thread_row(1)["replies"]), ("open", f"@me: {self.looks_fixed}"))
+        self.assertEqual((self.thread_row(1)["state"], self.thread_row(1)["replies"]), ("open", [("me", self.looks_fixed)]))
 
     def test_reports_it_left_open(self):
         self.assertIn("finding 1: replied; left open, you cannot resolve it", self.err)
@@ -1153,7 +1186,7 @@ class WhenGitHubRejectsAResolveTest(LiveCloseCase):
 
     def test_records_the_reply_it_sent_on_the_stopped_thread(self):
         self.stopped()
-        self.assertEqual((self.thread_row(2)["state"], self.thread_row(2)["replies"]), ("open", f"@bob: Fixed it.; @me: {self.looks_fixed}"))
+        self.assertEqual((self.thread_row(2)["state"], self.thread_row(2)["replies"]), ("open", [("bob", "Fixed it."), ("me", self.looks_fixed)]))
 
 
 class WhenTheViewerCannotResolveAndItIsSentTest(LiveCloseCase):
@@ -1163,7 +1196,7 @@ class WhenTheViewerCannotResolveAndItIsSentTest(LiveCloseCase):
         self.main("--close", "1")
 
     def test_keeps_the_thread_open(self):
-        self.assertEqual(post.rr.read_kept_open(self.run_dir)[1]["reason"], post.CANNOT_RESOLVE)
+        self.assertEqual(run_files.read_kept_open(self.run_dir)[1]["reason"], post.CANNOT_RESOLVE)
 
     def test_no_longer_offers_it_for_closing(self):
         self.assertEqual(self.closable(), [2])
@@ -1228,7 +1261,7 @@ class WhenTheViewersLoginIsUnavailableTest(LiveCloseCase):
 class RefreshThreadsTest(RunCase):
     def setUp(self):
         super().setUp()
-        post.rr.write_posted(self.run_dir, {1: {"state": "posted", "kind": "line", "comment_id": "901", "thread_id": "PRRT_1"}})
+        run_files.write_posted(self.run_dir, {1: {"state": "posted", "kind": "line", "comment_id": "901", "thread_id": "PRRT_1"}})
         live = {"reviewThreads": {"nodes": [{"id": "PRRT_1", "isResolved": True, "isOutdated": False, "viewerCanResolve": True,
                                               "path": "src/a.py", "line": 11, "originalLine": 11, "comments": {"nodes": [
                                                   {"databaseId": 901, "author": {"login": "me"}, "body": "Text.", "url": "u",
@@ -1242,7 +1275,29 @@ class RefreshThreadsTest(RunCase):
         self.assertEqual(self.fetch.call_args.args, ("o", "r", 7, "/w"))
 
     def test_rewrites_threads_tsv_from_it(self):
-        self.assertEqual(post.rr.read_threads(self.run_dir)[1]["state"], "resolved")
+        self.assertEqual(run_files.read_threads(self.run_dir)[1]["state"], "resolved")
+
+
+class WhenThePullRequestHasMoreThreadsThanTheLimitTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        run_files.write_posted(self.run_dir, {1: {"state": "posted", "kind": "line", "comment_id": "901", "thread_id": "PRRT_1"}})
+        live = {"reviewThreads": {"totalCount": post.pc.THREAD_LIMIT + 1, "nodes": []}}
+        fetch = mock.patch.object(post.pc, "fetch", return_value=live)
+        fetch.start()
+        self.addCleanup(fetch.stop)
+
+    def refresh(self):
+        with self.assertRaises(SystemExit) as raised:
+            post.refresh_threads(self.run_dir, {"owner": "o", "name": "r", "pr": 7}, "/w")
+        return str(raised.exception)
+
+    def test_stops_naming_the_limit(self):
+        self.assertIn("--close reads only the first 100 review threads of a pull request, and this one has 101 more", self.refresh())
+
+    def test_writes_no_missing_row(self):
+        self.refresh()
+        self.assertNotIn(1, run_files.read_threads(self.run_dir))
 
 
 class WhenGitHubRejectsTheFirstReplyTest(LiveCloseCase):

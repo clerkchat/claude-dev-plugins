@@ -1280,10 +1280,19 @@ subagent closes a thread, and no flow closes one without the question.
 When a render prints that line, or the user asks to close posted threads:
 
 1. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py <run> --repo
-   <worktree> --close` (add `--pr N` as for posting). With no numbers it sends
-   nothing: it lists each closable finding with its number, title, the ref it
-   was fixed in, the thread's URL, the author's last reply, whether the user
-   can resolve the thread, and the reply it would send.
+   <worktree> --close` (add `--pr N` as for posting). Every `--close` call
+   first re-reads the pull request's review threads from GitHub, so it lists
+   and sends from their live state. With no numbers it sends nothing: it lists
+   each closable finding with its number, title, the ref it was fixed in, the
+   thread's URL, the last reply from someone other than the user, whether the
+   user can resolve the thread, and the reply it would send. When the user's
+   own "looks fixed" reply is already the latest word on the thread (nobody
+   replied after it), the listing says "reply: already sent" instead: `--close`
+   then only resolves the thread, or, when the user cannot resolve it, keeps
+   it open and stops offering it. `--close` reads at most the first 100 review
+   threads of a pull request; on a pull request with more, it stops with an
+   error that names the limit, and nothing is sent: relay it, and the user
+   resolves those threads on GitHub.
 2. Show each one with its last reply and the reply text, and relay any warning
    under a reply as for a posted text. A last reply that disputes the fix is
    worth naming: the user may rather answer it by hand. The reply is "Looks
@@ -1298,15 +1307,22 @@ When a render prints that line, or the user asks to close posted threads:
 4. On yes, for all or some, run the same command with `--close N,M` for those
    findings. It replies to each thread and then resolves it, one thread at a
    time, and updates `pr/threads.tsv`, so the next render shows it without a
-   refetch. A number that is not closable refuses the whole call, and nothing is
-   sent. If GitHub rejects a call, it stops; the threads before it stand, and
-   its message names them. Relay it.
+   refetch. A named finding whose thread was resolved or deleted on GitHub
+   since the listing is skipped, and the output names it; any other number
+   that is not closable refuses the whole call, and nothing is sent. If GitHub
+   rejects a call, it stops; the threads before it stand, and its message
+   names them. Relay it. Running the same `--close N` again after a failed
+   resolve sends no second reply: the reply is already sent, so it only
+   resolves the thread. A thread the user cannot resolve gets the reply and is
+   kept open automatically, so it is no longer offered for closing; no
+   `--keep-open` is needed for it.
 5. On a no for a finding, run `--keep-open N[:reason]`, so the line stops
    repeating on every render; its Posted block then says "Thread kept open" with
    the reason.
 6. Render, and say what happened, one line per finding from the command's
    output ("4: replied and resolved", "9: replied; left open, you cannot
-   resolve it").
+   resolve it; no longer offered for closing", "5: already replied and
+   resolved").
 
 `--dry-run` with `--close N,M` writes the calls to `posted/payload.json`
 instead of making them; use it when the user asks to see what would be sent.

@@ -6,6 +6,7 @@ from helpers import SCRIPTS, RenderRunCase, RunCase, defect, init_repo, run_ok, 
 
 sys.path.insert(0, SCRIPTS)
 import records
+import run_files
 
 render = records.load_script("render-report.py")
 
@@ -279,7 +280,7 @@ class PostCase(RenderCase):
         write_file(self.draft, "Say it plainly.\n")
 
     def posted(self, mid):
-        return render.read_posted(self.run_dir).get(mid, {})
+        return run_files.read_posted(self.run_dir).get(mid, {})
 
     def posted_section(self, number):
         return self.card(number).split("##### Posted", 1)[1]
@@ -445,7 +446,7 @@ class PostedCommentCase(PostCase):
         self.render("--posted", f"1={self.draft}")
         row = {**self.posted(7), "state": "posted", "comment_id": "5", "url": self.URL,
                "path": "a.py", "line": "12", "end_line": "14", "side": "RIGHT", "kind": "range"}
-        render.write_posted(self.run_dir, {7: row})
+        run_files.write_posted(self.run_dir, {7: row})
         self.render()
 
     def after_the_link(self):
@@ -470,8 +471,8 @@ class PostedLinkTest(PostedCommentCase):
 class PostedThreadCase(PostedCommentCase):
     def show_thread(self, **fields):
         row = {"comment_id": "5", "thread_id": "T5", "state": "open", "outdated": "0", "can_resolve": "1",
-               "line": "12", "replies": "", "date": "2026-11-06", **fields}
-        render.write_threads(self.run_dir, {7: row})
+               "line": "12", "replies": [], "date": "2026-11-06", **fields}
+        run_files.write_threads(self.run_dir, {7: row})
         self.out = self.render()
         return self.after_the_link()
 
@@ -481,7 +482,7 @@ class PostedThreadTest(PostedThreadCase):
         self.assertNotRegex(self.show_thread(), "Replies:|State:")
 
     def test_shows_the_replies(self):
-        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies="@bob: Fair."))
+        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
 
     def test_words_a_resolved_thread(self):
         self.assertIn("\nState: marked resolved on GitHub.\n", self.show_thread(state="resolved"))
@@ -499,7 +500,7 @@ class PostedThreadTest(PostedThreadCase):
         self.assertNotIn("State:", self.show_thread(comment_id="4", state="missing"))
 
     def test_keeps_the_posted_text_importable(self):
-        self.show_thread(replies="@bob: Fair.", state="resolved")
+        self.show_thread(replies=[("bob", "Fair.")], state="resolved")
         self.edit_report("Say it plainly.", "Say it gently.")
         self.render()
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
@@ -536,7 +537,7 @@ class WhenAPostedThreadIsKeptOpenTest(PostedThreadCase):
     def setUp(self):
         super().setUp()
         self.render("--set", "1=fixed:abc1234")
-        render.write_kept_open(self.run_dir, {7: {"reason": "the author wants a follow-up", "date": ""}})
+        run_files.write_kept_open(self.run_dir, {7: {"reason": "the author wants a follow-up", "date": ""}})
 
     def test_says_it_is_kept_open_with_the_reason(self):
         self.assertIn("\nThread kept open: the author wants a follow-up.\n", self.show_thread())
@@ -555,7 +556,7 @@ class WhenAPostedFindingIsNoLongerMarkedPostTest(PostedThreadCase):
         self.assertIn(f"[comment]({self.URL})", self.posted_section(1))
 
     def test_shows_the_thread(self):
-        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies="@bob: Fair."))
+        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
 
     def test_does_not_ask_for_a_redraft(self):
         self.assertNotIn("to be redrafted", self.posted_section(1))
@@ -597,7 +598,7 @@ class CarryPostedTest(PostCase):
     def test_carries_the_note_of_a_text_edited_but_not_yet_rendered(self):
         self.render("--posted", f"1={self.draft}")
         self.edit_report("Say it plainly.", "Say it gently.")
-        self.assertEqual(render.read_posted(self.carry())[7]["note"], "keep it short")
+        self.assertEqual(run_files.read_posted(self.carry())[7]["note"], "keep it short")
 
     def test_leaves_the_previous_run_with_the_imported_edit(self):
         self.render("--posted", f"1={self.draft}")
@@ -614,7 +615,7 @@ class CarryWithoutMergedTest(RunCase):
         run_ok("carry", self.run_dir, self.cur)
 
     def test_carries_the_status(self):
-        self.assertEqual(render.read_status(self.cur)[7]["status"], "wont-fix")
+        self.assertEqual(run_files.read_status(self.cur)[7]["status"], "wont-fix")
 
     def test_carries_no_findings(self):
         with open(os.path.join(self.cur, "reconcile", "matches.tsv"), encoding="utf-8") as f:
@@ -634,7 +635,7 @@ class KeyedTsvCase(RunCase):
 class ReadKeyedTest(KeyedTsvCase):
     def parse(self, text, **kw):
         self.write("t.tsv", text)
-        return render.read_keyed(self.tsv_path(), self.FIELDS, **kw)
+        return run_files.read_keyed(self.tsv_path(), self.FIELDS, **kw)
 
     def test_skips_the_header_and_keys_rows_by_merged_id(self):
         self.assertEqual(self.parse("merged_id\tstatus\tref\n3\tfixed\tabc\n"), {3: {"status": "fixed", "ref": "abc"}})
@@ -656,7 +657,7 @@ class WriteKeyedTest(KeyedTsvCase):
     ROWS = {5: {"status": "open"}, 2: {"status": "fixed", "ref": "abc"}}
 
     def written(self, **kw):
-        render.write_keyed(self.tsv_path(), self.FIELDS, self.ROWS, **kw)
+        run_files.write_keyed(self.tsv_path(), self.FIELDS, self.ROWS, **kw)
         with open(self.tsv_path(), encoding="utf-8") as fh: return fh.read()
 
     def test_writes_the_header_and_the_rows_by_key(self):
@@ -692,7 +693,7 @@ class ChoicesTest(unittest.TestCase):
 
 class FencedLinesTest(unittest.TestCase):
     def kinds(self, *lines):
-        return [kind for _, kind in render.fenced_lines(lines)]
+        return [kind for _, kind in run_files.fenced_lines(lines)]
 
     def test_marks_prose_fences_and_bodies(self):
         self.assertEqual(self.kinds("a", "```", "b", "```", "c"), ["", "fence", "body", "fence", ""])

@@ -12,13 +12,14 @@ existing file.
 """
 import datetime, os, re, shutil, sys
 from records import load_script
+import run_files as rf
 
 rr = load_script("render-report.py")
 
 def import_pending(prev):
     """Bring ticks and notes the user made in the previous report since its
     last render into its status and instruction files, so they are carried."""
-    entries = rr.read_findings(prev, rr.mf) if os.path.exists(os.path.join(prev, "merged.md")) else []
+    entries = rf.read_findings(prev) if os.path.exists(rf.merged_path(prev)) else []
     changed = rr.load_triage(prev, entries, datetime.date.today().isoformat())
     rr.write_triage(prev)
     return len(changed)
@@ -35,17 +36,12 @@ def main():
     for d in ("verify", "overrides", "resolution", "recheck", "pr", "notes", "posted"):
         src, dst = os.path.join(prev, d), os.path.join(cur, d)
         if os.path.isdir(src) and not os.path.exists(dst): shutil.copytree(src, dst)
-    status = rr.read_status(prev)
-    nums = rr.read_numbers(prev)
-    ids = [int(m) for m in re.findall(r"^- id: (\d+)$", rr.read_text(os.path.join(prev, "merged.md")), re.M)]
-    rd = os.path.join(cur, "reconcile"); os.makedirs(rd, exist_ok=True)
-    open(os.path.join(rd, "previous.txt"), "w").write(os.path.basename(os.path.normpath(os.path.realpath(prev))) + "\n")
-    with open(os.path.join(rd, "matches.tsv"), "w") as fh:
-        fh.write("cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n")
-        for i in ids:
-            st = status.get(i, {"status": "open", "ref": ""})
-            fh.write(f"{i}\t{i}\tcarried\t{nums.get(i, '')}\t{st['status']}\t{st['ref']}\n")
-    open(os.path.join(rd, "unmatched.tsv"), "w").write("prev_id\tprev_number\tprev_status\tprev_ref\tlocation\ttitle\n")
+    status = rf.read_status(prev)
+    nums = rf.read_numbers(prev)
+    ids = [int(m) for m in re.findall(r"^- id: (\d+)$", rf.read_text(rf.merged_path(prev)), re.M)]
+    rf.write_previous(cur, rf.run_label(prev))
+    rf.write_matches(cur, {i: {"prev_id": str(i), "how": "carried", **rf.previous_state(status, nums, i)} for i in ids})
+    rf.write_unmatched(cur, {})
     print(f"carried {len(ids)} findings from {os.path.basename(os.path.normpath(prev))}", file=sys.stderr)
 
 if __name__ == "__main__": main()

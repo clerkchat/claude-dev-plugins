@@ -8,8 +8,8 @@ from helpers import SCRIPTS, RenderRunCase, RunCase, defect, merged_md, run_ok, 
 
 sys.path.insert(0, SCRIPTS)
 import records
+import run_files
 
-render = records.load_script("render-report.py")
 sf = records.load_script("stale-findings.py")
 
 def credit(mid, path, line=20):
@@ -100,8 +100,8 @@ class PostedCreditThreadTest(CreditCase):
         super().setUp()
         self.render()
         self.render("--instruct", "2=post")
-        render.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "comment_id": "5", "path": "c.py", "line": "20"}})
-        render.write_threads(self.run_dir, {9: {"comment_id": "5", "state": "resolved", "outdated": "0", "replies": "@bob: Thanks."}})
+        run_files.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "comment_id": "5", "path": "c.py", "line": "20"}})
+        run_files.write_threads(self.run_dir, {9: {"comment_id": "5", "state": "resolved", "outdated": "0", "replies": [("bob", "Thanks.")]}})
         self.render()
 
     def test_shows_the_replies(self):
@@ -237,7 +237,7 @@ class CreditOverlappingADefectTest(OverlapCase):
 class PostedCreditOverlappingADefectTest(OverlapCase):
     def setUp(self):
         super().setUp()
-        render.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "path": "a.py", "line": "4"}})
+        run_files.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "path": "a.py", "line": "4"}})
         self.render()
 
     def test_is_kept(self):
@@ -249,14 +249,14 @@ class PostedCreditOverlappingADefectTest(OverlapCase):
 
 class DraftedCreditOverlappingADefectTest(OverlapCase):
     def test_is_dropped(self):
-        render.write_posted(self.run_dir, {9: {"state": "drafted", "note": ""}})
+        run_files.write_posted(self.run_dir, {9: {"state": "drafted", "note": ""}})
         self.render()
         self.assertNotIn("\t9\t", self.read("numbers.tsv"))
 
 
 class CreditEditedAfterPostingOverlappingADefectTest(OverlapCase):
     def test_is_kept(self):
-        render.write_posted(self.run_dir, {9: {"state": "edited", "kind": "line", "path": "a.py", "line": "4"}})
+        run_files.write_posted(self.run_dir, {9: {"state": "edited", "kind": "line", "path": "a.py", "line": "4"}})
         self.render()
         self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
 
@@ -376,7 +376,7 @@ class CarryTickedCreditTest(CreditCase):
         boxes = "- [ ] Post\n- [ ] Ignore\n"
         self.edit_report(boxes, boxes.replace(f"- [ ] {label}", f"- [x] {label}"))
         run_ok("carry", self.run_dir, self.cur)
-        return render.read_instructions(self.cur).get(9, {}).get("choice"), render.read_status(self.cur).get(9)
+        return run_files.read_instructions(self.cur).get(9, {}).get("choice"), run_files.read_status(self.cur).get(9)
 
     def test_carries_a_ticked_post_as_an_instruction_only(self):
         self.assertEqual(self.carry_tick("Post"), ("post", None))

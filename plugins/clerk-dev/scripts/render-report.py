@@ -69,6 +69,10 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, read_plain_names
+from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, credit_ids, fenced_lines, finding_id, has_comment,
+                       joined_replies, log_commits, read_appended, read_findings, read_instructions, read_kept_open, read_numbers, read_posted,
+                       read_reconcile, read_status, read_text, report_titles, posted_path, posted_text, posted_threads, stale_text, status_of,
+                       status_row, title_of, write_instructions, write_number_rows, write_posted, write_status, line_span)
 mf = load_script("merge-findings.py")
 
 SEV = {"blocker": 3, "major": 2, "minor": 1}
@@ -86,20 +90,6 @@ RUN = "."
 IDNUM = {}
 TITLE_BY_ID = {}
 CREDITS = set()
-
-def load_merge_module(): return mf
-
-def read_merged(path, mf):
-    text = open(path, encoding="utf-8").read()
-    out = []
-    for block in mf.parse_blocks(text):
-        for e in mf.parse_entries(block, "merged"):
-            srcs = [x.strip() for x in str(e.get("sources", "")).split(",") if x.strip()]
-            e = mf.norm(e)
-            e["id"] = int(re.sub(r"\D", "", str(e.get("id", "0")) or "0"))
-            if srcs: e["sources"] = srcs
-            out.append(e)
-    return out
 
 def read_verdicts(run):
     v = {}
@@ -210,15 +200,6 @@ def read_labels(run):
         if m and cur: labels[cur] = m.group(1).strip()
     return labels
 
-def read_titles(run):
-    t = {}
-    p = os.path.join(run, "titles.tsv")
-    if os.path.exists(p):
-        for line in open(p, encoding="utf-8"):
-            parts = line.rstrip("\n").split("\t", 1)
-            if len(parts) == 2 and parts[0].isdigit(): t[int(parts[0])] = parts[1].strip()
-    return t
-
 def unquote(t):
     t = (t or "").strip()
     while len(t) > 1 and t[0] in "\"'“" and t[-1] in "\"'”.":
@@ -226,17 +207,6 @@ def unquote(t):
         if t[0] in "\"'“" and t[-1] in "\"'”": t = t[1:-1].strip()
         else: break
     return t
-
-def report_titles(run, mf):
-    titles = read_titles(run)
-    titles.update({mid: over["title"] for mid, over in read_overrides(run, mf).items() if "title" in over})
-    return titles
-
-def title_of(e, titles):
-    t = titles.get(e["id"]) or e.get("title") or ""
-    if not t:
-        t = e.get("claim", "").split(". ")[0].split(", so ")[0].split(", but ")[0].rstrip(".")
-    return t.rstrip(". ")
 
 def snippet(repo, head, spec):
     m = re.match(r"^\s*([^:\s]+):(\d+)(?:-(\d+))?\s*$", spec or "")
@@ -276,24 +246,6 @@ def file_len(repo, head, path):
         except Exception:
             _LEN[path] = None
     return _LEN[path]
-
-def read_overrides(run, mf):
-    """overrides/<merged id>.md holds hand-written or orchestrator-written
-    fields (what_changed, steps, impact, snippet, fix, title) in the same
-    key: value form as a finding. They overlay the merged entry at render
-    time, so a re-render keeps them."""
-    o = {}
-    d = os.path.join(run, "overrides")
-    if not os.path.isdir(d): return o
-    for n in sorted(os.listdir(d)):
-        m = re.match(r"^(\d+)\.md$", n)
-        if not m: continue
-        text = open(os.path.join(d, n), encoding="utf-8").read()
-        entries = mf.parse_entries(["- lens: override"] + ["  " + l if not l.startswith("  ") and l.strip() else l for l in text.splitlines()], n)
-        if entries:
-            e = entries[0]; e.pop("lens", None); e.pop("_source", None)
-            o[int(m.group(1))] = {k: v for k, v in e.items() if v}
-    return o
 
 def code_spans(text):
     """Protect identifiers that Markdown would read as emphasis. Wraps bare
@@ -346,10 +298,7 @@ def is_new(mid):
     instruction or a status, so `grep -n '\\[new\\]' report.md` lists what is
     left to look at."""
     global _APPENDED
-    if _APPENDED is None:
-        p = os.path.join(RUN, "reconcile", "appended.tsv")
-        rows = read_text(p).split()[1:]
-        _APPENDED = {int(r) for r in rows if r.isdigit()}
+    if _APPENDED is None: _APPENDED = read_appended(RUN)
     return mid in _APPENDED and not decided(mid)
 
 def card(n, e, v, labels, names, repo, head, section):
@@ -361,7 +310,7 @@ def card(n, e, v, labels, names, repo, head, section):
     else:
         focus = ", ".join(names.get(l, l) for l in sorted(e["lenses"]))
         head_lines = [f"**{action}** · {area_of(e, labels)}", "", f"Focus: {focus}", ""]
-    status = [] if is_credit(e) else [status_line(STATUS.get(e["id"], {"status": "open"})), ""]
+    status = [] if is_credit(e) else [status_line(status_row(STATUS, e["id"])), ""]
     out = [f"#### {n}. {title_of(e, TITLES)}" + (" [new]" if is_new(e["id"]) else ""), "", f"<!-- finding {n}, merged {e['id']}, verify/{e['id']}.md, raw: {raw} -->", ""] + head_lines + status
     sl = "" if is_pr(e) or is_credit(e) else scope_line(e)
     if sl: out += [sl, ""]
@@ -372,7 +321,7 @@ def card(n, e, v, labels, names, repo, head, section):
     if hl: out += [code_spans(hl), ""]
     rel = re.sub(r"\D", "", str(e.get("related_to", "")))
     if rel and int(rel) in IDNUM:
-        st = STATUS.get(int(rel), {"status": "open"})
+        st = status_row(STATUS, int(rel))
         how = f", marked fixed in {st['ref']}" if st["status"] == "fixed" and st.get("ref") else ""
         out += [f"Related to finding {IDNUM[int(rel)]}{how}; this is a separate issue.", ""]
     if section == "below":
@@ -436,55 +385,10 @@ def snippet_lines(e, repo, head):
     return [sn, ""] if sn else []
 
 STATUS_WORDS = {"open": "Open", "in-progress": "In progress", "fixed": "Fixed", "wont-fix": "Won't fix", "deferred": "Deferred"}
-DONE = ("fixed", "wont-fix", "deferred")
-
-def merged_key(text):
-    return int(text) if text.isdigit() else None
-
-def read_rows(path, key=merged_key):
-    if not os.path.exists(path): return []
-    with open(path, encoding="utf-8") as fh:
-        rows = [[cell.strip() for cell in line.rstrip("\n").split("\t")] for line in fh]
-    return [f for f in rows if key(f[0]) is not None]
-
-def write_rows(path, header, rows):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        for row in [header, *rows]: fh.write("\t".join(row) + "\n")
-
-def read_keyed(path, fields, key=merged_key, defaults=None):
-    return {key(f[0]): {name: value or (defaults or {}).get(name, "") for name, value in zip(fields, f[1:] + [""] * len(fields))}
-            for f in read_rows(path, key) if len(f) > 1}
-
-def write_keyed(path, fields, rows, header="merged_id", order=sorted):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        if header: fh.write("\t".join((header,) + fields) + "\n")
-        for k in order(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in fields]) + "\n")
-
-STATUS_FIELDS = ("status", "ref", "date")
-
-def read_status(run):
-    """status.tsv: merged id, status, ref (commit, ticket, or reason), date."""
-    return read_keyed(os.path.join(run, "status.tsv"), STATUS_FIELDS, defaults={"status": "open"})
-
-def write_status(run, st):
-    write_keyed(os.path.join(run, "status.tsv"), STATUS_FIELDS, st)
 
 GEN_RE = re.compile(r"^<!-- review generation (\d+)")
 FINDING_MARKER = re.compile(r"^<!-- finding \d+, merged (\d+),")
 CHECKBOX_RE = re.compile(r"^- \[( |x|X)\] (.*)$")
-
-def fenced_lines(lines):
-    fence = ""
-    for line in lines:
-        if fence:
-            if closes_fence(line, fence): fence = ""; yield line, FENCE_LINE
-            else: yield line, FENCE_BODY
-            continue
-        m = FENCE_RE.match(line)
-        if m: fence = m.group(1)
-        yield line, FENCE_LINE if m else PROSE
 
 def card_segments(lines):
     segments = []
@@ -514,32 +418,6 @@ def read_card_blocks(run):
 
 def status_box(head):
     return next((line for line in head if CHECKBOX_RE.match(line)), None)
-
-COMMIT_TOKEN = re.compile(r"\b[0-9a-f]{7,40}\b")
-
-def commits_named(repo, text):
-    toks = COMMIT_TOKEN.findall(text)
-    if not toks: return []
-    r = subprocess.run(["git", "-C", repo, "cat-file", "--batch-check=%(objectname) %(objecttype)"],
-                       input="".join(t + "^{commit}\n" for t in toks), capture_output=True, text=True)
-    return [p[0] for p in (l.split() for l in r.stdout.splitlines()) if len(p) == 2 and p[1] == "commit"]
-
-def log_commits(run, repo, mid, stt):
-    """Append every commit a status names to commits.tsv (merged id, commit,
-    status, date). status.tsv keeps one ref per finding, so without this the
-    first commit of a fix that took two is forgotten, and later tools count
-    it as unreviewed work."""
-    shas = commits_named(repo, stt.get("ref", ""))
-    if not shas: return
-    path = os.path.join(run, "commits.tsv")
-    have = set()
-    if os.path.exists(path):
-        have = {tuple(l.split("\t")[:2]) for l in open(path, encoding="utf-8").read().splitlines()[1:]}
-    new = [s for s in shas if (str(mid), s) not in have]
-    if not new: return
-    with open(path, "a", encoding="utf-8") as fh:
-        if not os.path.exists(path) or os.path.getsize(path) == 0: fh.write("merged_id\tcommit\tstatus\tdate\n")
-        for s in new: fh.write(f"{mid}\t{s}\t{stt['status']}\t{stt.get('date', '')}\n")
 
 def report_generation(run):
     """The generation stamp in the existing report.md: which render produced it."""
@@ -582,15 +460,15 @@ def import_hand_edits(run, st, today):
         if line is None or snap.get(mid) == line or mid in CREDITS: continue
         m = CHECKBOX_RE.match(line)
         ticked = m.group(1).lower() == "x"; text = m.group(2); low = text.lower()
-        cur = st.get(mid, {"status": "open", "ref": "", "date": ""})
+        cur = status_row(st, mid)
         sha = re.search(r"\b[0-9a-f]{7,40}\b", text)
-        if ticked and cur["status"] not in DONE:
+        if ticked and cur["status"] not in CLOSED_STATUSES:
             kind = "wont-fix" if "won't fix" in low or "wont fix" in low else "deferred" if "deferred" in low else "fixed"
             ref = sha.group(0) if sha else re.sub(r"^(fixed|won't fix|wont fix|deferred)\s*(in|:)?\s*", "", text, flags=re.I).strip()
             st[mid] = {"status": kind, "ref": ref, "date": today}
         elif ticked and sha and sha.group(0) != cur.get("ref"):
             st[mid] = {**cur, "ref": sha.group(0), "date": today}
-        elif not ticked and cur["status"] in DONE:
+        elif not ticked and cur["status"] in CLOSED_STATUSES:
             st[mid] = {"status": "open", "ref": "", "date": today}
     return st
 
@@ -609,34 +487,10 @@ def status_cell(stt):
     if s == "open": return ""
     return STATUS_WORDS.get(s, s).lower()
 
-def read_reconcile(run):
-    """Reconciliation against a previous run, if any (see reconcile.py)."""
-    rd = os.path.join(run, "reconcile")
-    rec = {"label": "", "matches": {}, "prior": {}, "since": {}, "unmatched": []}
-    if not os.path.isdir(rd): return rec
-    pt = os.path.join(rd, "previous.txt")
-    rec["label"] = read_text(pt)
-    def rows(name):
-        p = os.path.join(rd, name)
-        if not os.path.exists(p): return []
-        return [l.rstrip("\n").split("\t") for l in open(p, encoding="utf-8").readlines()[1:] if l.strip()]
-    for r in rows("matches.tsv"):
-        rec["matches"][int(r[0])] = {"prev_id": int(r[1]), "how": r[2], "prev_number": r[3], "prev_status": r[4], "prev_ref": r[5] if len(r) > 5 else "", "cause": r[6] if len(r) > 6 else ""}
-    for r in rows("prior.tsv"):
-        rec["prior"][int(r[0])] = {"outcome": r[1], "note": r[2] if len(r) > 2 else ""}
-    for r in rows("since.tsv"):
-        rec["since"][int(r[0])] = {"outcome": r[1], "note": r[2] if len(r) > 2 else ""}
-    for r in rows("unmatched.tsv"):
-        rec["unmatched"].append({"prev_id": int(r[0]), "prev_number": r[1], "prev_status": r[2], "prev_ref": r[3], "location": r[4], "title": r[5] if len(r) > 5 else ""})
-    return rec
-
 def is_pr(e):
     return str(e.get("lens", "")).startswith("pr-review") or e.get("source") == "github"
 
 is_credit = mf.is_credit
-
-def credit_ids(entries):
-    return {e["id"] for e in entries if is_credit(e)}
 
 def pr_block(c, heading, with_location=True):
     """The human comment's own words, author, link, replies, and GitHub state."""
@@ -724,112 +578,8 @@ def recommendation_options(fix):
     """The labels a recommendation offers, in order: '(a) ... or (b) ...'."""
     return re.findall(r"(?:^|[\s(])\(([a-z])\)\s", fix or "")
 
-INSTRUCTION_FIELDS = ("choice", "note", "date", "also", "option")
-
-def instructions_path(run):
-    return os.path.join(run, "instructions.tsv")
-
-def read_instructions(run):
-    """instructions.tsv: merged id, choice (fix|discuss|defer|ignore or empty),
-    note, date, also (other ticked choices, comma separated), option (the
-    labeled alternatives of the recommendation to follow, comma separated,
-    only with fix). Free-text notes live in notes/<merged id>.md."""
-    ins = read_keyed(instructions_path(run), INSTRUCTION_FIELDS)
-    nd = os.path.join(run, "notes")
-    if os.path.isdir(nd):
-        for n in os.listdir(nd):
-            m = re.match(r"^(\d+)\.md$", n)
-            if m:
-                txt = read_text(os.path.join(nd, n))
-                if txt: ins.setdefault(int(m.group(1)), {"choice": "", "note": "", "date": "", "also": ""})["text"] = txt
-    return ins
-
-def write_instructions(run, ins):
-    write_keyed(instructions_path(run), INSTRUCTION_FIELDS, {k: i for k, i in ins.items() if i.get("choice") or i.get("note") or i.get("also")})
-    nd = os.path.join(run, "notes")
-    for k, i in ins.items():
-        f = os.path.join(nd, f"{k}.md")
-        if i.get("text"):
-            os.makedirs(nd, exist_ok=True); open(f, "w", encoding="utf-8").write(i["text"].strip() + "\n")
-        elif os.path.exists(f):
-            os.remove(f)
-
-POSTED_FIELDS = ("state", "note", "date", "thread_id", "comment_id", "url", "path", "line", "end_line", "side", "kind", "review_id")
-
-def read_posted(run):
-    return read_keyed(os.path.join(run, "posted.tsv"), POSTED_FIELDS)
-
-def write_posted(run, rows):
-    write_keyed(os.path.join(run, "posted.tsv"), POSTED_FIELDS, rows)
-
-def has_comment(row):
-    return bool(row.get("kind"))
-
-def is_posted(row):
-    return has_comment(row) and row.get("state") == "posted"
-
-def has_thread(row):
-    return has_comment(row) and row["kind"] != "body" and bool(row.get("comment_id"))
-
-def review_ids(rows):
-    return {row["review_id"] for row in rows.values() if row.get("review_id")}
-
-THREAD_FIELDS = ("comment_id", "thread_id", "state", "outdated", "can_resolve", "line", "replies", "date")
-
-def threads_path(run):
-    return os.path.join(run, "pr", "threads.tsv")
-
-def read_threads(run):
-    return read_keyed(threads_path(run), THREAD_FIELDS)
-
-def write_threads(run, rows):
-    write_keyed(threads_path(run), THREAD_FIELDS, rows)
-
-def posted_threads(run, posted):
-    return {mid: row for mid, row in read_threads(run).items() if row["comment_id"] == posted.get(mid, {}).get("comment_id")}
-
-KEPT_OPEN_FIELDS = ("reason", "date")
-
-def kept_open_path(run):
-    return os.path.join(run, "posted", "keep.tsv")
-
-def read_kept_open(run):
-    return read_keyed(kept_open_path(run), KEPT_OPEN_FIELDS)
-
-def write_kept_open(run, rows):
-    write_keyed(kept_open_path(run), KEPT_OPEN_FIELDS, rows)
-
-Closable = namedtuple("Closable", "posted status thread")
-
-def closable(run):
-    posted, status, kept = read_posted(run), read_status(run), read_kept_open(run)
-    threads = posted_threads(run, posted)
-    credits = credit_ids(read_findings(run, mf))
-    return {mid: Closable(row, status[mid], threads[mid]) for mid, row in sorted(posted.items())
-            if has_thread(row) and mid not in credits and mid not in kept
-            and status.get(mid, {}).get("status") == "fixed" and threads.get(mid, {}).get("state") == "open"}
-
 def still_open(st):
     return "marked fixed" + (f" in {st['ref']}" if st.get("ref") else "") + "; its thread on GitHub is still open"
-
-def read_findings(run, mf):
-    overrides = read_overrides(run, mf)
-    merged = read_merged(os.path.join(run, "merged.md"), mf)
-    for e in merged:
-        over = overrides.get(e["id"], {})
-        for k, val in over.items():
-            e[k] = int(re.sub(r"\D", "", val) or 0) if k in ("line", "end_line") else val
-        if "line" in over and "end_line" not in over: e["end_line"] = e["line"]
-    return merged
-
-def posted_path(run, mid):
-    return os.path.join(run, "posted", f"{mid}.md")
-
-def read_text(path, missing=""):
-    return open(path, encoding="utf-8").read().strip() if path and os.path.exists(path) else missing
-
-def posted_text(run, mid):
-    return read_text(posted_path(run, mid))
 
 def record_posted(run, mid, text, state, today):
     os.makedirs(os.path.dirname(posted_path(run, mid)), exist_ok=True)
@@ -838,9 +588,6 @@ def record_posted(run, mid, text, state, today):
 
 def note_changed(mid):
     return mid in POSTED and POSTED[mid]["note"] != INSTR.get(mid, {}).get("note", "")
-
-def stale_text(row, note):
-    return bool(row) and row["note"] != note and row["state"] != "edited"
 
 def is_stale(mid):
     return choice_of(mid) == "post" and stale_text(POSTED.get(mid), INSTR.get(mid, {}).get("note", ""))
@@ -860,9 +607,6 @@ def fence_around(text, shortest):
 
 def posted_fence(text):
     return fence_around(text, 4)
-
-def line_span(lo, hi):
-    return f"{lo}" + (f"-{hi}" if hi and hi != lo else "")
 
 def posted_link(row):
     if not has_comment(row): return []
@@ -891,7 +635,7 @@ def thread_states(row):
     return [w for w in (row["state"], "outdated" if row["outdated"] == "1" else "") if w and w != "open"]
 
 def posted_thread_lines(row):
-    return thread_lines(row["replies"], thread_states(row)) if row else []
+    return thread_lines(joined_replies(row["replies"]), thread_states(row)) if row else []
 
 def fenced_text(block):
     body, opened = [], False
@@ -1017,7 +761,7 @@ def decided(mid):
     """The user or the fix flow has acted on this finding: it carries an
     instruction or a status other than open. Such a finding is always shown,
     whatever its severity and confidence, so it keeps a number and a card."""
-    return bool(choice_of(mid)) or STATUS.get(mid, {}).get("status", "open") != "open"
+    return bool(choice_of(mid)) or status_of(STATUS, mid) != "open"
 
 def md_table(rows):
     """Pipe table with padded columns, the way common formatters align it, so a
@@ -1026,13 +770,6 @@ def md_table(rows):
     def line(r): return "| " + " | ".join(c.ljust(widths[i]) for i, c in enumerate(r)) + " |"
     sep = "| " + " | ".join("-" * max(3, w) for w in widths) + " |"
     return [line(rows[0]), sep] + [line(r) for r in rows[1:]]
-
-FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
-PROSE, FENCE_LINE, FENCE_BODY = "", "fence", "body"
-
-def closes_fence(line, fence):
-    s = line.rstrip()
-    return len(s) >= len(fence) and s == fence[0] * len(s)
 
 def front_matter_length(lines):
     if lines[0] != "---": return 0
@@ -1066,26 +803,6 @@ def wrap_markdown(text, width):
             wrapped = textwrap.wrap(protected, width=width, break_long_words=False, break_on_hyphens=False)
         out.extend(w.replace(NB, " ") for w in wrapped)
     return "\n".join(out)
-
-NUMBER_FIELDS = ("merged_id", "section")
-
-def numbers_path(run):
-    return os.path.join(run, "numbers.tsv")
-
-def number_rows(run):
-    return [(n, int(r["merged_id"]), r["section"]) for n, r in read_keyed(numbers_path(run), NUMBER_FIELDS).items() if r["merged_id"].isdigit()]
-
-def read_numbers(run):
-    return {mid: n for n, mid, _ in number_rows(run)}
-
-def read_sections(run):
-    return {mid: section for _, mid, section in number_rows(run)}
-
-def finding_id(spec, nums):
-    if spec.startswith("#"): return int(spec[1:])
-    by_number = {n: mid for mid, n in nums.items()}
-    if not spec.isdigit() or int(spec) not in by_number: sys.exit(f"finding {spec} not in numbers.tsv")
-    return by_number[int(spec)]
 
 def file_spec(flag, spec, nums):
     m = re.match(r"^(#?\d+)=(.+)$", spec.strip())
@@ -1153,7 +870,7 @@ def set_instruction(spec, nums, today):
 
 def mirror_decision(mid, today):
     ch, note = INSTR[mid]["choice"], INSTR[mid]["note"]
-    cur = STATUS.get(mid, {"status": "open"})["status"]
+    cur = status_of(STATUS, mid)
     if ch == "ignore" and cur in ("open", "in-progress"): STATUS[mid] = {"status": "wont-fix", "ref": note, "date": today}
     elif ch == "defer" and cur in ("open", "in-progress"): STATUS[mid] = {"status": "deferred", "ref": note, "date": today}
     elif ch in ("fix", "noted", "discuss", "") and cur in ("wont-fix", "deferred"): STATUS[mid] = {"status": "open", "ref": "", "date": today}
@@ -1295,10 +1012,10 @@ def glance_rows(numbered, labels):
     def glance_title(e):
         t = title_of(e, TITLES)
         return t + " (also on the PR)" if e["id"] in PR_LINKS else t
-    return [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(NAMES.get(l, l) for l in sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), CHOICE_WORD.get(choice_of(e["id"]), ""), status_cell(STATUS.get(e["id"], {"status": "open"}))] for e in numbered]
+    return [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(NAMES.get(l, l) for l in sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), CHOICE_WORD.get(choice_of(e["id"]), ""), status_cell(status_row(STATUS, e["id"]))] for e in numbered]
 
 def progress_line(numbered):
-    done = {k: sum(1 for e in numbered if e["_sec"] == k and STATUS.get(e["id"], {}).get("status") in DONE) for k in ("reopen", "pr", "fix", "look", "confirm")}
+    done = {k: sum(1 for e in numbered if e["_sec"] == k and status_of(STATUS, e["id"]) in CLOSED_STATUSES) for k in ("reopen", "pr", "fix", "look", "confirm")}
     tot = {k: sum(1 for e in numbered if e["_sec"] == k) for k in ("reopen", "pr", "fix", "look", "confirm")}
     prog = f"Progress: {done['fix']} of {tot['fix']} to fix before merging resolved, {done['look']} of {tot['look']} worth a look resolved."
     if tot["reopen"]: prog = f"Progress: {done['reopen']} of {tot['reopen']} reopened resolved. " + prog[len("Progress: "):]
@@ -1311,7 +1028,7 @@ def progress_line(numbered):
 def since_lines(numbered, routed):
     numbered = without_credits(numbered)
     new = sum(1 for e in numbered if e["id"] not in RECON["matches"])
-    still = sum(1 for e in numbered if e["id"] in RECON["matches"] and STATUS.get(e["id"], {}).get("status", "open") in ("open", "in-progress") and RECON["matches"][e["id"]].get("how") != "reopened")
+    still = sum(1 for e in numbered if e["id"] in RECON["matches"] and status_of(STATUS, e["id"]) in ("open", "in-progress") and RECON["matches"][e["id"]].get("how") != "reopened")
     resolved = [u for u in RECON["unmatched"] if RECON["since"].get(u["prev_id"], {}).get("outcome") == "resolved"]
     resolved += [{"title": TITLE_BY_ID.get(pid, ""), "prev_number": RECON["matches"].get(pid, {}).get("prev_number", ""), "prev_ref": RECON["matches"].get(pid, {}).get("prev_ref", "")}
                  for pid, v in RECON["since"].items() if v.get("outcome") == "resolved" and RECON["matches"].get(pid, {}).get("how") == "carried" and pid not in CREDITS]
@@ -1378,7 +1095,7 @@ def render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, 
     return finish_text("\n".join(out), a.wrap)
 
 def write_snapshots(run, gen_dir, text, numbered):
-    snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(STATUS.get(e['id'], {'status': 'open'}))}\n" for e in numbered if e["id"] not in CREDITS),
+    snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(status_row(STATUS, e['id']))}\n" for e in numbered if e["id"] not in CREDITS),
              "rendered-instructions.tsv": "".join(f"{e['id']}\t{instruction_key(INSTR.get(e['id']), choices_for(e['id']))}\n" for e in numbered),
              "rendered-posted.tsv": "".join(f"{mid}\t{flat(t)}\n" for mid, t in sorted(posted_blocks(card_blocks(text.split("\n"))).items()))}
     os.makedirs(gen_dir, exist_ok=True)
@@ -1410,7 +1127,7 @@ def write_numbers(run, numbered, prior_nums):
     kept = [(n, mid) for mid, n in prior_nums.items() if mid not in shown]
     rows = {e["_n"]: {"merged_id": str(e["id"]), "section": e["_sec"]} for e in numbered}
     rows.update((n, {"merged_id": str(mid), "section": "hidden"}) for n, mid in sorted(kept))
-    write_keyed(numbers_path(run), NUMBER_FIELDS, rows, header="number", order=list)
+    write_number_rows(run, rows)
 
 def report_closable(run):
     global CLOSABLE, KEPT_OPEN
@@ -1421,11 +1138,10 @@ def report_closable(run):
 def main():
     a = parse_args()
     today = a.date or ""
-    mf = load_merge_module()
-    merged = read_findings(a.run, mf)
+    merged = read_findings(a.run)
     verdicts, labels = read_verdicts(a.run), read_labels(a.run)
     global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID
-    NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run, mf), a.run
+    NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run), a.run
     nums = read_numbers(a.run)
     drafts = [posted_draft(spec, nums) for spec in a.posted]
     load_triage(a.run, merged, today)
