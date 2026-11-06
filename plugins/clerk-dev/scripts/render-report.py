@@ -441,16 +441,20 @@ DONE = ("fixed", "wont-fix", "deferred")
 def merged_key(text):
     return int(text) if text.isdigit() else None
 
-def read_keyed(path, fields, key=merged_key, defaults=None):
-    rows = {}
-    if not os.path.exists(path): return rows
+def read_rows(path, key=merged_key):
+    if not os.path.exists(path): return []
     with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            f = [cell.strip() for cell in line.rstrip("\n").split("\t")]
-            k = key(f[0])
-            if len(f) > 1 and k is not None:
-                rows[k] = {name: value or (defaults or {}).get(name, "") for name, value in zip(fields, f[1:] + [""] * len(fields))}
-    return rows
+        rows = [[cell.strip() for cell in line.rstrip("\n").split("\t")] for line in fh]
+    return [f for f in rows if key(f[0]) is not None]
+
+def write_rows(path, header, rows):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        for row in [header, *rows]: fh.write("\t".join(row) + "\n")
+
+def read_keyed(path, fields, key=merged_key, defaults=None):
+    return {key(f[0]): {name: value or (defaults or {}).get(name, "") for name, value in zip(fields, f[1:] + [""] * len(fields))}
+            for f in read_rows(path, key) if len(f) > 1}
 
 def write_keyed(path, fields, rows, header="merged_id", order=sorted):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)

@@ -70,10 +70,10 @@ def load(run):
                 out[int(f[0])]["title"] = f[1]
     return out
 
-def tsv(path, skip_header=True):
-    if not os.path.exists(path): return []
-    rows = [l.rstrip("\n").split("\t") for l in open(path, encoding="utf-8")]
-    return rows[1:] if skip_header and rows and not rows[0][0].isdigit() else rows
+MATCH_HEADER = ["cur_id", "prev_id", "how", "prev_number", "prev_status", "prev_ref"]
+
+def matches_path(rd):
+    return os.path.join(rd, "matches.tsv")
 
 def words(e):
     t = (e.get("title", "") + " " + e.get("claim", "")).lower()
@@ -187,9 +187,7 @@ def append_mode(new_path, cur, judged=None):
         print(f"{len(cands)} of {len(new)} new findings have candidate carried matches; judge reconcile/append-candidates.tsv, then rerun with --judged", file=sys.stderr)
         return
     verdict = judged_verdicts(judged, new, cands) if judged else {}
-    mpath = os.path.join(rd, "matches.tsv")
-    mrows = [l.rstrip("\n").split("\t") for l in open(mpath)] if os.path.exists(mpath) else [["cur_id","prev_id","how","prev_number","prev_status","prev_ref","cause"]]
-    if len(mrows[0]) < 7: mrows[0] = mrows[0][:6] + ["cause"]
+    mrows = rr.read_rows(matches_path(rd))
     appended, dropped, counts, amap = [], [], {v: 0 for v in VERDICTS}, []
     for nid, n in sorted(new.items()):
         cid, v = verdict.get(nid, (None, "different"))
@@ -217,8 +215,7 @@ def append_mode(new_path, cur, judged=None):
         entries[next_id] = "\n".join(lines)
         appended.append(next_id); amap.append((nid, next_id))
     write_entries(cur, header, entries)
-    with open(mpath, "w") as fh:
-        for r in mrows: fh.write("\t".join(r) + "\n")
+    rr.write_rows(matches_path(rd), MATCH_HEADER + ["cause"], mrows)
     rr.write_status(cur, status)
     ap_path = os.path.join(rd, "appended.tsv")
     earlier = [l.strip() for l in open(ap_path).read().splitlines()[1:] if l.strip()] if os.path.exists(ap_path) else []
@@ -265,7 +262,7 @@ def main():
     open(os.path.join(rd, "previous.txt"), "w").write(label + "\n")
 
     if a.seed:
-        matches = tsv(os.path.join(rd, "matches.tsv"))
+        matches = rr.read_rows(matches_path(rd))
         st = rr.read_status(a.cur)
         os.makedirs(os.path.join(a.cur, "resolution"), exist_ok=True)
         carried = seeded_posted = 0
@@ -288,7 +285,7 @@ def main():
         return
 
     if a.judged:
-        matches = tsv(os.path.join(rd, "matches.tsv"))
+        matches = rr.read_rows(matches_path(rd))
         for line in open(a.judged):
             f = line.rstrip("\n").split("\t")
             if len(f) >= 3 and f[2].strip() == "same":
@@ -315,12 +312,8 @@ def main():
             used_c.add(cid); used_p.add(pid)
             n, s, ref = pinfo(pid); matches.append([str(cid), str(pid), how, n, s, ref])
         cands = [(s, c, p) for s, c, p in sorted(cands, reverse=True) if c not in used_c and p not in used_p]
-    with open(os.path.join(rd, "matches.tsv"), "w") as fh:
-        fh.write("cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n")
-        for m in matches: fh.write("\t".join(m) + "\n")
-    with open(os.path.join(rd, "candidates.tsv"), "w") as fh:
-        fh.write("cur_id\tprev_id\tscore\n")
-        for s, c, p in cands: fh.write(f"{c}\t{p}\t{s:.2f}\n")
+    rr.write_rows(matches_path(rd), MATCH_HEADER, matches)
+    rr.write_rows(os.path.join(rd, "candidates.tsv"), ["cur_id", "prev_id", "score"], [[str(c), str(p), f"{s:.2f}"] for s, c, p in cands])
     matched_prev = {int(m[1]) for m in matches}
     with open(os.path.join(rd, "unmatched.tsv"), "w") as fh:
         fh.write("prev_id\tprev_number\tprev_status\tprev_ref\tlocation\ttitle\n")

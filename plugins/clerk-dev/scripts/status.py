@@ -723,7 +723,7 @@ def finding_groups(run, status, instr, numbers):
     for mid in sf.load_findings(run):
         if mid not in numbers or not sf.is_open(mid, status, instr): continue
         choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
-        st = status[mid][1] if mid in status else "open"
+        st = status.get(mid, {}).get("status", "open")
         sec = sections.get(mid, "")
         if sec in SECTION_NAMES: by_section.setdefault(sec, []).append(numbers[mid])
         if st == "in-progress": inprog.append(numbers[mid])

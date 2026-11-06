@@ -49,11 +49,6 @@ def git(repo, *args, check=True):
         sys.exit(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout.strip() if r.returncode == 0 else ""
 
-def tsv(path):
-    if not os.path.exists(path): return []
-    rows = open(path, encoding="utf-8").read().splitlines()
-    return [r.split("\t") for r in rows[1:] if r.strip()]
-
 def load_findings(run):
     mf = load_script("merge-findings.py")
     out = {}
@@ -65,13 +60,13 @@ def load_findings(run):
     return out
 
 def state(run):
-    status = {int(r[0]): r for r in tsv(os.path.join(run, "status.tsv")) if r[0].isdigit()}
-    instr = {int(r[0]): (r[1] if len(r) > 1 else "") for r in tsv(os.path.join(run, "instructions.tsv")) if r[0].isdigit()}
+    status = rr.read_status(run)
+    instr = {mid: i["choice"] for mid, i in rr.read_instructions(run).items()}
     numbers = {mid: str(n) for mid, n in rr.read_numbers(run).items()}
     return status, instr, numbers
 
 def is_open(mid, status, instr):
-    st = status.get(mid, [str(mid), "open"])[1] if mid in status else "open"
+    st = status.get(mid, {}).get("status", "open")
     choice = re.sub(r"\(.*\)$", "", instr.get(mid, ""))
     return st not in CLOSED_STATUS and choice not in CLOSED_CHOICE
 
@@ -80,9 +75,9 @@ def fix_commits(repo, status, run=None):
     finding, so a fix that took two commits (a second attempt after a partial
     recheck) is only complete from RUN/commits.tsv, which keeps every commit
     a status ever named, and RUN/resolution/, which names each attempt."""
-    text = [row[2] for row in status.values() if len(row) > 2]
+    text = [row["ref"] for row in status.values()]
     if run:
-        text += [r[1] for r in tsv(os.path.join(run, "commits.tsv")) if len(r) > 1]
+        text += [r[1] for r in rr.read_rows(os.path.join(run, "commits.tsv")) if len(r) > 1]
         rdir = os.path.join(run, "resolution")
         for name in sorted(os.listdir(rdir)) if os.path.isdir(rdir) else []:
             text.append(open(os.path.join(rdir, name), encoding="utf-8").read())
@@ -168,8 +163,13 @@ def cmd_delta(a, run, repo):
     kinds = [k for _, k, _ in rows]
     print(f"{len(rows)} commits since {reviewed[:9]}: " + ", ".join(f"{kinds.count(k)} {k}" for k in dict.fromkeys(kinds)), file=sys.stderr)
 
+STALE_FIELDS = ("through", "verdict", "note", "date")
+
+def stale_path(run):
+    return os.path.join(run, "stale.tsv")
+
 def through_map(run):
-    return {int(r[0]): r[1] for r in tsv(os.path.join(run, "stale.tsv")) if r[0].isdigit() and len(r) > 1}
+    return {mid: r["through"] for mid, r in rr.read_keyed(stale_path(run), STALE_FIELDS).items() if r["through"]}
 
 def resolve_id(spec, numbers):
     by_num = {v: k for k, v in numbers.items()}
@@ -232,18 +232,16 @@ def cmd_record(a, run, repo):
     if not a.through: sys.exit("--record needs --through <sha>")
     _, _, numbers = state(run)
     sha = git(repo, "rev-parse", a.through)
-    path = os.path.join(run, "stale.tsv")
-    rows = {int(r[0]): r for r in tsv(path) if r[0].isdigit()}
+    path = stale_path(run)
+    rows = rr.read_keyed(path, STALE_FIELDS)
     today = datetime.date.today().isoformat()
     for spec in a.record:
         m = re.match(r"^(#?\d+)=([a-z]+)(?::(.*))?$", spec.strip())
         if not m or m.group(2) not in VERDICTS:
             sys.exit(f"bad --record {spec!r}; use N=still, N=resolved:<note>, N=changed:<note>")
         mid = resolve_id(m.group(1), numbers)
-        rows[mid] = [str(mid), sha, m.group(2), (m.group(3) or "").replace("\t", " "), today]
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("merged_id\tthrough\tverdict\tnote\tdate\n")
-        for mid in sorted(rows): fh.write("\t".join(rows[mid]) + "\n")
+        rows[mid] = dict(through=sha, verdict=m.group(2), note=(m.group(3) or "").replace("\t", " "), date=today)
+    rr.write_keyed(path, STALE_FIELDS, rows)
     print(f"recorded {len(a.record)} in {path}")
 
 def main():

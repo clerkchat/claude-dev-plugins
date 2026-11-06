@@ -72,9 +72,9 @@ def analyze(run):
     sections = rr.read_sections(run)
     credits = rr.credit_ids(rr.read_findings(run, rr.mf))
     rd = os.path.join(run, "reconcile")
-    appended = {int(r[0]) for r in sf.tsv(os.path.join(rd, "appended.tsv")) if r and r[0].isdigit()}
-    new_of = {int(r[1]): int(r[0]) for r in sf.tsv(os.path.join(rd, "appended-map.tsv")) if len(r) > 1 and r[0].isdigit() and r[1].isdigit()}
-    judged = [r for r in sf.tsv(os.path.join(rd, "append-judged.tsv")) if len(r) > 2]
+    appended = {int(r[0]) for r in rr.read_rows(os.path.join(rd, "appended.tsv"))}
+    new_of = {int(r[1]): int(r[0]) for r in rr.read_rows(os.path.join(rd, "appended-map.tsv")) if len(r) > 1 and r[1].isdigit()}
+    judged = [r for r in rr.read_rows(os.path.join(rd, "append-judged.tsv")) if len(r) > 2]
     title = lambda mid: re.sub(r"\s+", " ", str(findings.get(mid, {}).get("title", ""))).strip() or f"merged {mid}"
 
     kept = []
@@ -87,13 +87,13 @@ def analyze(run):
         cat = category_of(bar) or category_of(str(findings.get(mid, {}).get("context", "")))
         kept.append((numbers[mid], mid, title(mid), cat or "category not stated"))
     reopened = [(numbers[int(r[1])], int(r[1]), title(int(r[1]))) for r in judged
-                if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and status.get(int(r[1]), ["", ""])[1] != "fixed"]
+                if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and status.get(int(r[1]), {}).get("status") != "fixed"]
     open_fix = [(numbers[m], m, title(m)) for m in findings
                 if m in numbers and sections.get(m) == "fix" and sf.is_open(m, status, instr) and m not in appended]
     counts = {}
     for m in findings:
         if m not in numbers: continue
-        st = status[m][1] if m in status else "open"
+        st = status.get(m, {}).get("status", "open")
         choice = re.sub(r"\(.*\)$", "", instr.get(m, ""))
         key = st if st != "open" else {"defer": "deferred", "ignore": "declined"}.get(choice, "open")
         counts[key] = counts.get(key, 0) + 1
