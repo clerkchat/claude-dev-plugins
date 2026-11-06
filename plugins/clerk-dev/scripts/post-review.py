@@ -58,19 +58,9 @@ MUTATIONS = {"addPullRequestReviewThread": (ADD_THREAD, thread_result),
              "updatePullRequestReviewComment": (UPDATE_COMMENT, lambda d: d),
              "deletePullRequestReviewComment": (DELETE_COMMENT, lambda d: d)}
 
-def code_lines(text):
-    fence = ""
-    for line in text.split("\n"):
-        if fence:
-            if rr.closes_fence(line, fence): fence = ""
-            yield line, True; continue
-        m = rr.FENCE_RE.match(line)
-        if m: fence = m.group(1)
-        yield line, bool(m)
-
 def unwrap(text):
     out, joinable = [], False
-    for line, code in code_lines(text.strip("\n")):
+    for line, code in rr.fenced_lines(text.strip("\n").split("\n")):
         if code:
             joinable = False
             out.append(line); continue
@@ -82,7 +72,7 @@ def unwrap(text):
     return "\n".join(out)
 
 def prose(text):
-    return CODE_SPAN.sub(" ", "\n".join("" if code else line for line, code in code_lines(text)))
+    return CODE_SPAN.sub(" ", "\n".join("" if code else line for line, code in rr.fenced_lines(text.split("\n"))))
 
 def local_paths(*dirs):
     found = {os.path.expanduser("~")} | {norm(d) for d in dirs for norm in (os.path.abspath, os.path.realpath)}

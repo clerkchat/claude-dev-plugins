@@ -18,6 +18,7 @@ def import_pending(prev):
     last render into its status and instruction files, so they are carried."""
     rr = load_script("render-report.py")
     today = datetime.date.today().isoformat()
+    rr.CREDITS = rr.credit_ids(rr.read_merged(os.path.join(prev, "merged.md"), rr.mf))
     st = rr.import_hand_edits(prev, rr.read_status(prev), today); rr.write_status(prev, st)
     ins = rr.read_instructions(prev); changed = rr.import_instruction_edits(prev, ins, today)
     rr.write_instructions(prev, ins)

@@ -316,7 +316,7 @@ def recommendation(e):
     return prose_block("Recommendation", e["fix"]) if e.get("fix") and e["fix"].lower() != "none obvious" else []
 
 def instruction_tail(e):
-    out = ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]), choices_for(e["id"], CREDITS))
+    out = ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]), choices_for(e["id"]))
     return out + (posted_block(e["id"]) if choice_of(e["id"]) == "post" else [])
 
 def _card_tail(e):
@@ -454,25 +454,36 @@ GEN_RE = re.compile(r"^<!-- review generation (\d+)")
 FINDING_MARKER = re.compile(r"^<!-- finding \d+, merged (\d+),")
 CHECKBOX_RE = re.compile(r"^- \[( |x|X)\] (.*)$")
 
-def card_blocks(lines):
-    cards, mid, block, fence = {}, None, None, ""
+def fenced_lines(lines):
+    fence = ""
+    for line in lines:
+        if fence:
+            if closes_fence(line, fence): fence = ""; yield line, FENCE_LINE
+            else: yield line, FENCE_BODY
+            continue
+        m = FENCE_RE.match(line)
+        if m: fence = m.group(1)
+        yield line, FENCE_LINE if m else PROSE
+
+def card_segments(lines):
+    segments = []
     for line in lines:
         m = FINDING_MARKER.match(line)
-        if m:
-            mid, fence = int(m.group(1)), ""
-            block = cards.setdefault(mid, {}).setdefault("", [])
-            continue
-        if fence:
-            if closes_fence(line, fence): fence = ""
-        elif line.startswith("#") or line == "---":
-            if line.startswith(("#### ", "### ", "## ", "# ")): mid = None
-            heading = line.strip()[len("##### "):] if line.startswith("##### ") else None
-            block = cards[mid].setdefault(heading, []) if mid is not None and heading is not None else None
-            continue
-        else:
-            m = FENCE_RE.match(line)
-            if m: fence = m.group(1)
-        if block is not None: block.append(line)
+        if m: segments.append((int(m.group(1)), []))
+        elif segments: segments[-1][1].append(line)
+    return segments
+
+def card_blocks(lines):
+    cards = {}
+    for mid, body in card_segments(lines):
+        block, live = cards.setdefault(mid, {}).setdefault("", []), True
+        for line, kind in fenced_lines(body):
+            if kind == PROSE and (line.startswith("#") or line == "---"):
+                if line.startswith(("#### ", "### ", "## ", "# ")): live = False
+                heading = line.strip()[len("##### "):] if line.startswith("##### ") else None
+                block = cards[mid].setdefault(heading, []) if live and heading is not None else None
+                continue
+            if block is not None: block.append(line)
     return cards
 
 def read_card_blocks(run):
@@ -538,10 +549,10 @@ def import_hand_edits(run, st, today):
     status file does not know about becomes fixed, won't fix, or deferred by
     its wording, with a commit hash if the line has one; an unticked box over
     a done status reopens it."""
-    snap, credits = read_snapshot(run, "rendered-status.tsv"), credit_ids(run)
+    snap = read_snapshot(run, "rendered-status.tsv")
     for mid, blocks in read_card_blocks(run).items():
         line = status_box(blocks[""])
-        if line is None or snap.get(mid) == line or mid in credits: continue
+        if line is None or snap.get(mid) == line or mid in CREDITS: continue
         m = CHECKBOX_RE.match(line)
         ticked = m.group(1).lower() == "x"; text = m.group(2); low = text.lower()
         cur = st.get(mid, {"status": "open", "ref": "", "date": ""})
@@ -597,9 +608,8 @@ def is_pr(e):
 
 is_credit = mf.is_credit
 
-def credit_ids(run):
-    path = os.path.join(run, "merged.md")
-    return {e["id"] for e in read_merged(path, mf) if is_credit(e)} if os.path.exists(path) else set()
+def credit_ids(entries):
+    return {e["id"] for e in entries if is_credit(e)}
 
 def pr_block(c, heading, with_location=True):
     """The human comment's own words, author, link, replies, and GitHub state."""
@@ -644,8 +654,8 @@ CREDIT_CHOICES = [c._replace(note="note") for key in ("post", "ignore") for c in
 CHOICE_WORD = {c.key: c.word for c in CHOICES}
 LABEL_TO_CHOICE = {c.label.lower(): c.key for c in CHOICES}
 
-def choices_for(mid, credits):
-    return CREDIT_CHOICES if mid in credits else CHOICES
+def choices_for(mid):
+    return CREDIT_CHOICES if mid in CREDITS else CHOICES
 
 def choice_of(mid):
     return INSTR.get(mid, {}).get("choice", "")
@@ -799,14 +809,12 @@ def posted_block(mid):
     return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {}))
 
 def fenced_text(block):
-    fence, body = "", []
-    for line in block:
-        if fence:
-            if closes_fence(line, fence): return "\n".join(body)
-            body.append(line)
-        else:
-            m = FENCE_RE.match(line)
-            if m: fence = m.group(1)
+    body, opened = [], False
+    for line, kind in fenced_lines(block):
+        if kind == FENCE_BODY: body.append(line)
+        elif kind == FENCE_LINE:
+            if opened: return "\n".join(body)
+            opened = True
     return None
 
 def posted_blocks(cards):
@@ -901,12 +909,12 @@ def import_instruction_edits(run, ins, today):
     hand edit only when it differs from what the renderer last wrote
     (rendered-instructions.tsv), so a stale report never undoes a change made
     through --instruct. Returns the changed ids."""
-    snap, credits = read_snapshot(run, "rendered-instructions.tsv"), credit_ids(run)
+    snap = read_snapshot(run, "rendered-instructions.tsv")
     changed = set()
     for mid, blocks in read_card_blocks(run).items():
         lines, text = instruction_fields(blocks.get("Instruction", []))
         if not lines or snap.get(mid) == snapshot_key(lines, text): continue
-        ticked, note, option, refused = ticked_instruction(lines, choices_for(mid, credits))
+        ticked, note, option, refused = ticked_instruction(lines, choices_for(mid))
         if refused:
             print(f"warning: finding with merged id {mid} is a credit; dropped the tick on {', '.join(refused)}: only {choice_labels(CREDIT_CHOICES)} apply", file=sys.stderr)
         choice, also = (ticked or [""])[0], ",".join(ticked[1:])
@@ -932,29 +940,25 @@ def md_table(rows):
     return [line(rows[0]), sep] + [line(r) for r in rows[1:]]
 
 FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+PROSE, FENCE_LINE, FENCE_BODY = "", "fence", "body"
 
 def closes_fence(line, fence):
     s = line.rstrip()
     return len(s) >= len(fence) and s == fence[0] * len(s)
 
+def front_matter_length(lines):
+    if lines[0] != "---": return 0
+    return next((i + 2 for i, line in enumerate(lines[1:]) if line == "---"), len(lines))
+
 def wrap_markdown(text, width):
     """Wrap prose paragraphs and list items; leave headings, tables, code,
     front matter, HTML comments, and bare location lines untouched."""
     if not width: return text
-    out, fence, in_fm = [], "", False
     lines = text.split("\n")
-    for i, line in enumerate(lines):
-        if i == 0 and line == "---": in_fm = True; out.append(line); continue
-        if in_fm:
-            out.append(line)
-            if line == "---": in_fm = False
-            continue
-        if fence:
-            out.append(line)
-            if closes_fence(line, fence): fence = ""
-            continue
-        m = FENCE_RE.match(line)
-        if m: fence = m.group(1); out.append(line); continue
+    front = front_matter_length(lines)
+    out = lines[:front]
+    for line, kind in fenced_lines(lines[front:]):
+        if kind != PROSE: out.append(line); continue
         if not line.strip() or line.startswith("#") or line.startswith("|") or line.startswith("<!--") or line == "---" or len(line) <= width:
             out.append(line); continue
         if re.match(r"^\S+:\d+(\s|$)", line) and " " not in line.split("  ")[0]:
@@ -1034,7 +1038,7 @@ def set_instruction(spec, nums, today):
     m = INSTRUCT_RE.match(spec.strip())
     if not m or (m.group(3) and not takes_option(m.group(2))): sys.exit(f"bad --instruct {spec!r}; use {instruct_usage()}")
     mid = finding_id(m.group(1), nums)
-    if m.group(2) != "none" and not any(c.key == m.group(2) for c in choices_for(mid, CREDITS)):
+    if m.group(2) != "none" and not any(c.key == m.group(2) for c in choices_for(mid)):
         sys.exit(f"bad --instruct {spec!r}; finding {m.group(1)} is a credit: use {instruct_usage(CREDIT_CHOICES)}")
     INSTR[mid] = {**INSTR.get(mid, {}), "choice": "" if m.group(2) == "none" else m.group(2), "note": (m.group(4) or "").strip(), "date": today, "also": "",
                   "option": split_option("x" + (m.group(3) or ""))[1]}
@@ -1277,7 +1281,7 @@ def render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, 
 
 def write_snapshots(run, gen_dir, text, numbered):
     snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(STATUS.get(e['id'], {'status': 'open'}))}\n" for e in numbered if e["id"] not in CREDITS),
-             "rendered-instructions.tsv": "".join(f"{e['id']}\t{instruction_key(INSTR.get(e['id']), choices_for(e['id'], CREDITS))}\n" for e in numbered),
+             "rendered-instructions.tsv": "".join(f"{e['id']}\t{instruction_key(INSTR.get(e['id']), choices_for(e['id']))}\n" for e in numbered),
              "rendered-posted.tsv": "".join(f"{mid}\t{flat(t)}\n" for mid, t in sorted(posted_blocks(card_blocks(text.split("\n"))).items()))}
     os.makedirs(gen_dir, exist_ok=True)
     for name, body in snaps.items():
@@ -1315,7 +1319,7 @@ def main():
     merged = read_findings(a.run, mf)
     verdicts, labels = read_verdicts(a.run), read_labels(a.run)
     global NAMES, TITLES, RUN, RECON, PR_LINKS, IDNUM, TITLE_BY_ID, CREDITS
-    NAMES, TITLES, RUN, CREDITS = read_plain_names(a.routing), report_titles(a.run, mf), a.run, credit_ids(a.run)
+    NAMES, TITLES, RUN, CREDITS = read_plain_names(a.routing), report_titles(a.run, mf), a.run, credit_ids(merged)
     nums = read_numbers(a.run)
     drafts = [posted_draft(spec, nums) for spec in a.posted]
     apply_statuses(a.run, a.repo, nums, a.set, today)
