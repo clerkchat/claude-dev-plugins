@@ -44,7 +44,7 @@ CATEGORIES = [
 FINAL_LENSES = ["security", "tenancy", "data-privacy", "side-effects", "rollout", "sql", "scaling",
                 "capacity", "concurrency", "contracts", "error-handling", "llm-agent", "completeness"]
 BELOW_LENSES = ["design", "naming-concepts", "user-facing-text", "tests", "performance",
-                "observability-cost", "spec-conformance"]
+                "observability-cost", "spec-conformance", "credit"]
 
 def read(path):
     return open(path, encoding="utf-8").read() if os.path.exists(path) else ""

@@ -153,7 +153,13 @@ class LensModeCommandTest(unittest.TestCase):
 
     def test_lists_pass_lenses_by_default(self):
         out = run_ok("lens-mode", "--list")
-        self.assertEqual(out.split(), [lens for lens in lens_mode.lenses() if lens != "cross-repo"])
+        self.assertEqual(out.split(), [lens for lens in lens_mode.lenses() if lens not in ("cross-repo", "credit")])
+
+    def test_leaves_out_a_lens_whose_lines_for_the_mode_are_all_na(self):
+        self.assertNotIn("credit", run_ok("lens-mode", "--list", "design").split())
+
+    def test_lists_a_lens_with_a_line_for_the_mode(self):
+        self.assertIn("credit", run_ok("lens-mode", "--list", "review").split())
 
     def test_an_unknown_lens_exits_1(self):
         self.assertEqual(run_script("lens-mode", "nope"), (1, "no lens nope"))

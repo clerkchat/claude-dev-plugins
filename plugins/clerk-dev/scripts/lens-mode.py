@@ -4,7 +4,7 @@ Pass mode text without reading the whole agent prompt into its session.
 
 Usage:
   lens-mode.py LENS [MODE]     MODE is review, design, survey, or pass; defaults to pass
-  lens-mode.py --list [MODE]   lenses whose concerns all carry the mode's line
+  lens-mode.py --list [MODE]   lenses whose concerns all carry the mode's line, not all n/a
 
 LENS is the lens name (edge-cases), not the agent name. Exits 1 when the lens does
 not exist, its concerns do not parse, or they do not all carry the mode's line.
@@ -55,6 +55,8 @@ def na(text): return text[len(NA):].strip() if text.startswith(NA) else None
 
 def carries(found, label): return bool(found) and all(line(c, label) is not None for c in found)
 
+def applies(found, label): return carries(found, label) and any(na(line(c, label)) is None for c in found)
+
 def lenses(): return sorted(m.group(1) for m in (re.fullmatch(r"lens-(.+)\.md", f) for f in os.listdir(AGENTS)) if m)
 
 def mode_text(lens, label):
@@ -72,7 +74,7 @@ def main():
     try:
         if args[0] != "--list": print(mode_text(args[0], label)); return
         for lens in lenses():
-            if carries(concerns(lens), label): print(lens)
+            if applies(concerns(lens), label): print(lens)
     except ConcernError as e: sys.exit(str(e))
 
 if __name__ == "__main__": main()

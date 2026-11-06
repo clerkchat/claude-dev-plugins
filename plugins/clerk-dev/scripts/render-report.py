@@ -69,8 +69,7 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, read_plain_names
-from importlib import import_module
-mf = import_module("merge-findings") if False else None
+mf = load_script("merge-findings.py")
 
 SEV = {"blocker": 3, "major": 2, "minor": 1}
 TITLES = {}
@@ -83,8 +82,9 @@ RECON = {"label": "", "matches": {}, "prior": {}, "since": {}, "unmatched": []}
 RUN = "."
 IDNUM = {}
 TITLE_BY_ID = {}
+CREDITS = set()
 
-def load_merge_module(): return load_script("merge-findings.py")
+def load_merge_module(): return mf
 
 def read_merged(path, mf):
     text = open(path, encoding="utf-8").read()
@@ -134,10 +134,18 @@ def debt_intro(entries):
 def existing_intro(entries):
     return "Defects that are already on the remote main branch: this branch did not introduce them or make them worse, so they do not hold the merge. Each recommendation is a fix in its own pull request. Fix as recommended records the finding as deferred to that pull request; to fix one on this branch anyway, choose Fix as noted."
 
+def plural(n, word):
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+def credit_intro(entries):
+    marked = sum(1 for e in entries if choice_of(e["id"]) == "post")
+    return (f"Things this change does well, worth telling its author: {plural(len(entries), 'credit')}, {marked} marked Post."
+            " Post adds one to the review posted on the pull request and Ignore leaves it out; neither changes a status.")
+
 def below_intro(entries):
     return "Major findings the bar left out: the reviewers or the verifier were not sure enough that they exist as described, or no verifier checked them. Each may still be real. Nothing here is acted on unless you tick an instruction."
 
-Section = namedtuple("Section", "key heading action count_label intro")
+Section = namedtuple("Section", "key heading action count_label intro counted_when_empty", defaults=(True,))
 SECTIONS = [
     Section("reopen", "Reopened", "reopened", "reopened", None),
     Section("pr", "Pull request comments", "pull request comment", None, None),
@@ -147,12 +155,14 @@ SECTIONS = [
     Section("existing", "Already on main", "separate pull request", "existing", existing_intro),
     Section("debt", "Cleanup and refactoring", "cleanup", "cleanup", debt_intro),
     Section("declined", "Previously declined", "previously declined", "declined", None),
+    Section("credit", "Credits", "credit", "credits", credit_intro, False),
     Section("below", "Below the bar", "below the bar", "below", below_intro),
 ]
 ACTIONS = {s.key: s.action for s in SECTIONS}
+DEFECT_SECTIONS = ("reopen", "fix", "look", "confirm", "existing")
 
 def section_counts(routed, separator):
-    return ", ".join(f"{s.count_label}{separator}{len(routed[s.key])}" for s in SECTIONS if s.count_label)
+    return ", ".join(f"{s.count_label}{separator}{len(routed[s.key])}" for s in SECTIONS if s.count_label and (s.counted_when_empty or routed[s.key]))
 
 def action_of(e, section):
     """The action for a finding in a section, as the glance table words it; a
@@ -305,12 +315,24 @@ def note_block(heading, note):
 def recommendation(e):
     return prose_block("Recommendation", e["fix"]) if e.get("fix") and e["fix"].lower() != "none obvious" else []
 
-def _card_tail(e):
-    out = []
-    body = read_text(os.path.join(RUN, "resolution", f"{e['id']}.md"))
-    if body: out += prose_block("Resolution", body)
-    out += ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]))
+def instruction_tail(e):
+    out = ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]), choices_for(e["id"], CREDITS))
     return out + (posted_block(e["id"]) if choice_of(e["id"]) == "post" else [])
+
+def _card_tail(e):
+    body = read_text(os.path.join(RUN, "resolution", f"{e['id']}.md"))
+    return (prose_block("Resolution", body) if body else []) + instruction_tail(e)
+
+def claim_lines(e):
+    if e.get("claim") and title_of(e, TITLES) != unquote(e["claim"]).rstrip("."):
+        return [code_spans(unquote(e["claim"]).rstrip(".") + "."), ""]
+    return []
+
+def credit_body(e, v, repo, head):
+    out = [f"Overlaps finding {IDNUM[e['_overlaps']]}.", ""] if e.get("_overlaps") in IDNUM else []
+    out += claim_lines(e) + context_lines(e) + snippet_lines(e, repo, head)
+    if v.get("note"): out += note_block("Second opinion", v["note"])
+    return out + instruction_tail(e)
 
 _APPENDED = None
 def is_new(mid):
@@ -335,8 +357,9 @@ def card(n, e, v, labels, names, repo, head, section):
     else:
         focus = ", ".join(names.get(l, l) for l in sorted(e["lenses"]))
         head_lines = [f"**{action}** · {area_of(e, labels)}", "", f"Focus: {focus}", ""]
-    out = [f"#### {n}. {title_of(e, TITLES)}" + (" [new]" if is_new(e["id"]) else ""), "", f"<!-- finding {n}, merged {e['id']}, verify/{e['id']}.md, raw: {raw} -->", ""] + head_lines + [status_line(STATUS.get(e["id"], {"status": "open"})), ""]
-    sl = "" if is_pr(e) else scope_line(e)
+    status = [] if is_credit(e) else [status_line(STATUS.get(e["id"], {"status": "open"})), ""]
+    out = [f"#### {n}. {title_of(e, TITLES)}" + (" [new]" if is_new(e["id"]) else ""), "", f"<!-- finding {n}, merged {e['id']}, verify/{e['id']}.md, raw: {raw} -->", ""] + head_lines + status
+    sl = "" if is_pr(e) or is_credit(e) else scope_line(e)
     if sl: out += [sl, ""]
     loc = f"{e['file']}:{e['line']}" if e["line"] else e["file"]
     fl = file_len(repo, head, e["file"]) if e["line"] else None
@@ -363,13 +386,14 @@ def card(n, e, v, labels, names, repo, head, section):
         out += [f"Surfaced by the fix for finding {pn}." if pn else "Surfaced by a fix.", ""]
     if fl and e["line"] > fl:
         out += [f"Line number uncertain: the file has {fl} lines. The reviewer's evidence in merged.md names the real locations.", ""]
+    if is_credit(e):
+        return "\n".join(out + credit_body(e, v, repo, head))
     if is_pr(e):
         out += pr_block(e, "Comment", with_location=False)
         out += _sections(e, repo, head) + recommendation(e)
         if v.get("note"): out += note_block("Second opinion", v["note"])
         return "\n".join(out + _card_tail(e))
-    if e.get("claim") and title_of(e, TITLES) != unquote(e["claim"]).rstrip("."):
-        out += [code_spans(unquote(e["claim"]).rstrip(".") + "."), ""]
+    out += claim_lines(e)
     for c in PR_LINKS.get(e["id"], []):
         out += pr_block(c, "Raised on the pull request")
     out += _sections(e, repo, head)
@@ -389,9 +413,7 @@ def _sections(e, repo, head):
         out += prose_block("Why it matters", e["impact"])
         if e.get("uncertainty"):
             out += [code_spans("Uncertain: " + e["uncertainty"].strip()), ""]
-    ctx = e.get("context") or e.get("what_changed")
-    if ctx:
-        out += prose_block("Context", ctx)
+    out += context_lines(e)
     how = e.get("steps") or e.get("scenario", "")
     if how:
         out += ["##### How it goes wrong", ""]
@@ -399,9 +421,15 @@ def _sections(e, repo, head):
             out += [code_spans(steps_md(how)), ""]
         else:
             out += prose(how)
+    return out + snippet_lines(e, repo, head)
+
+def context_lines(e):
+    ctx = e.get("context") or e.get("what_changed")
+    return prose_block("Context", ctx) if ctx else []
+
+def snippet_lines(e, repo, head):
     sn = snippet(repo, head, e.get("snippet", ""))
-    if sn: out += [sn, ""]
-    return out
+    return [sn, ""] if sn else []
 
 STATUS_WORDS = {"open": "Open", "in-progress": "In progress", "fixed": "Fixed", "wont-fix": "Won't fix", "deferred": "Deferred"}
 DONE = ("fixed", "wont-fix", "deferred")
@@ -510,10 +538,10 @@ def import_hand_edits(run, st, today):
     status file does not know about becomes fixed, won't fix, or deferred by
     its wording, with a commit hash if the line has one; an unticked box over
     a done status reopens it."""
-    snap = read_snapshot(run, "rendered-status.tsv")
+    snap, credits = read_snapshot(run, "rendered-status.tsv"), credit_ids(run)
     for mid, blocks in read_card_blocks(run).items():
         line = status_box(blocks[""])
-        if line is None or snap.get(mid) == line: continue
+        if line is None or snap.get(mid) == line or mid in credits: continue
         m = CHECKBOX_RE.match(line)
         ticked = m.group(1).lower() == "x"; text = m.group(2); low = text.lower()
         cur = st.get(mid, {"status": "open", "ref": "", "date": ""})
@@ -567,6 +595,12 @@ def read_reconcile(run):
 def is_pr(e):
     return str(e.get("lens", "")).startswith("pr-review") or e.get("source") == "github"
 
+is_credit = mf.is_credit
+
+def credit_ids(run):
+    path = os.path.join(run, "merged.md")
+    return {e["id"] for e in read_merged(path, mf) if is_credit(e)} if os.path.exists(path) else set()
+
 def pr_block(c, heading, with_location=True):
     """The human comment's own words, author, link, replies, and GitHub state."""
     who = f"@{c.get('author', 'someone')}"
@@ -606,8 +640,12 @@ def history_line(e):
 Choice = namedtuple("Choice", "key label word note options", defaults=("note", False))
 CHOICES = [Choice("fix", "Fix as recommended", "fix", options=True), Choice("noted", "Fix as noted", "fix as noted"), Choice("discuss", "Discuss", "discuss"),
            Choice("defer", "Defer", "defer", note="ref"), Choice("ignore", "Ignore", "ignore", note="reason"), Choice("post", "Post", "post")]
+CREDIT_CHOICES = [c._replace(note="note") for key in ("post", "ignore") for c in CHOICES if c.key == key]
 CHOICE_WORD = {c.key: c.word for c in CHOICES}
 LABEL_TO_CHOICE = {c.label.lower(): c.key for c in CHOICES}
+
+def choices_for(mid, credits):
+    return CREDIT_CHOICES if mid in credits else CHOICES
 
 def choice_of(mid):
     return INSTR.get(mid, {}).get("choice", "")
@@ -821,6 +859,7 @@ def choice_counts(entries, choices=CHOICES):
     return {c.key: sum(1 for e in entries if choice_of(e["id"]) == c.key) for c in choices}
 
 def triage_line(numbered, choices=CHOICES):
+    numbered = [e for e in numbered if e["_sec"] != "credit"]
     counts = choice_counts(numbered, choices)
     undecided = sum(1 for e in numbered if e["_sec"] != "below" and not choice_of(e["id"]))
     below_open = sum(1 for e in numbered if e["_sec"] == "below" and not choice_of(e["id"]))
@@ -839,30 +878,37 @@ def instruction_fields(block):
             notes.append(line)
     return lines, "\n".join(notes).strip()
 
-def ticked_instruction(lines):
-    ticked, note, any_note, option = [], "", "", ""
+def ticked_instruction(lines, choices=CHOICES):
+    allowed = {c.key for c in choices}
+    ticked, refused, note, any_note, option = [], [], "", "", ""
     for l in lines:
         m = re.match(r"^- \[( |x|X)\] ([^:]+?)(?::\s*(.*))?$", l)
         if not m: continue
         label, opt = split_option(m.group(2))
         key = LABEL_TO_CHOICE.get(label.lower())
         if m.group(3) and not any_note: any_note = m.group(3).strip()
-        if m.group(1).lower() == "x" and key:
+        if m.group(1).lower() == "x" and key and key not in allowed: refused.append(label)
+        elif m.group(1).lower() == "x" and key:
             if not ticked: note, option = (m.group(3) or "").strip(), opt if takes_option(key) else ""
             ticked.append(key)
-    return ticked, note if ticked else any_note, option
+    return ticked, note if ticked else any_note, option, refused
+
+def choice_labels(choices):
+    return " and ".join(c.label for c in choices)
 
 def import_instruction_edits(run, ins, today):
     """Read Instruction blocks from the existing report.md. A block counts as a
     hand edit only when it differs from what the renderer last wrote
     (rendered-instructions.tsv), so a stale report never undoes a change made
     through --instruct. Returns the changed ids."""
-    snap = read_snapshot(run, "rendered-instructions.tsv")
+    snap, credits = read_snapshot(run, "rendered-instructions.tsv"), credit_ids(run)
     changed = set()
     for mid, blocks in read_card_blocks(run).items():
         lines, text = instruction_fields(blocks.get("Instruction", []))
         if not lines or snap.get(mid) == snapshot_key(lines, text): continue
-        ticked, note, option = ticked_instruction(lines)
+        ticked, note, option, refused = ticked_instruction(lines, choices_for(mid, credits))
+        if refused:
+            print(f"warning: finding with merged id {mid} is a credit; dropped the tick on {', '.join(refused)}: only {choice_labels(CREDIT_CHOICES)} apply", file=sys.stderr)
         choice, also = (ticked or [""])[0], ",".join(ticked[1:])
         if also:
             print(f"warning: finding with merged id {mid} has {len(ticked)} instructions ticked; using {choice}", file=sys.stderr)
@@ -974,12 +1020,13 @@ def parse_args():
 
 def apply_statuses(run, repo, nums, specs, today):
     global STATUS
-    STATUS = import_hand_edits(run, read_status(run), today)
+    STATUS = {mid: st for mid, st in import_hand_edits(run, read_status(run), today).items() if mid not in CREDITS}
     for spec in specs:
         m = re.match(r"^(#?\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
         if not m or m.group(2) not in STATUS_WORDS:
             sys.exit(f"bad --set {spec!r}; use N=fixed:<sha>, N=wont-fix:<reason>, N=deferred:<ref>, N=in-progress:<files>, N=open")
         mid = finding_id(m.group(1), nums)
+        if mid in CREDITS: sys.exit(f"bad --set {spec!r}; finding {m.group(1)} is a credit, which has no status")
         STATUS[mid] = {"status": m.group(2), "ref": (m.group(3) or "").strip(), "date": today}
         log_commits(run, repo, mid, STATUS[mid])
 
@@ -987,6 +1034,8 @@ def set_instruction(spec, nums, today):
     m = INSTRUCT_RE.match(spec.strip())
     if not m or (m.group(3) and not takes_option(m.group(2))): sys.exit(f"bad --instruct {spec!r}; use {instruct_usage()}")
     mid = finding_id(m.group(1), nums)
+    if m.group(2) != "none" and not any(c.key == m.group(2) for c in choices_for(mid, CREDITS)):
+        sys.exit(f"bad --instruct {spec!r}; finding {m.group(1)} is a credit: use {instruct_usage(CREDIT_CHOICES)}")
     INSTR[mid] = {**INSTR.get(mid, {}), "choice": "" if m.group(2) == "none" else m.group(2), "note": (m.group(4) or "").strip(), "date": today, "also": "",
                   "option": split_option("x" + (m.group(3) or ""))[1]}
     return mid
@@ -1010,7 +1059,7 @@ def apply_instructions(run, nums, instruct_specs, note_specs, today):
     for spec in instruct_specs: changed.add(set_instruction(spec, nums, today))
     # Ignore and Defer are decisions about the outcome: mirror them into status
     # when the finding is still open; undoing them reopens it.
-    for mid in changed: mirror_decision(mid, today)
+    for mid in changed - CREDITS: mirror_decision(mid, today)
     for spec in note_specs: add_note(spec, nums)
 
 def apply_posted(run, drafts, today):
@@ -1034,6 +1083,12 @@ def pr_links(merged):
     return links
 
 UNVERIFIED = {"verdict": "unverified", "confidence": 0, "severity": "", "note": ""}
+
+def credit_section(e, v):
+    if not v: return "unshown"
+    if v["verdict"] == "rejected" and not decided(e["id"]): return "rejected"
+    e["_conf"], e["_sev"], e["_v"] = v["confidence"] or e["confidence"], e["severity"], v
+    return "credit"
 
 def unverified_section(e):
     if e["id"] in PR_LINKS: dest = "look"
@@ -1077,6 +1132,7 @@ def section_of(e, v, a):
     if is_pr(e):
         e["_conf"], e["_sev"], e["_v"] = 100, "major", v or {"verdict": "", "confidence": 0, "severity": "", "note": ""}
         return "pr"
+    if is_credit(e): return credit_section(e, v)
     scope_of(e, {})
     return verified_section(e, v, a) if v else unverified_section(e)
 
@@ -1089,6 +1145,20 @@ def route_findings(merged, verdicts, a):
         if e["id"] not in linked: outcomes[section_of(e, verdicts.get(e["id"]), a)].append(e)
     unverified = [e for e in merged if not is_pr(e) and e["id"] not in verdicts]
     return {s.key: outcomes[s.key] for s in SECTIONS}, unverified, outcomes["rejected"], outcomes["hidden"]
+
+def is_posted(row):
+    return bool(row.get("kind")) and row.get("state") == "posted"
+
+def drop_overlapping_credits(routed):
+    defects = [d for key in DEFECT_SECTIONS for d in routed[key]]
+    kept, dropped = [], []
+    for c in routed["credit"]:
+        hit = next((d for d in defects if mf.same_lines(c, d)), None)
+        if hit and not is_posted(POSTED.get(c["id"], {})): dropped.append(c); continue
+        if hit: c["_overlaps"] = hit["id"]
+        kept.append(c)
+    routed["credit"] = kept
+    return dropped
 
 def priority(e):
     return (-SEV[e["_sev"]], -e["_conf"], e["file"], e["line"] or 0)
@@ -1175,9 +1245,10 @@ def section_lines(a, routed, ordered_areas, labels):
                 if sec in ("reopen", "pr", "fix") and i < len(es) - 1: out += ["---", ""]
     return out
 
-def about_lines(merged, verdicts, unverified, rejected, hidden_minor, numbered):
+def about_lines(merged, verdicts, unverified, rejected, hidden_minor, numbered, overlapping):
     low = len(hidden_minor) + sum(1 for e in unverified if e['severity'] == 'minor' or e['confidence'] < 40)
-    return ["## About this review", "", f"{len(merged)} findings were raised by the reviewers and merged; {len(verdicts)} were checked by a verifier and {len(rejected)} rejected. {low} minor or low-confidence findings are below the bar and listed only in merged.md. Refer to a finding by its number (\"finding {numbered[0]['_n'] if numbered else 1}\"); numbers are fixed for this run. Scores, lens attribution, and evidence: merged.md. Reviewer output: raw/. Verifier notes: verify/.", ""]
+    dropped = f" {plural(len(overlapping), 'credit')} dropped for overlapping a confirmed defect." if overlapping else ""
+    return ["## About this review", "", f"{len(merged)} findings were raised by the reviewers and merged; {len(verdicts)} were checked by a verifier and {len(rejected)} rejected. {low} minor or low-confidence findings are below the bar and listed only in merged.md.{dropped} Refer to a finding by its number (\"finding {numbered[0]['_n'] if numbered else 1}\"); numbers are fixed for this run. Scores, lens attribution, and evidence: merged.md. Reviewer output: raw/. Verifier notes: verify/.", ""]
 
 def sort_number_list(m):
     nums = sorted({int(x) for x in re.findall(r"\d+", m.group(2))})
@@ -1194,19 +1265,19 @@ def finish_text(text, wrap):
     text = wrap_markdown(text, wrap)
     return re.sub(r"\n{3,}", "\n\n", text)
 
-def render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor):
+def render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor, overlapping):
     title = f"Review of {a.target}"
     out = front_matter(a, title, routed) + [f"# {title}", "", "## Summary", "", read_text(a.summary, "(summary pending)"), ""]
     if RECON["label"]: out += since_lines(numbered, routed)
     out += ["## Findings at a glance", "", progress_line(numbered), "", triage_line(numbered), ""] + md_table(glance_rows(numbered, labels)) + [""]
     out += section_lines(a, routed, ordered_areas, labels)
     out += ["---", "", "## Not reviewed this run", "", read_text(a.not_reviewed, "(not provided)"), ""]
-    out += about_lines(merged, verdicts, unverified, rejected, hidden_minor, numbered)
+    out += about_lines(merged, verdicts, unverified, rejected, hidden_minor, numbered, overlapping)
     return finish_text("\n".join(out), a.wrap)
 
 def write_snapshots(run, gen_dir, text, numbered):
-    snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(STATUS.get(e['id'], {'status': 'open'}))}\n" for e in numbered),
-             "rendered-instructions.tsv": "".join(f"{e['id']}\t{instruction_key(INSTR.get(e['id']))}\n" for e in numbered),
+    snaps = {"rendered-status.tsv": "".join(f"{e['id']}\t{status_line(STATUS.get(e['id'], {'status': 'open'}))}\n" for e in numbered if e["id"] not in CREDITS),
+             "rendered-instructions.tsv": "".join(f"{e['id']}\t{instruction_key(INSTR.get(e['id']), choices_for(e['id'], CREDITS))}\n" for e in numbered),
              "rendered-posted.tsv": "".join(f"{mid}\t{flat(t)}\n" for mid, t in sorted(posted_blocks(card_blocks(text.split("\n"))).items()))}
     os.makedirs(gen_dir, exist_ok=True)
     for name, body in snaps.items():
@@ -1243,8 +1314,8 @@ def main():
     mf = load_merge_module()
     merged = read_findings(a.run, mf)
     verdicts, labels = read_verdicts(a.run), read_labels(a.run)
-    global NAMES, TITLES, RUN, RECON, PR_LINKS, IDNUM, TITLE_BY_ID
-    NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run, mf), a.run
+    global NAMES, TITLES, RUN, RECON, PR_LINKS, IDNUM, TITLE_BY_ID, CREDITS
+    NAMES, TITLES, RUN, CREDITS = read_plain_names(a.routing), report_titles(a.run, mf), a.run, credit_ids(a.run)
     nums = read_numbers(a.run)
     drafts = [posted_draft(spec, nums) for spec in a.posted]
     apply_statuses(a.run, a.repo, nums, a.set, today)
@@ -1255,13 +1326,14 @@ def main():
     warn_unlabeled_options(merged)
     RECON, PR_LINKS = read_reconcile(a.run), pr_links(merged)
     routed, unverified, rejected, hidden_minor = route_findings(merged, verdicts, a)
+    overlapping = drop_overlapping_credits(routed)
     prior_nums = {} if a.renumber else dict(nums)
     numbered, ordered_areas = number_sections(routed, prior_nums, labels)
     IDNUM = {e["id"]: e["_n"] for e in numbered}
     TITLE_BY_ID = {e["id"]: title_of(e, TITLES) for e in merged}
     check_posted_notes()
     if POSTED: write_posted(a.run, POSTED)
-    text = render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor)
+    text = render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor, overlapping)
     outp = write_report(a, text, numbered)
     write_numbers(a.run, numbered, prior_nums)
     print(f"report: {outp}; {section_counts(routed, ' ')}, unverified {len(unverified)}, rejected {len(rejected)}", file=sys.stderr)

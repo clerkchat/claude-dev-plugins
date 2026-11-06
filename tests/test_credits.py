@@ -1,0 +1,301 @@
+import os
+import sys
+import unittest
+
+from helpers import SCRIPTS, RunCase, run_ok, run_script
+
+sys.path.insert(0, SCRIPTS)
+import records
+
+render = records.load_script("render-report.py")
+sf = records.load_script("stale-findings.py")
+
+DATE = "2026-11-05"
+
+
+def defect(mid, path, line=3, extra=""):
+    return (
+        f"- id: {mid}\n  lens: correctness\n  severity: major\n  confidence: 90\n"
+        f"  file: {path}\n  line: {line}\n  claim: Finding {mid} breaks.\n  impact: It matters.\n  fix: Repair finding {mid}.\n{extra}"
+    )
+
+
+def credit(mid, path, line=20):
+    return (
+        f"- id: {mid}\n  lens: credit\n  slice: api\n  confidence: 90\n  file: {path}\n  line: {line}\n"
+        f"  title: Guards the retry\n  claim: Credit {mid} guards the retry before it sends.\n"
+        f"  context: The sibling handler sends twice.\n  evidence: read {path}\n"
+    )
+
+
+CONFIRMED = "verdict: confirmed | confidence: 90 | severity: major"
+
+
+class CreditCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run(defect(7, "a.py"), credit(9, "c.py"))
+
+    def write_run(self, *entries):
+        self.write_merged(*entries)
+        for entry in entries:
+            self.write(f"verify/{entry.split()[2]}.md", CONFIRMED)
+
+    def args(self, *extra):
+        return (self.run_dir, "--target", "t", "--repo", self.tmp, "--date", DATE, "--wrap", "0", *extra)
+
+    def render(self, *extra):
+        return run_ok("render-report", *self.args(*extra))
+
+    def render_fails(self, *extra):
+        code, out = run_script("render-report", *self.args(*extra))
+        self.assertEqual(code, 1)
+        return out
+
+    def report(self):
+        return self.read("report.md")
+
+    def card(self, number):
+        return self.report().split(f"#### {number}. ", 1)[1].split("\n#### ", 1)[0].split("\n## ", 1)[0]
+
+    def edit_report(self, old, new):
+        text = self.report()
+        self.assertIn(old, text)
+        self.write("report.md", text.replace(old, new, 1))
+
+    def instruction(self, mid):
+        return render.read_instructions(self.run_dir).get(mid, {})
+
+    def status(self, mid):
+        return render.read_status(self.run_dir).get(mid)
+
+
+class CreditsSectionTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.out = self.render()
+
+    def test_follows_previously_declined_and_precedes_below_the_bar(self):
+        keys = [s.key for s in render.SECTIONS]
+        self.assertEqual(keys[keys.index("declined") + 1 : keys.index("below") + 1], ["credit", "below"])
+
+    def test_heads_the_section(self):
+        self.assertIn("\n## Credits\n", self.report())
+
+    def test_carries_the_counts_in_its_intro(self):
+        self.assertIn("1 credit, 0 marked Post.", self.report())
+
+    def test_numbers_the_credit_in_its_section(self):
+        self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
+
+    def test_counts_credits_in_the_front_matter(self):
+        self.assertIn(", credits: 1, below: 0 }", self.report())
+
+    def test_names_the_count_in_the_summary_line(self):
+        self.assertIn("credits 1", self.out)
+
+    def test_shows_credit_as_the_glance_action(self):
+        self.assertRegex(self.report(), r"\| 2 +\| Guards the retry +\|.*\| credit +\|")
+
+    def test_leaves_credits_out_of_the_triage_line(self):
+        self.assertIn("0 post, 1 not decided.", self.report())
+
+
+class CreditCardTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.text = self.card(2)
+
+    def test_names_the_kind_and_area(self):
+        self.assertIn("**Credit** · Api", self.text)
+
+    def test_names_the_focus(self):
+        self.assertIn("Focus: credits", self.text)
+
+    def test_shows_the_claim(self):
+        self.assertIn("Credit 9 guards the retry before it sends.", self.text)
+
+    def test_shows_the_context(self):
+        self.assertIn("##### Context\n\nThe sibling handler sends twice.", self.text)
+
+    def test_has_no_status_line(self):
+        self.assertNotIn("- [ ] Open", self.text)
+
+    def test_has_no_defect_sections(self):
+        self.assertNotRegex(self.text, r"Why it matters|How it goes wrong|Recommendation")
+
+    def test_lists_post_and_ignore_only(self):
+        self.assertIn("##### Instruction\n\n- [ ] Post\n- [ ] Ignore\n\nNotes:", self.text)
+
+
+class CreditSecondOpinionTest(CreditCase):
+    def test_shows_the_verifier_note(self):
+        self.write("verify/9.md", "verdict: adjusted | confidence: 80 | note: True for one path only.")
+        self.render()
+        self.assertIn("##### Second opinion\n\nTrue for one path only.", self.card(2))
+
+
+class CreditInstructTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+
+    def test_sets_post(self):
+        self.render("--instruct", "2=post:say it warmly")
+        self.assertEqual(self.instruction(9)["choice"], "post")
+
+    def test_refuses_another_choice_naming_the_two(self):
+        self.assertIn("is a credit: use N=post[:note], N=ignore[:note], N=none", self.render_fails("--instruct", "2=fix"))
+
+    def test_refuses_a_status(self):
+        self.assertIn("is a credit, which has no status", self.render_fails("--set", "2=fixed:abc1234"))
+
+
+class CreditIgnoreTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.render("--instruct", "2=ignore")
+
+    def test_records_the_instruction(self):
+        self.assertEqual(self.instruction(9)["choice"], "ignore")
+
+    def test_sets_no_status(self):
+        self.assertIsNone(self.status(9))
+
+    def test_writes_no_rendered_status_row(self):
+        self.assertNotIn("9\t", self.read("rendered-status.tsv"))
+
+
+class CreditStatusRowTest(CreditCase):
+    def test_drops_a_status_row_for_a_credit(self):
+        self.write_status({9: ("fixed", "abc")})
+        self.render()
+        self.assertIsNone(self.status(9))
+
+
+class CreditTickTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+
+    def test_imports_a_ticked_post_as_an_instruction(self):
+        self.edit_report("- [ ] Post\n- [ ] Ignore", "- [x] Post\n- [ ] Ignore")
+        self.render()
+        self.assertEqual(self.instruction(9)["choice"], "post")
+
+    def test_does_not_import_a_ticked_post_as_a_status(self):
+        self.edit_report("- [ ] Post\n- [ ] Ignore", "- [x] Post\n- [ ] Ignore")
+        self.render()
+        self.assertIsNone(self.status(9))
+
+    def test_drops_a_tick_on_another_label_with_a_warning(self):
+        self.edit_report("- [ ] Post\n- [ ] Ignore", "- [ ] Post\n- [ ] Ignore\n- [x] Discuss")
+        self.assertIn("merged id 9 is a credit; dropped the tick on Discuss: only Post and Ignore apply", self.render())
+
+    def test_leaves_the_instruction_unset_after_the_dropped_tick(self):
+        self.edit_report("- [ ] Post\n- [ ] Ignore", "- [ ] Post\n- [ ] Ignore\n- [x] Discuss")
+        self.render()
+        self.assertEqual(self.instruction(9).get("choice", ""), "")
+
+
+class OverlapCase(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run(defect(7, "a.py"), credit(9, "a.py", line=4))
+
+
+class CreditOverlappingADefectTest(OverlapCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+
+    def test_is_not_numbered(self):
+        self.assertNotIn("\t9\t", self.read("numbers.tsv"))
+
+    def test_is_counted_in_about_this_review(self):
+        self.assertIn("1 credit dropped for overlapping a confirmed defect.", self.report())
+
+
+class PostedCreditOverlappingADefectTest(OverlapCase):
+    def setUp(self):
+        super().setUp()
+        render.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "path": "a.py", "line": "4"}})
+        self.render()
+
+    def test_is_kept(self):
+        self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
+
+    def test_names_the_finding_it_overlaps(self):
+        self.assertIn("Overlaps finding 1.", self.card(2))
+
+
+class CreditOverlappingAProposalTest(CreditCase):
+    def test_is_kept(self):
+        self.write_run(defect(7, "a.py", extra="  debt: cleanup\n"), credit(9, "a.py", line=4))
+        self.render()
+        self.assertIn("\t9\tcredit\n", self.read("numbers.tsv"))
+
+
+class RejectedCreditTest(CreditCase):
+    def test_is_not_numbered(self):
+        self.write("verify/9.md", "verdict: rejected | confidence: 20 | note: not true")
+        self.render()
+        self.assertNotIn("\t9\t", self.read("numbers.tsv"))
+
+
+class LoadFindingsTest(CreditCase):
+    def test_hides_credits(self):
+        self.assertEqual(list(sf.load_findings(self.run_dir)), [7])
+
+
+class ReconcileCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.prev = self.run_dir
+        self.cur = self.path("cur")
+        self.write_merged(defect(7, "a.py"), credit(9, "c.py"))
+        self.write_numbers({7: "fix", 9: "credit"})
+
+
+class ReconcileUnmatchedTest(ReconcileCase):
+    def setUp(self):
+        super().setUp()
+        os.makedirs(self.cur)
+        with open(os.path.join(self.cur, "merged.md"), "w") as f:
+            f.write("```findings\n```\n")
+        run_ok("reconcile", self.prev, self.cur)
+        with open(os.path.join(self.cur, "reconcile", "unmatched.tsv")) as f:
+            self.rows = [line.split("\t")[0] for line in f.read().splitlines()[1:]]
+
+    def test_leaves_an_unmatched_credit_out(self):
+        self.assertNotIn("9", self.rows)
+
+    def test_keeps_an_unmatched_defect(self):
+        self.assertIn("7", self.rows)
+
+
+class ReconcileMatchTest(ReconcileCase):
+    def test_never_matches_a_credit_with_a_defect(self):
+        os.makedirs(self.cur)
+        with open(os.path.join(self.cur, "merged.md"), "w") as f:
+            f.write("```findings\n- id: 1\n  lens: credit\n  confidence: 90\n  file: a.py\n  line: 3\n  claim: Finding 7 breaks.\n```\n")
+        run_ok("reconcile", self.prev, self.cur)
+        with open(os.path.join(self.cur, "reconcile", "matches.tsv")) as f:
+            self.assertEqual(f.read().splitlines()[1:], [])
+
+
+class FinalReportTest(RunCase):
+    def test_names_the_credit_lens_as_left_out_by_design(self):
+        self.write_merged(defect(7, "a.py"))
+        self.write_numbers({7: "fix"})
+        self.write_target("branch", "a" * 40, "b" * 40)
+        self.write("raw/security.md", "")
+        run_ok("final-report", self.run_dir)
+        left_out = next(l for l in self.read("final-review-report.md").splitlines() if l.startswith("Left out by design"))
+        self.assertIn("credits", left_out)
+
+
+if __name__ == "__main__":
+    unittest.main()

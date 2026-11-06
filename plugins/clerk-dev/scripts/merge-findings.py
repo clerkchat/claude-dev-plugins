@@ -32,6 +32,13 @@ LIST_FIELDS = {"steps"}
 ORIGIN_RANK = {"new": 3, "worsened": 2, "existing": 1}
 SIZE_RANK = {"trivial": 1, "small": 2, "medium": 3, "large": 4}
 DEBT_KINDS = ("cleanup", "simplify", "refactor")
+CREDIT_FIELDS = ("id", "lens", "slice", "confidence", "file", "line", "title", "claim", "context", "snippet", "evidence", "sources")
+
+def lens_set(text):
+    return {l.strip() for l in re.split(r"[,/]", text) if l.strip()}
+
+def is_credit(e):
+    return e.get("lenses", lens_set(str(e.get("lens", "")))) == {"credit"}
 
 def parse_blocks(text):
     blocks, inside, buf = [], False, []
@@ -90,7 +97,7 @@ def norm(e):
     e["end_line"] = int(rng.group(2)) if rng else (num(e.get("end_line")) or e["line"])
     e["severity"] = (e.get("severity","minor").lower().strip())
     if e["severity"] not in SEVERITY_RANK: e["severity"] = "minor"
-    e["lenses"] = {l.strip() for l in re.split(r"[,/]", e.get("lens","?")) if l.strip()}
+    e["lenses"] = lens_set(e.get("lens","?"))
     e["slices"] = {s.strip() for s in re.split(r"[,/]", e.get("slice","whole")) if s.strip()}
     e["evidence_all"] = [e.get("evidence","")] if e.get("evidence") else []
     e["sources"] = [e["_source"]]
@@ -111,7 +118,7 @@ def same_lines(a, b, slack=3):
     return a["line"] <= b["end_line"] + slack and b["line"] <= a["end_line"] + slack
 
 def same_kind(a, b):
-    return bool(a["debt"]) == bool(b["debt"])
+    return bool(a["debt"]) == bool(b["debt"]) and is_credit(a) == is_credit(b)
 
 def overlaps(a, b, slack=3):
     return same_lines(a, b, slack) and same_kind(a, b)
@@ -139,7 +146,7 @@ def render_readable(merged, title, pending, per_file):
     out += [f"Reviewers finished: {done}. Findings: {len(merged)}.", ""]
     groups=[("Fix before merging", lambda m: m["severity"] in ("blocker","major")), ("Worth a look", lambda m: m["severity"]=="minor")]
     for heading, pred in groups:
-        items=[m for m in merged if pred(m)]
+        items=[m for m in merged if pred(m) and not is_credit(m)]
         if not items: continue
         out += [f"## {heading}", ""]
         for m in items:
@@ -149,6 +156,18 @@ def render_readable(merged, title, pending, per_file):
                 out += [f"Suggested: {m['fix']}", ""]
     out += ["Scores, lens attribution, and evidence: merged.md. Raw reviewer output: raw/.", ""]
     return "\n".join(out)
+
+def entry_text(i, m):
+    rng = f"{m['line']}" + (f"\n  end_line: {m['end_line']}" if m["end_line"] and m["end_line"] != m["line"] else "")
+    fields = [("id", i), ("lens", ", ".join(sorted(m["lenses"]))), ("slice", ", ".join(sorted(m["slices"]))), ("severity", m["severity"]),
+              ("confidence", m["confidence"]), ("file", m["file"]), ("line", rng), ("title", m.get("title", "")), ("origin", m["origin"]),
+              ("fix_size", m["fix_size"]), ("follow_up", m["follow_up"] or "none")]
+    fields += ([("debt", m["debt"])] if m["debt"] else []) + ([("saves", f"~{m['saves']}")] if m["saves"] else [])
+    fields += [("claim", m.get("claim", "")), ("context", m.get("context", "") or m.get("what_changed", "")), ("scenario", m.get("scenario", "")),
+               ("steps", m.get("steps", "").replace("\n", "\n    ")), ("impact", m.get("impact", "")), ("uncertainty", m.get("uncertainty", "")),
+               ("snippet", m.get("snippet", "")), ("fix", m.get("fix", "")), ("evidence", " | ".join(m["evidence_all"])), ("sources", ", ".join(m["sources"]))]
+    if is_credit(m): fields = [(k, v) for k, v in fields if k in CREDIT_FIELDS]
+    return "- " + "\n  ".join(f"{k}: {v}" for k, v in fields) + "\n"
 
 def main():
     ap = argparse.ArgumentParser()
@@ -178,10 +197,7 @@ def main():
     out.append("per file: " + ", ".join(f"{k} {v}" for k,v in per_file.items()) + "\n")
     out.append("merges per lens: " + (", ".join(f"{k} {v}" for k,v in sorted(merges_by_lens.items())) or "none") + "\n")
     out.append("```findings")
-    for i, m in enumerate(merged, 1):
-        rng = f"{m['line']}" + (f"\n  end_line: {m['end_line']}" if m["end_line"] and m["end_line"] != m["line"] else "")
-        debt = (f"\n  debt: {m['debt']}" if m["debt"] else "") + (f"\n  saves: ~{m['saves']}" if m["saves"] else "")
-        out.append(f"- id: {i}\n  lens: {', '.join(sorted(m['lenses']))}\n  slice: {', '.join(sorted(m['slices']))}\n  severity: {m['severity']}\n  confidence: {m['confidence']}\n  file: {m['file']}\n  line: {rng}\n  title: {m.get('title','')}\n  origin: {m['origin']}\n  fix_size: {m['fix_size']}\n  follow_up: {m['follow_up'] or 'none'}{debt}\n  claim: {m.get('claim','')}\n  context: {m.get('context','') or m.get('what_changed','')}\n  scenario: {m.get('scenario','')}\n  steps: {m.get('steps','').replace(chr(10), chr(10)+'    ')}\n  impact: {m.get('impact','')}\n  uncertainty: {m.get('uncertainty','')}\n  snippet: {m.get('snippet','')}\n  fix: {m.get('fix','')}\n  evidence: {' | '.join(m['evidence_all'])}\n  sources: {', '.join(m['sources'])}\n")
+    out += [entry_text(i, m) for i, m in enumerate(merged, 1)]
     out.append("```")
     text = "\n".join(out)
     if a.out: open(a.out,"w",encoding="utf-8").write(text)

@@ -711,11 +711,8 @@ def area_view(wt, out, name, logs):
         steps.append(f"Roll its {len(decs)} decisions into a design that cites them.")
     return steps
 
-def is_posted(row):
-    return bool(row.get("kind")) and row.get("state") == "posted"
-
 def awaits_posting(row, note):
-    return not is_posted(row) or rr.stale_text(row, note)
+    return not rr.is_posted(row) or rr.stale_text(row, note)
 
 def finding_groups(run, status, instr, numbers):
     sections = {}

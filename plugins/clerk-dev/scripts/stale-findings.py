@@ -59,7 +59,7 @@ def load_findings(run):
     for block in mf.parse_blocks(text):
         for e in mf.parse_entries(block, "merged"):
             mid = re.sub(r"\D", "", str(e.get("id", "")))
-            if mid: out[int(mid)] = e
+            if mid and not mf.is_credit(e): out[int(mid)] = e
     return out
 
 def state(run):

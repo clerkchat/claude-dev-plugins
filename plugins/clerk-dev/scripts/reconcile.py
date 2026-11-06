@@ -73,6 +73,9 @@ def words(e):
     t = (e.get("title", "") + " " + e.get("claim", "")).lower()
     return {w for w in re.findall(r"[a-z_][a-z0-9_]{2,}", t) if w not in STOP}
 
+def comparable(a, b):
+    return mf.is_credit(a) == mf.is_credit(b)
+
 def jac(a, b):
     return len(a & b) / len(a | b) if a and b else 0.0
 
@@ -138,6 +141,7 @@ def append_mode(new_path, cur, judged=None):
     for nid, n in new.items():
         nw = words(n); scored = []
         for cid, c in carried.items():
+            if not comparable(n, c): continue
             sim = jac(nw, words(c))
             same = n["file"] == c["file"]
             near = same and n["line"] and c["line"] and abs(n["line"] - c["line"]) <= 15
@@ -260,6 +264,7 @@ def main():
         for cid, c in cur.items():
             cw = words(c)
             for pid, p in prev.items():
+                if not comparable(c, p): continue
                 sim = jac(cw, words(p))
                 same_file = c["file"] == p["file"]
                 near = same_file and c["line"] and p["line"] and abs(c["line"] - p["line"]) <= 15
@@ -282,10 +287,10 @@ def main():
     with open(os.path.join(rd, "unmatched.tsv"), "w") as fh:
         fh.write("prev_id\tprev_number\tprev_status\tprev_ref\tlocation\ttitle\n")
         for pid, p in sorted(prev.items()):
-            if pid in matched_prev or pid not in pnum: continue
+            if pid in matched_prev or pid not in pnum or mf.is_credit(p): continue
             n, s, ref = pinfo(pid)
             fh.write(f"{pid}\t{n}\t{s}\t{ref}\t{p['file']}:{p['line']}\t{p.get('title') or p.get('claim','')[:80]}\n")
     print(f"previous {label}: {len(matches)} matched, {len(cands)} candidates for judging, "
-          f"{sum(1 for pid in prev if pid not in matched_prev and pid in pnum)} reported earlier and not matched", file=sys.stderr)
+          f"{sum(1 for pid, p in prev.items() if pid not in matched_prev and pid in pnum and not mf.is_credit(p))} reported earlier and not matched", file=sys.stderr)
 
 if __name__ == "__main__": main()
