@@ -425,6 +425,18 @@ def read_appended_map(run):
 def write_appended_map(run, amap):
     write_keyed(appended_map_path(run), APPENDED_MAP_FIELDS, {new: {"merged_id": str(mid)} for new, mid in amap.items()}, header="new_id", order=list)
 
+CARRIED = ("carried", "reopened")
+
+def previous_run(run):
+    label = read_text(reconcile_path(run, "previous.txt"))
+    return os.path.join(os.path.dirname(os.path.realpath(run)), label) if label else ""
+
+def found_on(run, mid):
+    m = read_matches(run).get(mid)
+    if not (m and m["how"] in CARRIED): return reviewed_head(run)
+    prev = previous_run(run)
+    return found_on(prev, merged_key(m["prev_id"])) if os.path.isdir(prev) else ""
+
 def read_reconcile(run):
     return {"label": read_text(reconcile_path(run, "previous.txt")), "matches": read_matches(run), "prior": read_prior(run),
             "since": read_since(run), "unmatched": [{"prev_id": pid, **row} for pid, row in read_unmatched(run).items()]}

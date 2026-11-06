@@ -289,9 +289,16 @@ a file, or the review body, with any fallback named) and warnings for
 mentions, issue links, and anything that looks internal or secret. On your yes
 it adds them to your pending GitHub review, which only you see until you
 submit it; posting again skips what is already there and updates what you
-changed. You choose the verdict: Comment is submitted from the session, but
-Approve and Request changes are commands you run yourself with `!`, and they
-ask you to type the pull request number at the terminal.
+changed in that pending review. A change to a comment of a review you already
+submitted is public at once, so posting leaves it alone and the preview lists
+it under its own heading; sending it is a command you run yourself with `!`,
+which asks you to type the pull request number at the terminal. You choose the
+verdict: Comment is submitted from the session, but Approve and Request changes
+are commands you run the same way.
+
+A finding carried into a re-review after the author pushed is posted where its
+lines are now; when the commits since changed those lines, it goes on the file
+instead, and the preview says so.
 
 A posted finding keeps its thread: the next review links it back to the card
 and shows the author's replies there. Once you mark it fixed, the report says

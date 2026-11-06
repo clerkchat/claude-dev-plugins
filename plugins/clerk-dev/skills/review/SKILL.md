@@ -1283,7 +1283,7 @@ gone from the pull request, or kept open. Closing replies to the author and
 notifies them, so it is outward-facing like posting: the user is asked every
 time, and the user runs the close at a terminal, confirming it there. What
 holds: `post-review.py` asks at the terminal before it approves, requests
-changes, or closes threads; no session, builder, verifier, or other subagent
+changes, closes threads, or changes a published comment; no session, builder, verifier, or other subagent
 runs a GitHub write itself (`gh pr review`, `gh pr comment`, a write through
 `gh api`, or one from inline Python), and no flow closes a thread without the
 question. The skill's allowed tools pre-approve only reading the pull request
@@ -1397,9 +1397,12 @@ length, a suggestion or not), and a placement in it (`on <path>:<line>[-<line>]`
 drafted text becomes stale and the render says to redraft it; an edited text
 stands, and the render warns; relay that warning. Once posted, the block adds
 where it went ("Posted on `path:12-14`, [comment](url).", or "in the review
-body"), and "changed since posting" after a later edit, which the next post
-sends as an update of that comment (of the review's body, for one in the body
-of a submitted review); then the thread as step 7b last saw it,
+body"), and "changed since posting" after a later edit. The next post sends
+that edit as an update of the comment while the comment is in the pending
+review; once its review is submitted, the comment is public, and only
+`--update-published N`, which the user runs at a terminal, changes it (or that
+review's body, for one in the body of a submitted review); then the thread as
+step 7b last saw it,
 with the author's replies and its state, worded as on a pull request comment's
 card. A card with a posted comment keeps its Posted block when it is no longer
 marked Post, as after a re-review. Post leaves the status alone. The

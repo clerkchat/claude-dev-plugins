@@ -130,33 +130,139 @@ class ReadHunksTest(unittest.TestCase):
         self.assertEqual(post.read_hunks(patch), {"x": [(1, 3), (10, 10)]})
 
 
-class AfterAnIncrementalReviewTest(PostCase):
+def source(changes=None, above=()):
+    lines = {i: f"line {i}" for i in range(1, 21)}
+    return "".join(f"{l}\n" for l in [*above, *{**lines, 10: "first review 10", **(changes or {})}.values()])
+
+
+class ShiftedTest(unittest.TestCase):
+    def test_moves_a_line_down_by_the_lines_added_above_it(self):
+        self.assertEqual(post.shifted([(2, 0, 3, 5)], 10, 12), (15, 17))
+
+    def test_moves_a_line_up_by_the_lines_removed_above_it(self):
+        self.assertEqual(post.shifted([(2, 3, 1, 0)], 10, 10), (7, 7))
+
+    def test_leaves_a_line_above_every_change(self):
+        self.assertEqual(post.shifted([(30, 1, 30, 4)], 10, 10), (10, 10))
+
+    def test_finds_no_line_when_a_change_overlaps_the_range(self):
+        self.assertIsNone(post.shifted([(12, 1, 12, 1)], 10, 13))
+
+    def test_finds_no_line_when_lines_were_added_inside_the_range(self):
+        self.assertIsNone(post.shifted([(11, 0, 12, 2)], 10, 13))
+
+
+class IncrementalCase(PostCase):
     def setUp(self):
         super().setUp()
-        repo = init_repo(self.path("work"), with_origin=False)
-        self.commit_lines(repo, {"src/a.py": 20, "src/b.py": 20}, "pr base")
-        self.ctx["merge_base"] = repo.git("rev-parse", "HEAD")
-        first = self.commit_lines(repo, {"src/a.py": 20}, "first review", changed=10)
-        self.ctx["head"] = self.commit_lines(repo, {"src/b.py": 20}, "re-review", changed=5)
-        self.write_target("pr 7", first, self.ctx["head"])
-        self.write("patch/all.patch", repo.git("diff", first, self.ctx["head"]) + "\n")
-        self.repo = repo.path
+        self.git = init_repo(self.path("work"), with_origin=False)
+        self.ctx["merge_base"] = self.commit("pr base", {"src/a.py": source({10: "line 10"}), "src/b.py": source()})
+        self.first = self.commit("first review", {"src/a.py": source()})
         self.pr_diff.side_effect = REAL_PR_PATCH
         self.write_merged(finding(1, "src/a.py", "10"))
+
+    def commit(self, subject, files):
+        for name, text in files.items(): write_file(os.path.join(self.git.path, name), text)
+        self.git.git("add", "-A")
+        self.git.git("commit", "-qm", subject)
+        return self.git.git("rev-parse", "HEAD")
+
+    def review_at(self, subject, files):
+        self.ctx["head"] = self.commit(subject, files)
+        self.write_target("pr 7", self.first, self.ctx["head"])
+
+    def main(self, *args):
+        return super().main(*args, "--repo", self.git.path)
+
+    def anchor_of(self, mid):
+        return {k: self.thread_vars(mid).get(k) for k in ("subjectType", "line")}
+
+
+class AfterAnIncrementalReviewTest(IncrementalCase):
+    def setUp(self):
+        super().setUp()
+        self.review_at("re-review", {"src/b.py": source({5: "re-review 5"})})
         self.mark(1)
 
-    def commit_lines(self, repo, files, subject, changed=None):
-        for name, count in files.items():
-            write_file(os.path.join(repo.path, name), "".join(f"{subject if i == changed else 'line'} {i}\n" for i in range(1, count + 1)))
-        repo.git("add", "-A")
-        repo.git("commit", "-qm", subject)
-        return repo.git("rev-parse", "HEAD")
+    def test_anchors_a_finding_of_this_run_on_its_line_in_the_pull_requests_diff(self):
+        self.assertEqual(self.anchor_of(1), {"subjectType": "LINE", "line": 10})
 
-    def calls(self, *args):
-        return super().calls("--repo", self.repo, *args)
 
-    def test_anchors_a_carried_finding_on_its_line_in_the_pull_requests_diff(self):
-        self.assertEqual({k: self.thread_vars(1).get(k) for k in ("subjectType", "line")}, {"subjectType": "LINE", "line": 10})
+def carried(run, label):
+    run_files.write_previous(run, label)
+    run_files.write_matches(run, {1: {"prev_id": "1", "how": "carried"}})
+
+
+def earlier_run(path, head, carried_from=None):
+    write_file(os.path.join(path, "target.txt"), f"pr 7\n{MERGE_BASE}\n{head}\n")
+    if carried_from: carried(path, carried_from)
+
+
+class CarriedFindingCase(IncrementalCase):
+    def setUp(self):
+        super().setUp()
+        earlier_run(self.path("earlier"), self.first)
+        carried(self.run_dir, "earlier")
+
+    def lines_added_above(self):
+        self.review_at("re-review", {"src/a.py": source(above=("new 1", "new 2", "new 3", "new 4", "new 5"))})
+
+
+class WhenLinesWereAddedAboveACarriedFindingTest(CarriedFindingCase):
+    def setUp(self):
+        super().setUp()
+        self.lines_added_above()
+
+    def test_anchors_it_where_its_lines_are_now(self):
+        self.mark(1)
+        self.assertEqual(self.anchor_of(1), {"subjectType": "LINE", "line": 15})
+
+    def test_anchors_a_placement_in_its_note_on_the_reviewed_commit(self):
+        self.mark(1, note="on src/a.py:12")
+        self.assertEqual(self.anchor_of(1), {"subjectType": "LINE", "line": 12})
+
+
+class WhenACarriedFindingWasCarriedBeforeTest(CarriedFindingCase):
+    def setUp(self):
+        super().setUp()
+        self.lines_added_above()
+        earlier_run(self.path("between"), self.ctx["head"], carried_from="earlier")
+        run_files.write_previous(self.run_dir, "between")
+        self.mark(1)
+
+    def test_maps_its_lines_from_the_run_that_found_it(self):
+        self.assertEqual(self.anchor_of(1), {"subjectType": "LINE", "line": 15})
+
+
+class WhenTheCodeAtACarriedFindingsLinesChangedTest(CarriedFindingCase):
+    def setUp(self):
+        super().setUp()
+        self.review_at("re-review", {"src/a.py": source({10: "re-review 10"})})
+        self.mark(1, text=PostedTextTest.SUGGESTION)
+
+    def test_falls_back_to_a_file_comment(self):
+        self.assertEqual(self.thread_vars(1)["subjectType"], "FILE")
+
+    def test_sends_its_suggestion_as_a_plain_fence(self):
+        self.assertEqual(self.thread_vars(1)["body"], "Use this:\n```\nfixed()\n```")
+
+    def test_flags_it_in_the_preview(self):
+        self.assertIn(f"  fallback: the code at the found lines (src/a.py:10 on {self.first[:9]}) changed since; sent on the file",
+                      self.main())
+
+
+class WhenTheRunThatFoundACarriedFindingIsGoneTest(CarriedFindingCase):
+    def setUp(self):
+        super().setUp()
+        self.lines_added_above()
+        run_files.write_previous(self.run_dir, "deleted")
+        self.mark(1)
+
+    def test_falls_back_to_a_file_comment(self):
+        self.assertEqual(self.thread_vars(1)["subjectType"], "FILE")
+
+    def test_says_why_in_the_preview(self):
+        self.assertIn("fallback: src/a.py:10 was found on a commit this clone cannot compare with the reviewed", self.main())
 
 
 class AnchorTest(PostCase):
@@ -555,17 +661,55 @@ class RepostTest(PostCase):
         self.posted_row(1, state="edited")
         self.assertEqual(self.call_for(1)["variables"], {"pullRequestReviewCommentId": "PRRC_901", "body": "Finding 1 text."})
 
-    def test_updates_a_comment_of_a_submitted_review_through_rest(self):
+
+
+class PublishedCase(PostCase):
+    def update_calls(self, ids="1"):
+        self.main("--update-published", ids, "--dry-run")
+        with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
+            return json.load(fh)["calls"]
+
+
+class WhenAPublishedCommentChangedTest(PublishedCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
         self.posted_row(1, state="edited")
-        self.assertEqual((self.call_for(1)["method"], self.call_for(1)["path"]), ("PATCH", "repos/acme/widgets/pulls/comments/901"))
+
+    def test_post_leaves_it_as_it_is(self):
+        self.assertNotIn(1, [c.get("finding") for c in self.calls()])
+
+    def test_post_says_it_was_not_sent(self):
+        self.calls()
+        self.assertIn("not sent: finding 1 changed since posting, and GitHub already shows the comment; --update-published 1", self.err)
+
+    def test_preview_lists_it_under_its_own_heading(self):
+        self.assertIn("published; changes on GitHub at once:\nfinding 1: Finding 1\n", self.main())
+
+    def test_preview_names_the_comment_it_changes(self):
+        self.assertIn("changed since posting: --update-published 1 updates its published comment https://gh/c/901", self.main())
+
+    def test_preview_leaves_it_out_of_the_comments_for_the_pending_review(self):
+        self.assertNotIn("finding 1:", self.main().split("published; changes on GitHub at once:")[0])
+
+    def test_update_published_edits_it_through_rest(self):
+        self.assertEqual(self.update_calls(), [{"method": "PATCH", "path": "repos/acme/widgets/pulls/comments/901",
+                                                "fields": {"body": "Finding 1 text."}, "finding": 1}])
+
+    def test_update_published_refuses_a_finding_whose_comment_is_not_published_and_changed(self):
+        self.assertIn("nothing sent; not a published comment changed since posting: finding 3",
+                      self.refusal("--update-published", "1,3", "--dry-run"))
 
 
-class SubmittedBodyCommentCase(PostCase):
+class SubmittedBodyCommentCase(PublishedCase):
     def setUp(self):
         super().setUp()
         self.ctx["review_ids"] = {"54", "55"}
         self.mark(1, note="in the review body", text="Finding 1 reworded.")
-        self.posted_row(1, state="edited", kind="body", path="", line="", end_line="", side="", thread_id="", comment_id="",
+        self.body_comment(1)
+
+    def body_comment(self, mid):
+        self.posted_row(mid, state="edited", kind="body", path="", line="", end_line="", side="", thread_id="", comment_id="",
                         url="https://gh/r/54", review_id="54")
 
 
@@ -573,25 +717,44 @@ class WhenABodyCommentOfASubmittedReviewChangedTest(SubmittedBodyCommentCase):
     def setUp(self):
         super().setUp()
         self.pend()
+        self.mark(3)
 
-    def body_of(self, review_id):
-        return next(c["fields"]["body"] for c in self.calls() if c.get("path") == f"repos/acme/widgets/pulls/7/reviews/{review_id}")
+    def body_of(self, review_id, calls):
+        return next(c["fields"]["body"] for c in calls if c.get("path") == f"repos/acme/widgets/pulls/7/reviews/{review_id}")
 
-    def test_puts_the_new_text_in_the_body_of_that_review(self):
-        self.assertEqual(self.body_of(54), post.DEFAULT_BODY + "\n\nFinding 1 reworded.")
+    def test_update_published_puts_the_new_text_in_the_body_of_that_review(self):
+        self.assertEqual(self.body_of(54, self.update_calls()), post.DEFAULT_BODY + "\n\nFinding 1 reworded.")
 
-    def test_keeps_the_text_saved_from_that_review_above_it(self):
+    def test_update_published_keeps_the_text_saved_from_that_review_above_it(self):
         self.write("posted/pending-54.md", "My summary.")
-        self.assertEqual(self.body_of(54), "My summary.\n\nFinding 1 reworded.")
+        self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
 
-    def test_leaves_it_out_of_the_pending_review(self):
-        self.assertEqual(self.body_of(55), post.DEFAULT_BODY)
+    def test_post_leaves_that_review_as_it_is(self):
+        self.assertNotIn("repos/acme/widgets/pulls/7/reviews/54", [c.get("path") for c in self.calls()])
 
-    def test_says_it_updates_the_body_of_that_review(self):
-        self.assertIn("changed since posting: --post updates the body of submitted review 54", self.main())
+    def test_post_leaves_it_out_of_the_pending_review(self):
+        self.assertEqual(self.body_of(55, self.calls()), post.DEFAULT_BODY)
 
-    def test_shows_the_new_body_of_that_review(self):
-        self.assertIn("body of submitted review 54:\n    Comments from my review of this pull request.\n\n    Finding 1 reworded.", self.main())
+    def test_says_update_published_updates_the_body_of_that_review(self):
+        self.assertIn("changed since posting: --update-published 1 updates the body of submitted review 54", self.main())
+
+    def test_shows_the_new_body_of_that_review_under_published(self):
+        self.assertRegex(self.main(), r"published; changes on GitHub at once:\n(.*\n)*body of submitted review 54:\n"
+                                      r"    Comments from my review of this pull request\.\n\n    Finding 1 reworded\.")
+
+
+class WhenTwoBodyCommentsOfASubmittedReviewChangedTest(SubmittedBodyCommentCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(2, note="in the review body")
+        self.body_comment(2)
+
+    def test_refuses_to_send_one_without_the_other(self):
+        self.assertIn("the body of submitted review 54 also holds the changed text of finding 2; name it too",
+                      self.refusal("--update-published", "1", "--dry-run"))
+
+    def test_sends_one_body_for_both(self):
+        self.assertEqual([c["path"] for c in self.update_calls("1,2")], ["repos/acme/widgets/pulls/7/reviews/54"])
 
 
 class DeletedOnGitHubTest(PostCase):
@@ -760,6 +923,38 @@ class WhenSubmittingAsCommentTest(ConfirmedSubmitCase):
         self.assertEqual(self.writes(), 1)
 
 
+class ConfirmedUpdatePublishedCase(PublishedCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.posted_row(1, state="edited")
+        self.rest = self.stub("rest", return_value={})
+        self.repo_path = self.path("repo")
+        self.args = ("--update-published", "1")
+
+    def main(self, *args):
+        return super().main(*args, "--repo", self.repo_path)
+
+    def writes(self):
+        return self.rest.call_count
+
+
+class UpdatePublishedConfirmationTest(TerminalConfirmationTests, ConfirmedUpdatePublishedCase):
+    PROMPT = "Type the pull request number (7) to change 1 published comment on GitHub now: "
+
+    def test_asks_nothing_on_post(self):
+        self.main("--post")
+        self.terminal.assert_not_called()
+
+
+class WhenTheTypedNumberDiffersOnUpdatePublishedTest(WhenTheTypedNumberDiffersTests, ConfirmedUpdatePublishedCase):
+    pass
+
+
+class WhenThereIsNoTerminalOnUpdatePublishedTest(WhenThereIsNoTerminalTests, ConfirmedUpdatePublishedCase):
+    pass
+
+
 class LiveCase(PostCase):
     def setUp(self):
         super().setUp()
@@ -847,10 +1042,26 @@ class PlaceholderLookalikeTest(LiveCase):
         self.assertEqual(run_files.read_posted(self.run_dir)[1]["note"], "{unknown.key}")
 
 
-class WhenPostingAChangedBodyCommentOfASubmittedReviewTest(SubmittedBodyCommentCase, LiveCase):
+class WhenUpdatingAChangedBodyCommentOfASubmittedReviewTest(SubmittedBodyCommentCase, LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.main("--update-published", "1")
+
     def test_keeps_its_row_on_that_review(self):
-        self.main("--post")
         self.assertEqual(run_files.read_posted(self.run_dir)[1]["review_id"], "54")
+
+    def test_marks_it_posted(self):
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["state"], "posted")
+
+    def test_sends_nothing_else(self):
+        self.assertEqual((self.graphql.call_count, [c.args[:2] for c in self.rest.call_args_list]),
+                         (0, [("PUT", "repos/acme/widgets/pulls/7/reviews/54")]))
+
+
+class WhenPostingWithAChangedBodyCommentOfASubmittedReviewTest(SubmittedBodyCommentCase, LiveCase):
+    def test_keeps_it_marked_edited(self):
+        self.main("--post")
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["state"], "edited")
 
 
 class WhenAnEarlierBatchReachedGitHubUnrecordedTest(LiveCase):
@@ -1048,7 +1259,8 @@ class LiveUpdateRollbackTest(LiveCase):
         self.posted_row(1, state="edited")
 
     def test_deletes_the_new_comments_when_an_update_fails(self):
-        self.rest_rejects("PATCH")
+        self.pend(comments={901: "PRRC_901"})
+        self.graphql_rejects(lambda query, variables: "updatePullRequestReviewComment" in query)
         self.rejected()
         self.assertEqual(self.graphql.call_args_list[-1].args[1], {"id": "PRRC_3"})
 
