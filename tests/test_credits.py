@@ -426,6 +426,26 @@ class RejectedCreditTest(CreditCase):
         self.assertNotIn("\t9\t", self.read("numbers.tsv"))
 
 
+class PostedCreditCase(CreditCase):
+    def setUp(self):
+        super().setUp()
+        run_files.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "comment_id": "5", "path": "c.py", "line": "20"}})
+
+
+class WhenTheVerifierRejectsAPostedCreditTest(PostedCreditCase):
+    def test_keeps_it_numbered(self):
+        self.write("verify/9.md", "verdict: rejected | confidence: 20 | note: not true")
+        self.render()
+        self.assertIn("\t9\tcredit\n", self.read("numbers.tsv"))
+
+
+class WhenAPostedCreditHasNoVerdictTest(PostedCreditCase):
+    def test_keeps_it_numbered(self):
+        os.remove(os.path.join(self.run_dir, "verify", "9.md"))
+        self.render()
+        self.assertIn("\t9\tcredit\n", self.read("numbers.tsv"))
+
+
 class LoadFindingsTest(CreditCase):
     def test_hides_credits(self):
         self.assertEqual(list(sf.load_findings(self.run_dir)), [7])

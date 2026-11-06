@@ -219,10 +219,13 @@ def holds(comment, a, text):
     at = comment.get("subject_type") == "file" if a["kind"] == "file" else a["end_line"] in (comment.get("line"), comment.get("original_line"))
     return comment.get("path") == a["path"] and at and comment.get("body") == text
 
+def written_by(comment, login):
+    return (comment.get("user") or {}).get("login") == login
+
 def already_on_github(it, ctx, taken):
     a = it["anchor"]
     if it["action"] != "new" or not a or a["kind"] == "body": return None
-    return next((c for c in ctx["comments"] if str(c["id"]) not in taken and holds(c, a, it["text"])), None)
+    return next((c for c in ctx["comments"] if str(c["id"]) not in taken and written_by(c, ctx["viewer"]) and holds(c, a, it["text"])), None)
 
 def plan_items(run, ctx, hunks, reviewed):
     ins, rows, nums, found = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run), findings(run)
@@ -483,7 +486,7 @@ def merge_base(ctx, reviewed, repo):
 
 def fetch_pr(repo, run, pr, reviewed):
     owner, name, pr = reviewed_pr(repo, run, pr)
-    ctx = {"owner": owner, "name": name, "pr": pr, "pending": None}
+    ctx = {"owner": owner, "name": name, "pr": pr, "pending": None, "viewer": gh_api.viewer_login(repo)}
     base = pulls_path(ctx)
     view = json.loads(gh_api.gh(["pr", "view", str(pr), "--repo", f"{owner}/{name}", "--json", "headRefOid,baseRefOid"], repo))
     ctx["head"], ctx["base"] = view["headRefOid"], view["baseRefOid"]
@@ -591,8 +594,7 @@ def post(a, ctx, items, reviewed):
     results = execute(calls, a.repo, ctx, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
     try:
-        if ctx["kept"]:
-            with open(rf.kept_body_path(a.run, ctx["pending"]["id"]), "w", encoding="utf-8") as fh: fh.write(ctx["kept"] + "\n")
+        if ctx["kept"]: rf.write_text(rf.kept_body_path(a.run, ctx["pending"]["id"]), ctx["kept"] + "\n")
         rf.write_posted(a.run, {mid: {k: str(resolve_refs(v, results)) for k, v in row.items()} for mid, row in rows.items()})
     except BaseException:
         print("\n".join(["posted.tsv was not updated; this batch is on GitHub:", *posted_lines(sending, results)]), file=sys.stderr)
@@ -779,7 +781,7 @@ def refresh_threads(run, ctx, repo):
                  f"{threads.unread} more; resolve the posted findings' threads on GitHub by hand")
 
 def close(a, ctx):
-    viewer = gh_api.viewer_login(a.repo)
+    viewer = ctx["viewer"]
     refresh_threads(a.run, ctx, a.repo)
     items = close_items(a.run, ctx, a.repo, viewer)
     if not a.close: return list_closable(ctx, items, viewer)
@@ -862,8 +864,7 @@ def save_drafts(run, answer):
     drafts = checked_drafts(run, answer_parts(text))
     for number, mid, form, said in drafts:
         if form is None: print(f"finding {number}: not drafted: {said}", file=sys.stderr); continue
-        os.makedirs(os.path.dirname(rf.draft_path(run, mid)), exist_ok=True)
-        with open(rf.draft_path(run, mid), "w", encoding="utf-8") as fh: fh.write(said.strip("\n") + "\n")
+        rf.write_text(rf.draft_path(run, mid), said.strip("\n") + "\n")
         print(f"{number}={rf.draft_path(run, mid)}")
         print(f"finding {number}: {form}", file=sys.stderr)
 

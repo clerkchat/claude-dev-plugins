@@ -21,10 +21,17 @@ LINE_BREAKS = re.compile(r"[\t\r\n]")
 def tsv_cell(value):
     return LINE_BREAKS.sub(" ", value)
 
-def write_rows(path, header, rows):
+def write_text(path, text):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        for row in [*([header] if header else []), *rows]: fh.write("\t".join(map(tsv_cell, row)) + "\n")
+    partial = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(partial, "w", encoding="utf-8") as fh: fh.write(text)
+        os.replace(partial, path)
+    finally:
+        if os.path.exists(partial): os.remove(partial)
+
+def write_rows(path, header, rows):
+    write_text(path, "".join("\t".join(map(tsv_cell, row)) + "\n" for row in [*([header] if header else []), *rows]))
 
 def read_keyed(path, fields, key=merged_key, defaults=None):
     return {key(f[0]): {name: value or (defaults or {}).get(name, "") for name, value in zip(fields, f[1:] + [""] * len(fields))}
@@ -50,6 +57,12 @@ def fenced_lines(lines):
         m = FENCE_RE.match(line)
         if m: fence = m.group(1)
         yield line, FENCE_LINE if m else PROSE
+
+def open_fence(lines):
+    fence = ""
+    for line, kind in fenced_lines(lines):
+        if kind == FENCE_LINE: fence = "" if fence else FENCE_RE.match(line).group(1)
+    return fence
 
 def line_span(lo, hi):
     return f"{lo}" + (f"-{hi}" if hi and hi != lo else "")

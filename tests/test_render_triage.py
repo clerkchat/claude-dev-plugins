@@ -298,6 +298,59 @@ class WhenAPullRequestCommentReplyOpensAFenceTest(RenderCase):
         self.assertEqual(self.instruction(9)["choice"], "discuss")
 
 
+class WhenAFieldOpensAFenceItNeverClosesTest(RenderCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(7, "a.py", extra="  context: ```py x = 1\n"), defect(8, "b.py"))
+        self.render()
+
+    def test_still_imports_the_users_tick_on_its_card(self):
+        self.edit_report("- [ ] Discuss", "- [x] Discuss")
+        self.render()
+        self.assertEqual(self.instruction(7)["choice"], "discuss")
+
+    def test_still_imports_an_edit_of_its_posted_text(self):
+        draft = self.path("draft.md")
+        write_file(draft, "Say it plainly.\n")
+        self.render("--instruct", "1=post", "--posted", f"1={draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.render()
+        self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
+
+
+class SeededPostedCommentCase(RenderCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/7.md", "Say it plainly.\n")
+        run_files.write_posted(self.run_dir, {7: {"state": "posted", "kind": "line", "comment_id": "5", "path": "a.py", "line": "3"}})
+
+    def card_of(self, mid):
+        return self.report().split(f", merged {mid}, ", 1)[1].split("\n#### ", 1)[0]
+
+
+class WhenTheVerifierRejectsAPostedFindingTest(SeededPostedCommentCase):
+    def setUp(self):
+        super().setUp()
+        self.write("verify/7.md", "verdict: rejected | confidence: 20 | note: partly fixed")
+        self.render()
+
+    def test_keeps_its_card(self):
+        self.assertIn(", merged 7, ", self.report())
+
+    def test_keeps_its_posted_block(self):
+        self.assertIn("##### Posted\n\n````\nSay it plainly.\n````", self.card_of(7))
+
+
+class WhenAPostedFindingFallsBelowTheBarTest(SeededPostedCommentCase):
+    def setUp(self):
+        super().setUp()
+        self.write("verify/7.md", "verdict: confirmed | confidence: 30 | severity: minor")
+        self.render()
+
+    def test_keeps_its_card_below_the_bar(self):
+        self.assertIn("\t7\tbelow\n", self.read("numbers.tsv"))
+
+
 class PostCase(RenderCase):
     def setUp(self):
         super().setUp()

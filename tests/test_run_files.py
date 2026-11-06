@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 from contextlib import redirect_stderr
+from unittest import mock
 
 from helpers import SCRIPTS, RunCase, TempCase, defect, init_repo, merged_md
 
@@ -79,6 +80,26 @@ class WriteRowsTest(TsvCase):
         run_files.write_rows(self.tsv_path(), None, [["1"], ["2"]])
         run_files.write_rows(self.tsv_path(), None, [["3"]])
         self.assertEqual(self.written(), "3\n")
+
+
+class WhenWritingRowsFailsTest(TsvCase):
+    def setUp(self):
+        super().setUp()
+        run_files.write_rows(self.tsv_path(), None, [["1"]])
+
+    def rows_that_fail(self):
+        yield ["2"]
+        raise OSError("disk full")
+
+    def test_keeps_the_rows_written_before_when_the_rows_fail_partway(self):
+        with self.assertRaises(OSError):
+            run_files.write_rows(self.tsv_path(), None, self.rows_that_fail())
+        self.assertEqual(self.written(), "1\n")
+
+    def test_leaves_no_partial_file_when_the_replace_fails(self):
+        with mock.patch.object(run_files.os, "replace", side_effect=OSError("disk full")), self.assertRaises(OSError):
+            run_files.write_rows(self.tsv_path(), None, [["2"]])
+        self.assertEqual(os.listdir(self.run_dir), ["t.tsv"])
 
 
 class ReadKeyedTest(TsvCase):

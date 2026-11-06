@@ -259,12 +259,13 @@ findings, and one card per finding, grouped:
 | Worth a look            | Real but less pressing                                                 |
 | Already on main         | Not caused by the branch; fix separately, or mark "Fix as noted: fix now" |
 | Cleanup and refactoring | Ways to make the touched code smaller, labeled cleanup, simplify, or refactor |
+| Credits                 | What the change does well, worth telling its author                    |
 
 Each card says how big the fix is and whether another repository has to change
 too.
 
 **3. Decide.** Tick an instruction on each card: Fix as recommended, Fix as
-noted (with your notes), Discuss, Defer, or Ignore. Then:
+noted (with your notes), Discuss, Defer, Ignore, or Post. Then:
 
 > Triage the review findings.
 
@@ -274,6 +275,28 @@ Or act on single findings:
 
 > Fix finding 3. / Fix 4 and 7 as recommended. / Fix 5, but keep the old
 > parameter name. / Let's discuss finding 12.
+
+**Reviewing someone else's pull request.** Tick Post on the findings and
+credits you want to tell its author (a note after it can say where: "in the
+review body", or "on `src/a.ts:12`"), then:
+
+> Post the review.
+
+It drafts each comment in the author's terms, without local paths, ids, or
+scores, and shows the drafts in the card's Posted block for you to edit. Then
+`post-review.py` previews every comment with where it lands (a line, a range,
+a file, or the review body, with any fallback named) and warnings for
+mentions, issue links, and anything that looks internal or secret. On your yes
+it adds them to your pending GitHub review, which only you see until you
+submit it; posting again skips what is already there and updates what you
+changed. You choose the verdict: Comment is submitted from the session, but
+Approve and Request changes are commands you run yourself with `!`, and they
+ask you to type the pull request number at the terminal.
+
+A posted finding keeps its thread: the next review links it back to the card
+and shows the author's replies there. Once you mark it fixed, the report says
+its thread is still open, and closing it ("looks fixed", then resolve) is
+another command you run at the terminal.
 
 **4. Ask what's next.** It lists the next steps in order: follow-ups another
 repository left for this one, findings to decide, fix, or discuss, and commits

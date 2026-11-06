@@ -70,9 +70,10 @@ from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, read_plain_names
 from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
-                       finding_id, has_comment, joined_replies, log_commits, read_appended, read_findings, read_instructions, read_kept_open,
+                       finding_id, has_comment, joined_replies, log_commits, open_fence, read_appended, read_findings, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
-                       posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status, line_span)
+                       posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
+                       write_text, line_span)
 mf = load_script("merge-findings.py")
 
 SEV = {"blocker": 3, "major": 2, "minor": 1}
@@ -275,11 +276,18 @@ def recommendation(e):
 
 def instruction_tail(e):
     out = ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]), choices_for(e["id"]))
-    return out + (posted_block(e["id"]) if choice_of(e["id"]) == "post" or has_comment(POSTED.get(e["id"], {})) else [])
+    return out + (posted_block(e["id"]) if choice_of(e["id"]) == "post" or has_posted_comment(e["id"]) else [])
 
-def _card_tail(e):
+def resolution_lines(e):
     body = read_text(os.path.join(RUN, "resolution", f"{e['id']}.md"))
-    return (prose_block("Resolution", body) if body else []) + instruction_tail(e)
+    return prose_block("Resolution", body) if body else []
+
+def with_fences_closed(lines):
+    fence = open_fence("\n".join(lines).split("\n"))
+    return lines + [fence, ""] if fence else lines
+
+def card_text(e, body):
+    return "\n".join(with_fences_closed(body) + instruction_tail(e))
 
 def claim_lines(e):
     if e.get("claim") and title_of(e, TITLES) != unquote(e["claim"]).rstrip("."):
@@ -290,7 +298,7 @@ def credit_body(e, v, repo, head):
     out = [f"Overlaps finding {IDNUM[e['_overlaps']]}.", ""] if e.get("_overlaps") in IDNUM else []
     out += claim_lines(e) + context_lines(e) + snippet_lines(e, repo, head)
     if v.get("note"): out += note_block("Second opinion", v["note"])
-    return out + instruction_tail(e)
+    return out
 
 _APPENDED = None
 def is_new(mid):
@@ -342,12 +350,12 @@ def card(n, e, v, labels, names, repo, head, section):
     if fl and e["line"] > fl:
         out += [f"Line number uncertain: the file has {fl} lines. The reviewer's evidence in merged.md names the real locations.", ""]
     if is_credit(e):
-        return "\n".join(out + credit_body(e, v, repo, head))
+        return card_text(e, out + credit_body(e, v, repo, head))
     if is_pr(e):
         out += pr_block(e, "Comment", with_location=False)
         out += _sections(e, repo, head) + recommendation(e)
         if v.get("note"): out += note_block("Second opinion", v["note"])
-        return "\n".join(out + _card_tail(e))
+        return card_text(e, out + resolution_lines(e))
     out += claim_lines(e)
     for c in PR_LINKS.get(e["id"], []):
         out += pr_block(c, "Raised on the pull request")
@@ -357,7 +365,7 @@ def card(n, e, v, labels, names, repo, head, section):
     else:
         out += recommendation(e)
         if v["verdict"] in ("adjusted", "rejected") and v.get("note"): out += note_block("Second opinion", v["note"])
-    return "\n".join(out + _card_tail(e))
+    return card_text(e, out + resolution_lines(e))
 
 def _sections(e, repo, head):
     """Why it matters, Context, How it goes wrong, and the snippet. A pull
@@ -593,8 +601,7 @@ def drafted_here(mid):
     return drafted_for(FOUND.get(mid, {}), INSTR.get(mid, {}).get("note", ""), REVIEWED)
 
 def record_posted(run, mid, text, state, today):
-    os.makedirs(os.path.dirname(posted_path(run, mid)), exist_ok=True)
-    open(posted_path(run, mid), "w", encoding="utf-8").write(text.strip() + "\n")
+    write_text(posted_path(run, mid), text.strip() + "\n")
     POSTED[mid] = {**POSTED.get(mid, {}), "state": state, "note": INSTR.get(mid, {}).get("note", ""), "date": today, **drafted_here(mid)}
 
 def note_changed(mid):
@@ -790,11 +797,11 @@ def import_instruction_edits(run, ins, today):
             ins[mid] = {"choice": choice, "note": note, "date": today, "also": also, "option": option, "text": text}; changed.add(mid)
     return changed
 
+def has_posted_comment(mid):
+    return has_comment(POSTED.get(mid, {}))
+
 def decided(mid):
-    """The user or the fix flow has acted on this finding: it carries an
-    instruction or a status other than open. Such a finding is always shown,
-    whatever its severity and confidence, so it keeps a number and a card."""
-    return bool(choice_of(mid)) or status_of(STATUS, mid) != "open"
+    return bool(choice_of(mid)) or status_of(STATUS, mid) != "open" or has_posted_comment(mid)
 
 def md_table(rows):
     """Pipe table with padded columns, the way common formatters align it, so a
@@ -940,7 +947,8 @@ def pr_links(merged):
 UNVERIFIED = {"verdict": "unverified", "confidence": 0, "severity": "", "note": ""}
 
 def credit_section(e, v):
-    if not v: return "unshown"
+    if not v and not has_posted_comment(e["id"]): return "unshown"
+    v = v or dict(UNVERIFIED)
     if v["verdict"] == "rejected" and not decided(e["id"]): return "rejected"
     e["_conf"], e["_sev"], e["_v"] = v["confidence"] or e["confidence"], e["severity"], v
     return "credit"
@@ -1006,7 +1014,7 @@ def drop_overlapping_credits(routed):
     kept, dropped = [], []
     for c in routed["credit"]:
         hit = next((d for d in defects if mf.same_lines(c, d)), None)
-        if hit and not has_comment(POSTED.get(c["id"], {})): dropped.append(c); continue
+        if hit and not has_posted_comment(c["id"]): dropped.append(c); continue
         if hit: c["_overlaps"] = hit["id"]
         kept.append(c)
     routed["credit"] = kept

@@ -40,3 +40,18 @@ class SkillSplitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def allowed_tools(name):
+    return re.search(r"^allowed-tools: (.*)$", skill(name), re.M).group(1).split(", ")
+
+
+READS_OF_THE_PULL_REQUEST = {"Bash(gh pr view *)", "Bash(gh pr diff *)", "Bash(gh pr list *)"}
+
+
+class ReviewSkillToolsTests(unittest.TestCase):
+    def test_pre_approve_no_github_call_but_reading_the_pull_request(self):
+        for name in ("review", "review-fix", "review-triage"):
+            with self.subTest(name):
+                gh = {tool for tool in allowed_tools(name) if tool.startswith("Bash(gh")}
+                self.assertLessEqual(gh, READS_OF_THE_PULL_REQUEST)

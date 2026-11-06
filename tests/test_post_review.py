@@ -48,7 +48,8 @@ def thread_answer(variables):
 
 
 def review_comment(n, path, **fields):
-    return {"id": 900 + n, "node_id": f"PRRC_{n}", "html_url": f"https://gh/c/{900 + n}", "path": path, "body": f"Finding {n} text.", **fields}
+    return {"id": 900 + n, "node_id": f"PRRC_{n}", "html_url": f"https://gh/c/{900 + n}", "path": path, "body": f"Finding {n} text.",
+            "user": {"login": "me"}, **fields}
 
 
 class PostCase(GhRunCase):
@@ -59,7 +60,7 @@ class PostCase(GhRunCase):
         self.write_target("pr 7", MERGE_BASE, HEAD)
         self.marks = {}
         self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "merge_base": MERGE_BASE, "files": ["src/a.py", "src/b.py"],
-                    "pending": None, "review_ids": {"55"}, "comment_ids": {"901"}, "comments": []}
+                    "pending": None, "review_ids": {"55"}, "comment_ids": {"901"}, "comments": [], "viewer": "me"}
         patcher = mock.patch.object(post, "fetch_pr", side_effect=lambda *a: self.ctx)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -897,6 +898,10 @@ class WhenAnEarlierBatchReachedGitHubUnrecordedTest(LiveCase):
         self.posted_row(5, kind="body", comment_id="901")
         self.assertEqual(self.sent_findings(), [1, 3])
 
+    def test_sends_one_whose_comment_someone_else_wrote(self):
+        self.ctx["comments"][0]["user"] = {"login": "bob"}
+        self.assertEqual(self.sent_findings(), [1, 3])
+
 
 class LiveRollbackTest(LiveCase):
     def test_says_nothing_is_left_after_a_full_rollback(self):
@@ -1152,6 +1157,7 @@ class FetchPrCase(GhRunCase):
     def fetch(self, origin):
         with mock.patch.object(gh_api, "repo_owner_name", return_value=origin.split("/")), \
              mock.patch.object(gh_api, "pr_number", return_value=7), \
+             mock.patch.object(gh_api, "viewer_login", return_value="me"), \
              mock.patch.object(gh_api, "gh", side_effect=self.answer) as self.gh, \
              mock.patch.object(gh_api, "rest_list", side_effect=lambda path, cwd: self.LISTS[path]):
             return post.fetch_pr("/w", self.run_dir, 7, HEAD)
@@ -1167,6 +1173,9 @@ class FetchPrTest(FetchPrCase):
 
     def test_keeps_the_body_of_the_pending_review(self):
         self.assertEqual(self.ctx["pending"]["body"], "Mine.")
+
+    def test_knows_the_viewers_login(self):
+        self.assertEqual(self.ctx["viewer"], "me")
 
     def test_knows_which_reviews_are_on_github(self):
         self.assertEqual(self.ctx["review_ids"], {"1", "2"})
@@ -1275,7 +1284,6 @@ class CloseCase(PostCase):
         self.looks_fixed = f"Looks fixed in {self.sha[:7]}."
         self.statuses, self.threads = {}, {}
         self.closable_finding(1)
-        self.viewer = self.stub("viewer_login", return_value="me")
         self.fix_on_head = "ahead"
         self.gh = self.stub("gh", side_effect=self.compare)
         refresh = mock.patch.object(post, "refresh_threads")
@@ -1695,13 +1703,6 @@ class WhenAThreadWasDeletedSinceTheListingTest(WhenAThreadWasSettledSinceTheList
 
     def test_skips_it(self):
         self.assertEqual(self.threads_sent_to(), {"PRRT_2"})
-
-
-class WhenTheViewersLoginIsUnavailableTest(LiveCloseCase):
-    def test_sends_nothing(self):
-        self.viewer.side_effect = gh_api.GhError("gh api user failed")
-        self.stopped()
-        self.assertEqual(self.graphql.call_count, 0)
 
 
 class RefreshThreadsTest(GhRunCase):
