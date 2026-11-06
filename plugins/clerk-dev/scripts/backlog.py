@@ -54,6 +54,7 @@ def registry_store(repo):
 def locate(wt, name):
     _, repos = records.workspace(wt)
     if repos.get(name): return store_of(repos[name], name)
+    if not os.path.exists(config.path()): sys.exit(config.MISSING.format(config.path()))
     repo = config.by_name(config.load(), name)
     store = registry_store(repo) if repo else None
     if not store: sys.exit(f"repository {name} is not in .clerk-dev/workspace.md or {config.path()}" + (f", and {repo.checkout} is not a git checkout" if repo else ""))

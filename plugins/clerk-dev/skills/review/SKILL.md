@@ -18,6 +18,8 @@ allowed-tools:
   - Bash(gh pr list *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/carry.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/config.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/config-setup.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/final-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py *)

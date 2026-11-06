@@ -94,6 +94,25 @@ class LookupTests(ConfigFileCase):
         self.assertIsNone(config.by_common_dir(self.cfg, cwd_common))
 
 
+class RenderTests(ConfigFileCase):
+    def setUp(self):
+        super().setUp()
+        self.raw = config.read_raw(self.file)
+        self.text = config.render(self.raw, "Proposed today. Edit freely.")
+
+    def test_what_is_rendered_parses_back_unchanged(self):
+        self.assertEqual(config.parse(self.text), self.raw)
+
+    def test_paths_are_written_as_given(self):
+        self.assertIn("- ~/code/work", self.text.splitlines())
+
+    def test_it_has_every_section(self):
+        self.assertEqual(config.missing_sections(self.text), [])
+
+    def test_an_empty_after_create_line_is_kept(self):
+        self.assertIn("After create:", config.render(self.raw._replace(after_create=""), "").splitlines())
+
+
 class CommandTests(ConfigFileCase):
     def test_path_is_the_environment_variable(self):
         self.assertEqual(run_ok("config", "path", env=self.env(self.file)), self.file)

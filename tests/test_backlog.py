@@ -164,10 +164,9 @@ class AddRefusalTests(BacklogCase):
     def test_a_follow_up_needs_an_origin(self):
         self.assertIn("--origin", self.refused("add", self.feat, "x", "--kind", "followup"))
 
-    def test_repo_without_workspace_or_registry_names_the_config_file(self):
+    def test_repo_without_workspace_or_config_gives_the_setup_line(self):
         out = self.refused("add", self.feat, "x", "--kind", "followup", "--origin", "a b", "--repo", "web")
-        self.assertIn(self.path("absent.md"), out)
-        self.assertIn("web", out)
+        self.assertEqual(out, config.MISSING.format(self.path("absent.md")))
 
 
 class TwoRepositoryCase(BacklogCase):

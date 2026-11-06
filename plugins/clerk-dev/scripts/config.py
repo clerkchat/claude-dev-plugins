@@ -8,6 +8,9 @@ DEFAULT_PATH = os.path.join("~", ".claude", "clerk-dev", "local.md")
 SEARCH_ROOTS, REPOSITORIES, WORKTREES = "Search roots", "Repositories", "Worktrees"
 NAME, CHECKOUT, MAIN = "Name", "Main checkout", "Main branch"
 PATTERN, AFTER_CREATE = "Pattern", "After create"
+DEFAULT_PATTERN = "<repo parent>/<branch>"
+TITLE = "# clerk-dev config"
+MISSING = "No clerk-dev config at {}; run the config setup to reach other repositories."
 
 class Repo(NamedTuple):
     name: str
@@ -32,16 +35,39 @@ def labeled_line(text, label):
     return m.group(1) if m else ""
 
 def repo_rows(text):
-    return [Repo(r[NAME], os.path.expanduser(r[CHECKOUT]), r.get(MAIN, "")) for r in records.table_rows(text) if r.get(NAME) and r.get(CHECKOUT)]
+    return [Repo(r[NAME], r[CHECKOUT], r.get(MAIN, "")) for r in records.table_rows(text) if r.get(NAME) and r.get(CHECKOUT)]
 
-def load(p=None):
-    p = p or path()
-    if not os.path.exists(p): return EMPTY
-    sections = dict(records.headings(open(p, encoding="utf-8").read(), "##"))
+def sections_of(text): return dict(records.headings(text, "##"))
+
+def missing_sections(text):
+    found = sections_of(text)
+    return [s for s in (SEARCH_ROOTS, REPOSITORIES, WORKTREES) if s not in found]
+
+def parse(text):
+    sections = sections_of(text)
     worktrees = sections.get(WORKTREES, "")
-    return Config([os.path.expanduser(root) for root in list_items(sections.get(SEARCH_ROOTS, ""))],
-                  repo_rows(sections.get(REPOSITORIES, "")),
+    return Config(list_items(sections.get(SEARCH_ROOTS, "")), repo_rows(sections.get(REPOSITORIES, "")),
                   labeled_line(worktrees, PATTERN), labeled_line(worktrees, AFTER_CREATE))
+
+def expanded(cfg):
+    return cfg._replace(search_roots=[os.path.expanduser(root) for root in cfg.search_roots],
+                        repos=[r._replace(checkout=os.path.expanduser(r.checkout)) for r in cfg.repos])
+
+def read_raw(p):
+    return parse(open(p, encoding="utf-8").read()) if os.path.exists(p) else EMPTY
+
+def load(p=None): return expanded(read_raw(p or path()))
+
+def table(head, rows):
+    widths = [max(len(c) for c in col) for col in zip(head, *rows)]
+    line = lambda cells: "| " + " | ".join(c.ljust(w) for c, w in zip(cells, widths)) + " |"
+    return [line(head), line(["-" * w for w in widths]), *map(line, rows)]
+
+def render(cfg, header):
+    return "\n".join([TITLE, "", header, "",
+                      f"## {SEARCH_ROOTS}", "", *(f"- {root}" for root in cfg.search_roots), "",
+                      f"## {REPOSITORIES}", "", *table([NAME, CHECKOUT, MAIN], [list(r) for r in cfg.repos]), "",
+                      f"## {WORKTREES}", "", f"{PATTERN}: {cfg.pattern}".rstrip(), f"{AFTER_CREATE}: {cfg.after_create}".rstrip(), ""])
 
 def by_name(cfg, name): return next((r for r in cfg.repos if r.name == name), None)
 
