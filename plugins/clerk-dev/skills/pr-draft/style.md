@@ -10,9 +10,11 @@ and checked.
 ```
 ## Title
 ## Description
-  base line                     (when the base is not the default branch)
-  why this PR exists            (a short paragraph)
+  the problem                   (a few sentences)
+  what this PR does             ("This PR:", then goals and boundaries as bullets)
+  what extending it would take  (when the PR is a first step)
   sibling pull requests         (a bullet list, for several repositories)
+  ### Where <the new piece> fits (when it joins existing pieces that do similar work)
   ### Scope change              (when it applies)
   ### Client-facing changes     (when it applies)
 ## Walkthrough
@@ -48,17 +50,31 @@ prefix.
 The Description is a newcomer's first contact with the change. Reviewers range
 from the code's owners to people new to it; err toward explaining.
 
-- **The base, once.** When the base is not the repository's default branch,
-  open with one line saying so: "This PR targets `feat/x`, the branch that
-  holds ..., not `master`." Elsewhere compare as Before and After.
-- **Why this PR exists.** One short paragraph: the problem or goal, what the
-  base does about it today (introducing the base by role: "On the base branch,
-  `feat/x`, ..."), and what a reviewer or user gets from this PR, in plain
-  words. It does not list the parts; the contents table does. It defines no
-  terms beyond what the paragraph itself needs; the stages define the rest.
+- **No base line.** GitHub shows the branch the PR merges into; never say it
+  in prose. Compare as Before and After.
+- **The problem.** A few sentences: what is wrong or missing today, in plain
+  words. No dense paragraph that also carries the solution.
+- **What this PR does.** "This PR:" then bullets, one per goal or boundary,
+  each led by a bold phrase ("**is a proof of concept**, scoped to ...",
+  "**puts that in the query-builder library** ..."): what it sets out to do,
+  how, where it lives, and what it deliberately does not cover. Goals, not
+  parts: the contents table lists the parts. It defines no terms beyond what
+  the bullets need; the stages define the rest.
+- **What extending it would take**, when the PR is a first step (a proof of
+  concept, one path converted of many): a sentence or two on what would
+  follow if the direction holds.
 - **Sibling pull requests**, for several repositories: a bullet list, one per
   repository, each with its number and link (else the branch) and what it
   holds.
+
+### Where <the new piece> fits
+
+When the change adds a piece beside existing pieces that do similar work (a
+new builder next to other builders, a new client beside existing ones): one
+bullet per piece, the new one included, each led by its bold name and path,
+saying what it does and whether this PR changes it. It orients a reviewer
+who does not know the neighbors; it does not describe the new piece's
+internals, which its stage does.
 
 ### Scope change
 
@@ -91,8 +107,9 @@ Ordered by the spine: the flow a reviewer follows to understand the diff.
 
 1. One or two sentences: the spine (what every unit of the flow passes
    through), which section is not a stage of the flow when one is not
-   (deployed code underneath it), and the paths' shared root. Not a summary
-   of the stages; the table is that.
+   (deployed code underneath it), and the paths' shared root. One claim per
+   sentence, and every section referred to is named, never "the second
+   section". Not a summary of the stages; the table is that.
 2. With three or more stages, one mermaid diagram of the spine, one idea only,
    its nodes carrying the section names. Top to bottom (`flowchart TD`); left
    to right only when it is three or four short nodes, since GitHub shrinks a
@@ -128,6 +145,13 @@ Each stage is one section, in this shape:
   ("Smaller changes"); a change too small for a group is left to the diff.
   Keep enablers apart from what they enable. A group whose items pair up as
   before and after becomes a table.
+- When the stage adds a library or API other code is written against, short
+  usage examples, taken from the real code and tests: authoring with it,
+  what it rejects (a line that fails to type-check or throws), and for a
+  converted call site, the code before and after with what it produces
+  (rendered SQL, a response). A sentence before each block says what it
+  shows. Only what a reviewer needs to judge the API; no tours of every
+  function.
 - When the diff adds modes or options a user picks between, a `####`
   subsection with a comparison table, in the stage that implements them, so the
   capability has one home.
@@ -171,7 +195,8 @@ that reads as part of the last stage.
 
 What is open, gathered from every stage, opened by one line: each item can be
 fixed on this branch or in a follow-up, and reviewers may weigh in on which.
-Subsections, each only when it has items. Gaps (what the change does not
+Subsections, each only when it has items; when only one has items, its
+items go directly under the section with no subheading. Gaps (what the change does not
 cover yet) are not listed in a first draft: the skill reports them, and the
 user adds the ones worth a reviewer's time while refining, as a **Gaps**
 subsection between the two below.
@@ -207,6 +232,10 @@ lines only. No total for the PR and no exact counts.
 - **No bare "Here".** In prose say "This PR" or "This change".
 - **The codebase's verbs.** Use the verb the code uses for the action ("dispatch"
   a job, when the code says dispatch), not an invented one.
+- **Name the thing.** Say "typed fragments", not "the layer" or "the
+  section", when a generic word could mean more than one thing nearby.
+- **No lone subheading.** A section with one subsection drops the
+  subheading and holds its content directly.
 - **Statements stand alone.** Reread each bullet as someone who does not know
   the term, and name the thing: which listing, which route.
 - **Unambiguous definitions.** Define a new field in its own sentence; no
@@ -269,7 +298,8 @@ How to test manually: as Testing above.
 ## Worked example
 
 Cut down from a real PR into a feature branch, filled into that repository's
-template: four of its six stages and most bullets are left out here.
+template: four of its six stages and most bullets are left out here, and the
+field names in the code examples are illustrative.
 
 ````markdown
 ## Title
@@ -278,14 +308,26 @@ Pipeline test harness: voice call scenarios
 
 ## Description
 
-This PR targets `feat/pipeline-test-merge`, the branch that holds the text-only pipeline test harness, not `master`.
+The pipeline test harness drives text conversations only: voice triggers are rejected, so a voice pipeline cannot be tested before it takes real calls.
 
-The harness tests a pipeline with scripted scenarios, but on the base branch, `feat/pipeline-test-merge`, it drives text conversations only, so voice pipelines cannot be tested before they take real calls. This PR lets a scenario drive a voice pipeline as one call, turn by turn, with the voice service's agent either scripted or played by an LLM.
+This PR:
+
+- **drives a voice pipeline as one call**, turn by turn, the way the voice service does on a live call;
+- **lets the scenario play the voice agent**, either with scripted replies per turn or pinned to an LLM;
+- **keeps the whole call in one pipeline execution**, paused between caller turns as on a live call.
 
 Sibling pull requests:
 
 - clerkai `feat/pipeline-test-voice`: the scenario editor and results for calls
 - agent-swarm `feat/pipeline-test-voice`: Belle authoring and running voice cases
+
+### Where `ResumeEventSource` fits
+
+A paused pipeline execution resumes when an event source hands it the next event. The event sources are separate from each other:
+
+- **Voice service callbacks** (`controllers/voice-pipeline.controller.ts`): resume a live call's execution on the voice service's next event. Unchanged here, apart from refusing test-run executions.
+- **Trigger event sources** (`event-source.ts`): pick the event that starts a new execution from a trigger. Unchanged here.
+- **`ResumeEventSource`** (`testing/resume-event-source.ts`, new): plays the voice service's part in a test, handing a paused execution the next scripted turn or call event.
 
 ### Client-facing changes
 
@@ -334,6 +376,27 @@ What a scenario can say:
 | Turn kinds | `message`, `event` | adds `caller`, a line the caller says |
 | Voice triggers | rejected | call events are turns, and a call starts with a caller turn |
 | Voice agent | none | scripted replies on each caller turn (`agent`), or a pin to an LLM (`fixture.voiceAgent`) |
+
+A call scenario, with the agent's replies scripted on each caller turn:
+
+```json
+{
+  "turns": [
+    { "kind": "caller", "text": "Hi, I'd like to reschedule", "agent": "Sure, what day works?" },
+    { "kind": "caller", "text": "Thursday morning", "agent": "Done, Thursday at 9" },
+    { "kind": "event", "event": "callEnded" }
+  ]
+}
+```
+
+The same scenario in LLM mode drops each `agent` reply and pins the agent instead, with `"fixture": { "voiceAgent": { "model": "claude-sonnet-5-5" } }`. Mixing the two is rejected before anything runs:
+
+```json
+{
+  "fixture": { "voiceAgent": {} },
+  "turns": [{ "kind": "caller", "text": "Hi", "agent": "Hello" }]
+}
+```
 
 What validation checks, before anything runs:
 
