@@ -1,9 +1,11 @@
+import io
 import os
 import sys
 import unittest
+from contextlib import redirect_stderr
 from unittest import mock
 
-from helpers import SCRIPTS, RunCase, merged_md
+from helpers import SCRIPTS, GhRunCase, merged_md
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -60,7 +62,6 @@ class GithubItemsTest(unittest.TestCase):
     def test_skips_a_review_without_a_body(self):
         self.assertEqual(self.items(reviews=[review(2, "COMMENTED", body="  ")]), [])
 
-
     def test_skips_a_review_posted_by_this_plugin(self):
         items = pr_comments.github_items(pull_request(reviews=[review(2, "COMMENTED"), review(4, "COMMENTED")]), [], {"2"})
         self.assertEqual([c.gid for c in items], [4])
@@ -93,7 +94,7 @@ class SortThreadsTest(unittest.TestCase):
         self.assertEqual(self.sort(thread(1, "PENDING"), linking={1: 40}).left_out, 0)
 
 
-class FoldInCase(RunCase):
+class FoldInCase(GhRunCase):
     def setUp(self):
         super().setUp()
         self.write("merged.md", merged_md())
@@ -119,7 +120,7 @@ class FoldInTest(FoldInCase):
 
     def test_records_each_comment_as_seen(self):
         self.fold(thread(1))
-        self.assertEqual(self.read("pr/seen.tsv"), "thread:1\t1\n")
+        self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:1": 1})
 
     def test_keeps_the_payload_and_the_pull_request(self):
         self.fold()
@@ -181,7 +182,7 @@ class PostedThreadTest(PostedThreadCase):
         self.assertNotIn("Posted text.", self.read("merged.md"))
 
     def test_does_not_mark_it_seen(self):
-        self.assertNotIn("thread:1", self.read("pr/seen.tsv"))
+        self.assertNotIn("thread:1", pr_comments.read_seen(self.run_dir))
 
     def test_leaves_it_off_the_new_ids(self):
         self.assertEqual(self.folded.new_ids, [1])
@@ -201,6 +202,19 @@ class PostedThreadTest(PostedThreadCase):
 
     def test_writes_no_row_for_a_body_posting(self):
         self.assertNotIn(42, run_files.read_threads(self.run_dir))
+
+
+class WhenAPostingWasDraftedButNeverSentTest(FoldInCase):
+    def setUp(self):
+        super().setUp()
+        run_files.write_posted(self.run_dir, {40: {"state": "drafted", "kind": "", "comment_id": "", "thread_id": ""}})
+        self.fold(thread(1, body="Their comment."))
+
+    def test_imports_the_comment_as_one_of_someone_else(self):
+        self.assertIn("Their comment.", self.read("merged.md"))
+
+    def test_writes_no_thread_row_for_it(self):
+        self.assertFalse(os.path.exists(run_files.threads_path(self.run_dir)))
 
 
 class PostedReviewTest(PostedThreadCase):
@@ -313,17 +327,13 @@ class WhenTheCommentIsAlreadyLinkedTest(ApplyJudgedCase):
         self.assertNotIn("duplicate_of: 8", self.entry(1))
 
 
-class SeenTest(RunCase):
-    def test_writes_the_keys_in_the_order_of_their_ids(self):
-        pr_comments.write_seen(self.run_dir, {"thread:5": 2, "review:9": 1})
-        self.assertEqual(self.read("pr/seen.tsv"), "review:9\t1\nthread:5\t2\n")
-
+class SeenTest(GhRunCase):
     def test_reads_back_what_it_wrote(self):
         pr_comments.write_seen(self.run_dir, {"thread:5": 2, "review:9": 1})
         self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:5": 2, "review:9": 1})
 
 
-class ShortlistTest(RunCase):
+class ShortlistTest(GhRunCase):
     def test_a_credit_is_never_a_candidate_for_a_comment(self):
         self.write("merged.md", merged_md(
             "- id: 1\n  lens: credit\n  file: a.py\n  line: 1\n  title: Looks off\n  claim: Looks off here.\n",
@@ -351,15 +361,25 @@ class SummaryTest(unittest.TestCase):
         self.assertIn(", 30 review threads past the first 100 not read; ", self.summary(unread=30))
 
 
-class MainTest(RunCase):
+class MainTest(GhRunCase):
+    def run_main(self, *args):
+        with mock.patch.object(sys, "argv", ["pr-comments", self.run_dir, *args]), redirect_stderr(io.StringIO()):
+            pr_comments.main()
+
     def test_fetches_the_pull_request_and_folds_it_in(self):
         self.write("merged.md", merged_md())
         graphql = {"data": {"repository": {"pullRequest": pull_request([thread(1, body="Real comment.")])}}}
         with mock.patch.object(pr_comments, "graphql", return_value=graphql), \
                 mock.patch.object(pr_comments, "repo_owner_name", return_value=["o", "r"]), \
-                mock.patch.object(sys, "argv", ["pr-comments", self.run_dir, "--pr", "7", "--repo", self.tmp]):
-            pr_comments.main()
+                redirect_stderr(io.StringIO()):
+            self.run_main("--pr", "7", "--repo", self.tmp)
         self.assertIn("Real comment.", self.read("merged.md"))
+
+    def test_makes_no_call_when_applying_judged_links(self):
+        self.write("merged.md", merged_md("- id: 2\n  lens: pr-review\n  file: a.py\n  line: 1\n  claim: Looks off.\n"))
+        self.write("judged.tsv", "2\t9\tsame\n")
+        self.run_main("--judged", os.path.join(self.run_dir, "judged.tsv"))
+        self.assertIn("duplicate_of: 9", self.read("merged.md"))
 
 
 if __name__ == "__main__":

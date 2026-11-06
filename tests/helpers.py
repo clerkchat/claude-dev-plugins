@@ -6,12 +6,14 @@ import subprocess
 import tempfile
 import sys
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGIN = os.path.join(ROOT, "plugins", "clerk-dev")
 SCRIPTS = os.path.join(PLUGIN, "scripts")
 
 sys.path.insert(0, SCRIPTS)
+import gh_api
 import records
 import run_files
 
@@ -319,6 +321,26 @@ def defect(mid, path, line=3, lens="correctness", extra=""):
         f"- id: {mid}\n  lens: {lens}\n  severity: major\n  confidence: 90\n"
         f"  file: {path}\n  line: {line}\n  claim: Finding {mid} breaks.\n  impact: It matters.\n  fix: Repair finding {mid}.\n{extra}"
     )
+
+
+class GhRunCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.unstubbed_gh_calls = []
+        self.stub("gh", side_effect=self.refuse_gh)
+        self.addCleanup(self.assertNoUnstubbedGh)
+
+    def refuse_gh(self, args, cwd, stdin=None):
+        self.unstubbed_gh_calls.append(list(args))
+        raise AssertionError(f"unstubbed gh call: gh {' '.join(map(str, args))}")
+
+    def assertNoUnstubbedGh(self):
+        self.assertEqual(self.unstubbed_gh_calls, [])
+
+    def stub(self, name, **kw):
+        patcher = mock.patch.object(gh_api, name, **kw)
+        self.addCleanup(patcher.stop)
+        return patcher.start()
 
 
 class RenderRunCase(RunCase):

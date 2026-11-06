@@ -36,6 +36,40 @@ class SeedCase(TwoRunsCase):
             return f.read()
 
 
+class SeedStatusTest(SeedCase):
+    def match(self, prev_status, prev_ref="reason"):
+        write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
+                   "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n"
+                   f"1\t7\tline\t7\t{prev_status}\t{prev_ref}\n")
+
+    def seeded_status(self):
+        self.seed()
+        return run_files.read_status(self.cur).get(1)
+
+    def test_carries_a_wont_fix_status_and_its_reason(self):
+        self.match("wont-fix")
+        self.assertEqual(self.seeded_status(), {"status": "wont-fix", "ref": "reason", "date": ""})
+
+    def test_does_not_carry_a_fixed_status(self):
+        self.match("fixed", "abc1234")
+        self.assertIsNone(self.seeded_status())
+
+    def test_keeps_a_status_the_current_run_already_has(self):
+        self.match("wont-fix")
+        self.write_cur_status({1: ("in-progress", "")})
+        self.assertEqual(self.seeded_status()["status"], "in-progress")
+
+    def write_cur_status(self, rows):
+        run_files.write_status(self.cur, {m: {"status": s, "ref": r, "date": ""} for m, (s, r) in rows.items()})
+
+
+class SeedResolutionTest(SeedCase):
+    def test_copies_the_resolution_text_under_the_current_id_naming_the_review_it_came_from(self):
+        self.write("resolution/7.md", "Handled upstream.\n")
+        self.seed()
+        self.assertEqual(self.cur_text("resolution/1.md"), f"From the review in {os.path.basename(self.prev)}:\n\nHandled upstream.\n")
+
+
 class SeedWithoutPostedTest(SeedCase):
     def test_writes_no_posted_file(self):
         self.seed()
