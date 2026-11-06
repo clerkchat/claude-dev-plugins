@@ -77,7 +77,7 @@ def analyze(run):
 
     kept = []
     for mid in sorted(appended, key=lambda m: int(numbers.get(m, 10**6))):
-        if mid not in numbers: continue
+        if mid not in numbers or mid not in findings: continue
         bar = ""
         for p in (os.path.join(run, "final", "verify", f"{new_of.get(mid, '')}.md"), os.path.join(run, "verify", f"{mid}.md")):
             m = re.search(r"^bar:\s*(.*)$", read(p), re.M)

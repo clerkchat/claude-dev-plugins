@@ -795,7 +795,7 @@ def posted_fence(text):
     return "`" * max([4] + [len(r) + 1 for r in re.findall(r"^(`{3,})", text, re.M)])
 
 def posted_link(row):
-    if not row.get("kind"): return []
+    if not has_comment(row): return []
     span = row["line"] + (f"-{row['end_line']}" if row.get("end_line") and row["end_line"] != row["line"] else "")
     where = "in the review body" if row["kind"] == "body" else f"on `{row['path']}" + (f":{span}" if span else "") + "`"
     link = f", [comment]({row['url']})" if row.get("url") else ""
@@ -866,8 +866,11 @@ def instruction_key(i, choices=CHOICES):
 def choice_counts(entries, choices=CHOICES):
     return {c.key: sum(1 for e in entries if choice_of(e["id"]) == c.key) for c in choices}
 
+def without_credits(numbered):
+    return [e for e in numbered if e["_sec"] != "credit"]
+
 def triage_line(numbered, choices=CHOICES):
-    numbered = [e for e in numbered if e["_sec"] != "credit"]
+    numbered = without_credits(numbered)
     counts = choice_counts(numbered, choices)
     undecided = sum(1 for e in numbered if e["_sec"] != "below" and not choice_of(e["id"]))
     below_open = sum(1 for e in numbered if e["_sec"] == "below" and not choice_of(e["id"]))
@@ -979,14 +982,17 @@ def wrap_markdown(text, width):
         out.extend(w.replace(NB, " ") for w in wrapped)
     return "\n".join(out)
 
-def read_numbers(run):
-    nums = {}
+def number_rows(run):
     p = os.path.join(run, "numbers.tsv")
-    if os.path.exists(p):
-        for line in open(p, encoding="utf-8").read().splitlines()[1:]:
-            f = line.split("\t")
-            if len(f) >= 2 and f[0].isdigit() and f[1].isdigit(): nums[int(f[1])] = int(f[0])
-    return nums
+    if not os.path.exists(p): return []
+    rows = [line.split("\t") for line in open(p, encoding="utf-8").read().splitlines()[1:]]
+    return [(int(f[0]), int(f[1]), f[2] if len(f) > 2 else "") for f in rows if len(f) >= 2 and f[0].isdigit() and f[1].isdigit()]
+
+def read_numbers(run):
+    return {mid: n for n, mid, _ in number_rows(run)}
+
+def read_sections(run):
+    return {mid: section for _, mid, section in number_rows(run)}
 
 def finding_id(spec, nums):
     if spec.startswith("#"): return int(spec[1:])
@@ -1150,15 +1156,18 @@ def route_findings(merged, verdicts, a):
     unverified = [e for e in merged if not is_pr(e) and e["id"] not in verdicts]
     return {s.key: outcomes[s.key] for s in SECTIONS}, unverified, outcomes["rejected"], outcomes["hidden"]
 
+def has_comment(row):
+    return bool(row.get("kind"))
+
 def is_posted(row):
-    return bool(row.get("kind")) and row.get("state") == "posted"
+    return has_comment(row) and row.get("state") == "posted"
 
 def drop_overlapping_credits(routed):
     defects = [d for key in DEFECT_SECTIONS for d in routed[key]]
     kept, dropped = [], []
     for c in routed["credit"]:
         hit = next((d for d in defects if mf.same_lines(c, d)), None)
-        if hit and not is_posted(POSTED.get(c["id"], {})): dropped.append(c); continue
+        if hit and not has_comment(POSTED.get(c["id"], {})): dropped.append(c); continue
         if hit: c["_overlaps"] = hit["id"]
         kept.append(c)
     routed["credit"] = kept
@@ -1212,6 +1221,7 @@ def progress_line(numbered):
     return prog
 
 def since_lines(numbered, routed):
+    numbered = without_credits(numbered)
     new = sum(1 for e in numbered if e["id"] not in RECON["matches"])
     still = sum(1 for e in numbered if e["id"] in RECON["matches"] and STATUS.get(e["id"], {}).get("status", "open") in ("open", "in-progress") and RECON["matches"][e["id"]].get("how") != "reopened")
     resolved = [u for u in RECON["unmatched"] if RECON["since"].get(u["prev_id"], {}).get("outcome") == "resolved"]

@@ -190,6 +190,38 @@ class AnchorTest(PostCase):
         self.assertIn("fallback: src/a.py:30 is outside the diff; moved to 40", self.main())
 
 
+CREDIT = "- id: 6\n  lens: credit\n  confidence: 90\n  file: src/a.py\n  line: 11\n  title: Guards the retry\n  claim: It guards the retry.\n"
+
+
+class CreditCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()), CREDIT)
+        self.mark(6)
+
+    def number_credit(self, section):
+        self.write_numbers({**dict.fromkeys(FINDINGS, "fix"), 6: section})
+
+
+class ShownCreditTest(CreditCase):
+    def test_posts_on_its_lines(self):
+        self.number_credit("credit")
+        self.assertEqual(self.thread_vars(6)["line"], 11)
+
+
+class CreditTheReportDroppedTest(CreditCase):
+    def test_refuses_a_credit_never_numbered(self):
+        self.assertIn("finding #6: it is a credit the report no longer shows; clear its Post with --instruct #6=none", self.refusal())
+
+    def test_refuses_a_credit_numbered_before_and_now_hidden(self):
+        self.number_credit("hidden")
+        self.assertIn("finding 6: it is a credit the report no longer shows", self.refusal())
+
+    def test_skips_one_already_posted(self):
+        self.posted_row(6)
+        self.assertIn("already posted", self.main())
+
+
 class PreviewTitleTest(PostCase):
     def test_shows_the_title_an_override_sets_over_titles_tsv(self):
         self.write("titles.tsv", "1\tShort title\n")

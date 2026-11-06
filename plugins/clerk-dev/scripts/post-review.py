@@ -164,6 +164,7 @@ def findings(run):
 
 def plan_items(run, ctx, hunks):
     ins, rows, nums, found = rr.read_instructions(run), rr.read_posted(run), rr.read_numbers(run), findings(run)
+    sections = rr.read_sections(run)
     titles = rr.report_titles(run, rr.load_merge_module())
     marked = sorted((m for m, i in ins.items() if i.get("choice") == "post"), key=lambda m: nums.get(m, 10 ** 6))
     items = []
@@ -177,6 +178,8 @@ def plan_items(run, ctx, hunks):
             it["anchor"], it["action"] = row_anchor(row), "skip" if row["state"] == "posted" else "update"
         elif e is None:
             it["anchor"], it["action"], it["problem"] = None, "new", "it is not in merged.md"
+        elif rr.is_credit(e) and sections.get(mid) != "credit":
+            it["anchor"], it["action"], it["problem"] = None, "new", f"it is a credit the report no longer shows; clear its Post with --instruct #{mid}=none"
         else:
             it["anchor"], it["fallback"], it["problem"] = resolve(e, note, ctx["files"], hunks)
             it["action"] = "new"

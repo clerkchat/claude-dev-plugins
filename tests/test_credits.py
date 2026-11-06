@@ -247,6 +247,134 @@ class PostedCreditOverlappingADefectTest(OverlapCase):
         self.assertIn("Overlaps finding 1.", self.card(2))
 
 
+class DraftedCreditOverlappingADefectTest(OverlapCase):
+    def test_is_dropped(self):
+        render.write_posted(self.run_dir, {9: {"state": "drafted", "note": ""}})
+        self.render()
+        self.assertNotIn("\t9\t", self.read("numbers.tsv"))
+
+
+class CreditEditedAfterPostingOverlappingADefectTest(OverlapCase):
+    def test_is_kept(self):
+        render.write_posted(self.run_dir, {9: {"state": "edited", "kind": "line", "path": "a.py", "line": "4"}})
+        self.render()
+        self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
+
+
+class CreditOverlappingAFixedDefectTest(OverlapCase):
+    def test_stays_dropped(self):
+        self.render()
+        self.render("--set", "1=fixed:abc1234")
+        self.assertNotIn("\t9\t", self.read("numbers.tsv"))
+
+
+class NumberedCreditLaterOverlappedCase(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.write_run(defect(7, "a.py"), defect(8, "c.py", line=20), credit(9, "c.py"))
+        self.render()
+
+
+class NumberedCreditLaterOverlappedTest(NumberedCreditLaterOverlappedCase):
+    def test_keeps_its_number_as_hidden(self):
+        self.assertIn("2\t9\thidden\n", self.read("numbers.tsv"))
+
+    def test_gives_the_new_defect_the_next_number(self):
+        self.assertIn("3\t8\tfix\n", self.read("numbers.tsv"))
+
+
+class NumberedCreditBackAfterTheOverlapGoesTest(NumberedCreditLaterOverlappedCase):
+    def setUp(self):
+        super().setUp()
+        self.write("verify/8.md", "verdict: rejected | confidence: 10 | note: not real")
+        self.render()
+
+    def test_returns_with_its_number(self):
+        self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
+
+
+class CreditWithoutALineTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run(defect(7, "a.py"), credit(9, "a.py", line=""))
+        self.render()
+
+    def test_is_kept_beside_a_defect_in_its_file(self):
+        self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
+
+    def test_shows_its_file_as_the_location(self):
+        self.assertIn("Focus: credits\n\na.py\n", self.card(2))
+
+
+class CreditsOnlyRunTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run(credit(9, "c.py"))
+        self.render()
+
+    def test_numbers_the_credit_first(self):
+        self.assertIn("1\t9\tcredit\n", self.read("numbers.tsv"))
+
+    def test_counts_nothing_to_decide(self):
+        self.assertIn("0 post, 0 not decided.", self.report())
+
+
+class EmptyRunTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run()
+        self.render()
+
+    def test_has_no_credits_section(self):
+        self.assertNotIn("\n## Credits\n", self.report())
+
+
+class SinceCase(CreditCase):
+    def compare(self, *rows):
+        self.write("reconcile/previous.txt", "prev\n")
+        self.write("reconcile/matches.tsv", "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n" + "".join(rows))
+        self.render()
+
+
+class CreditCarriedWithALegacyStatusTest(SinceCase):
+    def setUp(self):
+        super().setUp()
+        self.write_status({9: ("fixed", "abc1234")})
+        self.compare("7\t7\tcarried\t1\topen\t\n", "9\t9\tcarried\t2\tfixed\tabc1234\n")
+
+    def test_is_left_out_of_still_open(self):
+        self.assertIn("- Still open: 1\n", self.report())
+
+    def test_stays_in_credits(self):
+        self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
+
+
+class CreditNewSinceThePreviousReviewTest(SinceCase):
+    def test_is_left_out_of_new(self):
+        self.compare("7\t7\tcarried\t1\topen\t\n")
+        self.assertIn("- New: 0\n", self.report())
+
+
+class CarryTickedCreditTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.cur = self.path("cur")
+
+    def carry_tick(self, label):
+        boxes = "- [ ] Post\n- [ ] Ignore\n"
+        self.edit_report(boxes, boxes.replace(f"- [ ] {label}", f"- [x] {label}"))
+        run_ok("carry", self.run_dir, self.cur)
+        return render.read_instructions(self.cur).get(9, {}).get("choice"), render.read_status(self.cur).get(9)
+
+    def test_carries_a_ticked_post_as_an_instruction_only(self):
+        self.assertEqual(self.carry_tick("Post"), ("post", None))
+
+    def test_carries_a_ticked_ignore_as_an_instruction_only(self):
+        self.assertEqual(self.carry_tick("Ignore"), ("ignore", None))
+
+
 class CreditOverlappingAProposalTest(CreditCase):
     def test_is_kept(self):
         self.write_run(defect(7, "a.py", extra="  debt: cleanup\n"), credit(9, "a.py", line=4))
@@ -292,6 +420,44 @@ class ReconcileUnmatchedTest(ReconcileCase):
         self.assertIn("7", self.rows)
 
 
+class ReconcileOnlyCreditsCase(ReconcileCase):
+    def reconcile(self, *cur_entries):
+        os.makedirs(self.cur)
+        with open(os.path.join(self.cur, "merged.md"), "w") as f:
+            f.write("```findings\n" + "".join(cur_entries) + "```\n")
+        run_ok("reconcile", self.prev, self.cur)
+
+    def rows(self, name):
+        with open(os.path.join(self.cur, "reconcile", name)) as f:
+            return [line.split("\t")[:2] for line in f.read().splitlines()[1:]]
+
+
+class ReconcileOnlyCreditsNowTest(ReconcileOnlyCreditsCase):
+    def setUp(self):
+        super().setUp()
+        self.reconcile(credit(1, "c.py"))
+
+    def test_matches_the_credit_to_the_previous_credit(self):
+        self.assertIn(["1", "9"], self.rows("matches.tsv"))
+
+    def test_lists_the_previous_defect_as_unmatched(self):
+        self.assertEqual([r[0] for r in self.rows("unmatched.tsv")], ["7"])
+
+
+class ReconcileOnlyCreditsBeforeTest(ReconcileOnlyCreditsCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(credit(9, "c.py"))
+        self.write_numbers({9: "credit"})
+        self.reconcile(defect(1, "c.py", line=20))
+
+    def test_matches_nothing(self):
+        self.assertEqual(self.rows("matches.tsv"), [])
+
+    def test_lists_nothing_as_unmatched(self):
+        self.assertEqual(self.rows("unmatched.tsv"), [])
+
+
 class ReconcileMatchTest(ReconcileCase):
     def test_never_matches_a_credit_with_a_defect(self):
         os.makedirs(self.cur)
@@ -311,6 +477,16 @@ class FinalReportTest(RunCase):
         run_ok("final-report", self.run_dir)
         left_out = next(l for l in self.read("final-review-report.md").splitlines() if l.startswith("Left out by design"))
         self.assertIn("credits", left_out)
+
+
+    def test_leaves_out_a_credit_appended_by_an_incremental_review(self):
+        self.write_merged(defect(7, "a.py"), credit(9, "c.py"))
+        self.write_numbers({7: "fix", 9: "credit"})
+        self.write_target("branch", "a" * 40, "b" * 40)
+        self.write("raw/security.md", "")
+        self.write("reconcile/appended.tsv", "merged_id\n9\n")
+        run_ok("final-report", self.run_dir)
+        self.assertNotIn("Guards the retry", self.read("final-review-report.md"))
 
 
 if __name__ == "__main__":
