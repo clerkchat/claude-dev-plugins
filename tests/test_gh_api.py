@@ -8,9 +8,6 @@ from helpers import SCRIPTS
 
 sys.path.insert(0, SCRIPTS)
 import gh_api
-import records
-
-pr_comments = records.load_script("pr-comments.py")
 
 
 def completed(stdout="", returncode=0, stderr=""):
@@ -86,33 +83,6 @@ class GhApiTest(unittest.TestCase):
     def test_pr_number_reads_number(self):
         self.run.return_value = completed(json.dumps({"number": 42}))
         self.assertEqual(gh_api.pr_number("/w"), 42)
-
-    def test_pr_comments_imports_them(self):
-        self.assertIs(pr_comments.graphql, gh_api.graphql)
-
-
-def thread(state, body="Looks off."):
-    return {"path": "a.py", "line": 3, "originalLine": 3, "isResolved": False, "isOutdated": False,
-            "comments": {"nodes": [{"databaseId": 1, "author": {"login": "me"}, "body": body, "url": "u", "state": state}]}}
-
-
-def review(state, body="Summary."):
-    return {"databaseId": 2, "author": {"login": "me"}, "body": body, "state": state, "url": "u"}
-
-
-class PrCommentsItemsTest(unittest.TestCase):
-    def items(self, threads=(), reviews=()):
-        p = {"reviewThreads": {"nodes": list(threads)}, "reviews": {"nodes": list(reviews)}, "comments": {"nodes": []}}
-        return [(kind, gid) for kind, gid, *_ in pr_comments.github_items(p)]
-
-    def test_brings_in_submitted_reviews_and_threads(self):
-        self.assertEqual(self.items([thread("SUBMITTED")], [review("COMMENTED")]), [("thread", 1), ("review", 2)])
-
-    def test_skips_a_pending_review(self):
-        self.assertEqual(self.items(reviews=[review("PENDING")]), [])
-
-    def test_skips_a_thread_of_a_pending_review(self):
-        self.assertEqual(self.items([thread("PENDING")]), [])
 
 
 if __name__ == "__main__":

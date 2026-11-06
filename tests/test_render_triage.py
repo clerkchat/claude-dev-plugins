@@ -387,6 +387,40 @@ class PostedLinkTest(PostCase):
         self.assertEqual((self.posted(7)["state"], self.posted(7)["comment_id"]), ("edited", "5"))
 
 
+class CarryPostedTest(PostCase):
+    def carry(self):
+        cur = self.path("cur")
+        run_ok("carry", self.run_dir, cur)
+        return cur
+
+    def carried(self, cur, name):
+        with open(os.path.join(cur, name), encoding="utf-8") as f:
+            return f.read()
+
+    def test_carries_the_drafted_text_and_its_state(self):
+        self.render("--posted", f"1={self.draft}")
+        cur = self.carry()
+        self.assertEqual(self.carried(cur, "posted/7.md"), "Say it plainly.\n")
+        self.assertIn("drafted", self.carried(cur, "posted.tsv"))
+
+    def test_carries_a_text_edited_in_the_report_but_not_yet_rendered(self):
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        cur = self.carry()
+        self.assertEqual(self.carried(cur, "posted/7.md"), "Say it gently.\n")
+
+    def test_carries_the_edited_state_of_a_text_edited_but_not_yet_rendered(self):
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.assertIn("edited", self.carried(self.carry(), "posted.tsv"))
+
+    def test_leaves_the_previous_run_with_the_imported_edit(self):
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.carry()
+        self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
+
+
 class WrapMarkdownTest(unittest.TestCase):
     def wrap(self, *lines):
         return render.wrap_markdown("\n".join(lines), 40).split("\n")
