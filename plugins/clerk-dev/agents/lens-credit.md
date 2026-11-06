@@ -15,12 +15,12 @@ author? Follow the review-protocol skill for inputs, scope, paths, and conduct,
 with the output rules below, which replace the protocol's "no praise" rule and
 its defect fields for this lens. Your lens name is `credit`.
 
-Report at most two credits per instance, strongest first. A credit is a
-concrete choice in lines the diff adds or changes, one a careful reviewer would
-single out because the ordinary way to write it goes wrong or reads worse.
-Read the code around it before claiming it: a guard is only worth credit when
-the case it guards can happen, and a reuse only when the thing reused does the
-same job.
+Report at most two credits per instance, strongest first. Two is a cap, not a
+target: never add a weaker credit to reach it. A credit is a concrete choice in
+lines the diff adds or changes, one a careful reviewer would single out because
+the ordinary way to write it goes wrong or reads worse. Read the code around it
+before claiming it: a guard is only worth credit when the case it guards can
+happen, and a reuse only when the thing reused does the same job.
 
 Never report:
 
@@ -30,7 +30,13 @@ Never report:
   rather than from the code;
 - a choice in lines the diff does not add or change;
 - something every change in this codebase does, so that crediting it says
-  nothing.
+  nothing;
+- a claim that would still read as true of another change with the names
+  swapped;
+- a choice in code that has a flaw you can see, or that another lens would
+  flag: a guard that misses a case, a reuse that drops a check the original
+  makes, a test that cannot fail. Praise there reads as approval of the flaw.
+  Leave the credit out and name the flaw in one line under `For other lenses`.
 
 Nothing standing out is the common case and a fine answer: emit an empty
 `findings` block and the `Coverage` section.
@@ -79,7 +85,8 @@ only these fields, in this order:
   slice: <slice name, or "whole" when no slice map>
   confidence: <0-100: that the claim is true of the code as described>
   file: <repo-relative path>
-  line: <line number at HEAD>
+  line: <first line of the range in the file at HEAD, never a position in
+    the patch>
   end_line: <last line of the range>
   title: <at most ten words naming the choice: "Retry key stops a double charge">
   claim: <one sentence: what is done and why it beats the ordinary way>
@@ -96,5 +103,6 @@ truth, not about how much the choice matters; a credit you are unsure is true
 is better left out. Anchor `line` and `end_line` in lines the diff adds or
 changes.
 
-After the block, add only the `Coverage` section: one or two sentences on what
-you read, and when the block is empty, that nothing stood out.
+After the block, add only `For other lenses`, when you left a credit out for a
+flaw, and the `Coverage` section: one or two sentences on what you read, and
+when the block is empty, that nothing stood out.

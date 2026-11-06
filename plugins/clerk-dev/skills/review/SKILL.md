@@ -471,8 +471,9 @@ Incremental run:
      cover what the new finding describes), `stale` (the same defect, and the
      fix already covers it), or `different` (another issue, even if nearby or
      related). Nearby lines or a shared file are not enough for anything but
-     `different`. A credit (lens `credit`) matches only a credit: a credit and
-     a finding on the same lines are `different`. It writes
+     `different`. A credit (lens `credit`) is a candidate only for a credit,
+     and has no fix: its verdict is `duplicate` (the same choice credited
+     again) or `different`, never `regressed` or `stale`. It writes
      `reconcile/append-judged.tsv` (`new_id`, `carried_id`, verdict).
    - `reconcile.py --append <run>/merged-new.md <run> --judged
      <run>/reconcile/append-judged.tsv`
@@ -1036,10 +1037,16 @@ sections with both the reason and the counter-evidence shown.
 
 Every credit (lens `credit`) is verified too, whatever its confidence, by a
 `sonnet` verifier at effort `medium` asked one question: is the claim true of
-the code at HEAD as described? It returns a confidence about that truth and a
-verdict: confirmed, adjusted (true but overstated, with the note), or rejected
-(with why); no severity, origin, or fix_size. A credit with no verdict is not
-shown.
+the code at HEAD as described? Its prompt opens with that question and the
+rules here, then the credit, the slice patch, and the code at HEAD. The claim
+says what this change does and why that beats the ordinary way, so a choice in
+lines the patch does not add or change, a guard against a case that cannot
+occur, or a reuse of something that does another job is not true as described.
+It returns a confidence about that truth and a verdict: confirmed, adjusted
+(true but overstated, with the note), or rejected (with why); no severity,
+origin, or fix_size. Write it to `verify/<id>.md` as for findings, as one line
+(`verdict: adjusted | confidence: 85 | note: <why>`) with the model and usage
+line below it. A credit with no verdict is not shown.
 
 Drop rejected findings and credits. Everything else stays in `merged.md`; the
 renderer decides the section from severity and final confidence: blockers and majors at

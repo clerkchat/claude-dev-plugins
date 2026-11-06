@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from helpers import SCRIPTS, TempCase, run_ok, write_file
+from helpers import PLUGIN, SCRIPTS, TempCase, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -96,6 +96,22 @@ class MergedCreditTest(TempCase):
 
     def test_leaves_credits_out_of_the_readable_findings(self):
         self.assertNotIn("It guards the retry", self.read("so-far.md"))
+
+
+CREDIT_LENS_FIELDS = {"lens", "slice", "confidence", "file", "line", "end_line", "title", "claim", "context", "snippet", "evidence"}
+
+
+class CreditLensTemplateTest(unittest.TestCase):
+    def setUp(self):
+        with open(os.path.join(PLUGIN, "agents", "lens-credit.md"), encoding="utf-8") as f:
+            [block] = mf.parse_blocks(f.read())
+        [self.entry] = mf.parse_entries(block, "lens-credit.md")
+
+    def test_parses_into_the_credit_fields(self):
+        self.assertEqual(set(self.entry) - {"_source"}, CREDIT_LENS_FIELDS)
+
+    def test_names_only_fields_the_merge_keeps_for_a_credit(self):
+        self.assertLessEqual(CREDIT_LENS_FIELDS - {"end_line"}, set(mf.CREDIT_FIELDS))
 
 
 if __name__ == "__main__":
