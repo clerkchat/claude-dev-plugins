@@ -25,6 +25,7 @@ summary.md.
 """
 import argparse, datetime, os, re
 from records import ROUTING, load_script, read_plain_names
+import run_files as rf
 
 sf = load_script("stale-findings.py")
 
@@ -44,7 +45,7 @@ CATEGORIES = [
 FINAL_LENSES = ["security", "tenancy", "data-privacy", "side-effects", "rollout", "sql", "scaling",
                 "capacity", "concurrency", "contracts", "error-handling", "llm-agent", "completeness"]
 BELOW_LENSES = ["design", "naming-concepts", "user-facing-text", "tests", "performance",
-                "observability-cost", "spec-conformance"]
+                "observability-cost", "spec-conformance", "credit"]
 
 def read(path):
     return open(path, encoding="utf-8").read() if os.path.exists(path) else ""
@@ -68,32 +69,31 @@ def ref(run, num, title):
 def analyze(run):
     findings = sf.load_findings(run)
     status, instr, numbers = sf.state(run)
-    sections = {int(r[1]): r[2] for r in sf.tsv(os.path.join(run, "numbers.tsv")) if len(r) > 2 and r[1].isdigit()}
-    rd = os.path.join(run, "reconcile")
-    appended = {int(r[0]) for r in sf.tsv(os.path.join(rd, "appended.tsv")) if r and r[0].isdigit()}
-    new_of = {int(r[1]): int(r[0]) for r in sf.tsv(os.path.join(rd, "appended-map.tsv")) if len(r) > 1 and r[0].isdigit() and r[1].isdigit()}
-    judged = [r for r in sf.tsv(os.path.join(rd, "append-judged.tsv")) if len(r) > 2]
+    sections = rf.read_sections(run)
+    credits = rf.credit_ids(rf.read_findings(run))
+    appended = rf.read_appended(run)
+    new_of = {mid: new for new, mid in rf.read_appended_map(run).items()}
+    judged = [r for r in rf.read_rows(rf.reconcile_path(run, "append-judged.tsv")) if len(r) > 2]
     title = lambda mid: re.sub(r"\s+", " ", str(findings.get(mid, {}).get("title", ""))).strip() or f"merged {mid}"
 
     kept = []
     for mid in sorted(appended, key=lambda m: int(numbers.get(m, 10**6))):
-        if mid not in numbers: continue
+        if mid not in numbers or mid in credits: continue
         bar = ""
         for p in (os.path.join(run, "final", "verify", f"{new_of.get(mid, '')}.md"), os.path.join(run, "verify", f"{mid}.md")):
             m = re.search(r"^bar:\s*(.*)$", read(p), re.M)
             if m: bar = m.group(1); break
-        cat = category_of(bar) or category_of(str(findings[mid].get("context", "")))
+        cat = category_of(bar) or category_of(str(findings.get(mid, {}).get("context", "")))
         kept.append((numbers[mid], mid, title(mid), cat or "category not stated"))
     reopened = [(numbers[int(r[1])], int(r[1]), title(int(r[1]))) for r in judged
-                if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and status.get(int(r[1]), ["", ""])[1] != "fixed"]
+                if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and rf.status_of(status, int(r[1])) != "fixed"]
     open_fix = [(numbers[m], m, title(m)) for m in findings
                 if m in numbers and sections.get(m) == "fix" and sf.is_open(m, status, instr) and m not in appended]
     counts = {}
     for m in findings:
         if m not in numbers: continue
-        st = status[m][1] if m in status else "open"
-        choice = re.sub(r"\(.*\)$", "", instr.get(m, ""))
-        key = st if st != "open" else {"defer": "deferred", "ignore": "declined"}.get(choice, "open")
+        st = rf.status_of(status, m)
+        key = st if st != "open" else {"defer": "deferred", "ignore": "declined"}.get(sf.plain_choice(instr, m), "open")
         counts[key] = counts.get(key, 0) + 1
     below = re.findall(r"^\s*title:\s*(.+)$", read(os.path.join(run, "final", "below.md")), re.M)
     lenses = sorted({re.sub(r"(-part\d+|-\d+)$", "", os.path.splitext(f)[0]) for f in os.listdir(os.path.join(run, "raw"))}) \

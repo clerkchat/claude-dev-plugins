@@ -50,7 +50,21 @@ class EveryLensTest(unittest.TestCase):
     def test_has_concerns(self):
         missing = [lens for lens in lens_mode.lenses() if not records.has_section(lens_text(lens), "Concerns")]
         self.assertEqual(missing, [])
-        self.assertEqual(len(lens_mode.lenses()), 24)
+        self.assertEqual(len(lens_mode.lenses()), 25)
+
+
+class CreditLensTest(unittest.TestCase):
+    def setUp(self):
+        self.found = lens_mode.concerns("credit")
+
+    def test_carries_review_design_and_pass_lines(self):
+        self.assertEqual({tuple(labels(c)) for c in self.found}, {("Review", "Design", "Pass")})
+
+    def test_design_lines_are_na(self):
+        self.assertTrue(all(lens_mode.na(lens_mode.line(c, "Design")) for c in self.found))
+
+    def test_pass_lines_are_na(self):
+        self.assertTrue(all(lens_mode.na(lens_mode.line(c, "Pass")) for c in self.found))
 
 
 class LensConcernsTest(unittest.TestCase):
@@ -132,6 +146,24 @@ class PassModeTextTest(unittest.TestCase):
         self.assertEqual(run_ok("lens-mode", "rollout", "pass"), run_ok("lens-mode", "rollout"))
 
 
+class AppliesTest(unittest.TestCase):
+    def found(self, *texts):
+        return [lens_mode.Concern(n, "C", [("Pass", text)]) for n, text in enumerate(texts, 1)]
+
+    def test_holds_when_a_concern_has_a_real_line(self):
+        self.assertTrue(lens_mode.applies(self.found("n/a: not for authors", "Check it."), "Pass"))
+
+    def test_fails_when_every_line_is_na(self):
+        self.assertFalse(lens_mode.applies(self.found("n/a: one", "n/a: two"), "Pass"))
+
+    def test_fails_when_a_concern_lacks_the_line(self):
+        found = self.found("Check it.") + [lens_mode.Concern(2, "D", [("Review", "Look.")])]
+        self.assertFalse(lens_mode.applies(found, "Pass"))
+
+    def test_fails_without_concerns(self):
+        self.assertFalse(lens_mode.applies([], "Pass"))
+
+
 class LensModeCommandTest(unittest.TestCase):
     def test_lists_the_six_survey_lenses(self):
         out = run_ok("lens-mode", "--list", "survey")
@@ -139,7 +171,19 @@ class LensModeCommandTest(unittest.TestCase):
 
     def test_lists_pass_lenses_by_default(self):
         out = run_ok("lens-mode", "--list")
-        self.assertEqual(out.split(), [lens for lens in lens_mode.lenses() if lens != "cross-repo"])
+        self.assertEqual(out.split(), [lens for lens in lens_mode.lenses() if lens not in ("cross-repo", "credit")])
+
+    def test_lists_every_lens_for_review(self):
+        self.assertEqual(run_ok("lens-mode", "--list", "review").split(), lens_mode.lenses())
+
+    def test_leaves_the_credit_lens_out_of_survey(self):
+        self.assertNotIn("credit", run_ok("lens-mode", "--list", "survey").split())
+
+    def test_leaves_out_a_lens_whose_lines_for_the_mode_are_all_na(self):
+        self.assertNotIn("credit", run_ok("lens-mode", "--list", "design").split())
+
+    def test_lists_a_lens_with_a_line_for_the_mode(self):
+        self.assertIn("credit", run_ok("lens-mode", "--list", "review").split())
 
     def test_an_unknown_lens_exits_1(self):
         self.assertEqual(run_script("lens-mode", "nope"), (1, "no lens nope"))
@@ -204,6 +248,23 @@ class RoutingSurveysTest(unittest.TestCase):
         for lens in SURVEY_LENSES:
             with self.subTest(lens=lens):
                 self.assertIn(f"`{lens}`", body)
+
+
+class RoutingCreditTest(unittest.TestCase):
+    def setUp(self):
+        self.text = read(ROUTING)
+
+    def test_plain_name_is_credits(self):
+        self.assertEqual(records.read_plain_names(ROUTING)["credit"], "credits")
+
+    def test_triggers_on_any_category_in_every_mode(self):
+        self.assertRegex(records.section(self.text, "Lens triggers"), r"\| `credit` +\| any +\| yes in every mode +\|")
+
+    def test_quick_mode_runs_it_outside_the_cap(self):
+        self.assertIn("`credit` still runs, outside the cap", records.section(self.text, "Quick mode"))
+
+    def test_triage_never_drops_it(self):
+        self.assertIn("credit,", records.section(self.text, "Triage questions").split("Lenses never dropped by triage:")[1])
 
 
 if __name__ == "__main__":

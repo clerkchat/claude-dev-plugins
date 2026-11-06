@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from helpers import TempCase, init_repo, run_script, write_feature_md, write_record
+from helpers import RunCase, init_repo, run_script, write_feature_md, write_record
 
 CHECK = """# Design check: R5 Spec five
 
@@ -16,11 +16,12 @@ Checked 2026-10-21: R5.
 FINDING = "- id: {n}\n  lens: tests\n  severity: minor\n  file: a.py\n  line: 1\n  title: Finding {n}\n"
 
 
-class BlockersCase(TempCase):
+class BlockersCase(RunCase):
     def setUp(self):
         super().setUp()
         self.repo = init_repo(self.path("work"))
         self.repo.git("checkout", "-q", "-b", "feat")
+        self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
         write_feature_md(self.repo.path)
         write_record(self.repo.path, "R5", "spec", "Spec five", body="## Requirements\n\n1. One.\n\n## Baseline\n\nClean.")
 
@@ -36,19 +37,11 @@ class BlockersCase(TempCase):
             f.write(CHECK)
 
     def write_run(self, sections, instructions=(), statuses=()):
-        run = os.path.join(self.repo.path, ".clerk-dev", "latest")
-        os.makedirs(run, exist_ok=True)
-        head = self.repo.git("rev-parse", "HEAD")
-        files = {
-            "merged.md": "```findings\n" + "".join(FINDING.format(n=n) for n in sections) + "```\n",
-            "target.txt": f"branch\n{self.repo.git('rev-parse', 'main')}\n{head}\n",
-            "numbers.tsv": "number\tmerged_id\tsection\n" + "".join(f"{n}\t{n}\t{s}\n" for n, s in sections.items()),
-            "instructions.tsv": "merged_id\tchoice\n" + "".join(f"{n}\t{c}\n" for n, c in instructions),
-            "status.tsv": "merged_id\tstatus\tref\tdate\n" + "".join(f"{n}\t{s}\tabc\t\n" for n, s in statuses),
-        }
-        for name, text in files.items():
-            with open(os.path.join(run, name), "w") as f:
-                f.write(text)
+        self.write_merged(*(FINDING.format(n=n) for n in sections))
+        self.write_target("branch", self.repo.git("rev-parse", "main"), self.repo.git("rev-parse", "HEAD"))
+        self.write_numbers(sections)
+        self.write_instructions({n: (c, "") for n, c in instructions})
+        self.write_status({n: (s, "abc") for n, s in statuses})
 
 
 class BlockersTests(BlockersCase):
@@ -103,6 +96,102 @@ class BlockersTests(BlockersCase):
     def test_other_sections_do_not_block(self):
         self.write_run({1: "look", 2: "debt"})
         self.assertIn("Nothing blocking.", self.blockers())
+
+
+POSTED_HEADER = "merged_id\tstate\tnote\tdate\tthread_id\tcomment_id\turl\tpath\tline\tend_line\tside\tkind\treview_id\n"
+
+
+class PostQueueCase(BlockersCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run({1: "look", 2: "look", 3: "look", 4: "look"}, instructions=[(n, "post") for n in (1, 2, 3, 4)])
+
+    def write_posted(self, rows, notes=None):
+        self.write("posted.tsv", POSTED_HEADER + "".join(f"{n}\t{state}\t{(notes or {}).get(n, '')}\t\t\t\t\ta.py\t1\t1\tRIGHT\t{kind}\t\n"
+                                                         for n, state, kind in rows))
+
+    def full_status(self):
+        code, out = self.repo.status()
+        self.assertEqual(code, 0, out)
+        return out
+
+
+class PostQueueTests(PostQueueCase):
+    def test_without_posted_tsv_every_post_finding_is_queued(self):
+        out = self.full_status()
+        self.assertIn("marked to post, not yet posted or changed since posting: 4 (1, 2, 3, 4)", out)
+        self.assertIn('"post the review"', out)
+
+    def test_only_drafted_and_edited_findings_are_queued(self):
+        self.write_posted([(1, "drafted", ""), (2, "posted", "inline"), (3, "edited", "inline")])
+        out = self.full_status()
+        self.assertIn("marked to post, not yet posted or changed since posting: 3 (1, 3, 4)", out)
+
+    def test_a_posted_finding_whose_note_changed_is_queued(self):
+        self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4)], notes={2: "an earlier note"})
+        out = self.full_status()
+        self.assertIn("marked to post, not yet posted or changed since posting: 1 (2)", out)
+
+    def test_all_posted_and_unchanged_lists_nothing(self):
+        self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4)])
+        out = self.full_status()
+        self.assertNotIn("marked to post", out)
+        self.assertNotIn("post the review", out)
+
+    def test_a_run_with_no_post_marks_is_unchanged(self):
+        self.write_run({1: "look"}, instructions=[(1, "fix")])
+        out = self.full_status()
+        self.assertNotIn("marked to post", out)
+        self.assertNotIn("post the review", out)
+
+
+class WhenAFindingIgnoredEarlierIsMarkedPostTest(PostQueueCase):
+    def setUp(self):
+        super().setUp()
+        self.write_status({4: ("wont-fix", "")})
+
+    def test_it_is_still_queued(self):
+        self.assertIn("marked to post, not yet posted or changed since posting: 4 (1, 2, 3, 4)", self.full_status())
+
+
+class CloseStepTests(PostQueueCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted.tsv", POSTED_HEADER + "".join(f"{n}\tposted\tinline\t\tT{n}\t{n}\t\ta.py\t1\t1\tRIGHT\tline\t\n" for n in (1, 2, 3, 4)))
+        self.write_status({1: ("fixed", "abc"), 2: ("fixed", "abc")})
+        self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\tby_viewer\n"
+                   "1\t1\tT1\topen\t0\t1\t1\t\td\t1\n2\t2\tT2\tresolved\t0\t1\t1\t\td\t1\n")
+
+    def test_names_the_fixed_findings_with_an_open_thread(self):
+        self.assertIn("Close the posted thread of finding 1; see Closing posted threads in the `review` skill.", self.full_status())
+
+    def test_names_nothing_when_no_thread_is_open(self):
+        self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\n")
+        self.assertNotIn("Close the posted thread", self.full_status())
+
+
+class CreditsInStatusTests(PostQueueCase):
+    CREDIT = "- id: 5\n  lens: credit\n  file: a.py\n  line: 1\n  title: Credit 5\n  claim: Guards it.\n"
+
+    def setUp(self):
+        super().setUp()
+        self.write_merged(*(FINDING.format(n=n) for n in (1, 2, 3, 4)), self.CREDIT)
+        self.write_numbers({1: "look", 2: "look", 3: "look", 4: "look", 5: "credit"})
+        self.write_instructions({n: ("post", "") for n in (1, 2, 3, 4, 5)})
+
+    def test_a_post_marked_credit_is_queued_to_post(self):
+        self.assertIn("marked to post, not yet posted or changed since posting: 5 (1, 2, 3, 4, 5)", self.full_status())
+
+    def test_a_credit_is_not_counted_as_a_finding(self):
+        self.assertIn("**Findings:** 4 in the report", self.full_status())
+
+    def test_a_credit_only_post_mark_prompts_to_post(self):
+        self.write_instructions({5: ("post", "")})
+        self.assertIn('"post the review"', self.full_status())
+
+    def test_a_posted_credit_is_not_queued(self):
+        self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4, 5)])
+        self.assertNotIn("marked to post", self.full_status())
 
 
 if __name__ == "__main__":

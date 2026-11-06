@@ -80,7 +80,11 @@ commit rules below.
 
    ```
    claude -p "/clerk-dev:review <start>..<end> --standalone --pass PASS-<n> --lenses <lenses> --no-pr-comments"
-     --allowedTools "Bash(git *)" "Bash(gh pr *)" "Bash(python3 *)" "Bash(ln *)" "Bash(mkdir *)" Read Grep Glob Agent Write
+     --allowedTools "Bash(git blame *)" "Bash(git check-ignore *)" "Bash(git diff *)"
+     "Bash(git log *)" "Bash(git merge-base *)" "Bash(git remote set-head origin --auto)"
+     "Bash(git rev-parse *)" "Bash(git show *)" "Bash(git status *)"
+     "Bash(git worktree list *)" "Bash(gh pr view *)" "Bash(gh pr diff *)"
+     "Bash(gh pr list *)" "Bash(mkdir *)" Read Grep Glob Agent Write
    ```
 
    from the worktree, in the background, output to a log in the scratchpad.

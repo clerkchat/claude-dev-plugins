@@ -473,10 +473,21 @@ done as written):
   "..."`, then `items.py status <survey file> Q-3 deferred --ref IDEA-7`, and no
   deferred item.
 - `Ignore`: not at all; the status becomes `wont-fix`, with why.
+- `Post`: send it to the pull request's author as a comment on the user's
+  pending GitHub review; the note steers the text or names where it goes ("Post:
+  as a question, on `src/a.ts`"). Findings only. The card gets a Posted block
+  holding the text that goes out, which the user edits in the report; the
+  status stays as it is. The `review-triage` skill's posting pass drafts,
+  previews, and posts, each step on the user's yes.
 - `Refine`: investigate first (read the source change and the local code),
   propose a concrete fix or a reason not to, as the `deliberate` skill does,
   then set one of the others. Follow-ups and design questions only; a
   finding's author is a lens in this repository, and Discuss covers it.
+
+A credit (a finding from the credit lens: something the change does well,
+worth telling its author) takes only `Post` and `Ignore`, and has no status:
+`Ignore` there means only "do not post it", with no reason, and changes no
+status.
 
 Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
 `deferred`. The box is ticked exactly when the status is one of the last three.

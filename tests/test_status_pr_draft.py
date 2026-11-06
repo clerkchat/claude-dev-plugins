@@ -1,12 +1,12 @@
 import os
 import unittest
 
-from helpers import TempCase, init_repo
+from helpers import RunCase, init_repo
 
 DRAFT_STEP = '"draft the PR description"'
 
 
-class DraftStepCase(TempCase):
+class DraftStepCase(RunCase):
     def setUp(self):
         super().setUp()
         self.repo = init_repo(self.path("work"))
@@ -15,17 +15,11 @@ class DraftStepCase(TempCase):
         self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
 
     def write_run(self):
-        os.makedirs(self.run_dir, exist_ok=True)
         self.write("merged.md", "")
-        head = self.repo.git("rev-parse", "HEAD")
-        self.write("target.txt", f"branch\n{self.repo.git('rev-parse', 'main')}\n{head}\n")
+        self.write_target("branch", self.repo.git("rev-parse", "main"), self.repo.git("rev-parse", "HEAD"))
 
     def write_final(self, verdict):
         self.write("final-review-report.md", f"# Final review: {verdict}\n\nWhole branch.\n")
-
-    def write(self, name, text):
-        with open(os.path.join(self.run_dir, name), "w") as f:
-            f.write(text)
 
     def next_steps(self):
         code, out = self.repo.status()

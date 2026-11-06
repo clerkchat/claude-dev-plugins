@@ -4,11 +4,19 @@ import json
 import re
 import subprocess
 import tempfile
+import sys
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGIN = os.path.join(ROOT, "plugins", "clerk-dev")
 SCRIPTS = os.path.join(PLUGIN, "scripts")
+
+sys.path.insert(0, SCRIPTS)
+import gh_api
+import records
+import run_files
+
 
 GIT_ENV = {
     **os.environ,
@@ -272,3 +280,96 @@ class FeatureRepoCase(TempCase):
         write_record(root, "R6", "spec", "Spec six", body="## Requirements\n\n1. Six one.\n2. Six two.")
         write_record(root, "R7", "brainstorm", "A brainstorm", body="Ideas.")
         write_record(root, "R8", "plan", "Old plan", "superseded", "superseded_by: R4\n", "1. Old step. Done when old.")
+
+
+def merged_md(*entries):
+    return "```findings\n" + "".join(entries) + "```\n"
+
+
+class RunCase(TempCase):
+    def setUp(self):
+        super().setUp()
+        self.run_dir = self.path("run")
+
+    def write(self, name, text):
+        write_file(os.path.join(self.run_dir, name), text)
+
+    def read(self, name):
+        with open(os.path.join(self.run_dir, name), encoding="utf-8") as f:
+            return f.read()
+
+    def write_merged(self, *entries):
+        self.write("merged.md", merged_md(*entries))
+
+    def write_numbers(self, sections):
+        self.write("numbers.tsv", "number\tmerged_id\tsection\n" + "".join(f"{m}\t{m}\t{s}\n" for m, s in sections.items()))
+
+    def write_instructions(self, rows):
+        self.write("instructions.tsv", "merged_id\tchoice\tnote\tdate\talso\toption\n"
+                   + "".join(f"{m}\t{choice}\t{note}\t\t\t\n" for m, (choice, note) in sorted(rows.items())))
+
+    def write_status(self, rows):
+        self.write("status.tsv", "merged_id\tstatus\tref\tdate\n"
+                   + "".join(f"{m}\t{status}\t{ref}\t\n" for m, (status, ref) in sorted(rows.items())))
+
+    def write_target(self, *lines):
+        self.write("target.txt", "".join(l + "\n" for l in lines))
+
+
+def defect(mid, path, line=3, lens="correctness", extra=""):
+    return (
+        f"- id: {mid}\n  lens: {lens}\n  severity: major\n  confidence: 90\n"
+        f"  file: {path}\n  line: {line}\n  claim: Finding {mid} breaks.\n  impact: It matters.\n  fix: Repair finding {mid}.\n{extra}"
+    )
+
+
+class GhRunCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.unstubbed_gh_calls = []
+        self.stub("gh", side_effect=self.refuse_gh)
+        self.addCleanup(self.assertNoUnstubbedGh)
+
+    def refuse_gh(self, args, cwd, stdin=None):
+        self.unstubbed_gh_calls.append(list(args))
+        raise AssertionError(f"unstubbed gh call: gh {' '.join(map(str, args))}")
+
+    def assertNoUnstubbedGh(self):
+        self.assertEqual(self.unstubbed_gh_calls, [])
+
+    def stub(self, name, **kw):
+        patcher = mock.patch.object(gh_api, name, **kw)
+        self.addCleanup(patcher.stop)
+        return patcher.start()
+
+
+class RenderRunCase(RunCase):
+    DATE = "2026-11-05"
+
+    def args(self, *extra):
+        return (self.run_dir, "--target", "t", "--repo", self.tmp, "--date", self.DATE, "--wrap", "0", *extra)
+
+    def render(self, *extra):
+        return run_ok("render-report", *self.args(*extra))
+
+    def render_fails(self, *extra):
+        code, out = run_script("render-report", *self.args(*extra))
+        self.assertEqual(code, 1)
+        return out
+
+    def report(self):
+        return self.read("report.md")
+
+    def edit_report(self, old, new):
+        text = self.report()
+        self.assertIn(old, text)
+        self.write("report.md", text.replace(old, new, 1))
+
+    def card(self, number):
+        return self.report().split(f"#### {number}. ", 1)[1].split("\n#### ", 1)[0].split("\n## ", 1)[0]
+
+    def instruction(self, mid):
+        return run_files.read_instructions(self.run_dir).get(mid, {})
+
+    def status(self, mid):
+        return run_files.read_status(self.run_dir).get(mid)
