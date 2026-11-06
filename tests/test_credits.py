@@ -70,6 +70,22 @@ class CreditCase(RunCase):
         return render.read_status(self.run_dir).get(mid)
 
 
+class NoCreditsTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run(defect(7, "a.py"))
+        self.out = self.render()
+
+    def test_leaves_the_count_out_of_the_front_matter(self):
+        self.assertNotIn("credits:", self.report())
+
+    def test_leaves_the_count_out_of_the_summary_line(self):
+        self.assertNotIn("credits", self.out)
+
+    def test_has_no_credits_section(self):
+        self.assertNotIn("\n## Credits\n", self.report())
+
+
 class CreditsSectionTest(CreditCase):
     def setUp(self):
         super().setUp()
