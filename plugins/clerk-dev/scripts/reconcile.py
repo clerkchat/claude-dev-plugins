@@ -33,7 +33,7 @@ in-progress, wont-fix, or deferred (open needs no row) (a previous "fixed" that 
 again is reopened, so it is not carried), and copies previous resolution
 text into CUR_RUN/resolution/ prefixed with the previous run's label.
 """
-import argparse, os, re, sys
+import argparse, os, re, shutil, sys
 from records import load_script
 
 mf = load_script("merge-findings.py")
@@ -94,6 +94,9 @@ def normalize_merged(text):
         byid[int(re.match(r"^- id: (\d+)", c).group(1))] = c
     return header, [byid[k] for k in sorted(byid)]
 
+def read_normalized(run):
+    with open(os.path.join(run, "merged.md"), encoding="utf-8") as fh: return normalize_merged(fh.read())
+
 def write_merged(path, header, entries):
     open(path, "w", encoding="utf-8").write(header.rstrip("\n") + "\n\n```findings\n" + "\n\n".join(entries) + "\n```\n")
 
@@ -134,7 +137,7 @@ def append_mode(new_path, cur, judged=None):
     as a new finding with related_to set when it had a candidate. A recheck
     that found the carried finding resolved (reconcile/since.tsv) wins over
     regressed: the new finding is appended as different instead."""
-    header, entries = normalize_merged(open(os.path.join(cur, "merged.md"), encoding="utf-8").read())
+    header, entries = read_normalized(cur)
     carried = load(cur)
     new = {}
     for block in mf.parse_blocks(open(new_path, encoding="utf-8").read()):
@@ -221,6 +224,18 @@ def append_mode(new_path, cur, judged=None):
     print(f"incremental: {len(new)} new findings: {counts['duplicate']} duplicates, {counts['regressed']} regressions, "
           f"{counts['stale']} already covered by a fix, {len(appended)} appended", file=sys.stderr)
 
+def seed_posted(prev, cur, pid, cid, prev_posted, cur_posted):
+    if pid not in prev_posted or cid in cur_posted: return False
+    cur_posted[cid] = prev_posted[pid]
+    src, dst = rr.posted_path(prev, pid), rr.posted_path(cur, cid)
+    if os.path.exists(src) and not os.path.exists(dst):
+        os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copy2(src, dst)
+    return True
+
+def lost_line(lost, pnum):
+    names = ", ".join(f"finding {pnum[pid]}" if pid in pnum else f"#{pid}" for pid in lost)
+    return f"{len(lost)} posted findings not found again ({names}); their threads come in as pull request comments"
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("prev", nargs="?", help="previous run (omit with --append)")
@@ -248,7 +263,8 @@ def main():
         existing = {int(r[0]) for r in tsv(st_path) if r and r[0].isdigit()}
         rows = [l for l in open(st_path)] if os.path.exists(st_path) else ["merged_id\tstatus\tref\tdate\n"]
         os.makedirs(os.path.join(a.cur, "resolution"), exist_ok=True)
-        carried = 0
+        carried = seeded_posted = 0
+        prev_posted, cur_posted = rr.read_posted(a.prev), rr.read_posted(a.cur)
         for r in matches:
             cid, pid, status, ref = int(r[0]), int(r[1]), r[4], r[5] if len(r) > 5 else ""
             if status in ("in-progress", "wont-fix", "deferred") and cid not in existing:
@@ -257,8 +273,13 @@ def main():
             dst = os.path.join(a.cur, "resolution", f"{cid}.md")
             if os.path.exists(src) and not os.path.exists(dst):
                 open(dst, "w").write(f"From the review in {label}:\n\n" + open(src).read())
+            seeded_posted += seed_posted(a.prev, a.cur, pid, cid, prev_posted, cur_posted)
         open(st_path, "w").writelines(rows)
-        print(f"seeded {carried} statuses from {label}", file=sys.stderr)
+        if seeded_posted: rr.write_posted(a.cur, cur_posted)
+        matched = {int(r[1]) for r in matches}
+        lost = [pid for pid, row in sorted(prev_posted.items()) if rr.has_thread(row) and pid not in matched]
+        print(f"seeded {carried} statuses" + (f" and {seeded_posted} posted findings" if seeded_posted else "") + f" from {label}"
+              + (f"; {lost_line(lost, pnum)}" if lost else ""), file=sys.stderr)
         return
 
     if a.judged:

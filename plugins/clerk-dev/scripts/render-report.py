@@ -77,6 +77,7 @@ NAMES = {}
 STATUS = {}
 INSTR = {}
 POSTED = {}
+THREADS = {}
 PR_LINKS = {}
 RECON = {"label": "", "matches": {}, "prior": {}, "since": {}, "unmatched": []}
 RUN = "."
@@ -623,7 +624,8 @@ def pr_block(c, heading, with_location=True):
     st = c.get("github_state", "")
     return out + thread_lines(c.get("replies", ""), [x.strip() for x in st.split(",")] if st else [])
 
-THREAD_STATE_WORDS = {"resolved": "marked resolved on GitHub", "outdated": "outdated on GitHub: the code it was attached to has changed"}
+THREAD_STATE_WORDS = {"resolved": "marked resolved on GitHub", "outdated": "outdated on GitHub: the code it was attached to has changed",
+                      "pending": "in your pending review, not yet submitted", "missing": "the comment is no longer on the pull request"}
 
 def thread_lines(replies, state_words):
     out = [code_spans("Replies: " + replies), ""] if replies else []
@@ -737,20 +739,46 @@ def write_instructions(run, ins):
 
 POSTED_FIELDS = ("state", "note", "date", "thread_id", "comment_id", "url", "path", "line", "end_line", "side", "kind", "review_id")
 
-def read_posted(run):
+def read_keyed(path, fields):
     rows = {}
-    p = os.path.join(run, "posted.tsv")
-    if os.path.exists(p):
-        with open(p, encoding="utf-8") as fh: lines = fh.read().splitlines()[1:]
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh: lines = fh.read().splitlines()[1:]
         for line in lines:
             f = line.split("\t")
-            if f[0].isdigit(): rows[int(f[0])] = dict(zip(POSTED_FIELDS, f[1:] + [""] * len(POSTED_FIELDS)))
+            if f[0].isdigit(): rows[int(f[0])] = dict(zip(fields, f[1:] + [""] * len(fields)))
     return rows
 
+def write_keyed(path, fields, rows):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\t".join(("merged_id",) + fields) + "\n")
+        for k in sorted(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in fields]) + "\n")
+
+def read_posted(run):
+    return read_keyed(os.path.join(run, "posted.tsv"), POSTED_FIELDS)
+
 def write_posted(run, rows):
-    with open(os.path.join(run, "posted.tsv"), "w", encoding="utf-8") as fh:
-        fh.write("\t".join(("merged_id",) + POSTED_FIELDS) + "\n")
-        for k in sorted(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in POSTED_FIELDS]) + "\n")
+    write_keyed(os.path.join(run, "posted.tsv"), POSTED_FIELDS, rows)
+
+def has_comment(row):
+    return bool(row.get("kind"))
+
+def is_posted(row):
+    return has_comment(row) and row.get("state") == "posted"
+
+def has_thread(row):
+    return has_comment(row) and row["kind"] != "body" and bool(row.get("comment_id"))
+
+THREAD_FIELDS = ("comment_id", "thread_id", "state", "outdated", "can_resolve", "line", "replies", "date")
+
+def threads_path(run):
+    return os.path.join(run, "pr", "threads.tsv")
+
+def read_threads(run):
+    return read_keyed(threads_path(run), THREAD_FIELDS)
+
+def write_threads(run, rows):
+    write_keyed(threads_path(run), THREAD_FIELDS, rows)
 
 def read_findings(run, mf):
     overrides = read_overrides(run, mf)
@@ -813,7 +841,13 @@ def posted_block(mid):
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
     else: body = [posted_fence(text), text, posted_fence(text)]
-    return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {}))
+    return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {})) + posted_thread_lines(THREADS.get(mid))
+
+def thread_states(row):
+    return [w for w in (row["state"], "outdated" if row["outdated"] == "1" else "") if w and w != "open"]
+
+def posted_thread_lines(row):
+    return thread_lines(row["replies"], thread_states(row)) if row else []
 
 def fenced_text(block):
     body, opened = [], False
@@ -1170,12 +1204,6 @@ def route_findings(merged, verdicts, a):
     unverified = [e for e in merged if not is_pr(e) and e["id"] not in verdicts]
     return {s.key: outcomes[s.key] for s in SECTIONS}, unverified, outcomes["rejected"], outcomes["hidden"]
 
-def has_comment(row):
-    return bool(row.get("kind"))
-
-def is_posted(row):
-    return has_comment(row) and row.get("state") == "posted"
-
 def drop_overlapping_credits(routed):
     defects = [d for key in DEFECT_SECTIONS for d in routed[key]]
     kept, dropped = [], []
@@ -1342,7 +1370,7 @@ def main():
     mf = load_merge_module()
     merged = read_findings(a.run, mf)
     verdicts, labels = read_verdicts(a.run), read_labels(a.run)
-    global NAMES, TITLES, RUN, RECON, PR_LINKS, IDNUM, TITLE_BY_ID
+    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID
     NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run, mf), a.run
     nums = read_numbers(a.run)
     drafts = [posted_draft(spec, nums) for spec in a.posted]
@@ -1351,7 +1379,7 @@ def main():
     apply_instructions(nums, a.instruct, a.note, today)
     for mid, text in drafts: record_posted(a.run, mid, text, "drafted", today)
     warn_unlabeled_options(merged)
-    RECON, PR_LINKS = read_reconcile(a.run), pr_links(merged)
+    RECON, PR_LINKS, THREADS = read_reconcile(a.run), pr_links(merged), read_threads(a.run)
     routed, unverified, rejected, hidden_minor = route_findings(merged, verdicts, a)
     overlapping = drop_overlapping_credits(routed)
     prior_nums = {} if a.renumber else dict(nums)

@@ -251,6 +251,10 @@ class ThreadLinesTest(unittest.TestCase):
         self.assertEqual(render.thread_lines("", ["resolved", "outdated"]),
                          ["State: marked resolved on GitHub; outdated on GitHub: the code it was attached to has changed.", ""])
 
+    def test_words_the_pending_and_missing_states(self):
+        self.assertEqual(render.thread_lines("", ["pending", "missing"]),
+                         ["State: in your pending review, not yet submitted; the comment is no longer on the pull request.", ""])
+
     def test_keeps_an_unknown_state_as_is(self):
         self.assertEqual(render.thread_lines("", ["approved"]), ["State: approved.", ""])
 
@@ -433,7 +437,7 @@ class EditAndNoteChangeInOneRenderTest(PostCase):
         self.assertNotIn("redraft", self.out)
 
 
-class PostedLinkTest(PostCase):
+class PostedCommentCase(PostCase):
     URL = "https://github.com/o/r/pull/1#discussion_r5"
 
     def setUp(self):
@@ -444,6 +448,11 @@ class PostedLinkTest(PostCase):
         render.write_posted(self.run_dir, {7: row})
         self.render()
 
+    def after_the_link(self):
+        return self.posted_section(1).split(f"[comment]({self.URL}).", 1)[1]
+
+
+class PostedLinkTest(PostedCommentCase):
     def test_links_the_posted_comment(self):
         self.assertIn(f"Posted on `a.py:12-14`, [comment]({self.URL}).", self.posted_section(1))
 
@@ -456,6 +465,39 @@ class PostedLinkTest(PostCase):
         self.edit_report("Say it plainly.", "Say it gently.")
         self.render()
         self.assertEqual((self.posted(7)["state"], self.posted(7)["comment_id"]), ("edited", "5"))
+
+
+class PostedThreadTest(PostedCommentCase):
+    def show_thread(self, **fields):
+        row = {"comment_id": "5", "thread_id": "T5", "state": "open", "outdated": "0", "can_resolve": "1",
+               "line": "12", "replies": "", "date": "2026-11-06", **fields}
+        render.write_threads(self.run_dir, {7: row})
+        self.render()
+        return self.after_the_link()
+
+    def test_adds_nothing_for_an_open_thread_without_replies(self):
+        self.assertNotRegex(self.show_thread(), "Replies:|State:")
+
+    def test_shows_the_replies(self):
+        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies="@bob: Fair."))
+
+    def test_words_a_resolved_thread(self):
+        self.assertIn("\nState: marked resolved on GitHub.\n", self.show_thread(state="resolved"))
+
+    def test_words_an_outdated_thread(self):
+        self.assertIn("State: outdated on GitHub", self.show_thread(outdated="1"))
+
+    def test_words_a_thread_in_the_pending_review(self):
+        self.assertIn("State: in your pending review, not yet submitted.", self.show_thread(state="pending"))
+
+    def test_words_a_missing_thread(self):
+        self.assertIn("State: the comment is no longer on the pull request.", self.show_thread(state="missing"))
+
+    def test_keeps_the_posted_text_importable(self):
+        self.show_thread(replies="@bob: Fair.", state="resolved")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.render()
+        self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
 
 
 class CarryPostedTest(PostCase):

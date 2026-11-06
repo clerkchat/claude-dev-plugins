@@ -95,6 +95,22 @@ class MarkedCreditTest(CreditCase):
         self.assertIn("0 post, 1 not decided.", self.report())
 
 
+class PostedCreditThreadTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.render("--instruct", "2=post")
+        render.write_posted(self.run_dir, {9: {"state": "posted", "kind": "line", "comment_id": "5", "path": "c.py", "line": "20"}})
+        render.write_threads(self.run_dir, {9: {"comment_id": "5", "state": "resolved", "outdated": "0", "replies": "@bob: Thanks."}})
+        self.render()
+
+    def test_shows_the_replies(self):
+        self.assertIn("Replies: @bob: Thanks.", self.card(2))
+
+    def test_shows_the_state(self):
+        self.assertIn("State: marked resolved on GitHub.", self.card(2))
+
+
 class CreditCardTest(CreditCase):
     def setUp(self):
         super().setUp()

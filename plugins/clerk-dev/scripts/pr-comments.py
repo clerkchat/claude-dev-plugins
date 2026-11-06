@@ -23,7 +23,7 @@ renders inside the finding's card; an unlinked one renders as its own card in
 the "Pull request comments" section. Human comments are never filtered by any
 confidence bar.
 """
-import argparse, json, os, re, sys
+import argparse, datetime, json, os, re, sys
 from collections import namedtuple
 from records import load_script
 from gh_api import graphql, pr_number, repo_owner_name
@@ -32,8 +32,8 @@ rc = load_script("reconcile.py"); mf, rr = rc.mf, rc.rr
 
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName
-reviewThreads(first:100){nodes{id isResolved isOutdated path line originalLine
-  comments(first:50){nodes{databaseId author{login} body url createdAt state}}}}
+reviewThreads(first:100){nodes{id isResolved isOutdated viewerCanResolve path line startLine originalLine
+  comments(first:50){nodes{databaseId author{login} body url createdAt pullRequestReview{state}}}}}
 reviews(first:100){nodes{databaseId author{login} body state url}}
 comments(first:100){nodes{databaseId author{login} body url}}}}}"""
 
@@ -69,25 +69,66 @@ def entry(mid, kind, gid, author, body, url, path="", line=None, oline=None, rep
     }
     return "\n".join([f"- id: {mid}"] + [f"  {k}: {v}" for k, v in f.items() if v not in ("", None)])
 
-def github_items(p):
-    items = []
-    for t in p["reviewThreads"]["nodes"]:
-        cs = [c for c in t["comments"]["nodes"] if c.get("state") != "PENDING"]
-        if not cs: continue
-        root = cs[0]
-        items.append(("thread", root["databaseId"], (root["author"] or {}).get("login", "ghost"), root["body"], root["url"],
-                      dict(path=t["path"], line=t["line"], oline=t["originalLine"],
-                           replies=[((c["author"] or {}).get("login", "ghost"), c["body"]) for c in cs[1:]],
-                           resolved=t["isResolved"], outdated=t["isOutdated"])))
+def login(c):
+    return (c["author"] or {}).get("login", "ghost")
+
+def is_pending(c):
+    return (c.get("pullRequestReview") or {}).get("state") == "PENDING"
+
+def replies_of(t):
+    return [(login(c), c["body"]) for c in t["comments"]["nodes"][1:] if not is_pending(c)]
+
+def thread_item(t):
+    root = t["comments"]["nodes"][0]
+    return ("thread", root["databaseId"], login(root), root["body"], root["url"],
+            dict(path=t["path"], line=t["line"], oline=t["originalLine"], replies=replies_of(t),
+                 resolved=t["isResolved"], outdated=t["isOutdated"]))
+
+def github_items(p, threads):
+    items = [thread_item(t) for t in threads]
     for r in p["reviews"]["nodes"]:
         if r["body"].strip() and r["state"] != "PENDING":
-            items.append(("review", r["databaseId"], (r["author"] or {}).get("login", "ghost"), r["body"], r["url"], dict(state=r["state"])))
+            items.append(("review", r["databaseId"], login(r), r["body"], r["url"], dict(state=r["state"])))
     for c in p["comments"]["nodes"]:
         if c["body"].strip():
-            items.append(("comment", c["databaseId"], (c["author"] or {}).get("login", "ghost"), c["body"], c["url"], {}))
+            items.append(("comment", c["databaseId"], login(c), c["body"], c["url"], {}))
     return items
 
-Folded = namedtuple("Folded", "new_ids updated")
+Threads = namedtuple("Threads", "linked imported left_out")
+
+def sort_threads(p, linking):
+    linked, imported, left_out = {}, [], 0
+    for t in p["reviewThreads"]["nodes"]:
+        if not t["comments"]["nodes"]: continue
+        root = t["comments"]["nodes"][0]
+        if root["databaseId"] in linking: linked[linking[root["databaseId"]]] = t
+        elif is_pending(root): left_out += 1
+        else: imported.append(t)
+    return Threads(linked, imported, left_out)
+
+def flag(on):
+    return "1" if on else "0"
+
+def thread_row(t, today):
+    root = t["comments"]["nodes"][0]
+    state = "pending" if is_pending(root) else "resolved" if t["isResolved"] else "open"
+    return {"comment_id": str(root["databaseId"]), "thread_id": t["id"], "state": state, "outdated": flag(t["isOutdated"]),
+            "can_resolve": flag(t.get("viewerCanResolve")), "line": str(t["line"] or ""),
+            "replies": join_replies(replies_of(t)), "date": today}
+
+def missing_row(posted, today):
+    return {"comment_id": posted["comment_id"], "thread_id": posted["thread_id"], "state": "missing",
+            "outdated": "0", "can_resolve": "0", "line": "", "replies": "", "date": today}
+
+def link_threads(run, p, today):
+    posted = {mid: row for mid, row in rr.read_posted(run).items() if rr.has_thread(row)}
+    threads = sort_threads(p, {int(row["comment_id"]): mid for mid, row in posted.items()})
+    if posted:
+        rr.write_threads(run, {mid: thread_row(threads.linked[mid], today) if mid in threads.linked else missing_row(row, today)
+                               for mid, row in posted.items()})
+    return threads
+
+Folded = namedtuple("Folded", "new_ids updated linked left_out")
 
 def fetch(repo, pr):
     owner, name = repo_owner_name(repo)
@@ -109,17 +150,13 @@ def write_seen(path, seen):
     with open(path, "w") as fh:
         for k, v in sorted(seen.items(), key=lambda kv: kv[1]): fh.write(f"{k}\t{v}\n")
 
-def fold_in(run, p):
-    pd = pr_dir(run)
-    open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
-    open(os.path.join(pd, "pr.txt"), "w").write(f"{p['number']}\t{p['url']}\n")
-    mpath = os.path.join(run, "merged.md")
-    header, entries = rc.normalize_merged(open(mpath, encoding="utf-8").read())
-    sp = os.path.join(pd, "seen.tsv")
+def import_items(run, items):
+    header, entries = rc.read_normalized(run)
+    sp = os.path.join(pr_dir(run), "seen.tsv")
     seen = read_seen(sp)
     next_id = max([int(re.match(r"^- id: (\d+)", c).group(1)) for c in entries] or [0]) + 1
     new_ids, updated = [], 0
-    for kind, gid, author, body, url, extra in github_items(p):
+    for kind, gid, author, body, url, extra in items:
         key = f"{kind}:{gid}"
         if key in seen:
             mid = seen[key]
@@ -131,9 +168,17 @@ def fold_in(run, p):
             continue
         mid = next_id; next_id += 1; seen[key] = mid; new_ids.append(mid)
         entries.append(entry(mid, kind, gid, author, body, url, **extra))
-    rc.write_merged(mpath, header, entries)
+    rc.write_merged(os.path.join(run, "merged.md"), header, entries)
     write_seen(sp, seen)
-    return Folded(new_ids, updated)
+    return new_ids, updated
+
+def fold_in(run, p, today):
+    pd = pr_dir(run)
+    open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
+    open(os.path.join(pd, "pr.txt"), "w").write(f"{p['number']}\t{p['url']}\n")
+    threads = link_threads(run, p, today)
+    new_ids, updated = import_items(run, github_items(p, threads.imported))
+    return Folded(new_ids, updated, len(threads.linked), threads.left_out)
 
 def shortlist(run, new_ids):
     allm = rc.load(run)
@@ -158,8 +203,7 @@ def shortlist(run, new_ids):
     return rows
 
 def apply_judged(run, judged):
-    mpath = os.path.join(run, "merged.md")
-    header, entries = rc.normalize_merged(open(mpath, encoding="utf-8").read())
+    header, entries = rc.read_normalized(run)
     links = 0
     for line in open(judged):
         f = line.rstrip("\n").split("\t")
@@ -168,8 +212,15 @@ def apply_judged(run, judged):
             for k, c in enumerate(entries):
                 if c.startswith(f"- id: {pid}\n") and "duplicate_of:" not in c:
                     entries[k] = c + f"\n  duplicate_of: {fid}"; links += 1
-    rc.write_merged(mpath, header, entries)
+    rc.write_merged(os.path.join(run, "merged.md"), header, entries)
     return links
+
+def summary(pr, folded, rows):
+    parts = [f"{len(folded.new_ids)} new comments", f"{folded.updated} updated"]
+    if folded.linked: parts.append(f"{folded.linked} posted findings linked")
+    if folded.left_out: parts.append(f"{folded.left_out} threads of your own pending review left out")
+    parts.append(f"{len(rows)} candidate links for {len({r[0] for r in rows})} comments to judge")
+    return f"PR #{pr}: " + ", ".join(parts)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -180,9 +231,7 @@ def main():
         links = apply_judged(a.run, a.judged)
         print(f"linked {links} pull request comments after judging", file=sys.stderr); return
     pr = a.pr or pr_number(a.repo)
-    folded = fold_in(a.run, fetch(a.repo, pr))
-    rows = shortlist(a.run, folded.new_ids)
-    print(f"PR #{pr}: {len(folded.new_ids)} new comments, {folded.updated} updated, "
-          f"{len(rows)} candidate links for {len({r[0] for r in rows})} comments to judge", file=sys.stderr)
+    folded = fold_in(a.run, fetch(a.repo, pr), datetime.date.today().isoformat())
+    print(summary(pr, folded, shortlist(a.run, folded.new_ids)), file=sys.stderr)
 
 if __name__ == "__main__": main()
