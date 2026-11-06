@@ -4,23 +4,13 @@ import shutil
 import sys
 import unittest
 
-from helpers import SCRIPTS, RunCase, merged_md, run_ok, run_script, write_file
+from helpers import SCRIPTS, RenderRunCase, RunCase, defect, merged_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
 
 render = records.load_script("render-report.py")
 sf = records.load_script("stale-findings.py")
-
-DATE = "2026-11-05"
-
-
-def defect(mid, path, line=3, extra=""):
-    return (
-        f"- id: {mid}\n  lens: correctness\n  severity: major\n  confidence: 90\n"
-        f"  file: {path}\n  line: {line}\n  claim: Finding {mid} breaks.\n  impact: It matters.\n  fix: Repair finding {mid}.\n{extra}"
-    )
-
 
 def credit(mid, path, line=20):
     return (
@@ -33,7 +23,7 @@ def credit(mid, path, line=20):
 CONFIRMED = "verdict: confirmed | confidence: 90 | severity: major"
 
 
-class CreditCase(RunCase):
+class CreditCase(RenderRunCase):
     def setUp(self):
         super().setUp()
         self.write_run(defect(7, "a.py"), credit(9, "c.py"))
@@ -42,34 +32,6 @@ class CreditCase(RunCase):
         self.write_merged(*entries)
         for entry in entries:
             self.write(f"verify/{entry.split()[2]}.md", CONFIRMED)
-
-    def args(self, *extra):
-        return (self.run_dir, "--target", "t", "--repo", self.tmp, "--date", DATE, "--wrap", "0", *extra)
-
-    def render(self, *extra):
-        return run_ok("render-report", *self.args(*extra))
-
-    def render_fails(self, *extra):
-        code, out = run_script("render-report", *self.args(*extra))
-        self.assertEqual(code, 1)
-        return out
-
-    def report(self):
-        return self.read("report.md")
-
-    def card(self, number):
-        return self.report().split(f"#### {number}. ", 1)[1].split("\n#### ", 1)[0].split("\n## ", 1)[0]
-
-    def edit_report(self, old, new):
-        text = self.report()
-        self.assertIn(old, text)
-        self.write("report.md", text.replace(old, new, 1))
-
-    def instruction(self, mid):
-        return render.read_instructions(self.run_dir).get(mid, {})
-
-    def status(self, mid):
-        return render.read_status(self.run_dir).get(mid)
 
 
 class NoCreditsTest(CreditCase):
@@ -93,9 +55,10 @@ class CreditsSectionTest(CreditCase):
         super().setUp()
         self.out = self.render()
 
-    def test_follows_previously_declined_and_precedes_below_the_bar(self):
-        keys = [s.key for s in render.SECTIONS]
-        self.assertEqual(keys[keys.index("declined") + 1 : keys.index("below") + 1], ["credit", "below"])
+    def test_comes_after_the_defects_and_before_the_closing_sections(self):
+        report = self.report()
+        self.assertLess(report.index("#### 1. "), report.index("## Credits"))
+        self.assertLess(report.index("## Credits"), report.index("## Not reviewed this run"))
 
     def test_heads_the_section(self):
         self.assertIn("\n## Credits\n", self.report())
@@ -116,6 +79,19 @@ class CreditsSectionTest(CreditCase):
         self.assertRegex(self.report(), r"\| 2 +\| Guards the retry +\|.*\| credit +\|")
 
     def test_leaves_credits_out_of_the_triage_line(self):
+        self.assertIn("0 post, 1 not decided.", self.report())
+
+
+class MarkedCreditTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.render("--instruct", "2=post")
+
+    def test_counts_the_credit_marked_post_in_the_intro(self):
+        self.assertIn("1 credit, 1 marked Post.", self.report())
+
+    def test_leaves_it_out_of_the_triage_line(self):
         self.assertIn("0 post, 1 not decided.", self.report())
 
 
@@ -543,6 +519,46 @@ class AppendCreditJudgedStaleTest(AppendCase):
         self.assertIn("new finding 1: a credit judged stale; treating it as a duplicate of 9", self.out)
 
 
+class AppendCreditJudgedRegressedTest(AppendCase):
+    def setUp(self):
+        super().setUp()
+        self.out = self.append("1\t9\tregressed\n")
+
+    def test_does_not_drop_the_new_credit(self):
+        self.assertEqual(self.read("reconcile/dropped.tsv"), "")
+
+    def test_appends_nothing(self):
+        self.assertEqual(self.appended(), [])
+
+    def test_warns_that_it_is_taken_as_a_duplicate(self):
+        self.assertIn("new finding 1: a credit judged regressed; treating it as a duplicate of 9", self.out)
+
+
+class AppendJudgedAgainstNothingTest(AppendCase):
+    def setUp(self):
+        super().setUp()
+        self.out = self.append("1\t\tduplicate\n")
+
+    def test_appends_the_new_finding(self):
+        self.assertEqual(self.appended(), ["10"])
+
+    def test_warns_that_the_verdict_is_ignored(self):
+        self.assertIn("new finding 1: judged against nothing", self.out)
+
+
+class AppendDefectBesideACarriedCreditTest(AppendCase):
+    def setUp(self):
+        super().setUp()
+        write_file(self.new, merged_md(defect(1, "c.py", line=20)))
+        self.out = self.append("1\t9\tduplicate\n")
+
+    def test_appends_the_defect(self):
+        self.assertEqual(self.appended(), ["10"])
+
+    def test_ignores_the_verdict_against_the_credit(self):
+        self.assertIn("new finding 1: judged against 9, which was not among its candidates", self.out)
+
+
 class AppendJudgedAgainstANonCandidateTest(AppendCase):
     def setUp(self):
         super().setUp()
@@ -564,7 +580,6 @@ class FinalReportTest(RunCase):
         run_ok("final-report", self.run_dir)
         left_out = next(l for l in self.read("final-review-report.md").splitlines() if l.startswith("Left out by design"))
         self.assertIn("credits", left_out)
-
 
     def test_leaves_out_a_credit_appended_by_an_incremental_review(self):
         self.write_merged(defect(7, "a.py"), credit(9, "c.py"))

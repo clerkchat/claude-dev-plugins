@@ -4,11 +4,17 @@ import json
 import re
 import subprocess
 import tempfile
+import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLUGIN = os.path.join(ROOT, "plugins", "clerk-dev")
 SCRIPTS = os.path.join(PLUGIN, "scripts")
+
+sys.path.insert(0, SCRIPTS)
+import records
+
+render_report = records.load_script("render-report.py")
 
 GIT_ENV = {
     **os.environ,
@@ -306,3 +312,42 @@ class RunCase(TempCase):
 
     def write_target(self, *lines):
         self.write("target.txt", "".join(l + "\n" for l in lines))
+
+
+def defect(mid, path, line=3, lens="correctness", extra=""):
+    return (
+        f"- id: {mid}\n  lens: {lens}\n  severity: major\n  confidence: 90\n"
+        f"  file: {path}\n  line: {line}\n  claim: Finding {mid} breaks.\n  impact: It matters.\n  fix: Repair finding {mid}.\n{extra}"
+    )
+
+
+class RenderRunCase(RunCase):
+    DATE = "2026-11-05"
+
+    def args(self, *extra):
+        return (self.run_dir, "--target", "t", "--repo", self.tmp, "--date", self.DATE, "--wrap", "0", *extra)
+
+    def render(self, *extra):
+        return run_ok("render-report", *self.args(*extra))
+
+    def render_fails(self, *extra):
+        code, out = run_script("render-report", *self.args(*extra))
+        self.assertEqual(code, 1)
+        return out
+
+    def report(self):
+        return self.read("report.md")
+
+    def edit_report(self, old, new):
+        text = self.report()
+        self.assertIn(old, text)
+        self.write("report.md", text.replace(old, new, 1))
+
+    def card(self, number):
+        return self.report().split(f"#### {number}. ", 1)[1].split("\n#### ", 1)[0].split("\n## ", 1)[0]
+
+    def instruction(self, mid):
+        return render_report.read_instructions(self.run_dir).get(mid, {})
+
+    def status(self, mid):
+        return render_report.read_status(self.run_dir).get(mid)

@@ -146,6 +146,24 @@ class PassModeTextTest(unittest.TestCase):
         self.assertEqual(run_ok("lens-mode", "rollout", "pass"), run_ok("lens-mode", "rollout"))
 
 
+class AppliesTest(unittest.TestCase):
+    def found(self, *texts):
+        return [lens_mode.Concern(n, "C", [("Pass", text)]) for n, text in enumerate(texts, 1)]
+
+    def test_holds_when_a_concern_has_a_real_line(self):
+        self.assertTrue(lens_mode.applies(self.found("n/a: not for authors", "Check it."), "Pass"))
+
+    def test_fails_when_every_line_is_na(self):
+        self.assertFalse(lens_mode.applies(self.found("n/a: one", "n/a: two"), "Pass"))
+
+    def test_fails_when_a_concern_lacks_the_line(self):
+        found = self.found("Check it.") + [lens_mode.Concern(2, "D", [("Review", "Look.")])]
+        self.assertFalse(lens_mode.applies(found, "Pass"))
+
+    def test_fails_without_concerns(self):
+        self.assertFalse(lens_mode.applies([], "Pass"))
+
+
 class LensModeCommandTest(unittest.TestCase):
     def test_lists_the_six_survey_lenses(self):
         out = run_ok("lens-mode", "--list", "survey")
@@ -154,6 +172,12 @@ class LensModeCommandTest(unittest.TestCase):
     def test_lists_pass_lenses_by_default(self):
         out = run_ok("lens-mode", "--list")
         self.assertEqual(out.split(), [lens for lens in lens_mode.lenses() if lens not in ("cross-repo", "credit")])
+
+    def test_lists_every_lens_for_review(self):
+        self.assertEqual(run_ok("lens-mode", "--list", "review").split(), lens_mode.lenses())
+
+    def test_leaves_the_credit_lens_out_of_survey(self):
+        self.assertNotIn("credit", run_ok("lens-mode", "--list", "survey").split())
 
     def test_leaves_out_a_lens_whose_lines_for_the_mode_are_all_na(self):
         self.assertNotIn("credit", run_ok("lens-mode", "--list", "design").split())

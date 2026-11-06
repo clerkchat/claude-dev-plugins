@@ -1,58 +1,27 @@
 import os
 import sys
 import unittest
-from unittest import mock
 
-from helpers import SCRIPTS, RunCase, run_ok, run_script, write_file
+from helpers import SCRIPTS, RenderRunCase, RunCase, defect, init_repo, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
 
 render = records.load_script("render-report.py")
 
-DATE = "2026-11-05"
 LONG = "word " * 30
 
 
-def finding(mid, path, lens="correctness", extra=""):
-    return (
-        f"- id: {mid}\n  lens: {lens}\n  severity: major\n  confidence: 90\n"
-        f"  file: {path}\n  line: 3\n  claim: Finding {mid} breaks.\n  fix: Repair finding {mid}.\n{extra}"
-    )
-
-
-class RenderCase(RunCase):
+class RenderCase(RenderRunCase):
     def setUp(self):
         super().setUp()
-        self.write_merged(finding(7, "a.py"), finding(8, "b.py"))
+        self.write_merged(defect(7, "a.py"), defect(8, "b.py"))
         for mid in (7, 8):
             self.write(f"verify/{mid}.md", "verdict: confirmed | confidence: 90 | severity: major")
         self.render()
 
-    def args(self, *extra):
-        return (self.run_dir, "--target", "t", "--repo", self.tmp, "--date", DATE, "--wrap", "0", *extra)
-
-    def render(self, *extra):
-        return run_ok("render-report", *self.args(*extra))
-
-    def render_fails(self, *extra):
-        code, out = run_script("render-report", *self.args(*extra))
-        self.assertNotEqual(code, 0)
-        return out
-
-    def instruction(self, mid):
-        return render.read_instructions(self.run_dir).get(mid, {})
-
     def status(self, mid):
-        return render.read_status(self.run_dir).get(mid, {})
-
-    def edit_report(self, old, new):
-        text = self.read("report.md")
-        self.assertIn(old, text)
-        self.write("report.md", text.replace(old, new, 1))
-
-    def card(self, number):
-        return self.read("report.md").split(f"#### {number}. ", 1)[1].split("\n#### ", 1)[0]
+        return super().status(mid) or {}
 
 
 class NumbersTest(RenderCase):
@@ -213,6 +182,28 @@ class FencedNoteTest(RenderCase):
         self.assertEqual(self.instruction(7)["choice"], "discuss")
 
 
+class HandEditAndFlagInOneRenderTest(RenderCase):
+    def test_set_wins_over_a_ticked_status_box(self):
+        self.edit_report("- [ ] Open", "- [x] Won't fix: out of scope")
+        self.render("--set", "1=fixed:abc1234")
+        self.assertEqual((self.status(7)["status"], self.status(7)["ref"]), ("fixed", "abc1234"))
+
+    def test_instruct_wins_over_a_ticked_instruction_box(self):
+        self.edit_report("- [ ] Discuss", "- [x] Discuss")
+        self.render("--instruct", "1=defer:later")
+        self.assertEqual((self.instruction(7)["choice"], self.instruction(7)["note"]), ("defer", "later"))
+
+    def test_instruct_ignore_after_a_ticked_discuss_declines_the_finding(self):
+        self.edit_report("- [ ] Discuss", "- [x] Discuss")
+        self.render("--instruct", "1=ignore:not ours")
+        self.assertEqual(self.status(7)["status"], "wont-fix")
+
+    def test_a_tick_on_one_finding_survives_a_flag_on_another(self):
+        self.edit_report("- [ ] Discuss", "- [x] Discuss")
+        self.render("--instruct", "2=defer")
+        self.assertEqual(self.instruction(7)["choice"], "discuss")
+
+
 class SummaryTest(RenderCase):
     def summary(self, path):
         self.render("--summary", path)
@@ -237,8 +228,8 @@ class CardTailTest(RenderCase):
 class PullRequestCardTailTest(RenderCase):
     def setUp(self):
         super().setUp()
-        pr = finding(9, "c.py", lens="pr-review", extra="  author: bob\n")
-        self.write_merged(finding(7, "a.py"), finding(8, "b.py"), pr)
+        pr = defect(9, "c.py", lens="pr-review", extra="  author: bob\n")
+        self.write_merged(defect(7, "a.py"), defect(8, "b.py"), pr)
         self.write("verify/9.md", "verdict: confirmed | confidence: 90 | severity: major | note: The comment holds.")
         self.write("resolution/9.md", "Answered on the thread.\n")
         self.render()
@@ -395,6 +386,26 @@ class EditedNoteChangeTest(PostCase):
         self.assertNotIn("note changed", self.render())
 
 
+class EditAndNoteChangeInOneRenderTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.out = self.render("--instruct", "1=post:longer")
+
+    def test_warns_that_the_edit_stands(self):
+        self.assertIn("note changed after its posted text was edited; the edit stands", self.out)
+
+    def test_keeps_the_edited_text(self):
+        self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
+
+    def test_marks_the_text_edited(self):
+        self.assertEqual(self.posted(7)["state"], "edited")
+
+    def test_does_not_ask_for_a_redraft(self):
+        self.assertNotIn("redraft", self.out)
+
+
 class PostedLinkTest(PostCase):
     URL = "https://github.com/o/r/pull/1#discussion_r5"
 
@@ -500,10 +511,47 @@ class ChoicesTest(unittest.TestCase):
     def test_words_the_usage_from_the_given_choices(self):
         self.assertEqual(render.instruct_usage(TWO_CHOICES), "N=post[:note], N=ignore[:reason], N=none")
 
-    def test_counts_only_the_given_choices_in_the_triage_line(self):
-        numbered = [{"id": 7, "_sec": "fix"}, {"id": 8, "_sec": "fix"}]
-        with mock.patch.object(render, "INSTR", {7: {"choice": "post"}}):
-            self.assertEqual(render.triage_line(numbered, TWO_CHOICES), "Triage: 1 post, 0 ignore, 1 not decided.")
+
+class FencedLinesTest(unittest.TestCase):
+    def kinds(self, *lines):
+        return [kind for _, kind in render.fenced_lines(lines)]
+
+    def test_marks_prose_fences_and_bodies(self):
+        self.assertEqual(self.kinds("a", "```", "b", "```", "c"), ["", "fence", "body", "fence", ""])
+
+    def test_walks_a_tilde_fence(self):
+        self.assertEqual(self.kinds("~~~", "x", "~~~", "y"), ["fence", "body", "fence", ""])
+
+    def test_holds_a_backtick_fence_inside_a_tilde_fence_as_body(self):
+        self.assertEqual(self.kinds("~~~", "```", "x", "```", "~~~", "y"), ["fence", "body", "body", "body", "fence", ""])
+
+    def test_holds_a_shorter_fence_inside_a_longer_one_as_body(self):
+        self.assertEqual(self.kinds("````", "```suggestion", "x", "```", "````", "y"), ["fence", "body", "body", "body", "fence", ""])
+
+    def test_closes_on_a_longer_fence(self):
+        self.assertEqual(self.kinds("```", "x", "````", "y"), ["fence", "body", "fence", ""])
+
+    def test_does_not_close_on_a_fence_with_an_info_string(self):
+        self.assertEqual(self.kinds("```", "```js", "x"), ["fence", "body", "body"])
+
+    def test_holds_the_rest_after_an_unclosed_fence_as_body(self):
+        self.assertEqual(self.kinds("```", "a", "##### Instruction"), ["fence", "body", "body"])
+
+
+class UnbalancedFenceInSnippetTest(RenderCase):
+    def setUp(self):
+        super().setUp()
+        source = init_repo(self.path("source"))
+        write_file(os.path.join(source.path, "notes.md"), "one\n```\ntwo\nthree\n")
+        source.git("add", "notes.md")
+        source.git("commit", "-qm", "notes")
+        self.write_merged(defect(7, "notes.md", extra="  snippet: notes.md:1-4\n"))
+        self.render("--repo", source.path)
+
+    def test_keeps_the_instruction_boxes_live(self):
+        self.edit_report("- [ ] Discuss", "- [x] Discuss")
+        self.render()
+        self.assertEqual(self.instruction(7)["choice"], "discuss")
 
 
 class WrapMarkdownTest(unittest.TestCase):
