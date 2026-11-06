@@ -1,6 +1,6 @@
 ---
 name: review-triage
-description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", records outcomes in the report, then drafts the posted text of findings marked "Post" through the post-drafter agent and posts them to the user's pending GitHub review. "post the review", "draft the posted text", or "submit the review" runs only that posting pass.
+description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "cross check the findings against the backlog follow-ups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", records outcomes in the report, then drafts the posted text of findings marked "Post" through the post-drafter agent and posts them to the user's pending GitHub review. "post the review", "draft the posted text", or "submit the review" runs only that posting pass.
 argument-hint: "[fixes | discuss | post | check | all] [run label]"
 allowed-tools:
   - Bash(git add *)
@@ -30,7 +30,7 @@ allowed-tools:
 
 # Review triage
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The user marks each finding in a review report with an instruction: Fix as
 recommended (optionally with a note), Discuss, Defer, Ignore, or Post; a
@@ -81,7 +81,8 @@ against code that has changed or is about to.
 
 ### Open follow-ups
 
-Run `followups.py list <worktree> --open`. When items are open, the other
+Run `backlog.py list <worktree> --kind followup`: this repository's open
+backlog follow-ups for the branch. When items are open, the other
 repository has already changed a contract on this branch and this one is out of
 step until they are done; a finding fixed first may be fixed against code the
 follow-up rewrites. Ask once: "<n> follow-ups are open (<their
@@ -132,7 +133,7 @@ Otherwise judge the candidates, which you do not do yourself:
      N=<verdict>[:<note>] ... --through
    <HEAD>`.
 4. Say what moved, one line per resolved or changed finding ("12 resolved by
-   cabf2b2 (F1)", "40 moved to discuss: the settings page no longer renders the
+   cabf2b2 (BL-1)", "40 moved to discuss: the settings page no longer renders the
    invite form inline"), and one line with the count that still applies. The user can
    undo any of these the usual way, by re-ticking the report. When the render
    says a posted finding's thread is still open, follow Closing posted threads

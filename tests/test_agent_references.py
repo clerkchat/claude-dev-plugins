@@ -26,6 +26,23 @@ def check_references(paths, plugin=PLUGIN, root=ROOT):
     return broken, sorted(templates)
 
 
+STORES_THE_BACKLOG_REPLACED = re.compile(
+    r"followups\.py|\.clerk-dev/followups\.md|ideas\.md"
+    r"|records\.py`? +(?:idea|ideas|adopt|drop|unpark)\b"
+    r"|\bIDEA-\d+|\bF\d+\b"
+)
+
+
+def lines_matching(pattern):
+    named = []
+    for path in plugin_text_files():
+        with open(path, encoding="utf-8") as f:
+            for number, line in enumerate(f, 1):
+                if pattern.search(line):
+                    named.append(f"{os.path.relpath(path, ROOT)}:{number}")
+    return named
+
+
 class AgentReferenceTests(unittest.TestCase):
     def test_every_reference_names_an_agent_or_a_skill(self):
         broken, templates = check_references(referring_files())
@@ -39,14 +56,10 @@ class AgentReferenceTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(PLUGIN, "skills", "followups", "SKILL.md")))
 
     def test_no_file_names_the_old_agents_or_the_old_followups_skill(self):
-        old = re.compile(r"implementer|fixer|review-followups", re.I)
-        named = []
-        for path in plugin_text_files():
-            with open(path, encoding="utf-8") as f:
-                for number, line in enumerate(f, 1):
-                    if old.search(line):
-                        named.append(f"{os.path.relpath(path, ROOT)}:{number}")
-        self.assertEqual(named, [])
+        self.assertEqual(lines_matching(re.compile(r"implementer|fixer|review-followups", re.I)), [])
+
+    def test_no_file_names_the_stores_the_backlog_replaced_or_their_ids(self):
+        self.assertEqual(lines_matching(STORES_THE_BACKLOG_REPLACED), [])
 
 
 def agent_frontmatter(name):

@@ -23,11 +23,11 @@ worktrees and records; features are not tracked across each other.
     SURVEY-1.md               a survey of existing code (the design-check skill)
     SURVEY-1/raw/<lens>.md    each lens's reply, verbatim
   overview.md                 generated from the active records; never edited
-  ideas.md                    parked ideas, IDEA-1, IDEA-2, ...; kept by records.py
 ```
 
 `overview.md` is the feature's current state in one read, generated from the
-active records (below). `ideas.md` holds ideas set aside for later (below). Check files are not
+active records (below). Ideas set aside for later live in the hub repository's
+backlog, not here (below). Check files are not
 records: they have no record id, are never superseded, and are
 listed in the index under every record they checked. A survey is a check-style
 file over code, not a record: it is listed under the record it was for, or as
@@ -63,7 +63,7 @@ Record bodies and the overview carry diagrams as "Diagrams" in
 - **Ids.** One sequence per feature, whatever the type, and each id is its
   type's prefix and its number: STORM-1 (brainstorm), DESIGN-2, DEC-3
   (decision), GUIDE-4 (guidance), PIECES-5 (pieces), PLAN-6, BRIEF-7
-  (brief). The number alone finds the record, so older ids (R7, and IDEAS-1 from before brainstorms were STORM-) still resolve. Parked ideas are items, not records: IDEA-1 in `ideas.md` is unrelated to STORM-1.
+  (brief). The number alone finds the record, so older ids (R7, and IDEAS-1 from before brainstorms were STORM-) still resolve. Parked ideas are backlog items, not records: BL-1 in the hub repository's backlog is unrelated to STORM-1.
   Older records may say `type: spec` or `type: capabilities`: they read as a
   brief and a pieces record, and are not rewritten.
   The id is the handle in conversation ("DEC-3"), in other records (`from:`),
@@ -306,26 +306,26 @@ being.
 
 Lists inside a brief other than Requirements and Open items use plain numbers,
 cited as BRIEF-9.4 (brief, then number). Never prefix list items with an id
-prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a record type's prefix such as
+prefix (BL, DEFER, BUILD, MILE, PASS, Q, a record type's prefix such as
 DEC or BRIEF, or the older single letters I, D, B, M, P, R): those are the
-plugin's ids for ideas, follow-ups, deferred items, handoffs, milestones,
+plugin's ids for backlog items, deferred items, handoffs, milestones,
 passes, questions, and records.
 
 ## Ideas
 
 Good ideas come up all the time that are not for now. Parking one keeps it
-from being lost or from creeping into the current work. `ideas.md` is a
-checkbox list (IDEA-1, IDEA-2, ...) kept by `records.py idea`, `adopt`, `drop`, and
-`unpark`, in the item vocabulary of "Items" in `skills/review/tracking.md`:
+from being lost or from creeping into the current work. A parked idea is an
+item of kind `idea` in the hub repository's backlog (`scripts/backlog.py`,
+`<git common dir>/clerk-dev/backlog/`), scoped to the hub's branch and numbered
+BL-1, BL-2, ... per repository, `<repo>:BL-1` from another repository:
 
 - **Parked** (status open): the idea, where it came from (a record, a check
   question, "this session"), why it is worth having, and when to look at it
   again: a trigger rather than a date ("after the core lands", "if exports
-  get slow"). An area when it belongs to one; inherited from its `from`
-  record otherwise.
-- **Adopted** (fixed): it became a record (a brainstorm, a decision, a brief,
-  or a piece of the plan); Outcome names the record.
-- **Dropped** (wont-fix): it will not be done; Outcome says why.
+  get slow"). An area when it belongs to one, given with `--area`.
+- **Adopted** (status adopted): it became a record (a brainstorm, a decision,
+  a brief, or a piece of the plan); the outcome names the record.
+- **Dropped** (status dropped): it will not be done; the outcome says why.
 
 An idea is not a rejected alternative (those stay in the decision that
 rejected them) or a deferred item (a known gap with a path chosen for now,
@@ -429,7 +429,7 @@ names its change in Approach are consistent, not a disagreement.
 
 ## Parked
 
-One line per parked idea, by area, with when to look again (IDEA-4, harness:
+One line per parked idea, by area, with when to look again (BL-4, harness:
 streaming results; when a suite runs longer than a minute). "None." when there
 are none. The digest also lists adopted and dropped ideas; they are not
 parked, and an adopted idea is cited by the record it became wherever that

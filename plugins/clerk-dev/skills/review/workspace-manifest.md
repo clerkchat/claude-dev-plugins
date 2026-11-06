@@ -33,7 +33,7 @@ Hub: api
 | worker | /Users/me/src/worker-exports |             |
 ```
 
-- `Repo`: the short name used in reports, follow-up `From:` lines, and finding
+- `Repo`: the short name used in reports, follow-up `origin` fields, and finding
   references ("api 8").
 - `Worktree`: absolute path of the worktree that holds this job's branch.
 - `Main`: optional, the remote main branch to compare against. Empty means

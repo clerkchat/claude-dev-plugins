@@ -108,7 +108,8 @@ plugin is built around the habits that make that happen.
 - **Clean up first, then build.** Reuse what exists, keep one source of truth,
   tidy the code before adding to it.
 - **Saying "not now" on purpose.** Good ideas for later are parked with why and
-  when to look again; work another repository owes becomes a follow-up there.
+  when to look again; work another repository owes becomes a follow-up in that
+  repository's backlog, which every worktree of it shares.
 - **Knowing when to stop.** The final review raises only what would hold the
   merge and does not reopen what you decided.
 
@@ -133,7 +134,8 @@ with "where are we?".
 - On a bigger feature, records carry an area (`auth`, `delivery`), named as the
   thinking splits rather than planned up front.
 - Parked ideas carry why they are worth having and when to look again, until
-  they are adopted or dropped.
+  they are adopted or dropped. They live in the hub repository's backlog,
+  outside any worktree, so they outlive the branch.
 - They live in `.clerk-dev/feature/` in the worktree you started in (the hub),
   where other repositories of the feature find them. Reviews check the code
   against the active briefs.
@@ -231,7 +233,7 @@ reaches a choice no record settles, it stops and asks you rather than guessing.
 Covers the feature as well as the review: passes in progress, design questions
 to settle first, open items in briefs, and the follow-ups each repository owes
 the others. Follow-ups take the same instructions as findings, plus Refine:
-"refine F3", "ignore F2, that screen is gone".
+"refine BL-4", "ignore BL-2, that screen is gone".
 
 #### A typical review
 

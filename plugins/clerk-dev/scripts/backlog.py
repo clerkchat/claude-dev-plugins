@@ -93,9 +93,11 @@ class Reader:
     def __init__(self, wt):
         self.wt = wt
         self.own = own_store(wt)
+        self.own_branch = branch_of(wt)
         self.branches = {}
 
     def exists(self, store, branch):
+        if branch == self.own_branch and same_store(store, self.own): return True
         if store.wt not in self.branches: self.branches[store.wt] = branches(store.wt)
         return branch in self.branches[store.wt]
 
@@ -134,7 +136,7 @@ def read(wt, kind=None, scope=None, include_closed=False, repo=None):
     else:
         hub = hub_store(wt, reader.own)
         branch = branch_of(hub.wt)
-        views = (scope,) if scope else (NEW, branch)
+        views = (scope,) if scope else (NEW, branch, reader.own_branch)
         in_view = lambda it: include_closed or it["orphaned"] or it.get("scope") in views
         found = [it for it in reader.items(reader.own) if in_view(it)]
         if kind in (None, IDEA) and not same_store(hub, reader.own):

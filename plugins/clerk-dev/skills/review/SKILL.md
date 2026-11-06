@@ -108,7 +108,7 @@ lists them, the other worktrees of the job. For each one it prints the
 repository's `setup` lines, the remote main or that `origin/HEAD` is
 missing, when the last fetch was, the merge base, the branch's commit messages,
 `diff --stat` and `git status --short`, whether the branch notes have a Purpose,
-the review workspace rows, open follow-ups, and the latest run and whether it is
+the review workspace rows, open follow-ups (from the backlog), and the latest run and whether it is
 unfinished and still at `HEAD`. It never fails the call; a missing piece is
 printed as missing. Use its output for Branch notes first, First runs in a
 repository, and Resuming, rather than gathering the same facts with your own
@@ -188,7 +188,7 @@ reads it but never asks, offers, or records anything.
 
 ## How you talk to the user
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 When this session runs headless (started with `claude -p`, as feature mode does
 for each repository), there is no one to answer a question. Never ask: follow
@@ -354,7 +354,8 @@ see Step 6b):
 - `${CLAUDE_PLUGIN_ROOT}/scripts/carry.py` and `reconcile.py`: incremental and
   re-review bookkeeping; `reconcile.py --append` is the only way to add a
   finding to `merged.md` after the merge step.
-- `${CLAUDE_PLUGIN_ROOT}/scripts/followups.py`: the follow-ups file.
+- `${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py`: the repository's backlog, whose
+  open follow-ups each run writes to its run directory (Step 1).
 - `${CLAUDE_PLUGIN_ROOT}/scripts/usage.py RUN [--append]`: totals the real
   usage recorded in raw and verify headers, by lens and model.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/progress.py`: watches runs on disk for the
@@ -772,9 +773,10 @@ it with the shipped script. Give it the target and the script path and have it:
    `tracking.md`) and the review does not read them. Select only documents that
    are new or modified on the branch, or whose text mentions a changed path or
    the branch name; order by modification time; keep at most eight and report
-   how many were dropped. Also include the plugin's own `.clerk-dev/followups.md`
-   when it has open items (see `tracking.md`); it does not count against the
-   eight. With `--pass`, the only document is the pass's piece record: skip the
+   how many were dropped. Also write this worktree's open follow-ups,
+   `backlog.py list <worktree> --kind followup` as printed, to
+   `<run>/followups.md`, and include that file when it has items (see
+   `tracking.md`); it does not count against the eight. With `--pass`, the only document is the pass's piece record: skip the
    work-tracking selection above (the PR is still collected). Otherwise include the feature's
    active records
    (`records.py list <worktree> --active`, which reads the hub; see
@@ -1560,8 +1562,10 @@ skills, and repo context, and writes its run and report under that worktree's
    `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's guidance
    file, `records.py guidance <its worktree> --context <its CONTEXT> --out
    <run>/guidance-<repo>.md`, whose branch scope says what that side meant to change), plus `MODE`,
-   `PR`, and `DOCS`; `DOCS` includes each repository's
-   `.clerk-dev/followups.md` (see `tracking.md`). Merge, verify,
+   `PR`, and `DOCS`; `DOCS` includes each repository's open follow-ups,
+   `backlog.py list <its worktree> --kind followup` as printed, written to
+   `<run>/followups-<repo>.md` beside its guidance file, when it has items
+   (see `tracking.md`). Merge, verify,
    and number its findings in this session's run directory as usual.
    With `--final`, the lens and its verifiers also get `BAR: final`, and
    its findings are split by the bar as in Final pass steps 6 and 7 (with
@@ -1616,6 +1620,8 @@ cross-repository check is starting and roughly how long it takes.
 instance list), `progress.md`, `raw/<lens>[-<slice>].md`, `so-far.md` (interim,
 unverified), `merged.md` (and `merged-new.md` in incremental runs),
 `verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
+`followups.md` (the worktree's open backlog follow-ups, as `backlog.py list`
+printed them; `followups-<repo>.md` per repository in feature runs),
 `reconcile/`, `pr/` (with `threads.tsv`, the posted findings' threads as step
 7b last saw them), `titles.tsv`, `overrides/`, `summary.md`,
 `not-reviewed.md`, `numbers.tsv`, `status.tsv`, `instructions.tsv`,
@@ -1633,7 +1639,7 @@ among them), `report.md`, `report.prev.md`, `stale.tsv`
 later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the
 final pass's verdict) next to `report.md`. Next to the run directories,
-`.clerk-dev/latest`, `.clerk-dev/latest-feature`, `.clerk-dev/branch-notes.md`, `.clerk-dev/followups.md`,
+`.clerk-dev/latest`, `.clerk-dev/latest-feature`, `.clerk-dev/branch-notes.md`,
 `.clerk-dev/workspace.md` (or a link to it), and `.clerk-dev/status-seen`
 belong to the worktree. Raw and verify files are written
 only on completion, which is what makes `--resume` safe. A run stopped after

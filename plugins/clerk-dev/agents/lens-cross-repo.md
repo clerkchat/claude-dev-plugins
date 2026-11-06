@@ -100,13 +100,14 @@ reader can check your map.
    - Design: When `SPEC` is present, do the plan's pieces across repositories
      together satisfy it?
 11. **Follow-ups.**
-   - Review: for each repository's `.clerk-dev/followups.md` in `DOCS`, check
+   - Review: for each repository's `followups-<repo>.md` in `DOCS` (its open
+     backlog follow-ups, one `BL-n` line each), check
      each open item against that repository's diff. An item whose contract
      change is now matched is resolved work left open; an item with no matching
      change is still owed, and is a finding when the producing side has already
      shipped the change in this feature.
    - Design: Does the plan have a piece for each open follow-up in a
-     repository's `.clerk-dev/followups.md` that owes a contract change this
+     repository's `followups-<repo>.md` that owes a contract change this
      feature makes?
 12. **Missing repos.**
    - Review: based on the contract graph, name any repo that should have

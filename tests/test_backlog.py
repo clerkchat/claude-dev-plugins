@@ -212,6 +212,19 @@ class HubTests(TwoRepositoryCase):
         self.assertIn("not a backlog id", self.refused("show", self.feat, "DEC-4"))
 
 
+class NonHubFollowUpTests(TwoRepositoryCase):
+    def setUp(self):
+        super().setUp()
+        self.link_workspace(self.feat, "api", [("api", self.feat), ("web", self.web_feat)])
+        self.followup("Handle exportId", "--scope", "feat/web-x", wt=self.web_feat)
+
+    def test_a_follow_up_scoped_to_the_worktrees_own_branch_is_in_the_default_view(self):
+        self.assertEqual(self.ids_listed("--kind", "followup", wt=self.web_feat), ["BL-1"])
+
+    def test_it_is_not_marked_orphaned_in_its_own_repository(self):
+        self.assertNotIn("branch gone", self.listed("--kind", "followup", wt=self.web_feat)[0])
+
+
 class ListTests(BacklogCase):
     def setUp(self):
         super().setUp()

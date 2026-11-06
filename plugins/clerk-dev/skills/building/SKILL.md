@@ -6,7 +6,7 @@ allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 
 # Building
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -83,7 +83,7 @@ Items reach intake in these ways:
   run files as the `review-fix` skill's Build the handoff step lists them;
 - a follow-up, from the `followups` skill (one item or its work list),
   bringing its handoff block and how it closes; or handed to this skill
-  directly ("build F3"): its handoff is `Source: follow-up` with the
+  directly ("build BL-4"): its handoff is `Source: follow-up` with the
   Follow-up entry of By kind pasted, filled from the item as the `followups`
   skill's Build the handoff step lists;
 - several of these handed over together, a queue, sorted as "Queues"
@@ -99,7 +99,7 @@ never grows an item; it takes the source's row of the Scope table, whatever
 the item's size. Grow it without asking:
 
 1. Write the brief: `records.py new <hub> brief "<title>" --from <the item>
-   --area <area>`, where the item is `F3` for a follow-up, `<run> N` for a
+   --area <area>`, where the item is `BL-4` for a follow-up, `<run> N` for a
    finding, or "this session" for a request, and the area is chosen as the
    `feature` skill's Areas section says. Draft it as that skill's brief step
    in "Writing each type" describes, giving the drafting subagent, in place of
@@ -122,8 +122,7 @@ the item's size. Grow it without asking:
 3. Mark the source item `in-progress`, naming the brief: a finding with
    `render-report.py --set N=in-progress:BRIEF-<n>`, re-rendered as the
    `review-fix` skill does, its instruction unchanged; a follow-up with
-   `items.py status <worktree>/.clerk-dev/followups.md F3 in-progress --ref
-   BRIEF-<n>`. A request has nothing to mark; the brief's Goal quotes it.
+   `backlog.py set <worktree> BL-4 in-progress --ref BRIEF-<n>`. A request has nothing to mark; the brief's Goal quotes it.
    Items grown into one brief are each marked alike.
 4. Say its intake line, routed `grown into BRIEF-<n>` with its milestone and
    when it runs: after the milestone under way, since passes cannot nest,
@@ -173,7 +172,7 @@ persists.
 
 ### Queues
 
-A queue is several items handed to intake together ("build F2, F3, F5",
+A queue is several items handed to intake together ("build BL-2, BL-4, BL-5",
 "build findings 4, 7, 9"). Sort it in one pass before any handoff, as "Sort in
 one pass" under "Several items waiting" in the `deliberate` skill sorts
 choices:
@@ -405,7 +404,7 @@ status lives only here; the brief is not edited for it.
 7. **Commit.** `git add` only the handoff's files (the report's `files:`),
    never anything under `.clerk-dev/` or an untracked file the handoff did
    not create, then commit. The message stands alone, because review runs,
-   the follow-ups file, and the records are local and never committed: no
+   the backlog, and the records are local and never committed: no
    finding numbers, run labels, follow-up ids, record ids, `.clerk-dev/`
    paths, or mention of the review. The subject is `<type>(<area>): <what the
    change does>`, its type as `skills/review/commits.md` says (`fix` for
@@ -430,16 +429,16 @@ status lives only here; the brief is not edited for it.
    `<run>/resolution/<merged id>.md` written as the `review-fix` skill's
    Resolution step describes, its first paragraph naming the brief and saying that the milestone's pass review and the next
    triage's moved-code check stand in for a recheck, so no recheck runs; a
-   follow-up with `followups.py close <worktree> F3 --ref "in <sha>
+   follow-up with `backlog.py set <worktree> BL-4 done --ref "<sha>
    (BRIEF-<n>)"`. A request has nothing to close.
-8. Add each `follow-ups:` line with `followups.py add` to the owing
-   repository's worktree, as Follow-ups in `skills/review/tracking.md`
-   describes, with the commit as `--from`. When `contract:` is not "none",
+8. File each `follow-ups:` line with `backlog.py add --kind followup` in the
+   owing repository's backlog, as Follow-ups in `skills/review/tracking.md`
+   describes, with the commit as `--origin "<this repo> <sha>"`. When `contract:` is not "none",
    check every related worktree as "Clients of a changed contract" below
    describes.
 9. Say one line: the handoff, the commit, the tests, anything accepted, the
    rollout considerations when `rollout:` is not "none", the worktrees that
-   got a follow-up, the source items step 7 closed, and the count it moves
+   got a follow-up (with its `<repo>:BL-n`), the source items step 7 closed, and the count it moves
    ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
 
 **Leftover edits.** A stopped report whose `files:` is not "none" left edits.
@@ -467,9 +466,12 @@ related worktree yourself, without a model:
    sets them up.
 2. Search each: `git -C <worktree> grep -l -F -e <term> -e <term> ...` with the
    terms after `search:`. Print only the count of files per worktree.
-3. A worktree with hits and no follow-up yet for this change gets one, through
-   `followups.py add`, with the builder's contract sentence in the `changed:`
-   form as `--contract`, this commit as `--from`, the finding as `--finding`
+3. A worktree with hits and no follow-up yet for this change (its repository's
+   `backlog.py list <worktree> --kind followup`) gets one, through `backlog.py
+   add --kind followup` in that repository's backlog as Follow-ups in
+   `skills/review/tracking.md` describes, with the builder's contract sentence
+   in the `changed:` form as `--contract`, this commit as `--origin "<this
+   repo> <sha>"`, the finding as `--finding`
    when the item is one, and as text the need: the part after `needs:` of the
    builder's `follow-ups:` line for that repository, or, when it has none, the
    behavior the `contract:` sentence implies for a reader of the old shape.

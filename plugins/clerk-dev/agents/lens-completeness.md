@@ -31,10 +31,11 @@ cases.
 Read every document in `DOCS`. These are the author's specifications, plans,
 checklists, and notes for this work. Check each against concerns 13 to 16.
 
-When `DOCS` includes `.clerk-dev/followups.md`, treat its open items as work this
-repository owes: report an open item the diff should have addressed and did not,
-and an item the diff visibly addressed without its box being closed (a minor
-finding; the fix is to close it with the commit).
+When `DOCS` includes the run's `followups.md` (this repository's open backlog
+follow-ups, one `BL-n` line each), treat its items as work this repository
+owes: report an open item the diff should have addressed and did not, and an
+item the diff visibly addressed without being closed (a minor finding; the fix
+is to close it with the commit).
 
 Say under Coverage which documents you read and how many were listed. When
 `DOCS` is `none`, skip this section and say so.
