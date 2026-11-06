@@ -286,7 +286,8 @@ It drafts each comment in the author's terms, without local paths, ids, or
 scores, and shows the drafts in the card's Posted block for you to edit. Then
 `post-review.py` previews every comment with where it lands (a line, a range,
 a file, or the review body, with any fallback named) and warnings for
-mentions, issue links, and anything that looks internal or secret. On your yes
+mentions, issue links, and anything that looks internal; it refuses text that
+holds what looks like a key or token. On your yes
 it adds them to your pending GitHub review, which only you see until you
 submit it; posting again skips what is already there and updates what you
 changed in that pending review. A change to a comment of a review you already
@@ -295,8 +296,9 @@ it under its own heading; sending it is a command you run yourself with `!`,
 which asks you to type the pull request number at the terminal. You choose the
 verdict: Comment is submitted from the session, but Approve and Request changes
 are commands you run the same way. So is Comment when your pending review also
-holds comments you drafted on GitHub: submitting publishes them too, so the
-preview and the submit step list them first.
+holds comments you drafted on GitHub, since submitting publishes them too (the
+preview and the submit step list them first), or when the review body or any
+comment in it drew a warning.
 
 A finding carried into a re-review after the author pushed is posted where its
 lines are now; when the commits since changed those lines, it goes on the file

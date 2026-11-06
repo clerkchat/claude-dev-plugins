@@ -102,6 +102,9 @@ class ReviewSkillToolsTests(unittest.TestCase):
                 allowed = {match.group(1) for match in map(SCRIPT_RULE.match, rules) if match}
                 self.assertLessEqual(scripts_named_in(name), allowed)
 
+    def test_review_pre_approves_git_blame_for_the_lenses(self):
+        self.assertIn("Bash(git blame *)", allowed_tools("review"))
+
     def test_pre_approve_git_only_by_subcommand_and_never_grep(self):
         for name in SKILLS_READING_PULL_REQUEST_TEXT:
             for rule in bash_rules(allowed_tools(name)):

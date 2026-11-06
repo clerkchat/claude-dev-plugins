@@ -26,9 +26,9 @@ INTERNAL = [("a .clerk-dev path", re.compile(r"\.clerk-dev\b")),
 SECRETS = [("a private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")),
            ("a GitHub token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,})")),
            ("an API key", re.compile(r"\b(?:sk-[A-Za-z0-9_-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,})")),
-           ("an AWS access key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
-           ("a long hex run", re.compile(r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{41,}(?![0-9A-Fa-f])")),
-           ("a long base64 run", re.compile(r"(?<![\w+/=-])(?=[\w+/-]*[A-Z])(?=[\w+/-]*[a-z])(?=[\w+/-]*\d)[\w+/-]{40,}={0,2}"))]
+           ("an AWS access key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"))]
+SUSPECT_RUNS = [("a long hex run", re.compile(r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{41,}(?![0-9A-Fa-f])")),
+                ("a long base64 run", re.compile(r"(?<![\w+/=-])(?=[\w+/-]*[A-Z])(?=[\w+/-]*[a-z])(?=[\w+/-]*\d)[\w+/-]{40,}={0,2}"))]
 MENTION = re.compile(r"(?<![\w/@])@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:/[\w-]+)?)")
 ISSUE_REFERENCE = re.compile(r"(?<![\w&/])#(\d+)\b")
 LINKED = [(MENTION, "@", "mentions {}; GitHub notifies them"),
@@ -102,12 +102,20 @@ def local_paths(*dirs):
     found = {os.path.expanduser("~")} | {norm(d) for d in dirs for norm in (os.path.abspath, os.path.realpath)}
     return sorted((p for p in found if len(p.rstrip("/")) > 1), key=len, reverse=True)
 
+def matches_in(patterns, text):
+    return [(what, m.group(0)) for what, rx in patterns for m in [rx.search(text)] if m]
+
+def looks_like(what, found):
+    return f"what looks like {what}: {found[:12]}..."
+
 def screen(text, local):
     path, token = next((p for p in local if p in text), None), CROSS_REFERENCE.search(text)
-    problem = (f"its text names a local path of this machine ({path})" if path else
+    secret = next(iter(matches_in(SECRETS, text)), None)
+    problem = (f"its text holds {looks_like(*secret)}" if secret else
+               f"its text names a local path of this machine ({path})" if path else
                f"its text holds a cross-reference token of the review ({token.group(0)})" if token else None)
-    warnings = [f"the text names {what}: {m.group(0)}" for what, rx in INTERNAL for m in [rx.search(text)] if m]
-    warnings += [f"the text holds what looks like {what}: {m.group(0)[:12]}..." for what, rx in SECRETS for m in [rx.search(text)] if m]
+    warnings = [f"the text names {what}: {found}" for what, found in matches_in(INTERNAL, text)]
+    warnings += [f"the text holds {looks_like(what, found)}" for what, found in matches_in(SUSPECT_RUNS, text)]
     plain = prose(text)
     for rx, lead, says in LINKED:
         found = sorted(set(rx.findall(plain)))
@@ -255,14 +263,20 @@ def submitted_review(it):
 def recorded_comments(rows):
     return {row["comment_id"] for row in rows.values() if row.get("comment_id")}
 
+def in_pending_review(ctx):
+    return [c for c in ctx["comments"] if c["id"] in pending_comments(ctx)]
+
 def own_drafts(ctx, rows):
     ours = recorded_comments(rows)
-    return [c for c in ctx["comments"] if c["id"] in pending_comments(ctx) and str(c["id"]) not in ours]
+    return [c for c in in_pending_review(ctx) if str(c["id"]) not in ours]
+
+def draft_place(comment):
+    line = comment.get("line") or comment.get("original_line")
+    return comment.get("path", "") + (f":{line}" if line else "")
 
 def draft_line(comment):
-    line = comment.get("line") or comment.get("original_line")
     first = (comment.get("body") or "").strip().partition("\n")[0]
-    return f"  {comment.get('path', '')}" + (f":{line}" if line else "") + f": {first}"
+    return f"  {draft_place(comment)}: {first}"
 
 def own_draft_lines(drafts):
     return ["your own drafts in this pending review; submitting publishes them too:", *map(draft_line, drafts)] if drafts else []
@@ -584,14 +598,27 @@ def indent(text):
 def warning_lines(warnings):
     return [f"  warning: {w}" for w in warnings]
 
-def checked(label, body, ctx):
-    problem, warnings = screen(body, ctx["local"])
+def screened(label, text, ctx):
+    problem, warnings = screen(text, ctx["local"])
     if problem: sys.exit(f"nothing sent; the {label}: {problem}")
     print_warnings(f"{label}:", warnings)
+    return warnings
+
+def checked(label, body, ctx):
+    screened(label, body, ctx)
     return body
 
 def checked_body(run, ctx, rows, review_id):
     return checked("review body", review_body(run, rows, review_id, ctx["kept"]), ctx)
+
+def pending_comment_label(comment, rows, nums):
+    mid = next((m for m, row in rows.items() if row.get("comment_id") == str(comment["id"])), None)
+    return f"comment of {numbered(mid, nums)}" if mid else f"draft of yours on {draft_place(comment)}"
+
+def pending_warnings(run, ctx, rows, body):
+    nums = rf.read_numbers(run)
+    found = screened("review body", body, ctx)
+    return found + [w for c in in_pending_review(ctx) for w in screened(pending_comment_label(c, rows, nums), c.get("body") or "", ctx)]
 
 def body_lines(label, body, ctx):
     problem, warnings = screen(body, ctx["local"])
@@ -742,10 +769,10 @@ def confirm(a, ctx, what, action):
                  f"run this yourself:\n! {own_command(a, action)}")
     if typed != str(ctx["pr"]): sys.exit(f"nothing sent; you typed {typed!r}, not the pull request number {ctx['pr']}")
 
-def submit_confirmation(verdict, drafts):
-    if not (drafts or verdict in CONFIRMED_VERDICTS): return None
+def submit_confirmation(verdict, drafts, warned):
+    if not (drafts or warned or verdict in CONFIRMED_VERDICTS): return None
     also = f", publishing {len(drafts)} draft" + ("" if len(drafts) == 1 else "s") + " of your own with it" if drafts else ""
-    return CONFIRMED_VERDICTS.get(verdict, "submit as comment") + also
+    return CONFIRMED_VERDICTS.get(verdict, "submit as comment") + also + (", despite the warnings above" if warned else "")
 
 def submit(a, ctx, verdict):
     p = ctx["pending"]
@@ -753,12 +780,13 @@ def submit(a, ctx, verdict):
     rows = rf.read_posted(a.run)
     if str(p["id"]) not in rf.review_ids(rows):
         sys.exit(f"nothing sent; pending review {p['id']} holds nothing this run posted; run --post first, or submit it on GitHub")
-    body = checked_body(a.run, ctx, rows, p["id"])
+    body = review_body(a.run, rows, p["id"], ctx["kept"])
+    warned = pending_warnings(a.run, ctx, rows, body)
     drafts = own_drafts(ctx, rows)
     if drafts: print("\n".join(own_draft_lines(drafts)), file=sys.stderr)
     calls = [{"method": "POST", "path": f"{pulls_path(ctx)}/reviews/{p['id']}/events", "fields": {"event": VERDICTS[verdict], "body": body}}]
     if a.dry_run: write_payload(a.run, calls); return
-    what = submit_confirmation(verdict, drafts)
+    what = submit_confirmation(verdict, drafts, warned)
     if what: confirm(a, ctx, what, ["--submit", verdict])
     execute(calls, a.repo, ctx)
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
@@ -1012,7 +1040,7 @@ def main(argv=None):
     action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
     action.add_argument("--submit", choices=list(VERDICTS),
                         help="submit the pending review with this verdict; approve, request-changes, and comment on a pending review "
-                             "that holds drafts of your own ask you to type the pull request number at a terminal")
+                             "that holds drafts of your own or text that drew a warning ask you to type the pull request number at a terminal")
     action.add_argument("--close", nargs="?", const="", metavar="N[,M]",
                         help="list the posted findings marked fixed whose threads are still open; "
                              "with numbers, reply and resolve those threads once you type the pull request number at a terminal")

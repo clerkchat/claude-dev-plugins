@@ -714,11 +714,18 @@ def area_view(wt, out, name, logs):
 def awaits_posting(row, note):
     return not rf.is_posted(row) or rf.stale_text(row, note)
 
+def post_queue(run, instr, numbers, findings, sections):
+    posted, marks = rf.read_posted(run), rf.read_instructions(run)
+    credits = [mid for mid, sec in sections.items() if sec == "credit"]
+    return [numbers[mid] for mid in (*findings, *credits)
+            if mid in numbers and sf.plain_choice(instr, mid) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", ""))]
+
 def finding_groups(run, status, instr, numbers):
-    sections = rf.read_sections(run)
-    unmarked, queue, discuss, post, inprog, new, by_section = {}, [], [], [], [], [], {}
-    posted, marks, appended = rf.read_posted(run), rf.read_instructions(run), rf.read_appended(run)
-    for mid in sf.load_findings(run):
+    sections, findings = rf.read_sections(run), sf.load_findings(run)
+    unmarked, queue, discuss, inprog, new, by_section = {}, [], [], [], [], {}
+    appended = rf.read_appended(run)
+    post = post_queue(run, instr, numbers, findings, sections)
+    for mid in findings:
         if mid not in numbers or not sf.is_open(mid, status, instr): continue
         choice, st = sf.plain_choice(instr, mid), rf.status_of(status, mid)
         sec = sections.get(mid, "")
@@ -726,12 +733,8 @@ def finding_groups(run, status, instr, numbers):
         if st == "in-progress": inprog.append(numbers[mid])
         if choice in ("fix", "noted"): queue.append(numbers[mid])
         elif choice == "discuss": discuss.append(numbers[mid])
-        elif choice == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")): post.append(numbers[mid])
         elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
-    for mid in sections:
-        if sections[mid] == "credit" and mid in numbers and sf.plain_choice(instr, mid) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")):
-            post.append(numbers[mid])
     return unmarked, queue, discuss, post, inprog, new, by_section
 
 def blockers_view(wt, out, logs, run, have_run):

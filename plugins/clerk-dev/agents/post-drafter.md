@@ -4,6 +4,7 @@ description: Drafts the text posted to a GitHub pull request for review findings
 model: sonnet
 effort: medium
 tools: []
+disallowedTools: Bash, Read, Write, Edit, Glob, Grep, NotebookEdit, WebFetch, WebSearch, Agent
 color: yellow
 ---
 

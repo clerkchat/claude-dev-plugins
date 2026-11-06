@@ -461,16 +461,44 @@ class LocalPathTest(PostCase):
         self.assertIn("cannot post: its text names a local path", self.main())
 
 
-class SecretWarningTest(PostCase):
+class SecretTest(PostCase):
     CASES = {"-----BEGIN RSA PRIVATE KEY-----": "a private key", "ghp_" + "A1b2" * 9: "a GitHub token",
-             "sk-" + "a1B2" * 6: "an API key", "AKIA" + "ABCDEFGH12345678": "an AWS access key",
-             "f" * 64: "a long hex run", "Zm9vYmFy" * 5 + "Q1": "a long base64 run"}
+             "github_pat_" + "A1b2" * 6: "a GitHub token", "sk-" + "a1B2" * 6: "an API key",
+             "xoxb-" + "12345" * 3: "an API key", "AKIA" + "ABCDEFGH12345678": "an AWS access key",
+             "ASIA" + "ABCDEFGH12345678": "an AWS access key"}
+
+    def test_refuses_each_kind_naming_the_finding(self):
+        for text, what in self.CASES.items():
+            with self.subTest(what=what, text=text[:12]):
+                self.mark(1, text=f"Set it to {text} here.")
+                self.assertIn(f"finding 1: its text holds what looks like {what}: {text[:12]}...", self.refusal())
+
+    def test_shows_no_more_than_twelve_characters_of_it(self):
+        self.mark(1, text="Key: AKIAABCDEFGH12345678")
+        self.assertNotIn("AKIAABCDEFGH1", self.refusal())
+
+    def test_says_so_in_the_preview(self):
+        self.mark(1, text="Key: AKIAABCDEFGH12345678")
+        self.assertIn("cannot post: its text holds what looks like an AWS access key: AKIAABCDEFGH...", self.main())
+
+    def test_refuses_one_in_the_review_body(self):
+        self.mark(1)
+        self.write("posted/review.md", "Key: AKIAABCDEFGH12345678")
+        self.assertIn("the review body: its text holds what looks like an AWS access key", self.refusal())
+
+
+class SuspectRunWarningTest(PostCase):
+    CASES = {"f" * 64: "a long hex run", "Zm9vYmFy" * 5 + "Q1": "a long base64 run"}
 
     def test_warns_on_each_kind_in_the_preview(self):
         for text, what in self.CASES.items():
             with self.subTest(what):
                 self.mark(1, text=f"Set it to {text} here.")
                 self.assertIn(f"warning: the text holds what looks like {what}: {text[:12]}...", self.main())
+
+    def test_still_posts_the_text(self):
+        self.mark(1, text=f"Set it to {'f' * 64} here.")
+        self.assertEqual(self.thread_vars(1)["body"], f"Set it to {'f' * 64} here.")
 
     def test_ignores_a_commit_sha(self):
         self.mark(1, text=f"Fixed in {HEAD}.")
@@ -482,8 +510,8 @@ class SecretWarningTest(PostCase):
 
     def test_warns_on_one_in_the_review_body(self):
         self.mark(1)
-        self.write("posted/review.md", "Key: AKIAABCDEFGH12345678")
-        self.assertIn("warning: the text holds what looks like an AWS access key", self.main())
+        self.write("posted/review.md", f"Hash: {'f' * 64}")
+        self.assertIn("warning: the text holds what looks like a long hex run", self.main())
 
 
 class InternalMaterialWarningTest(PostCase):
@@ -824,6 +852,17 @@ class SubmitTest(PostCase):
         self.assertIn("GitHub answered with an error; possibly on GitHub: POST repos/acme/widgets/pulls/7/reviews/55/events",
                       str(raised.exception))
 
+    def test_refuses_a_review_body_holding_a_secret(self):
+        self.write("posted/review.md", "Key: AKIAABCDEFGH12345678")
+        self.assertIn("the review body: its text holds what looks like an AWS access key: AKIAABCDEFGH...",
+                      self.refusal("--submit", "comment", "--dry-run"))
+
+    def test_refuses_a_pending_comment_holding_a_secret(self):
+        self.ctx["comments"] = [review_comment(1, "src/a.py", line=11, body="Key: ghp_" + "A1b2" * 9)]
+        self.pend(comments={901: "PRRC_1"})
+        self.assertIn("the comment of finding 1: its text holds what looks like a GitHub token: ghp_A1b2A1b2...",
+                      self.refusal("--submit", "comment", "--dry-run"))
+
     def test_shows_the_review_body_warnings(self):
         self.write("posted/review.md", "Thanks @octocat.")
         self.submit("comment")
@@ -934,6 +973,34 @@ class WhenSubmittingAsCommentTest(ConfirmedSubmitCase):
         self.assertEqual(self.writes(), 1)
 
 
+class WhenSubmittingAsCommentWithWarningsCase(ConfirmedSubmitCase):
+    VERDICT = "comment"
+    PROMPT = "Type the pull request number (7) to submit as comment, despite the warnings above: "
+
+
+class WhenTheReviewBodyDrewAWarningTest(TerminalConfirmationTests, WhenSubmittingAsCommentWithWarningsCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Thanks @octocat.")
+
+
+class WhenAPendingCommentDrewAWarningTest(TerminalConfirmationTests, WhenSubmittingAsCommentWithWarningsCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx["comments"] = [review_comment(1, "src/a.py", line=11, body=f"Hash: {'f' * 64}")]
+        self.pend(comments={901: "PRRC_1"})
+
+    def test_names_the_finding_with_its_warning(self):
+        self.main(*self.args, "--dry-run")
+        self.assertIn("comment of finding 1:\n  warning: the text holds what looks like a long hex run", self.err)
+
+
+class WhenThereIsNoTerminalOnCommentWithWarningsTest(WhenThereIsNoTerminalTests, WhenSubmittingAsCommentWithWarningsCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Thanks @octocat.")
+
+
 OWN_DRAFT = review_comment(20, "src/z.py", line=4, body="Rough idea.\nMore later.")
 OWN_DRAFTS_LINES = "your own drafts in this pending review; submitting publishes them too:\n  src/z.py:4: Rough idea."
 
@@ -974,7 +1041,7 @@ class WhenSubmittingWithYourOwnDraftsCase(YourOwnDraftsInThePendingReview, Confi
 
     def setUp(self):
         super().setUp()
-        self.add_to_pending(review_comment(1, "src/a.py", line=11))
+        self.add_to_pending(review_comment(1, "src/a.py", line=11, body="A plain comment."))
 
 
 class WhenSubmittingAsCommentWithYourOwnDraftsTest(TerminalConfirmationTests, WhenSubmittingWithYourOwnDraftsCase):

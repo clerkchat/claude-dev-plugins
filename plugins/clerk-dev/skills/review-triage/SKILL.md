@@ -246,8 +246,10 @@ commits since (it goes on the file, its suggestion as a plain code block; a
 finding whose lines only moved is anchored where they are now), "the code moved since its text was
 drafted" when the finding's anchor or the reviewed commit is not the one the
 text was drafted for (its suggestion then goes as a plain code block), "cannot
-post: ..." when a text is missing, names a local path of this machine, holds a
-`{#<id>}` cross-reference token, or its file is not in the pull request,
+post: ..." when a text is missing, holds what looks like a secret (a private
+key, a GitHub token, an `sk-` API key, a Slack `xox` token, an AWS access key),
+names a local path of this machine, holds a `{#<id>}` cross-reference token, or
+its file is not in the pull request,
 "already posted" or "changed since posting", "already on
 GitHub, though this run has no record of it" for a comment an earlier batch
 posted without recording it (`--post` records it without sending it again),
@@ -255,8 +257,8 @@ the text as it will be sent, and
 a warning when the text names internal material (a `.clerk-dev` path, a
 home-directory path, a record id, a confidence, a lens, a finding number, a
 run label), mentions someone (`@name`, which GitHub notifies), names an issue
-(`#12`, which GitHub links to that issue or pull request), or holds what looks
-like a secret (a private key, a token, a long hex or base64 run); then the
+(`#12`, which GitHub links to that issue or pull request), or holds a long hex
+or base64 run that may be a secret; then the
 review body with the same checks; then, under "published; changes on GitHub
 at once", each changed comment the author can already see (one of a submitted
 review, not of the pending review) with its new text, and the new body of any
@@ -325,7 +327,7 @@ branch's pull request.
    anchors, every fallback, the review body, the head-moved line, and the
    pending-review line. When a finding cannot be posted, say why and what would
    settle it (a text to draft, a placement in its note, an edit that drops a
-   local path), and stop there; `--post` would refuse the whole batch. Show
+   local path or a secret), and stop there; `--post` would refuse the whole batch. Show
    every warning with its text and ask whether to edit it; a mention notifies
    that person when the review is submitted, and internal material is for the
    user only.
@@ -366,12 +368,14 @@ branch's pull request.
    review, name each (`path:line` and its first line) in the question and say
    that submitting publishes them too. Only when the user names one, run the
    command with `--submit comment`, `--submit request-changes`, or `--submit
-   approve` and `--dry-run` first: it prints the review body's warnings, as the
-   preview does, since the body may have changed since, and lists those drafts
-   again. When it prints any warning or draft, show each with its text and ask
-   again whether to submit; mentions notify on submit. For Comment with no
-   drafts of the user's own listed, then run it without `--dry-run`, and say it
-   was submitted. For Request changes and Approve, and for Comment when the
+   approve` and `--dry-run` first: it prints the warnings of the review body
+   and of every comment in the pending review, as the preview does, since the
+   texts may have changed since, and lists those drafts again; it refuses text
+   that holds what looks like a secret. When it prints any warning or draft,
+   show each with its text and ask again whether to submit; mentions notify on
+   submit. For Comment with no warning and no drafts of the user's own listed,
+   then run it without `--dry-run`, and say it was submitted. For Request
+   changes and Approve, and for Comment when it printed any warning or the
    pending review holds drafts of the user's own, never run it without
    `--dry-run` yourself: it asks the user to type the pull request number at a
    terminal, and refuses in this session's shell, which has none. Show the user

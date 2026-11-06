@@ -49,6 +49,25 @@ class AgentReferenceTests(unittest.TestCase):
         self.assertEqual(named, [])
 
 
+def agent_frontmatter(name):
+    with open(os.path.join(PLUGIN, "agents", name + ".md"), encoding="utf-8") as f:
+        return f.read().split("---", 2)[1]
+
+
+class PostDrafterToolsTests(unittest.TestCase):
+    TOOLS = {"Bash", "Read", "Write", "Edit", "Glob", "Grep", "NotebookEdit", "WebFetch", "WebSearch", "Agent"}
+
+    def setUp(self):
+        self.front = agent_frontmatter("post-drafter")
+
+    def test_has_no_tools(self):
+        self.assertRegex(self.front, r"(?m)^tools: \[\]$")
+
+    def test_also_disallows_every_tool_that_reads_writes_or_reaches_out(self):
+        listed = re.search(r"(?m)^disallowedTools: (.+)$", self.front).group(1)
+        self.assertLessEqual(self.TOOLS, set(listed.split(", ")))
+
+
 class ReferenceCheckerTests(TempCase):
     def setUp(self):
         super().setUp()

@@ -3,6 +3,7 @@ name: review
 description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", "give this change a code review", "code review this", "do a code review", or /clerk-dev:review. In a worktree with a .clerk-dev/ directory, use this rather than the built-in code-review skill for any of these. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
 argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass PASS-<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --render | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk]"
 allowed-tools:
+  - Bash(git blame *)
   - Bash(git check-ignore *)
   - Bash(git diff *)
   - Bash(git log *)
@@ -344,7 +345,7 @@ see Step 6b):
 
 - `${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...] [--log N]`: the
   state a run starts from, per worktree (see Preflight).
-- `${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py RUN`: points `.clerk-dev/latest`
+- `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py RUN`: points `.clerk-dev/latest`
   (or `latest-feature` for a `-feature` run) at a run directory of this
   worktree (Step 0).
 - `${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py PATCH [--exclude GLOB ...]
@@ -1121,7 +1122,7 @@ installed or not signed in, skip this step and say so in one line ("No pull
 request for this branch; skipping its comments."), and when the reason is
 `gh`, add the one-time line under First runs in a repository. Otherwise:
 
-1. Run `pr-comments.py <run> --repo <repo>` (add `--pr N` when the branch's pull
+1. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pr-comments.py <run> --repo <repo>` (add `--pr N` when the branch's pull
    request cannot be found from the branch). It adds each review thread, review
    summary with a body, and conversation comment as an entry in `merged.md` with
    `lens: pr-review`, the author, the link, the replies, and the GitHub state;
@@ -1144,7 +1145,7 @@ request for this branch; skipping its comments."), and when the reason is
    the lens whose focus fits it best (from the plain names in `routing.md`). It
    writes `pr/judged.tsv` (`pr_id`, `finding_id`, `same` | `different`) and
    `pr/lens.tsv` (`pr_id`, lens). Apply with
-   `pr-comments.py <run> --judged <run>/pr/judged.tsv`.
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pr-comments.py <run> --judged <run>/pr/judged.tsv`.
 3. Verify every comment not linked to a finding, as a second opinion only: the
    verifier reads the comment and the code at HEAD and says whether it still
    applies (it may already be addressed, or the code may have moved). Write the
@@ -1503,8 +1504,8 @@ skills, and repo context, and writes its run and report under that worktree's
    repositories have changes on their branch and which have nothing yet.
 2. Review: for each worktree, in parallel and in the background, run
    `claude -p "/clerk-dev:review <passed flags>" --name "<repo> review"
-   --allowedTools "Bash(git check-ignore *)" "Bash(git diff *)" "Bash(git log *)"
-   "Bash(git merge-base *)" "Bash(git remote set-head origin --auto)"
+   --allowedTools "Bash(git blame *)" "Bash(git check-ignore *)" "Bash(git diff *)"
+   "Bash(git log *)" "Bash(git merge-base *)" "Bash(git remote set-head origin --auto)"
    "Bash(git rev-parse *)" "Bash(git show *)" "Bash(git status *)"
    "Bash(git worktree list *)" "Bash(gh pr view *)" "Bash(gh pr diff *)"
    "Bash(gh pr list *)" "Bash(mkdir *)" Read Grep Glob Agent Write`

@@ -145,6 +145,15 @@ class PostQueueTests(PostQueueCase):
         self.assertNotIn("post the review", out)
 
 
+class WhenAFindingIgnoredEarlierIsMarkedPostTest(PostQueueCase):
+    def setUp(self):
+        super().setUp()
+        self.write_status({4: ("wont-fix", "")})
+
+    def test_it_is_still_queued(self):
+        self.assertIn("marked to post, not yet posted or changed since posting: 4 (1, 2, 3, 4)", self.full_status())
+
+
 class CloseStepTests(PostQueueCase):
     def setUp(self):
         super().setUp()
