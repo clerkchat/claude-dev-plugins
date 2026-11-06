@@ -25,5 +25,8 @@ def rest_list(path, cwd):
 def repo_owner_name(cwd):
     return json.loads(gh(["repo", "view", "--json", "nameWithOwner"], cwd))["nameWithOwner"].split("/")
 
+def viewer_login(cwd):
+    return json.loads(gh(["api", "user"], cwd))["login"]
+
 def pr_number(cwd):
     return json.loads(gh(["pr", "view", "--json", "number"], cwd))["number"]

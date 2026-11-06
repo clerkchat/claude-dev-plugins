@@ -953,7 +953,7 @@ def main():
         if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
         if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")
         closable = sorted((numbers[m] for m in rr.closable(run) if m in numbers), key=int)
-        if closable: steps.append(f"Close the posted thread{plural(closable)} of finding{plural(closable)} {number_list(closable)} (`post-review.py --close`).")
+        if closable: steps.append(f"Close the posted thread{plural(closable)} of finding{plural(closable)} {number_list(closable)}; see Closing posted threads in the `review` skill.")
         if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")
         # Fixes are rechecked one finding at a time, never re-reviewed as a
         # branch; once triage is done, the final pass reads them all together.

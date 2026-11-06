@@ -438,21 +438,34 @@ def snippet_lines(e, repo, head):
 STATUS_WORDS = {"open": "Open", "in-progress": "In progress", "fixed": "Fixed", "wont-fix": "Won't fix", "deferred": "Deferred"}
 DONE = ("fixed", "wont-fix", "deferred")
 
+def merged_key(text):
+    return int(text) if text.isdigit() else None
+
+def read_keyed(path, fields, key=merged_key, defaults=None):
+    rows = {}
+    if not os.path.exists(path): return rows
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            f = [cell.strip() for cell in line.rstrip("\n").split("\t")]
+            k = key(f[0])
+            if len(f) > 1 and k is not None:
+                rows[k] = {name: value or (defaults or {}).get(name, "") for name, value in zip(fields, f[1:] + [""] * len(fields))}
+    return rows
+
+def write_keyed(path, fields, rows, header="merged_id", order=sorted):
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        if header: fh.write("\t".join((header,) + fields) + "\n")
+        for k in order(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in fields]) + "\n")
+
+STATUS_FIELDS = ("status", "ref", "date")
+
 def read_status(run):
     """status.tsv: merged id, status, ref (commit, ticket, or reason), date."""
-    st = {}
-    p = os.path.join(run, "status.tsv")
-    if os.path.exists(p):
-        for line in open(p, encoding="utf-8"):
-            parts = line.rstrip("\n").split("\t")
-            if len(parts) >= 2 and parts[0].isdigit():
-                st[int(parts[0])] = {"status": parts[1].strip() or "open", "ref": (parts[2] if len(parts) > 2 else "").strip(), "date": (parts[3] if len(parts) > 3 else "").strip()}
-    return st
+    return read_keyed(os.path.join(run, "status.tsv"), STATUS_FIELDS, defaults={"status": "open"})
 
 def write_status(run, st):
-    with open(os.path.join(run, "status.tsv"), "w", encoding="utf-8") as fh:
-        fh.write("merged_id\tstatus\tref\tdate\n")
-        for k in sorted(st): fh.write(f"{k}\t{st[k]['status']}\t{st[k].get('ref','')}\t{st[k].get('date','')}\n")
+    write_keyed(os.path.join(run, "status.tsv"), STATUS_FIELDS, st)
 
 GEN_RE = re.compile(r"^<!-- review generation (\d+)")
 FINDING_MARKER = re.compile(r"^<!-- finding \d+, merged (\d+),")
@@ -703,20 +716,17 @@ def recommendation_options(fix):
     """The labels a recommendation offers, in order: '(a) ... or (b) ...'."""
     return re.findall(r"(?:^|[\s(])\(([a-z])\)\s", fix or "")
 
+INSTRUCTION_FIELDS = ("choice", "note", "date", "also", "option")
+
+def instructions_path(run):
+    return os.path.join(run, "instructions.tsv")
+
 def read_instructions(run):
     """instructions.tsv: merged id, choice (fix|discuss|defer|ignore or empty),
     note, date, also (other ticked choices, comma separated), option (the
     labeled alternatives of the recommendation to follow, comma separated,
     only with fix). Free-text notes live in notes/<merged id>.md."""
-    ins = {}
-    p = os.path.join(run, "instructions.tsv")
-    if os.path.exists(p):
-        for line in open(p, encoding="utf-8"):
-            f = line.rstrip("\n").split("\t")
-            if f and f[0].isdigit():
-                ins[int(f[0])] = {"choice": f[1] if len(f) > 1 else "", "note": f[2] if len(f) > 2 else "",
-                                  "date": f[3] if len(f) > 3 else "", "also": f[4] if len(f) > 4 else "",
-                                  "option": f[5] if len(f) > 5 else ""}
+    ins = read_keyed(instructions_path(run), INSTRUCTION_FIELDS)
     nd = os.path.join(run, "notes")
     if os.path.isdir(nd):
         for n in os.listdir(nd):
@@ -727,12 +737,7 @@ def read_instructions(run):
     return ins
 
 def write_instructions(run, ins):
-    with open(os.path.join(run, "instructions.tsv"), "w", encoding="utf-8") as fh:
-        fh.write("merged_id\tchoice\tnote\tdate\talso\toption\n")
-        for k in sorted(ins):
-            i = ins[k]
-            if i.get("choice") or i.get("note") or i.get("also"):
-                fh.write(f"{k}\t{i.get('choice','')}\t{i.get('note','')}\t{i.get('date','')}\t{i.get('also','')}\t{i.get('option','')}\n")
+    write_keyed(instructions_path(run), INSTRUCTION_FIELDS, {k: i for k, i in ins.items() if i.get("choice") or i.get("note") or i.get("also")})
     nd = os.path.join(run, "notes")
     for k, i in ins.items():
         f = os.path.join(nd, f"{k}.md")
@@ -742,21 +747,6 @@ def write_instructions(run, ins):
             os.remove(f)
 
 POSTED_FIELDS = ("state", "note", "date", "thread_id", "comment_id", "url", "path", "line", "end_line", "side", "kind", "review_id")
-
-def read_keyed(path, fields):
-    rows = {}
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as fh: lines = fh.read().splitlines()[1:]
-        for line in lines:
-            f = line.split("\t")
-            if f[0].isdigit(): rows[int(f[0])] = dict(zip(fields, f[1:] + [""] * len(fields)))
-    return rows
-
-def write_keyed(path, fields, rows):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\t".join(("merged_id",) + fields) + "\n")
-        for k in sorted(rows): fh.write("\t".join([str(k)] + [rows[k].get(f, "") for f in fields]) + "\n")
 
 def read_posted(run):
     return read_keyed(os.path.join(run, "posted.tsv"), POSTED_FIELDS)
@@ -772,6 +762,9 @@ def is_posted(row):
 
 def has_thread(row):
     return has_comment(row) and row["kind"] != "body" and bool(row.get("comment_id"))
+
+def review_ids(rows):
+    return {row["review_id"] for row in rows.values() if row.get("review_id")}
 
 THREAD_FIELDS = ("comment_id", "thread_id", "state", "outdated", "can_resolve", "line", "replies", "date")
 
@@ -1059,11 +1052,13 @@ def wrap_markdown(text, width):
         out.extend(w.replace(NB, " ") for w in wrapped)
     return "\n".join(out)
 
+NUMBER_FIELDS = ("merged_id", "section")
+
+def numbers_path(run):
+    return os.path.join(run, "numbers.tsv")
+
 def number_rows(run):
-    p = os.path.join(run, "numbers.tsv")
-    if not os.path.exists(p): return []
-    rows = [line.split("\t") for line in open(p, encoding="utf-8").read().splitlines()[1:]]
-    return [(int(f[0]), int(f[1]), f[2] if len(f) > 2 else "") for f in rows if len(f) >= 2 and f[0].isdigit() and f[1].isdigit()]
+    return [(n, int(r["merged_id"]), r["section"]) for n, r in read_keyed(numbers_path(run), NUMBER_FIELDS).items() if r["merged_id"].isdigit()]
 
 def read_numbers(run):
     return {mid: n for n, mid, _ in number_rows(run)}
@@ -1398,7 +1393,9 @@ def write_numbers(run, numbered, prior_nums):
     # back if they reappear and no other finding takes it.
     shown = {e["id"] for e in numbered}
     kept = [(n, mid) for mid, n in prior_nums.items() if mid not in shown]
-    open(os.path.join(run, "numbers.tsv"), "w").write("number\tmerged_id\tsection\n" + "".join(f"{e['_n']}\t{e['id']}\t{e['_sec']}\n" for e in numbered) + "".join(f"{n}\t{mid}\thidden\n" for n, mid in sorted(kept)))
+    rows = {e["_n"]: {"merged_id": str(e["id"]), "section": e["_sec"]} for e in numbered}
+    rows.update((n, {"merged_id": str(mid), "section": "hidden"}) for n, mid in sorted(kept))
+    write_keyed(numbers_path(run), NUMBER_FIELDS, rows, header="number", order=list)
 
 def report_closable(run):
     global CLOSABLE, KEPT_OPEN

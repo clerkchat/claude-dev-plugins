@@ -617,6 +617,54 @@ class CarryWithoutMergedTest(RunCase):
 TWO_CHOICES = [render.Choice("post", "Post", "post"), render.Choice("ignore", "Ignore", "ignore", note="reason")]
 
 
+class KeyedTsvCase(RunCase):
+    FIELDS = ("status", "ref")
+
+    def tsv_path(self):
+        return os.path.join(self.run_dir, "t.tsv")
+
+
+class ReadKeyedTest(KeyedTsvCase):
+    def parse(self, text, **kw):
+        self.write("t.tsv", text)
+        return render.read_keyed(self.tsv_path(), self.FIELDS, **kw)
+
+    def test_skips_the_header_and_keys_rows_by_merged_id(self):
+        self.assertEqual(self.parse("merged_id\tstatus\tref\n3\tfixed\tabc\n"), {3: {"status": "fixed", "ref": "abc"}})
+
+    def test_fills_an_empty_cell_from_the_defaults(self):
+        self.assertEqual(self.parse("3\t\tabc\n", defaults={"status": "open"})[3]["status"], "open")
+
+    def test_strips_the_cells(self):
+        self.assertEqual(self.parse("3\t fixed \tabc\n")[3]["status"], "fixed")
+
+    def test_takes_string_keys(self):
+        self.assertEqual(self.parse("thread:1\t4\n", key=str), {"thread:1": {"status": "4", "ref": ""}})
+
+    def test_skips_a_row_with_only_a_key(self):
+        self.assertEqual(self.parse("3\n"), {})
+
+
+class WriteKeyedTest(KeyedTsvCase):
+    ROWS = {5: {"status": "open"}, 2: {"status": "fixed", "ref": "abc"}}
+
+    def written(self, **kw):
+        render.write_keyed(self.tsv_path(), self.FIELDS, self.ROWS, **kw)
+        with open(self.tsv_path(), encoding="utf-8") as fh: return fh.read()
+
+    def test_writes_the_header_and_the_rows_by_key(self):
+        self.assertEqual(self.written(), "merged_id\tstatus\tref\n2\tfixed\tabc\n5\topen\t\n")
+
+    def test_names_the_key_column(self):
+        self.assertTrue(self.written(header="number").startswith("number\tstatus\tref\n"))
+
+    def test_writes_no_header(self):
+        self.assertEqual(self.written(header=None), "2\tfixed\tabc\n5\topen\t\n")
+
+    def test_keeps_the_given_order(self):
+        self.assertEqual(self.written(header=None, order=list), "5\topen\t\n2\tfixed\tabc\n")
+
+
 class ChoicesTest(unittest.TestCase):
     def test_lists_only_the_given_choices(self):
         self.assertEqual(render.instruction_lines({"choice": "post"}, TWO_CHOICES), ["- [x] Post", "- [ ] Ignore"])

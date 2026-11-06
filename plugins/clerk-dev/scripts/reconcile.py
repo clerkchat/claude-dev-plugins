@@ -4,7 +4,7 @@
 Usage:
   reconcile.py PREV_RUN CUR_RUN                 # propose matches
   reconcile.py PREV_RUN CUR_RUN --judged FILE   # apply judge decisions, finalize
-  reconcile.py PREV_RUN CUR_RUN --seed          # carry statuses and resolutions
+  reconcile.py PREV_RUN CUR_RUN --seed          # carry statuses, resolutions, and posted findings
   reconcile.py --append NEW_MERGED CUR_RUN [--judged FILE]  # fold in delta findings
 
 Reviewers never see this; it runs after merge. Matching is mechanical first:
@@ -31,7 +31,12 @@ entries an earlier edit left outside the block.
 --seed writes CUR_RUN/status.tsv rows for matches whose previous status was
 in-progress, wont-fix, or deferred (open needs no row) (a previous "fixed" that is found
 again is reopened, so it is not carried), and copies previous resolution
-text into CUR_RUN/resolution/ prefixed with the previous run's label.
+text into CUR_RUN/resolution/ prefixed with the previous run's label. It also
+copies each matched finding's posted.tsv row and posted text (posted/<id>.md)
+under its new id, unless the current run already has one. When a previous
+finding posted as a thread on GitHub matched nothing, it prints "N posted
+findings not found again (...)": those threads come in as pull request
+comments on the next pr-comments.py fetch.
 """
 import argparse, os, re, shutil, sys
 from records import load_script
@@ -92,13 +97,20 @@ def normalize_merged(text):
     byid = {}
     for c in chunks:
         byid[int(re.match(r"^- id: (\d+)", c).group(1))] = c
-    return header, [byid[k] for k in sorted(byid)]
+    return header, dict(sorted(byid.items()))
 
-def read_normalized(run):
-    with open(os.path.join(run, "merged.md"), encoding="utf-8") as fh: return normalize_merged(fh.read())
+def merged_path(run):
+    return os.path.join(run, "merged.md")
 
-def write_merged(path, header, entries):
-    open(path, "w", encoding="utf-8").write(header.rstrip("\n") + "\n\n```findings\n" + "\n\n".join(entries) + "\n```\n")
+def read_entries(run):
+    with open(merged_path(run), encoding="utf-8") as fh: return normalize_merged(fh.read())
+
+def write_entries(run, header, entries):
+    text = header.rstrip("\n") + "\n\n```findings\n" + "\n\n".join(entries[k] for k in sorted(entries)) + "\n```\n"
+    with open(merged_path(run), "w", encoding="utf-8") as fh: fh.write(text)
+
+def next_entry_id(entries):
+    return max(entries, default=0) + 1
 
 VERDICTS = ("duplicate", "regressed", "stale", "different")
 
@@ -137,7 +149,7 @@ def append_mode(new_path, cur, judged=None):
     as a new finding with related_to set when it had a candidate. A recheck
     that found the carried finding resolved (reconcile/since.tsv) wins over
     regressed: the new finding is appended as different instead."""
-    header, entries = read_normalized(cur)
+    header, entries = read_entries(cur)
     carried = load(cur)
     new = {}
     for block in mf.parse_blocks(open(new_path, encoding="utf-8").read()):
@@ -146,9 +158,7 @@ def append_mode(new_path, cur, judged=None):
             e = mf.norm(e); e["id"] = int(re.sub(r"\D", "", str(e.get("id", "0"))) or 0); e["_raw"] = raw
             new[e["id"]] = e
     rd = os.path.join(cur, "reconcile"); os.makedirs(rd, exist_ok=True)
-    st_path = os.path.join(cur, "status.tsv")
-    st_lines = open(st_path).read().splitlines() if os.path.exists(st_path) else ["merged_id\tstatus\tref\tdate"]
-    status = {int(l.split("\t")[0]): l for l in st_lines[1:] if l and l.split("\t")[0].isdigit()}
+    status = rr.read_status(cur)
     since = {}
     sp = os.path.join(rd, "since.tsv")
     if os.path.exists(sp):
@@ -172,7 +182,7 @@ def append_mode(new_path, cur, judged=None):
             fh.write("new_id\tcarried_id\tcarried_status\trecheck\n")
             for nid in sorted(cands):
                 for cid in cands[nid]:
-                    st = status.get(cid, f"{cid}\topen").split("\t")[1]
+                    st = status.get(cid, {}).get("status", "open")
                     fh.write(f"{nid}\t{cid}\t{st}\t{since.get(cid, '')}\n")
         print(f"{len(cands)} of {len(new)} new findings have candidate carried matches; judge reconcile/append-candidates.tsv, then rerun with --judged", file=sys.stderr)
         return
@@ -180,7 +190,6 @@ def append_mode(new_path, cur, judged=None):
     mpath = os.path.join(rd, "matches.tsv")
     mrows = [l.rstrip("\n").split("\t") for l in open(mpath)] if os.path.exists(mpath) else [["cur_id","prev_id","how","prev_number","prev_status","prev_ref","cause"]]
     if len(mrows[0]) < 7: mrows[0] = mrows[0][:6] + ["cause"]
-    next_id = max([int(re.match(r"^- id: (\d+)", c).group(1)) for c in entries] or [0]) + 1
     appended, dropped, counts, amap = [], [], {v: 0 for v in VERDICTS}, []
     for nid, n in sorted(new.items()):
         cid, v = verdict.get(nid, (None, "different"))
@@ -190,29 +199,27 @@ def append_mode(new_path, cur, judged=None):
         counts[v] += 1
         if v in ("duplicate", "regressed"):
             ev = str(n["_raw"].get("evidence", "")).strip()
-            for k, c in enumerate(entries):
-                if c.startswith(f"- id: {cid}\n") and ev:
-                    entries[k] = re.sub(r"(\n  evidence: )([^\n]*)", lambda m: m.group(1) + m.group(2) + " | " + ev, c, count=1)
-            if v == "regressed" and cid in status and status[cid].split("\t")[1] == "fixed":
-                status[cid] = f"{cid}\topen\t\t"
+            if cid in entries and ev:
+                entries[cid] = re.sub(r"(\n  evidence: )([^\n]*)", lambda m: m.group(1) + m.group(2) + " | " + ev, entries[cid], count=1)
+            if v == "regressed" and status.get(cid, {}).get("status") == "fixed":
+                status[cid] = {"status": "open", "ref": "", "date": ""}
                 for r in mrows:
                     if r[0] == str(cid):
                         r[:] = (r + [""] * 7)[:7]; r[2] = "reopened"; r[6] = _cause(n)
             continue
         if v == "stale":
             dropped.append((nid, cid)); continue
+        next_id = next_entry_id(entries)
         raw = n["_raw"]; raw["id"] = str(next_id)
         rel = cid if cid is not None else (cands.get(nid) or [None])[0]
         if rel is not None and v == "different" and nid in cands: raw["related_to"] = str(rel)
         lines = [f"- id: {next_id}"] + [f"  {k}: {val}" for k, val in raw.items() if k not in ("id", "_source") and val]
-        entries.append("\n".join(lines))
-        appended.append(next_id); amap.append((nid, next_id)); next_id += 1
-    write_merged(os.path.join(cur, "merged.md"), header, entries)
+        entries[next_id] = "\n".join(lines)
+        appended.append(next_id); amap.append((nid, next_id))
+    write_entries(cur, header, entries)
     with open(mpath, "w") as fh:
         for r in mrows: fh.write("\t".join(r) + "\n")
-    with open(st_path, "w") as fh:
-        fh.write(st_lines[0] + "\n")
-        for k in sorted(status): fh.write(status[k] + "\n")
+    rr.write_status(cur, status)
     ap_path = os.path.join(rd, "appended.tsv")
     earlier = [l.strip() for l in open(ap_path).read().splitlines()[1:] if l.strip()] if os.path.exists(ap_path) else []
     with open(ap_path, "w") as fh:
@@ -249,32 +256,30 @@ def main():
     if not a.prev: ap.error("PREV_RUN and CUR_RUN are required without --append")
     rd = os.path.join(a.cur, "reconcile"); os.makedirs(rd, exist_ok=True)
     prev, cur = load(a.prev), load(a.cur)
-    pstatus = {int(r[0]): r for r in tsv(os.path.join(a.prev, "status.tsv")) if r and r[0].isdigit()}
+    pstatus = rr.read_status(a.prev)
     pnum = {mid: str(n) for mid, n in rr.read_numbers(a.prev).items()}
     def pinfo(pid):
-        s = pstatus.get(pid)
-        return (pnum.get(pid, ""), s[1] if s else "open", s[2] if s and len(s) > 2 else "")
+        s = pstatus.get(pid, {"status": "open", "ref": ""})
+        return (pnum.get(pid, ""), s["status"], s["ref"])
     label = os.path.basename(os.path.normpath(os.path.realpath(a.prev)))
     open(os.path.join(rd, "previous.txt"), "w").write(label + "\n")
 
     if a.seed:
         matches = tsv(os.path.join(rd, "matches.tsv"))
-        st_path = os.path.join(a.cur, "status.tsv")
-        existing = {int(r[0]) for r in tsv(st_path) if r and r[0].isdigit()}
-        rows = [l for l in open(st_path)] if os.path.exists(st_path) else ["merged_id\tstatus\tref\tdate\n"]
+        st = rr.read_status(a.cur)
         os.makedirs(os.path.join(a.cur, "resolution"), exist_ok=True)
         carried = seeded_posted = 0
         prev_posted, cur_posted = rr.read_posted(a.prev), rr.read_posted(a.cur)
         for r in matches:
             cid, pid, status, ref = int(r[0]), int(r[1]), r[4], r[5] if len(r) > 5 else ""
-            if status in ("in-progress", "wont-fix", "deferred") and cid not in existing:
-                rows.append(f"{cid}\t{status}\t{ref}\t\n"); carried += 1
+            if status in ("in-progress", "wont-fix", "deferred") and cid not in st:
+                st[cid] = {"status": status, "ref": ref, "date": ""}; carried += 1
             src = os.path.join(a.prev, "resolution", f"{pid}.md")
             dst = os.path.join(a.cur, "resolution", f"{cid}.md")
             if os.path.exists(src) and not os.path.exists(dst):
                 open(dst, "w").write(f"From the review in {label}:\n\n" + open(src).read())
             seeded_posted += seed_posted(a.prev, a.cur, pid, cid, prev_posted, cur_posted)
-        open(st_path, "w").writelines(rows)
+        rr.write_status(a.cur, st)
         if seeded_posted: rr.write_posted(a.cur, cur_posted)
         matched = {int(r[1]) for r in matches}
         lost = [pid for pid, row in sorted(prev_posted.items()) if rr.has_thread(row) and pid not in matched]

@@ -154,7 +154,7 @@ class CloseStepTests(PostQueueCase):
                    "1\t1\tT1\topen\t0\t1\t1\t\td\n2\t2\tT2\tresolved\t0\t1\t1\t\td\n")
 
     def test_names_the_fixed_findings_with_an_open_thread(self):
-        self.assertIn("Close the posted thread of finding 1 (`post-review.py --close`).", self.full_status())
+        self.assertIn("Close the posted thread of finding 1; see Closing posted threads in the `review` skill.", self.full_status())
 
     def test_names_nothing_when_no_thread_is_open(self):
         self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\n")

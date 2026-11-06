@@ -889,6 +889,7 @@ class CloseCase(PostCase):
         super().setUp()
         self.statuses, self.threads = {}, {}
         self.closable_finding(1)
+        self.stub("viewer_login", return_value="me")
 
     def closable_finding(self, mid, ref=SHA, **thread):
         self.posted_row(mid, thread_id=f"PRRT_{mid}", comment_id=str(900 + mid), url=f"https://gh/c/{900 + mid}")
@@ -957,6 +958,14 @@ class CloseListTest(CloseCase):
     def test_shows_the_last_reply(self):
         self.thread(1, replies="@amy: Why?; @bob: Done, see the new guard.")
         self.assertIn("  last reply: @bob: Done, see the new guard.\n", self.main("--close"))
+
+    def test_skips_the_viewers_own_replies(self):
+        self.thread(1, replies="@bob: Done, see the new guard.; @me: Looks fixed in abc1234.")
+        self.assertIn("  last reply: @bob: Done, see the new guard.\n", self.main("--close"))
+
+    def test_says_none_when_only_the_viewer_replied(self):
+        self.thread(1, replies="@me: Looks fixed in abc1234.")
+        self.assertIn("  last reply: none\n", self.main("--close"))
 
     def test_shows_the_reply_it_would_send(self):
         self.assertIn("  reply:\n    Looks fixed in abc1234.", self.main("--close"))

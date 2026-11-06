@@ -53,7 +53,7 @@ class GithubItemsTest(unittest.TestCase):
 
     def test_leaves_out_a_pending_reply_on_a_submitted_thread(self):
         submitted = thread(1, replies=["Unsent draft."], reply_state="PENDING")
-        self.assertEqual(pr_comments.github_items(pull_request(), [submitted])[0][5]["replies"], [])
+        self.assertEqual(pr_comments.github_items(pull_request(), [submitted])[0].replies, [])
 
     def test_skips_a_review_without_a_body(self):
         self.assertEqual(self.items(reviews=[review(2, "COMMENTED", body="  ")]), [])
@@ -61,7 +61,7 @@ class GithubItemsTest(unittest.TestCase):
 
     def test_skips_a_review_posted_by_this_plugin(self):
         items = pr_comments.github_items(pull_request(reviews=[review(2, "COMMENTED"), review(4, "COMMENTED")]), [], {"2"})
-        self.assertEqual([gid for _, gid, *_ in items], [4])
+        self.assertEqual([c.gid for c in items], [4])
 
 
 class SortThreadsTest(unittest.TestCase):
@@ -236,6 +236,52 @@ class PostedThreadStateTest(PostedThreadCase):
         self.fold(thread(1, isResolved=True))
         self.fold()
         self.assertEqual(self.row(40)["state"], "missing")
+
+
+class ApplyJudgedCase(FoldInCase):
+    def setUp(self):
+        super().setUp()
+        self.fold(thread(1), thread(2))
+
+    def judge(self, *lines):
+        self.write("judged.tsv", "".join(line + "\n" for line in lines))
+        return pr_comments.apply_judged(self.run_dir, os.path.join(self.run_dir, "judged.tsv"))
+
+    def entry(self, mid):
+        return self.read("merged.md").split(f"- id: {mid}\n", 1)[1].split("\n\n", 1)[0]
+
+
+class ApplyJudgedTest(ApplyJudgedCase):
+    def test_links_a_comment_judged_the_same(self):
+        self.judge("2\t9\tsame")
+        self.assertIn("duplicate_of: 9", self.entry(2))
+
+    def test_counts_the_links(self):
+        self.assertEqual(self.judge("1\t9\tsame", "2\t8\tdifferent"), 1)
+
+    def test_leaves_a_comment_judged_different(self):
+        self.judge("2\t9\tdifferent")
+        self.assertNotIn("duplicate_of", self.read("merged.md"))
+
+
+class WhenTheCommentIsAlreadyLinkedTest(ApplyJudgedCase):
+    def setUp(self):
+        super().setUp()
+        self.judge("1\t9\tsame")
+
+    def test_keeps_its_first_link(self):
+        self.judge("1\t8\tsame")
+        self.assertNotIn("duplicate_of: 8", self.entry(1))
+
+
+class SeenTest(RunCase):
+    def test_writes_the_keys_in_the_order_of_their_ids(self):
+        pr_comments.write_seen(self.run_dir, {"thread:5": 2, "review:9": 1})
+        self.assertEqual(self.read("pr/seen.tsv"), "review:9\t1\nthread:5\t2\n")
+
+    def test_reads_back_what_it_wrote(self):
+        pr_comments.write_seen(self.run_dir, {"thread:5": 2, "review:9": 1})
+        self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:5": 2, "review:9": 1})
 
 
 class ShortlistTest(RunCase):

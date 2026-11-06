@@ -84,6 +84,10 @@ class GhApiTest(unittest.TestCase):
         self.run.return_value = completed(json.dumps({"number": 42}))
         self.assertEqual(gh_api.pr_number("/w"), 42)
 
+    def test_viewer_login_reads_the_signed_in_user(self):
+        self.run.return_value = completed(json.dumps({"login": "me"}))
+        self.assertEqual(gh_api.viewer_login("/w"), "me")
+
 
 if __name__ == "__main__":
     unittest.main()
