@@ -21,7 +21,12 @@ INTERNAL = [("a .clerk-dev path", re.compile(r"\.clerk-dev\b")),
             ("a lens", re.compile(r"\blens(?:es)?\b", re.I)),
             ("a finding number", re.compile(r"\bfindings?\s+#?\d+|\bmerged id\b", re.I)),
             ("a run label", re.compile(r"\b\d{8}-\d{4}\b"))]
-MENTION = re.compile(r"(?<![\w`/@])@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:/[\w-]+)?)")
+MENTION = re.compile(r"(?<![\w/@])@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:/[\w-]+)?)")
+ISSUE_REFERENCE = re.compile(r"(?<![\w&/])#(\d+)\b")
+LINKED = [(MENTION, "@", "mentions {}; GitHub notifies them"),
+          (ISSUE_REFERENCE, "#", "names {}; GitHub links each to that issue or pull request of the repository")]
+CROSS_REFERENCE = re.compile(r"\{#\d+\}")
+CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)((?:(?!\n[ \t]*\n).)+?)(?<!`)\1(?!`)", re.S)
 
 class UnexpectedReply(SystemExit):
     pass
@@ -77,18 +82,21 @@ def unwrap(text):
     return "\n".join(out)
 
 def prose(text):
-    return "\n".join(re.sub(r"`[^`\n]*`", "", line) for line, code in code_lines(text) if not code)
+    return CODE_SPAN.sub(" ", "\n".join("" if code else line for line, code in code_lines(text)))
 
 def local_paths(*dirs):
     found = {os.path.expanduser("~")} | {norm(d) for d in dirs for norm in (os.path.abspath, os.path.realpath)}
     return sorted((p for p in found if len(p.rstrip("/")) > 1), key=len, reverse=True)
 
 def screen(text, local):
-    path = next((p for p in local if p in text), None)
-    problem = f"its text names a local path of this machine ({path})" if path else None
+    path, token = next((p for p in local if p in text), None), CROSS_REFERENCE.search(text)
+    problem = (f"its text names a local path of this machine ({path})" if path else
+               f"its text holds a cross-reference token of the review ({token.group(0)})" if token else None)
     warnings = [f"the text names {what}: {m.group(0)}" for what, rx in INTERNAL for m in [rx.search(text)] if m]
-    mentions = sorted(set(MENTION.findall(prose(text))))
-    if mentions: warnings.append(f"the text mentions {', '.join('@' + m for m in mentions)}; GitHub notifies them")
+    plain = prose(text)
+    for rx, lead, says in LINKED:
+        found = sorted(set(rx.findall(plain)))
+        if found: warnings.append("the text " + says.format(", ".join(lead + f for f in found)))
     return problem, warnings
 
 def outgoing(text, plain):
@@ -192,9 +200,19 @@ def plan_items(run, ctx):
         items.append(it)
     return items
 
-def review_body(run, rows, review_id):
+def kept_path(run, review_id):
+    return os.path.join(run, "posted", f"pending-{review_id}.md")
+
+def kept_body(run, ctx):
+    p = ctx["pending"]
+    if not p: return ""
+    if os.path.exists(kept_path(run, p["id"])): return rr.read_text(kept_path(run, p["id"]))
+    posted_to = any(row.get("review_id") == str(p["id"]) for row in rr.read_posted(run).values())
+    return "" if posted_to else (p.get("body") or "").strip()
+
+def review_body(run, rows, review_id, kept):
     head = rr.read_text(os.path.join(run, "posted", "review.md"))
-    parts = [unwrap(head) if head else DEFAULT_BODY]
+    parts = [part for part in (kept, unwrap(head) if head else "") if part] or [DEFAULT_BODY]
     for mid in sorted(rows):
         row = rows[mid]
         if row.get("kind") == "body" and str(row.get("review_id")) == str(review_id):
@@ -363,21 +381,19 @@ def branch_pr(repo):
     try: return gh_api.pr_number(repo)
     except gh_api.GhError: return None
 
-def reviewed_pr(repo, run, asked, repo_name):
+def reviewed_pr(repo, run, asked):
     number, reviewed_repo = recorded_pr(run)
-    if reviewed_repo and reviewed_repo.lower() != repo_name.lower():
-        sys.exit(f"nothing sent; the run reviewed a pull request of {reviewed_repo}, but --repo is {repo_name}")
     known = number or branch_pr(repo)
     if asked and known and asked != known: sys.exit(f"nothing sent; --pr {asked} is not the reviewed pull request #{known}")
     if not (asked or known): sys.exit("no pull request found for the run or the branch; pass --pr N")
-    return asked or known
+    owner, name = reviewed_repo.split("/") if reviewed_repo else gh_api.repo_owner_name(repo)
+    return owner, name, asked or known
 
 def fetch_pr(repo, run, pr):
-    owner, name = gh_api.repo_owner_name(repo)
-    pr = reviewed_pr(repo, run, pr, f"{owner}/{name}")
+    owner, name, pr = reviewed_pr(repo, run, pr)
     ctx = {"owner": owner, "name": name, "pr": pr, "pending": None}
     base = pulls_path(ctx)
-    ctx["head"] = json.loads(gh_api.gh(["pr", "view", str(pr), "--json", "headRefOid"], repo))["headRefOid"]
+    ctx["head"] = json.loads(gh_api.gh(["pr", "view", str(pr), "--repo", f"{owner}/{name}", "--json", "headRefOid"], repo))["headRefOid"]
     ctx["files"] = [f["filename"] for f in gh_api.rest_list(f"{base}/files", repo)]
     reviews = gh_api.rest_list(f"{base}/reviews", repo)
     ctx["review_ids"] = {str(r["id"]) for r in reviews}
@@ -386,7 +402,7 @@ def fetch_pr(repo, run, pr):
     if pending:
         comments = gh_api.rest_list(f"{base}/reviews/{pending['id']}/comments", repo)
         ctx["pending"] = {"id": pending["id"], "node_id": pending["node_id"], "commit_id": pending["commit_id"],
-                          "html_url": pending.get("html_url", ""), "comments": {c["id"]: c["node_id"] for c in comments}}
+                          "html_url": pending.get("html_url", ""), "body": pending.get("body") or "", "comments": {c["id"]: c["node_id"] for c in comments}}
         ctx["comment_ids"] |= {str(c) for c in ctx["pending"]["comments"]}
     return ctx
 
@@ -407,9 +423,10 @@ def warning_lines(warnings):
     return [f"  warning: {w}" for w in warnings]
 
 def checked_body(run, ctx, rows, review_id):
-    body = review_body(run, rows, review_id)
-    problem = screen(body, ctx["local"])[0]
+    body = review_body(run, rows, review_id, ctx["kept"])
+    problem, warnings = screen(body, ctx["local"])
     if problem: sys.exit(f"nothing sent; the review body: {problem}")
+    if warnings: print("\n".join(["review body:", *warning_lines(warnings)]), file=sys.stderr)
     return body
 
 def preview(run, ctx, items, reviewed):
@@ -427,9 +444,10 @@ def preview(run, ctx, items, reviewed):
         out += ["  text:", indent(it["text"])] + warning_lines(it["warnings"])
     review_id = current_review(ctx)
     rows = planned_rows(rr.read_posted(run), [it for it in items if it["action"] != "skip" and not it["problem"]], review_id, "")
-    body = review_body(run, rows, review_id)
+    body = review_body(run, rows, review_id, ctx["kept"])
     problem, warnings = screen(body, ctx["local"])
     out += ["review body:", indent(body)] + ([f"  cannot post: {problem}"] if problem else []) + warning_lines(warnings)
+    if ctx["kept"]: out.append(f"  keeps the text already in pending review {ctx['pending']['id']} on GitHub, with this run's text below it")
     if not same_commit(ctx["head"], reviewed):
         out.append(f"head moved: the pull request head is {ctx['head'][:9]}, the review judged {reviewed[:9]}; comments anchor on the reviewed commit")
     out.append(pending_line(ctx, reviewed, "--post"))
@@ -456,7 +474,10 @@ def post(a, ctx, items, reviewed):
     if a.dry_run: write_payload(a.run, calls); return
     results = execute(calls, a.repo, ctx, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
-    try: rr.write_posted(a.run, {mid: {k: str(resolve_refs(v, results)) for k, v in row.items()} for mid, row in rows.items()})
+    try:
+        if ctx["kept"]:
+            with open(kept_path(a.run, ctx["pending"]["id"]), "w", encoding="utf-8") as fh: fh.write(ctx["kept"] + "\n")
+        rr.write_posted(a.run, {mid: {k: str(resolve_refs(v, results)) for k, v in row.items()} for mid, row in rows.items()})
     except BaseException:
         print("\n".join(["posted.tsv was not updated; this batch is on GitHub:", *posted_lines(sending, results)]), file=sys.stderr)
         raise
@@ -487,6 +508,7 @@ def main(argv=None):
     if a.dry_run and not (a.post or a.submit): ap.error("--dry-run goes with --post or --submit")
     reviewed = reviewed_commit(a.run)
     ctx = {**fetch_pr(a.repo, a.run, a.pr), "local": local_paths(a.run, a.repo)}
+    ctx["kept"] = kept_body(a.run, ctx)
     if a.submit: return submit(a, ctx, a.submit)
     items = plan_items(a.run, ctx)
     return post(a, ctx, items, reviewed) if a.post else preview(a.run, ctx, items, reviewed)

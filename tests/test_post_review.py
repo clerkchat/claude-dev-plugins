@@ -70,8 +70,9 @@ class PostCase(RunCase):
         self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
         if text is not False: self.write(f"posted/{mid}.md", text or f"Finding {mid} text.")
 
-    def pend(self, commit=HEAD, comments=None):
-        self.ctx["pending"] = {"id": 55, "node_id": "PRR_55", "commit_id": commit, "html_url": "https://gh/r/55", "comments": comments or {}}
+    def pend(self, commit=HEAD, comments=None, body=""):
+        self.ctx["pending"] = {"id": 55, "node_id": "PRR_55", "commit_id": commit, "html_url": "https://gh/r/55", "body": body,
+                               "comments": comments or {}}
 
     def posted_row(self, mid, state="posted", **fields):
         row = {"state": state, "note": self.marks.get(mid, ""), "kind": "line", "path": "src/a.py", "line": "11", "end_line": "11",
@@ -83,6 +84,7 @@ class PostCase(RunCase):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             post.main([self.run_dir, *args])
+        self.err = err.getvalue()
         return out.getvalue()
 
     def calls(self, *args):
@@ -250,6 +252,20 @@ class InternalMaterialWarningTest(PostCase):
         self.assertEqual(self.thread_vars(1)["body"], "Per DEC-17 this breaks.")
 
 
+class IssueReferenceTest(PostCase):
+    def test_warns_that_github_links_an_issue_reference(self):
+        self.mark(1, text="Same as in #12 and #3.")
+        self.assertIn("warning: the text names #12, #3; GitHub links each to that issue or pull request", self.main())
+
+    def test_ignores_an_issue_reference_in_inline_code(self):
+        self.mark(1, text="The `#12` anchor.")
+        self.assertNotIn("GitHub links", self.main())
+
+    def test_refuses_a_cross_reference_token_of_the_review(self):
+        self.mark(1, text="Same root cause as {#12}.")
+        self.assertIn("finding 1: its text holds a cross-reference token of the review ({#12})", self.refusal())
+
+
 class MentionWarningTest(PostCase):
     def test_warns_that_a_mention_notifies(self):
         self.mark(1, text="Ask @octocat and @acme/core.")
@@ -257,6 +273,14 @@ class MentionWarningTest(PostCase):
 
     def test_ignores_a_mention_in_inline_code(self):
         self.mark(1, text="Use the `@octocat` decorator.")
+        self.assertNotIn("mentions", self.main())
+
+    def test_warns_on_a_mention_after_an_unclosed_backtick(self):
+        self.mark(1, text="Use the `@octocat decorator.")
+        self.assertIn("warning: the text mentions @octocat", self.main())
+
+    def test_ignores_a_mention_in_a_code_span_closed_by_a_run_of_the_same_length(self):
+        self.mark(1, text="Use ``@octocat ` here``.")
         self.assertNotIn("mentions", self.main())
 
     def test_ignores_a_mention_in_a_code_fence(self):
@@ -338,6 +362,33 @@ class PendingReviewTest(PostCase):
         self.assertIn("exists on ccccccccc, another commit than the reviewed aaaaaaaaa", self.main())
 
 
+class WhenThePendingReviewHasABodyTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.pend(body="My summary.")
+
+    def test_keeps_it_above_the_review_body(self):
+        self.write("posted/review.md", "Nice work.")
+        self.assertEqual(self.review_body(), "My summary.\n\nNice work.")
+
+    def test_sends_no_default_sentence_below_it(self):
+        self.assertEqual(self.review_body(), "My summary.")
+
+    def test_shows_it_in_the_preview(self):
+        self.assertIn("review body:\n    My summary.\n  keeps the text already in pending review 55 on GitHub", self.main())
+
+    def test_keeps_only_the_text_saved_when_this_run_first_posted_to_it(self):
+        self.write("posted/pending-55.md", "My summary.")
+        self.posted_row(3)
+        self.pend(body="My summary.\n\nComments from an earlier batch.")
+        self.assertEqual(self.review_body(), "My summary.")
+
+    def test_takes_none_once_this_run_posted_to_it_without_saving_any(self):
+        self.posted_row(3)
+        self.assertEqual(self.review_body(), post.DEFAULT_BODY)
+
+
 class RepostTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -412,6 +463,15 @@ class SubmitTest(PostCase):
             post.main([self.run_dir, "--submit", "approve"])
         self.assertIn("GitHub rejected the request; nothing changed on GitHub", str(raised.exception))
 
+    def test_shows_the_review_body_warnings(self):
+        self.write("posted/review.md", "Thanks @octocat.")
+        self.submit("comment")
+        self.assertIn("review body:\n  warning: the text mentions @octocat", self.err)
+
+    def test_keeps_the_text_saved_from_the_pending_review(self):
+        self.write("posted/pending-55.md", "My summary.")
+        self.assertEqual(self.submit("comment")[0]["fields"]["body"], "My summary.")
+
     def test_sends_the_verdict_with_the_review_body(self):
         self.assertEqual(self.submit("request-changes"), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
                                                            "fields": {"event": "REQUEST_CHANGES", "body": post.DEFAULT_BODY}}])
@@ -476,6 +536,13 @@ class LivePostTest(LiveCase):
             post.main([self.run_dir, "--post"])
         self.assertEqual((self.graphql.call_args_list[-1].args[1], self.rest.call_args.args[:2]),
                          ({"id": "PRRC_1"}, ("DELETE", "repos/acme/widgets/pulls/7/reviews/55")))
+
+
+class WhenPostingToAPendingReviewWithABodyTest(LiveCase):
+    def test_saves_the_body_it_keeps(self):
+        self.pend(body="My summary.")
+        self.main("--post")
+        self.assertEqual(self.read("posted/pending-55.md"), "My summary.\n")
 
 
 class PlaceholderLookalikeTest(LiveCase):
@@ -610,20 +677,31 @@ class LiveUpdateRollbackTest(LiveCase):
         self.assertIn("still on GitHub: finding 1's comment https://gh/c/901, which keeps its new text", self.rejected())
 
 
-class FetchPrTest(unittest.TestCase):
-    def setUp(self):
-        lists = {"repos/o/r/pulls/7/files": [{"filename": "a.py"}],
-                 "repos/o/r/pulls/7/reviews": [{"id": 1, "state": "COMMENTED"}, {"id": 2, "node_id": "N2", "state": "PENDING", "commit_id": HEAD}],
-                 "repos/o/r/pulls/7/comments": [{"id": 8}],
-                 "repos/o/r/pulls/7/reviews/2/comments": [{"id": 9, "node_id": "C9"}]}
-        with mock.patch.object(gh_api, "repo_owner_name", return_value=["o", "r"]), \
+class FetchPrCase(RunCase):
+    LISTS = {"repos/o/r/pulls/7/files": [{"filename": "a.py"}],
+             "repos/o/r/pulls/7/reviews": [{"id": 1, "state": "COMMENTED"},
+                                           {"id": 2, "node_id": "N2", "state": "PENDING", "commit_id": HEAD, "body": "Mine."}],
+             "repos/o/r/pulls/7/comments": [{"id": 8}],
+             "repos/o/r/pulls/7/reviews/2/comments": [{"id": 9, "node_id": "C9"}]}
+
+    def fetch(self, origin):
+        with mock.patch.object(gh_api, "repo_owner_name", return_value=origin.split("/")), \
              mock.patch.object(gh_api, "pr_number", return_value=7), \
-             mock.patch.object(gh_api, "gh", return_value=json.dumps({"headRefOid": HEAD})), \
-             mock.patch.object(gh_api, "rest_list", side_effect=lambda path, cwd: lists[path]):
-            self.ctx = post.fetch_pr("/w", "/nowhere", 7)
+             mock.patch.object(gh_api, "gh", return_value=json.dumps({"headRefOid": HEAD})) as self.gh, \
+             mock.patch.object(gh_api, "rest_list", side_effect=lambda path, cwd: self.LISTS[path]):
+            return post.fetch_pr("/w", self.run_dir, 7)
+
+
+class FetchPrTest(FetchPrCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.fetch("o/r")
 
     def test_finds_the_pending_review_and_its_comment_nodes(self):
         self.assertEqual((self.ctx["pending"]["id"], self.ctx["pending"]["comments"]), (2, {9: "C9"}))
+
+    def test_keeps_the_body_of_the_pending_review(self):
+        self.assertEqual(self.ctx["pending"]["body"], "Mine.")
 
     def test_knows_which_reviews_are_on_github(self):
         self.assertEqual(self.ctx["review_ids"], {"1", "2"})
@@ -632,19 +710,37 @@ class FetchPrTest(unittest.TestCase):
         self.assertEqual(self.ctx["comment_ids"], {"8", "9"})
 
 
+class WhenTheCheckoutIsAForkTest(FetchPrCase):
+    def setUp(self):
+        super().setUp()
+        self.write("pr/pr.txt", "7\thttps://github.com/o/r/pull/7\n")
+        self.ctx = self.fetch("me/r")
+
+    def test_posts_to_the_repository_the_pull_request_belongs_to(self):
+        self.assertEqual((self.ctx["owner"], self.ctx["name"], self.ctx["pr"]), ("o", "r", 7))
+
+    def test_reads_the_head_from_that_repository(self):
+        args = self.gh.call_args.args[0]
+        self.assertEqual(args[args.index("--repo") + 1], "o/r")
+
+
 class ReviewedPrCase(RunCase):
     def setUp(self):
         super().setUp()
-        patcher = mock.patch.object(gh_api, "pr_number", return_value=7)
-        self.branch_pr = patcher.start()
+        self.branch_pr = self.stub("pr_number", return_value=7)
+        self.origin = self.stub("repo_owner_name", return_value=["o", "r"])
+
+    def stub(self, name, **kw):
+        patcher = mock.patch.object(gh_api, name, **kw)
         self.addCleanup(patcher.stop)
+        return patcher.start()
 
-    def reviewed(self, asked=None, repo="o/r"):
-        return post.reviewed_pr("/w", self.run_dir, asked, repo)
+    def reviewed(self, asked=None):
+        return post.reviewed_pr("/w", self.run_dir, asked)
 
-    def refusal(self, asked=None, repo="o/r"):
+    def refusal(self, asked=None):
         with self.assertRaises(SystemExit) as raised:
-            self.reviewed(asked, repo)
+            self.reviewed(asked)
         return str(raised.exception)
 
 
@@ -654,34 +750,42 @@ class WhenTheRunRecordedAPullRequestTest(ReviewedPrCase):
         self.write("pr/pr.txt", "9\thttps://github.com/o/r/pull/9\n")
 
     def test_posts_to_it(self):
-        self.assertEqual(self.reviewed(), 9)
+        self.assertEqual(self.reviewed(), ("o", "r", 9))
 
     def test_accepts_the_same_pr(self):
-        self.assertEqual(self.reviewed(9), 9)
+        self.assertEqual(self.reviewed(9), ("o", "r", 9))
 
     def test_refuses_another_pr(self):
         self.assertIn("--pr 8 is not the reviewed pull request #9", self.refusal(8))
 
-    def test_refuses_another_repository(self):
-        self.assertIn("the run reviewed a pull request of o/r, but --repo is o/fork", self.refusal(repo="o/fork"))
+    def test_posts_to_its_repository_when_origin_is_a_fork(self):
+        self.origin.return_value = ["me", "r"]
+        self.assertEqual(self.reviewed(), ("o", "r", 9))
 
 
 class WhenTheRunReviewedAPullRequestNumberTest(ReviewedPrCase):
-    def test_posts_to_that_number(self):
+    def test_posts_to_that_number_on_origin(self):
         self.write_target("#9", "b" * 40, HEAD)
-        self.assertEqual(self.reviewed(), 9)
+        self.assertEqual(self.reviewed(), ("o", "r", 9))
+
+
+class WhenTheRunReviewedAPullRequestUrlTest(ReviewedPrCase):
+    def test_posts_to_the_repository_of_the_url(self):
+        self.origin.return_value = ["me", "r"]
+        self.write_target("https://github.com/o/r/pull/9", "b" * 40, HEAD)
+        self.assertEqual(self.reviewed(), ("o", "r", 9))
 
 
 class WhenTheRunRecordedNoPullRequestTest(ReviewedPrCase):
-    def test_posts_to_the_branch_pull_request(self):
-        self.assertEqual(self.reviewed(), 7)
+    def test_posts_to_the_branch_pull_request_on_origin(self):
+        self.assertEqual(self.reviewed(), ("o", "r", 7))
 
     def test_refuses_a_pr_other_than_the_branch_pull_request(self):
         self.assertIn("--pr 8 is not the reviewed pull request #7", self.refusal(8))
 
     def test_takes_the_pr_when_the_branch_has_none(self):
         self.branch_pr.side_effect = gh_api.GhError("no pull requests found")
-        self.assertEqual(self.reviewed(8), 8)
+        self.assertEqual(self.reviewed(8), ("o", "r", 8))
 
     def test_asks_for_a_pr_when_nothing_names_one(self):
         self.branch_pr.side_effect = gh_api.GhError("no pull requests found")
