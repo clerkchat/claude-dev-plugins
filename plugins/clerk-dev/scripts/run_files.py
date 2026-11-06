@@ -153,7 +153,7 @@ def commits_named(repo, text):
 
 def commits_unknown(repo, text):
     known = commits_named(repo, text)
-    return [t for t in COMMIT_TOKEN.findall(text) if not any(k.startswith(t) for k in known)]
+    return list(dict.fromkeys(t for t in COMMIT_TOKEN.findall(text) if not any(k.startswith(t) for k in known)))
 
 def commits_path(run):
     return os.path.join(run, "commits.tsv")

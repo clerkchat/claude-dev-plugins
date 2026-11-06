@@ -983,9 +983,11 @@ is discovered.
    (`git diff <BASE>..HEAD --
    <files>`), not just the fix commit. Write
    `<run>/reconcile/since.tsv` (`prev_id`, `resolved` | `reopened`, one-line
-   note). For `reopened`, append the earlier finding to `merged.md` with
-   `reconcile.py --append` and add a row to `reconcile/matches.tsv` (`how` =
-   `recheck`), so it renders as reopened. Earlier open findings with no match
+   note). For `reopened`, write the earlier finding, under its merged id in the
+   previous run, to a findings file and append it with `reconcile.py <previous>
+   <run> --append <that file>`: it adds the row to `reconcile/matches.tsv`
+   (`how` = `recheck`), so it renders as reopened, and carries the finding's
+   posted thread, kept-open row, and closing reply as `--seed` does. Earlier open findings with no match
    are not rechecked; the report lists them for the user to confirm. Credits
    are matched only with credits, and an earlier credit with no match is not
    listed: it has nothing to confirm.
@@ -1294,8 +1296,11 @@ When a render prints that line, or the user asks to close posted threads:
    request. A fix whose status names no commit (a recheck against the working
    tree) is listed with the warning "no fix commit to check against the pull
    request" and can still be closed; name it in the question. A status that names
-   a commit this clone does not have shows "cannot send: its fix commit <sha> is
-   not in this clone; fetch it and retry", and `--close` refuses it. When the user's
+   a commit-like token this clone does not have as a commit (a sha not fetched, or
+   a ticket number) shows "cannot send: its status names <token>, which is not a
+   commit in this clone; fetch it if it is one, or reword the status or keep the
+   thread open with --keep-open", naming every such token, and `--close` refuses
+   it. When the user's
    own "looks fixed" reply is already the latest word on the thread (nobody
    replied after it), the listing says "reply: already sent" instead: `--close`
    then only resolves the thread, or, when the user cannot resolve it, keeps

@@ -260,6 +260,28 @@ class CommitsNamedTest(TempCase):
         self.assertEqual(self.named("the working tree"), [])
 
 
+class CommitsUnknownTest(TempCase):
+    def setUp(self):
+        super().setUp()
+        self.repo = init_repo(self.path("repo"), with_origin=False)
+        self.sha = self.repo.git("rev-parse", "HEAD")
+
+    def unknown(self, text):
+        return run_files.commits_unknown(self.repo.path, text)
+
+    def test_leaves_out_a_short_sha_the_clone_has(self):
+        self.assertEqual(self.unknown(f"fixed in {self.sha[:7]}"), [])
+
+    def test_names_a_full_sha_the_clone_lacks(self):
+        self.assertEqual(self.unknown("fixed in " + "d" * 40), ["d" * 40])
+
+    def test_names_every_unknown_token_once(self):
+        self.assertEqual(self.unknown(f"deadbee, {self.sha[:7]}, 1234567 and deadbee"), ["deadbee", "1234567"])
+
+    def test_names_nothing_in_text_without_a_sha(self):
+        self.assertEqual(self.unknown("the working tree"), [])
+
+
 class ClosableCase(RunCase):
     def setUp(self):
         super().setUp()

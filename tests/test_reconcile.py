@@ -125,6 +125,74 @@ class SeedUnmatchedBodyPostingTest(SeedCase):
         self.assertNotIn("not found again", self.seed())
 
 
+class KeptOpenPostingCase(SeedCase):
+    KEPT = {"reason": "waiting on author", "date": "2026-11-05"}
+
+    def post_kept_open(self, mid):
+        self.post({mid: posted_row(5)})
+        run_files.write_kept_open(self.prev, {mid: self.KEPT})
+        self.write(f"posted/close-{mid}.md", "Thanks, that does it.\n")
+
+
+class SeedKeptOpenPostingTest(KeptOpenPostingCase):
+    def setUp(self):
+        super().setUp()
+        self.post_kept_open(7)
+        self.seed()
+
+    def test_re_keys_the_kept_open_row_to_the_current_id(self):
+        self.assertEqual(run_files.read_kept_open(self.cur), {1: self.KEPT})
+
+    def test_copies_the_closing_reply_under_the_current_id(self):
+        self.assertEqual(self.cur_text("posted/close-1.md"), "Thanks, that does it.\n")
+
+
+class AppendRecheckCase(KeptOpenPostingCase):
+    def setUp(self):
+        super().setUp()
+        self.post_kept_open(8)
+        self.new = self.path("rechecked.md")
+        write_file(self.new, merged_md(defect(8, "b.py")))
+        write_file(self.path("judged.tsv"), "new_id\tcarried_id\tverdict\n")
+
+    def append(self, *prev):
+        run_ok("reconcile", *prev, self.cur, "--append", self.new, "--judged", self.path("judged.tsv"))
+
+
+class AppendRecheckTest(AppendRecheckCase):
+    def setUp(self):
+        super().setUp()
+        self.append(self.prev)
+
+    def test_records_the_appended_finding_as_a_recheck_match(self):
+        self.assertEqual({k: run_files.read_matches(self.cur)[3][k] for k in ("prev_id", "how", "prev_number")},
+                         {"prev_id": "8", "how": "recheck", "prev_number": "8"})
+
+    def test_re_keys_the_posted_row_to_the_appended_id(self):
+        self.assertEqual(run_files.read_posted(self.cur)[3]["comment_id"], "5")
+
+    def test_copies_the_posted_text_under_the_appended_id(self):
+        self.assertEqual(self.cur_text("posted/3.md"), "Posted text of 8.\n")
+
+    def test_re_keys_the_kept_open_row_to_the_appended_id(self):
+        self.assertEqual(run_files.read_kept_open(self.cur), {3: self.KEPT})
+
+    def test_copies_the_closing_reply_under_the_appended_id(self):
+        self.assertEqual(self.cur_text("posted/close-3.md"), "Thanks, that does it.\n")
+
+
+class AppendWithoutAPreviousRunTest(AppendRecheckCase):
+    def setUp(self):
+        super().setUp()
+        self.append()
+
+    def test_adds_no_match(self):
+        self.assertNotIn(3, run_files.read_matches(self.cur))
+
+    def test_copies_no_posted_row(self):
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted.tsv")))
+
+
 class JudgedTest(TwoRunsCase):
     def setUp(self):
         super().setUp()

@@ -6,6 +6,7 @@ Usage:
   reconcile.py PREV_RUN CUR_RUN --judged FILE   # apply judge decisions, finalize
   reconcile.py PREV_RUN CUR_RUN --seed          # carry statuses, resolutions, and posted findings
   reconcile.py --append NEW_MERGED CUR_RUN [--judged FILE]  # fold in delta findings
+  reconcile.py PREV_RUN CUR_RUN --append NEW_MERGED [--judged FILE]  # fold in rechecked findings
 
 Reviewers never see this; it runs after merge. Matching is mechanical first:
 same file and either lines within 15 of each other or claim text overlap of
@@ -24,6 +25,9 @@ Writes CUR_RUN/reconcile/:
 phases, see append_mode. Phase 2 also writes reconcile/appended-map.tsv
 (new_id in NEW_MERGED, merged_id it was given). Nothing is folded or reopened without a judged
 verdict; the mechanical match only proposes candidates.
+With PREV_RUN, --append takes NEW_MERGED as earlier findings a recheck
+reopened, each under its id in PREV_RUN: every one it appends gets a
+matches.tsv row (how = recheck) and its posted files, as --seed copies them.
 Use --append for every finding added to a run after the merge step (a
 recheck's new findings too), never a hand edit: it keeps every entry inside
 the findings block, picks ids after the highest one in the file, and repairs
@@ -32,8 +36,9 @@ entries an earlier edit left outside the block.
 in-progress, wont-fix, or deferred (open needs no row) (a previous "fixed" that is found
 again is reopened, so it is not carried), and copies previous resolution
 text into CUR_RUN/resolution/ prefixed with the previous run's label. It also
-copies each matched finding's posted.tsv row and posted text (posted/<id>.md)
-under its new id, unless the current run already has one. When a previous
+copies each matched finding's posted.tsv row, posted/keep.tsv row, posted
+text (posted/<id>.md), and closing reply (posted/close-<id>.md) under its new
+id, unless the current run already has a posted.tsv row for it. When a previous
 finding posted as a thread on GitHub matched nothing, it prints "N posted
 findings not found again (...)": those threads come in as pull request
 comments on the next pr-comments.py fetch.
@@ -155,7 +160,13 @@ def write_append_results(run, folded):
     with open(rf.reconcile_path(run, "dropped.tsv"), "a") as fh:
         for nid, cid in folded.dropped: fh.write(f"{nid}\t{cid}\tstale\n")
 
-def append_mode(new_path, cur, judged=None):
+Recheck = namedtuple("Recheck", "prev pinfo")
+
+def record_rechecks(recheck, cur, amap, matches):
+    for pid, cid in amap.items(): matches[cid] = {"prev_id": str(pid), "how": "recheck", **recheck.pinfo(pid)}
+    seed_postings(recheck.prev, cur, amap.items())
+
+def append_mode(new_path, cur, judged=None, recheck=None):
     """Fold findings from a delta review (or a recheck) into a run.
 
     Phase 1, without --judged: write reconcile/append-candidates.tsv, the
@@ -181,6 +192,7 @@ def append_mode(new_path, cur, judged=None):
         return
     matches = rf.read_matches(cur)
     folded = apply_verdicts(new, cands, judged_verdicts(judged, new, cands) if judged else {}, entries, status, matches, since)
+    if recheck: record_rechecks(recheck, cur, folded.amap, matches)
     mf.write_entries(rf.merged_path(cur), header, entries)
     rf.write_matches(cur, matches)
     rf.write_status(cur, status)
@@ -189,13 +201,31 @@ def append_mode(new_path, cur, judged=None):
     print(f"incremental: {len(new)} new findings: {counts['duplicate']} duplicates, {counts['regressed']} regressions, "
           f"{counts['stale']} already covered by a fix, {len(folded.appended)} appended", file=sys.stderr)
 
-def seed_posted(prev, cur, pid, cid, prev_posted, cur_posted):
-    if pid not in prev_posted or cid in cur_posted: return False
-    cur_posted[cid] = prev_posted[pid]
-    src, dst = rf.posted_path(prev, pid), rf.posted_path(cur, cid)
+Posting = namedtuple("Posting", "posted kept")
+
+def read_posting(run):
+    return Posting(rf.read_posted(run), rf.read_kept_open(run))
+
+def write_posting(run, posting):
+    rf.write_posted(run, posting.posted)
+    if posting.kept: rf.write_kept_open(run, posting.kept)
+
+def copy_new(src, dst):
     if os.path.exists(src) and not os.path.exists(dst):
         os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copy2(src, dst)
+
+def seed_posted(prev, cur, pid, cid, prev_posting, cur_posting):
+    if pid not in prev_posting.posted or cid in cur_posting.posted: return False
+    cur_posting.posted[cid] = prev_posting.posted[pid]
+    if pid in prev_posting.kept: cur_posting.kept[cid] = prev_posting.kept[pid]
+    for path in (rf.posted_path, rf.close_text_path): copy_new(path(prev, pid), path(cur, cid))
     return True
+
+def seed_postings(prev, cur, pairs):
+    prev_posting, cur_posting = read_posting(prev), read_posting(cur)
+    seeded = sum(seed_posted(prev, cur, pid, cid, prev_posting, cur_posting) for pid, cid in pairs)
+    if seeded: write_posting(cur, cur_posting)
+    return seeded
 
 def lost_line(lost, pnum):
     names = ", ".join(f"finding {pnum[pid]}" if pid in pnum else f"#{pid}" for pid in lost)
@@ -210,18 +240,17 @@ def seed_resolution(prev, cur, pid, cid, label):
 def seed(prev, cur, label, pnum):
     matches, st = rf.read_matches(cur), rf.read_status(cur)
     os.makedirs(os.path.join(cur, "resolution"), exist_ok=True)
-    carried = seeded_posted = 0
-    prev_posted, cur_posted = rf.read_posted(prev), rf.read_posted(cur)
-    for cid, m in matches.items():
-        pid = int(m["prev_id"])
+    carried = 0
+    pairs = [(int(m["prev_id"]), cid) for cid, m in matches.items()]
+    for pid, cid in pairs:
+        m = matches[cid]
         if m["prev_status"] in ("in-progress", "wont-fix", "deferred") and cid not in st:
             st[cid] = {"status": m["prev_status"], "ref": m["prev_ref"], "date": ""}; carried += 1
         seed_resolution(prev, cur, pid, cid, label)
-        seeded_posted += seed_posted(prev, cur, pid, cid, prev_posted, cur_posted)
+    seeded_posted = seed_postings(prev, cur, pairs)
     rf.write_status(cur, st)
-    if seeded_posted: rf.write_posted(cur, cur_posted)
-    matched = {int(m["prev_id"]) for m in matches.values()}
-    lost = [pid for pid, row in sorted(prev_posted.items()) if rf.has_thread(row) and pid not in matched]
+    matched = {pid for pid, _ in pairs}
+    lost = [pid for pid, row in sorted(rf.read_posted(prev).items()) if rf.has_thread(row) and pid not in matched]
     print(f"seeded {carried} statuses" + (f" and {seeded_posted} posted findings" if seeded_posted else "") + f" from {label}"
           + (f"; {lost_line(lost, pnum)}" if lost else ""), file=sys.stderr)
 
@@ -270,17 +299,15 @@ def write_unmatched(run, left, pinfo):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("prev", nargs="?", help="previous run (omit with --append)")
+    ap.add_argument("prev", nargs="?", help="previous run (with --append, the run the rechecked findings come from)")
     ap.add_argument("cur", help="current run")
     ap.add_argument("--append", metavar="NEW_MERGED", help="fold findings from NEW_MERGED into CUR_RUN")
     ap.add_argument("--judged"); ap.add_argument("--seed", action="store_true")
     a = ap.parse_args()
-    if a.append:
-        if a.prev: ap.error("--append takes NEW_MERGED and CUR_RUN only")
-        return append_mode(a.append, a.cur, a.judged)
+    pnum = rf.read_numbers(a.prev) if a.prev else {}
+    pinfo = functools.partial(rf.previous_state, rf.read_status(a.prev), pnum) if a.prev else None
+    if a.append: return append_mode(a.append, a.cur, a.judged, Recheck(a.prev, pinfo) if a.prev else None)
     if not a.prev: ap.error("PREV_RUN and CUR_RUN are required without --append")
-    pstatus, pnum = rf.read_status(a.prev), rf.read_numbers(a.prev)
-    pinfo = functools.partial(rf.previous_state, pstatus, pnum)
     label = rf.run_label(a.prev)
     rf.write_previous(a.cur, label)
     if a.seed: return seed(a.prev, a.cur, label, pnum)

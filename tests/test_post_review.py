@@ -1335,7 +1335,8 @@ class WhenTheFixCommitIsNotInThisCloneTest(CloseCase):
     def setUp(self):
         super().setUp()
         self.set_status(1, "fixed", f"{self.UNKNOWN} (fix)")
-        self.reason = f"its fix commit {self.UNKNOWN} is not in this clone; fetch it and retry"
+        self.reason = (f"its status names {self.UNKNOWN}, which is not a commit in this clone; "
+                       "fetch it if it is one, or reword the status or keep the thread open with --keep-open")
 
     def test_refuses_to_close_it(self):
         self.assertIn(f"nothing sent; finding 1: {self.reason}", self.refusal("--close", "1", "--dry-run"))
@@ -1349,6 +1350,22 @@ class WhenTheFixCommitIsNotInThisCloneTest(CloseCase):
     def test_refuses_it_when_another_named_commit_is_known(self):
         self.set_status(1, "fixed", f"{self.sha} and {self.UNKNOWN}")
         self.assertIn(self.reason, self.refusal("--close", "1", "--dry-run"))
+
+    def test_names_every_unknown_token(self):
+        self.set_status(1, "fixed", f"{self.UNKNOWN} and 1234567")
+        self.assertIn(f"its status names {self.UNKNOWN} and 1234567, which are not commits in this clone; fetch them if they are",
+                      self.refusal("--close", "1", "--dry-run"))
+
+
+class WhenTheStatusNamesATicketNumberTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.set_status(1, "fixed", "see ticket 1234567")
+
+    def test_refuses_to_close_it_saying_the_number_may_not_be_a_commit(self):
+        self.assertIn("nothing sent; finding 1: its status names 1234567, which is not a commit in this clone; "
+                      "fetch it if it is one, or reword the status or keep the thread open with --keep-open",
+                      self.refusal("--close", "1", "--dry-run"))
 
 
 if __name__ == "__main__":

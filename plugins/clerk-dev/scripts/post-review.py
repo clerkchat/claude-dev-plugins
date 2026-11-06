@@ -548,8 +548,13 @@ def off_head(ctx, sha, repo):
     except gh_api.GhError as err: return f"GitHub cannot compare its fix {sha[:7]} with {where}, so the fix may not be pushed ({err})"
     return None if on_head else f"its fix {sha[:7]} is not on {where}; close it once the fix is on the pull request"
 
+UNFETCHED_NEXT = "fetch {it} if {one}, or reword the status or keep the thread open with --keep-open"
+
 def unfetched(tokens):
-    return f"its fix commit {tokens[0]} is not in this clone; fetch it and retry" if tokens else None
+    if not tokens: return None
+    if len(tokens) == 1: return f"its status names {tokens[0]}, which is not a commit in this clone; {UNFETCHED_NEXT.format(it='it', one='it is one')}"
+    names = ", ".join(tokens[:-1]) + f" and {tokens[-1]}"
+    return f"its status names {names}, which are not commits in this clone; {UNFETCHED_NEXT.format(it='them', one='they are')}"
 
 def fix_check(ctx, shas, unknown, repo):
     if unknown: return unfetched(unknown), []
