@@ -517,16 +517,20 @@ def status_box(head):
 
 COMMIT_TOKEN = re.compile(r"\b[0-9a-f]{7,40}\b")
 
+def commits_named(repo, text):
+    toks = COMMIT_TOKEN.findall(text)
+    if not toks: return []
+    r = subprocess.run(["git", "-C", repo, "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+                       input="".join(t + "^{commit}\n" for t in toks), capture_output=True, text=True)
+    return [p[0] for p in (l.split() for l in r.stdout.splitlines()) if len(p) == 2 and p[1] == "commit"]
+
 def log_commits(run, repo, mid, stt):
     """Append every commit a status names to commits.tsv (merged id, commit,
     status, date). status.tsv keeps one ref per finding, so without this the
     first commit of a fix that took two is forgotten, and later tools count
     it as unreviewed work."""
-    toks = COMMIT_TOKEN.findall(stt.get("ref", ""))
-    if not toks: return
-    r = subprocess.run(["git", "-C", repo, "cat-file", "--batch-check=%(objectname) %(objecttype)"],
-                       input="".join(t + "^{commit}\n" for t in toks), capture_output=True, text=True)
-    shas = [p[0] for p in (l.split() for l in r.stdout.splitlines()) if len(p) == 2 and p[1] == "commit"]
+    shas = commits_named(repo, stt.get("ref", ""))
+    if not shas: return
     path = os.path.join(run, "commits.tsv")
     have = set()
     if os.path.exists(path):
@@ -781,6 +785,9 @@ def read_threads(run):
 def write_threads(run, rows):
     write_keyed(threads_path(run), THREAD_FIELDS, rows)
 
+def posted_threads(run, posted):
+    return {mid: row for mid, row in read_threads(run).items() if row["comment_id"] == posted.get(mid, {}).get("comment_id")}
+
 KEPT_OPEN_FIELDS = ("reason", "date")
 
 def kept_open_path(run):
@@ -795,7 +802,8 @@ def write_kept_open(run, rows):
 Closable = namedtuple("Closable", "posted status thread")
 
 def closable(run):
-    posted, status, threads, kept = read_posted(run), read_status(run), read_threads(run), read_kept_open(run)
+    posted, status, kept = read_posted(run), read_status(run), read_kept_open(run)
+    threads = posted_threads(run, posted)
     credits = credit_ids(read_findings(run, mf))
     return {mid: Closable(row, status[mid], threads[mid]) for mid, row in sorted(posted.items())
             if has_thread(row) and mid not in credits and mid not in kept
@@ -853,9 +861,12 @@ def fence_around(text, shortest):
 def posted_fence(text):
     return fence_around(text, 4)
 
+def line_span(lo, hi):
+    return f"{lo}" + (f"-{hi}" if hi and hi != lo else "")
+
 def posted_link(row):
     if not has_comment(row): return []
-    span = row["line"] + (f"-{row['end_line']}" if row.get("end_line") and row["end_line"] != row["line"] else "")
+    span = line_span(row["line"], row.get("end_line"))
     where = "in the review body" if row["kind"] == "body" else f"on `{row['path']}" + (f":{span}" if span else "") + "`"
     link = f", [comment]({row['url']})" if row.get("url") else ""
     return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
@@ -1422,7 +1433,7 @@ def main():
     apply_instructions(nums, a.instruct, a.note, today)
     for mid, text in drafts: record_posted(a.run, mid, text, "drafted", today)
     warn_unlabeled_options(merged)
-    RECON, PR_LINKS, THREADS = read_reconcile(a.run), pr_links(merged), read_threads(a.run)
+    RECON, PR_LINKS, THREADS = read_reconcile(a.run), pr_links(merged), posted_threads(a.run, POSTED)
     routed, unverified, rejected, hidden_minor = route_findings(merged, verdicts, a)
     overlapping = drop_overlapping_credits(routed)
     prior_nums = {} if a.renumber else dict(nums)

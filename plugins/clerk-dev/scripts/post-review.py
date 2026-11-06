@@ -133,9 +133,6 @@ def read_hunks(patch):
             if new_left: hunks.setdefault(path, []).append((start, start + new_left - 1))
     return hunks
 
-def span(lo, hi):
-    return f"{lo}" + (f"-{hi}" if hi != lo else "")
-
 def nearest_lines(hunks, line, end):
     for s, e in hunks:
         if s <= line and end <= e: return (line, end), False
@@ -166,7 +163,7 @@ def resolve(e, note, files, hunks):
     line, end = sorted((line, end or line))
     if not hunks.get(path): return anchor("file", path), f"fallback: {path} has no lines in the reviewed diff; sent on the file", None
     (lo, hi), moved = nearest_lines(hunks[path], line, end)
-    moved_to = f"fallback: {path}:{span(line, end)} is outside the diff; moved to {span(lo, hi)}" if moved else None
+    moved_to = f"fallback: {path}:{rr.line_span(line, end)} is outside the diff; moved to {rr.line_span(lo, hi)}" if moved else None
     return anchor("line" if lo == hi else "range", path, lo, hi), moved_to, None
 
 def on_github(row, ctx):
@@ -467,7 +464,7 @@ def preview(run, ctx, items, reviewed):
     for it in items:
         out.append(f"{named(it)}: {it['title']}")
         a = it["anchor"]
-        if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
+        if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{rr.line_span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
         if it["gone"]: out.append(f"  {it['gone']}")
         if it["fallback"]: out.append(f"  {it['fallback']}")
         if it["downgraded"]: out.append("  suggestion sent as a plain code block")
@@ -529,28 +526,34 @@ def submit(a, ctx, verdict):
     execute(calls, a.repo, ctx)
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
-def close_text(run, mid, ref):
+def close_text(run, mid, ref, repo):
     own = rr.read_text(os.path.join(run, "posted", f"close-{mid}.md"))
     if own: return own
-    sha = rr.COMMIT_TOKEN.search(ref)
-    return f"Looks fixed in {sha.group(0)[:7]}." if sha else "Looks fixed."
+    shas = rr.commits_named(repo, ref)
+    return f"Looks fixed in {shas[0][:7]}." if shas else "Looks fixed."
 
-def close_items(run, ctx):
+def said(replies):
+    return ["@" + r for r in replies.lstrip("@").split("; @")] if replies else []
+
+def already_replied(thread, text, viewer):
+    return pc.join_replies([(viewer, text)]) in said(thread["replies"])
+
+def close_items(run, ctx, repo, viewer):
     nums, found, titles, closable, items = rr.read_numbers(run), findings(run), report_titles(run), rr.closable(run), []
     for mid in in_number_order(closable, nums):
         c = closable[mid]
-        text = unwrap(close_text(run, mid, c.status["ref"]))
-        problem, warnings = screen(text, ctx["local"])
-        items.append({**item_head(mid, nums, found, titles), "ref": c.status["ref"],
-                      "url": c.posted["url"], "thread": c.thread, "text": text, "problem": problem, "warnings": warnings})
+        text = unwrap(close_text(run, mid, c.status["ref"], repo))
+        replied = already_replied(c.thread, text, viewer)
+        problem, warnings = (None, []) if replied else screen(text, ctx["local"])
+        items.append({**item_head(mid, nums, found, titles), "ref": c.status["ref"], "url": c.posted["url"], "thread": c.thread,
+                      "text": text, "replied": replied, "problem": problem, "warnings": warnings})
     return items
 
 def can_resolve(it):
     return it["thread"]["can_resolve"] == "1"
 
 def last_reply(replies, viewer):
-    said = ["@" + r for r in replies.lstrip("@").split("; @")] if replies else []
-    return next((r for r in reversed(said) if not r.startswith(f"@{viewer}:")), "none")
+    return next((r for r in reversed(said(replies)) if not r.startswith(f"@{viewer}:")), "none")
 
 def pending_refusal(ctx):
     p = ctx["pending"]
@@ -563,44 +566,63 @@ def list_closable(ctx, items, viewer):
         out += [f"{named(it)}: {it['title']}", f"  fixed in: {it['ref'] or '(no ref)'}", f"  thread: {it['url']}",
                 f"  last reply: {last_reply(it['thread']['replies'], viewer)}",
                 "  can resolve: " + ("yes" if can_resolve(it) else "no; the reply is sent and the thread left open")]
-        out += ([f"  cannot send: {it['problem']}"] if it["problem"] else []) + ["  reply:", indent(it["text"])] + warning_lines(it["warnings"])
+        reply = ["  reply: already sent; --close only resolves the thread"] if it["replied"] else ["  reply:", indent(it["text"])]
+        out += ([f"  cannot send: {it['problem']}"] if it["problem"] else []) + reply + warning_lines(it["warnings"])
     if not items: out.append("nothing to close: no posted finding is marked fixed with its thread still open")
     refused = pending_refusal(ctx)
     if refused and items: out.append(f"cannot close: {refused}")
     print("\n".join(out))
 
+SETTLED = {"resolved": "its thread is already resolved on GitHub", "missing": "its comment is no longer on the pull request"}
+
+def numbered(mid, nums):
+    return f"finding {nums.get(mid, f'#{mid}')}"
+
+def settled_threads(run, mids):
+    threads = rr.posted_threads(run, rr.read_posted(run))
+    return {mid: SETTLED[threads[mid]["state"]] for mid in mids if threads.get(mid, {}).get("state") in SETTLED}
+
 def chosen(run, spec, items):
     nums, by_id = rr.read_numbers(run), {it["id"]: it for it in items}
     picked = {rr.finding_id(n.strip(), nums) for n in spec.split(",") if n.strip()}
     if not picked: sys.exit(f"bad --close {spec!r}; use --close N[,M]")
-    refused = [f"finding {nums.get(mid, f'#{mid}')}" for mid in sorted(picked) if mid not in by_id]
+    settled = settled_threads(run, picked - by_id.keys())
+    refused = [numbered(mid, nums) for mid in sorted(picked) if mid not in by_id and mid not in settled]
     if refused: sys.exit("nothing sent; not closable (a posted thread still open, marked fixed, not kept open): " + ", ".join(refused))
-    refuse_blocked([by_id[mid] for mid in sorted(picked)])
+    refuse_blocked([by_id[mid] for mid in sorted(picked) if mid in by_id])
+    for mid in sorted(settled): print(f"{numbered(mid, nums)}: {settled[mid]}; skipped", file=sys.stderr)
     return [it for it in items if it["id"] in picked]
 
 def close_calls(it):
     tid = it["thread"]["thread_id"]
-    calls = [{"graphql": "addPullRequestReviewThreadReply", "variables": {"pullRequestReviewThreadId": tid, "body": it["text"]},
-              "finding": it["id"], "as": "reply"}]
+    calls = [] if it["replied"] else [{"graphql": "addPullRequestReviewThreadReply", "finding": it["id"], "as": "reply",
+                                       "variables": {"pullRequestReviewThreadId": tid, "body": it["text"]}}]
     if can_resolve(it): calls.append({"graphql": "resolveReviewThread", "variables": {"threadId": tid}, "finding": it["id"], "as": "resolve"})
     return calls
 
+def resolved(results):
+    return results.get("resolve", {}).get("resolved")
+
 def closed_row(it, row, results, today):
+    if not results: return row
     reply = results.get("reply")
-    if not reply: return row
-    added = pc.join_replies([(reply["login"], it["text"])])
-    return {**row, "state": "resolved" if results.get("resolve", {}).get("resolved") else row["state"], "date": today,
-            "replies": f"{row['replies']}; {added}" if row["replies"] else added}
+    added = pc.join_replies([(reply["login"], it["text"])]) if reply else ""
+    return {**row, "state": "resolved" if resolved(results) else row["state"], "date": today,
+            "replies": "; ".join(r for r in (row["replies"], added) if r)}
+
+def reply_word(it, results):
+    return "replied" if results.get("reply") else "already replied" if it["replied"] else None
 
 def close_outcome(it, results):
-    if not results.get("reply"): return f"{named(it)}: nothing sent"
-    if results.get("resolve", {}).get("resolved"): return f"{named(it)}: replied and resolved"
-    return f"{named(it)}: replied; " + ("not resolved" if can_resolve(it) else "left open, you cannot resolve it")
+    said_so = reply_word(it, results)
+    if not said_so: return f"{named(it)}: nothing sent"
+    if resolved(results): return f"{named(it)}: {said_so} and resolved"
+    return f"{named(it)}: {said_so}; " + ("not resolved" if can_resolve(it) else "left open, you cannot resolve it; no longer offered for closing")
 
 def in_flight(it, results, err):
-    rejected = isinstance(err, gh_api.GhError)
-    if not results.get("reply"): return f"{named(it)}: " + ("nothing sent" if rejected else "its reply may be on GitHub")
-    return f"{named(it)}: replied; " + ("not resolved" if rejected else "it may be resolved")
+    rejected, said_so = isinstance(err, gh_api.GhError), reply_word(it, results)
+    if not said_so: return f"{named(it)}: " + ("nothing sent" if rejected else "its reply may be on GitHub")
+    return f"{named(it)}: {said_so}; " + ("not resolved" if rejected else "it may be resolved")
 
 def stopped_at(it, results, err, done):
     return (f"the close stopped at {in_flight(it, results, err)}; done before it: " + ("; ".join(done) or "none")
@@ -620,19 +642,34 @@ def close_threads(run, items, repo):
         finally:
             rows[it["id"]] = closed_row(it, rows[it["id"]], results, today)
             rr.write_threads(run, rows)
+        if not can_resolve(it): record_kept(run, it["id"], CANNOT_RESOLVE)
         done.append(close_outcome(it, results))
     print("\n".join(["closed:", *(f"  {d}" for d in done)]), file=sys.stderr)
 
+def refresh_threads(run, ctx, repo):
+    pull = pc.fetch(ctx["owner"], ctx["name"], ctx["pr"], repo)
+    pc.link_threads(run, rr.read_posted(run), pull, datetime.date.today().isoformat())
+
 def close(a, ctx):
-    items = close_items(a.run, ctx)
-    if not a.close: return list_closable(ctx, items, gh_api.viewer_login(a.repo))
+    viewer = gh_api.viewer_login(a.repo)
+    refresh_threads(a.run, ctx, a.repo)
+    items = close_items(a.run, ctx, a.repo, viewer)
+    if not a.close: return list_closable(ctx, items, viewer)
     sending = chosen(a.run, a.close, items)
+    if not sending: print("nothing sent", file=sys.stderr); return
     refused = pending_refusal(ctx)
     if refused: sys.exit(f"nothing sent; {refused}")
     for it in sending: print_warnings(f"{named(it)}:", it["warnings"])
     calls = [call for it in sending for call in close_calls(it)]
     if a.dry_run: write_payload(a.run, calls); return
     close_threads(a.run, sending, a.repo)
+
+CANNOT_RESOLVE = "replied that it looks fixed; you cannot resolve the thread"
+
+def record_kept(run, mid, reason):
+    kept = rr.read_kept_open(run)
+    kept[mid] = {"reason": " ".join(reason.split()), "date": datetime.date.today().isoformat()}
+    rr.write_kept_open(run, kept)
 
 KEEP_SPEC = re.compile(r"^(#?\d+)(?::(.*))?$", re.S)
 
@@ -641,9 +678,7 @@ def keep_open(run, spec):
     if not m: sys.exit(f"bad --keep-open {spec!r}; use N[:reason]")
     mid = rr.finding_id(m.group(1), rr.read_numbers(run))
     if not rr.has_thread(rr.read_posted(run).get(mid, {})): sys.exit(f"finding {m.group(1)} has no posted thread to keep open")
-    kept = rr.read_kept_open(run)
-    kept[mid] = {"reason": " ".join((m.group(2) or "").split()), "date": datetime.date.today().isoformat()}
-    rr.write_kept_open(run, kept)
+    record_kept(run, mid, m.group(2) or "")
     print(f"finding {m.group(1)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
 
 def main(argv=None):

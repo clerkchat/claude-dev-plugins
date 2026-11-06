@@ -64,6 +64,12 @@ class SeedPostedTest(SeedCase):
         self.assertIn("; 1 posted findings not found again (finding 8); their threads come in as pull request comments", self.out)
 
 
+class SeedUnnumberedPostingTest(SeedCase):
+    def test_names_a_lost_posting_without_a_number_by_its_merged_id(self):
+        self.post({9: posted_row(6)})
+        self.assertIn("1 posted findings not found again (#9)", self.seed())
+
+
 class SeedOverACurrentPostingTest(SeedCase):
     def setUp(self):
         super().setUp()

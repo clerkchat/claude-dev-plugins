@@ -30,7 +30,7 @@ rc = load_script("reconcile.py"); mf, rr = rc.mf, rc.rr
 
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName
-reviewThreads(first:100){nodes{id isResolved isOutdated viewerCanResolve path line originalLine
+reviewThreads(first:100){totalCount nodes{id isResolved isOutdated viewerCanResolve path line startLine originalLine
   comments(first:50){nodes{databaseId author{login} body url createdAt pullRequestReview{state}}}}}
 reviews(first:100){nodes{databaseId author{login} body state url}}
 comments(first:100){nodes{databaseId author{login} body url}}}}}"""
@@ -105,7 +105,7 @@ def github_items(p, threads, own_review_ids=()):
             + [comment_item("review", r, state=r["state"]) for r in submitted_reviews(p) if str(r["databaseId"]) not in own_review_ids]
             + [comment_item("comment", c) for c in p["comments"]["nodes"] if c["body"].strip()])
 
-Threads = namedtuple("Threads", "linked imported left_out")
+Threads = namedtuple("Threads", "linked imported left_out unread")
 
 def sort_threads(p, linking):
     linked, imported, left_out = {}, [], 0
@@ -115,16 +115,20 @@ def sort_threads(p, linking):
         if root["databaseId"] in linking: linked[linking[root["databaseId"]]] = t
         elif is_pending(root): left_out += 1
         else: imported.append(t)
-    return Threads(linked, imported, left_out)
+    unread = p["reviewThreads"].get("totalCount", 0) - len(p["reviewThreads"]["nodes"])
+    return Threads(linked, imported, left_out, max(unread, 0))
 
 def flag(on):
     return "1" if on else "0"
+
+def thread_span(t):
+    return rr.line_span(t.get("startLine") or t["line"], t["line"]) if t["line"] else ""
 
 def thread_row(t, today):
     root = root_of(t)
     state = "pending" if is_pending(root) else "resolved" if t["isResolved"] else "open"
     return {"comment_id": str(root["databaseId"]), "thread_id": t["id"], "state": state, "outdated": flag(t["isOutdated"]),
-            "can_resolve": flag(t.get("viewerCanResolve")), "line": str(t["line"] or ""),
+            "can_resolve": flag(t.get("viewerCanResolve")), "line": thread_span(t),
             "replies": join_replies(replies_of(t)), "date": today}
 
 def missing_row(posted, today):
@@ -139,11 +143,10 @@ def link_threads(run, posted, p, today):
                                for mid, row in posted.items()})
     return threads
 
-Folded = namedtuple("Folded", "new_ids updated linked left_out")
+Folded = namedtuple("Folded", "new_ids updated linked left_out unread_threads")
 
-def fetch(repo, pr):
-    owner, name = repo_owner_name(repo)
-    return graphql(Q, {"o": owner, "r": name, "n": pr}, repo)["data"]["repository"]["pullRequest"]
+def fetch(owner, name, pr, cwd):
+    return graphql(Q, {"o": owner, "r": name, "n": pr}, cwd)["data"]["repository"]["pullRequest"]
 
 def pr_dir(run):
     pd = os.path.join(run, "pr"); os.makedirs(pd, exist_ok=True)
@@ -198,7 +201,7 @@ def fold_in(run, p, today):
     own = rr.review_ids(posted)
     own_reviews = [r for r in submitted_reviews(p) if str(r["databaseId"]) in own]
     new_ids, updated = import_items(run, github_items(p, threads.imported, own))
-    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out)
+    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread)
 
 def shortlist(run, new_ids):
     allm = rc.load(run)
@@ -239,6 +242,8 @@ def summary(pr, folded, rows):
     if folded.linked: parts.append(f"{folded.linked} posted findings linked")
     if folded.left_out: parts.append(f"{folded.left_out} threads of your own pending review left out")
     parts.append(f"{len(rows)} candidate links for {len({r[0] for r in rows})} comments to judge")
+    if folded.unread_threads: parts.append(f"{folded.unread_threads} review threads past the first page not read; "
+                                           "a posted finding among them shows its comment as no longer on the pull request")
     return f"PR #{pr}: " + ", ".join(parts)
 
 def main():
@@ -250,7 +255,7 @@ def main():
         links = apply_judged(a.run, a.judged)
         print(f"linked {links} pull request comments after judging", file=sys.stderr); return
     pr = a.pr or pr_number(a.repo)
-    folded = fold_in(a.run, fetch(a.repo, pr), datetime.date.today().isoformat())
+    folded = fold_in(a.run, fetch(*repo_owner_name(a.repo), pr, a.repo), datetime.date.today().isoformat())
     print(summary(pr, folded, shortlist(a.run, folded.new_ids)), file=sys.stderr)
 
 if __name__ == "__main__": main()

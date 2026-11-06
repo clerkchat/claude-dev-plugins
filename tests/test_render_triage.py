@@ -495,6 +495,9 @@ class PostedThreadTest(PostedThreadCase):
     def test_words_a_missing_thread(self):
         self.assertIn("State: the comment is no longer on the pull request.", self.show_thread(state="missing"))
 
+    def test_ignores_the_row_of_an_earlier_comment_posted_again_since(self):
+        self.assertNotIn("State:", self.show_thread(comment_id="4", state="missing"))
+
     def test_keeps_the_posted_text_importable(self):
         self.show_thread(replies="@bob: Fair.", state="resolved")
         self.edit_report("Say it plainly.", "Say it gently.")
@@ -522,6 +525,10 @@ class WhenAPostedFindingIsMarkedFixedTest(PostedThreadCase):
 
     def test_stops_once_the_thread_is_missing(self):
         self.show_thread(state="missing")
+        self.assertNotIn(self.STILL_OPEN, self.out + self.report())
+
+    def test_says_nothing_for_the_open_row_of_an_earlier_comment(self):
+        self.show_thread(comment_id="4")
         self.assertNotIn(self.STILL_OPEN, self.out + self.report())
 
 

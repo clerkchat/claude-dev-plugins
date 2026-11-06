@@ -873,9 +873,6 @@ class WhenTheRunRecordedNoPullRequestTest(ReviewedPrCase):
         self.assertIn("pass --pr N", self.refusal())
 
 
-SHA = "abc1234def5678"
-
-
 def reply_data(n):
     return {"data": {"addPullRequestReviewThreadReply": {"comment": {"databaseId": 950 + n, "url": f"https://gh/c/{950 + n}",
                                                                      "author": {"login": "me"}}}}}
@@ -887,13 +884,22 @@ RESOLVED = {"data": {"resolveReviewThread": {"thread": {"isResolved": True}}}}
 class CloseCase(PostCase):
     def setUp(self):
         super().setUp()
+        self.repo = init_repo(self.path("repo"), with_origin=False)
+        self.sha = self.repo.git("rev-parse", "HEAD")
+        self.looks_fixed = f"Looks fixed in {self.sha[:7]}."
         self.statuses, self.threads = {}, {}
         self.closable_finding(1)
-        self.stub("viewer_login", return_value="me")
+        self.viewer = self.stub("viewer_login", return_value="me")
+        refresh = mock.patch.object(post, "refresh_threads")
+        self.refresh = refresh.start()
+        self.addCleanup(refresh.stop)
 
-    def closable_finding(self, mid, ref=SHA, **thread):
+    def main(self, *args):
+        return super().main(*args, "--repo", self.repo.path)
+
+    def closable_finding(self, mid, ref=None, **thread):
         self.posted_row(mid, thread_id=f"PRRT_{mid}", comment_id=str(900 + mid), url=f"https://gh/c/{900 + mid}")
-        self.set_status(mid, "fixed", ref)
+        self.set_status(mid, "fixed", ref or self.sha)
         self.thread(mid, **thread)
 
     def set_status(self, mid, status, ref=""):
@@ -950,10 +956,14 @@ class ClosableTest(CloseCase):
         self.thread(1, state="missing")
         self.assertEqual(self.closable(), [])
 
+    def test_leaves_out_a_thread_row_of_an_earlier_comment(self):
+        self.thread(1, comment_id="899")
+        self.assertEqual(self.closable(), [])
+
 
 class CloseListTest(CloseCase):
     def test_lists_the_closable_finding_with_its_fix_and_thread(self):
-        self.assertIn(f"finding 1: Finding 1\n  fixed in: {SHA}\n  thread: https://gh/c/901\n", self.main("--close"))
+        self.assertIn(f"finding 1: Finding 1\n  fixed in: {self.sha}\n  thread: https://gh/c/901\n", self.main("--close"))
 
     def test_shows_the_last_reply(self):
         self.thread(1, replies="@amy: Why?; @bob: Done, see the new guard.")
@@ -968,11 +978,15 @@ class CloseListTest(CloseCase):
         self.assertIn("  last reply: none\n", self.main("--close"))
 
     def test_shows_the_reply_it_would_send(self):
-        self.assertIn("  reply:\n    Looks fixed in abc1234.", self.main("--close"))
+        self.assertIn(f"  reply:\n    {self.looks_fixed}", self.main("--close"))
 
     def test_says_when_the_viewer_cannot_resolve(self):
         self.thread(1, can_resolve="0")
         self.assertIn("can resolve: no; the reply is sent and the thread left open", self.main("--close"))
+
+    def test_reads_the_threads_from_the_pull_request_first(self):
+        self.main("--close")
+        self.assertTrue(self.refresh.called)
 
     def test_says_when_nothing_is_closable(self):
         self.set_status(1, "open")
@@ -1000,11 +1014,19 @@ class CloseDryRunTest(CloseCase):
                          ["PRRT_1", "PRRT_1"])
 
     def test_says_looks_fixed_in_the_short_sha(self):
-        self.assertEqual(self.reply_body(), "Looks fixed in abc1234.")
+        self.assertEqual(self.reply_body(), self.looks_fixed)
 
     def test_says_looks_fixed_when_the_ref_names_no_commit(self):
         self.set_status(1, "fixed", "covered by the new tests")
         self.assertEqual(self.reply_body(), "Looks fixed.")
+
+    def test_names_no_commit_for_a_number_that_is_not_one(self):
+        self.set_status(1, "fixed", "see ticket 1234567")
+        self.assertEqual(self.reply_body(), "Looks fixed.")
+
+    def test_sends_the_default_reply_when_close_md_is_blank(self):
+        self.write("posted/close-1.md", "  \n\n")
+        self.assertEqual(self.reply_body(), self.looks_fixed)
 
     def test_sends_the_reply_text_of_close_md_unwrapped(self):
         self.write("posted/close-1.md", "Thanks, the guard\ncovers it now.\n")
@@ -1018,6 +1040,18 @@ class CloseDryRunTest(CloseCase):
         writes = [self.stub("rest"), self.stub("graphql")]
         self.close_calls()
         self.assertEqual([w.call_count for w in writes], [0, 0])
+
+
+class WhenTheViewerAlreadyRepliedTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.thread(1, replies=f"@me: {self.looks_fixed}; @bob: Thanks.")
+
+    def test_only_resolves_the_thread(self):
+        self.assertEqual([c["graphql"] for c in self.close_calls()], ["resolveReviewThread"])
+
+    def test_says_so_in_the_listing(self):
+        self.assertIn("  reply: already sent; --close only resolves the thread", self.main("--close"))
 
 
 class CloseRefusalTest(CloseCase):
@@ -1072,7 +1106,7 @@ class LiveCloseCase(CloseCase):
 
     def stopped(self):
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
-            post.main([self.run_dir, "--close", "1,2"])
+            post.main([self.run_dir, "--close", "1,2", "--repo", self.repo.path])
         return str(raised.exception)
 
 
@@ -1085,7 +1119,7 @@ class LiveCloseTest(LiveCloseCase):
         self.assertEqual([self.thread_row(m)["state"] for m in (1, 2)], ["resolved", "resolved"])
 
     def test_adds_the_reply_to_the_threads_replies(self):
-        self.assertEqual(self.thread_row(2)["replies"], "@bob: Fixed it.; @me: Looks fixed in abc1234.")
+        self.assertEqual(self.thread_row(2)["replies"], f"@bob: Fixed it.; @me: {self.looks_fixed}")
 
     def test_says_what_it_closed(self):
         self.assertIn("closed:\n  finding 1: replied and resolved\n  finding 2: replied and resolved", self.err)
@@ -1098,7 +1132,7 @@ class WhenTheViewerCannotResolveTest(LiveCloseCase):
         self.main("--close", "1")
 
     def test_keeps_the_thread_open_in_threads_tsv(self):
-        self.assertEqual((self.thread_row(1)["state"], self.thread_row(1)["replies"]), ("open", "@me: Looks fixed in abc1234."))
+        self.assertEqual((self.thread_row(1)["state"], self.thread_row(1)["replies"]), ("open", f"@me: {self.looks_fixed}"))
 
     def test_reports_it_left_open(self):
         self.assertIn("finding 1: replied; left open, you cannot resolve it", self.err)
@@ -1119,7 +1153,96 @@ class WhenGitHubRejectsAResolveTest(LiveCloseCase):
 
     def test_records_the_reply_it_sent_on_the_stopped_thread(self):
         self.stopped()
-        self.assertEqual((self.thread_row(2)["state"], self.thread_row(2)["replies"]), ("open", "@bob: Fixed it.; @me: Looks fixed in abc1234."))
+        self.assertEqual((self.thread_row(2)["state"], self.thread_row(2)["replies"]), ("open", f"@bob: Fixed it.; @me: {self.looks_fixed}"))
+
+
+class WhenTheViewerCannotResolveAndItIsSentTest(LiveCloseCase):
+    def setUp(self):
+        super().setUp()
+        self.thread(1, can_resolve="0")
+        self.main("--close", "1")
+
+    def test_keeps_the_thread_open(self):
+        self.assertEqual(post.rr.read_kept_open(self.run_dir)[1]["reason"], post.CANNOT_RESOLVE)
+
+    def test_no_longer_offers_it_for_closing(self):
+        self.assertEqual(self.closable(), [2])
+
+
+class WhenRetriedAfterAResolveFailedTest(LiveCloseCase):
+    def setUp(self):
+        super().setUp()
+        self.graphql.side_effect = [reply_data(1), gh_api.GhError("rejected")]
+        self.stopped()
+        self.graphql.reset_mock(side_effect=True)
+        self.graphql.side_effect = self.answer
+        self.main("--close", "1")
+
+    def test_sends_no_second_reply(self):
+        self.assertEqual(["resolveReviewThread" in c.args[0] for c in self.graphql.call_args_list], [True])
+
+    def test_marks_the_thread_resolved(self):
+        self.assertEqual(self.thread_row(1)["state"], "resolved")
+
+    def test_says_it_had_replied_already(self):
+        self.assertIn("finding 1: already replied and resolved", self.err)
+
+
+class WhenAThreadWasSettledSinceTheListingCase(LiveCloseCase):
+    STATE = "resolved"
+
+    def setUp(self):
+        super().setUp()
+        self.refresh.side_effect = lambda *a: self.thread(1, state=self.STATE)
+        self.main("--close", "1,2")
+
+    def threads_sent_to(self):
+        return {c.args[1].get("pullRequestReviewThreadId", c.args[1].get("threadId")) for c in self.graphql.call_args_list}
+
+
+class WhenAThreadWasResolvedSinceTheListingTest(WhenAThreadWasSettledSinceTheListingCase):
+    def test_skips_it(self):
+        self.assertEqual(self.threads_sent_to(), {"PRRT_2"})
+
+    def test_says_it_skipped_it(self):
+        self.assertIn("finding 1: its thread is already resolved on GitHub; skipped", self.err)
+
+    def test_closes_the_others(self):
+        self.assertIn("finding 2: replied and resolved", self.err)
+
+
+class WhenAThreadWasDeletedSinceTheListingTest(WhenAThreadWasSettledSinceTheListingCase):
+    STATE = "missing"
+
+    def test_skips_it(self):
+        self.assertEqual(self.threads_sent_to(), {"PRRT_2"})
+
+
+class WhenTheViewersLoginIsUnavailableTest(LiveCloseCase):
+    def test_sends_nothing(self):
+        self.viewer.side_effect = gh_api.GhError("gh api user failed")
+        self.stopped()
+        self.assertEqual(self.graphql.call_count, 0)
+
+
+class RefreshThreadsTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        post.rr.write_posted(self.run_dir, {1: {"state": "posted", "kind": "line", "comment_id": "901", "thread_id": "PRRT_1"}})
+        live = {"reviewThreads": {"nodes": [{"id": "PRRT_1", "isResolved": True, "isOutdated": False, "viewerCanResolve": True,
+                                              "path": "src/a.py", "line": 11, "originalLine": 11, "comments": {"nodes": [
+                                                  {"databaseId": 901, "author": {"login": "me"}, "body": "Text.", "url": "u",
+                                                   "pullRequestReview": {"state": "COMMENTED"}}]}}]}}
+        fetch = mock.patch.object(post.pc, "fetch", return_value=live)
+        self.fetch = fetch.start()
+        self.addCleanup(fetch.stop)
+        post.refresh_threads(self.run_dir, {"owner": "o", "name": "r", "pr": 7}, "/w")
+
+    def test_reads_the_reviewed_pull_request(self):
+        self.assertEqual(self.fetch.call_args.args, ("o", "r", 7, "/w"))
+
+    def test_rewrites_threads_tsv_from_it(self):
+        self.assertEqual(post.rr.read_threads(self.run_dir)[1]["state"], "resolved")
 
 
 class WhenGitHubRejectsTheFirstReplyTest(LiveCloseCase):

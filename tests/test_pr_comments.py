@@ -29,9 +29,10 @@ def review(gid, state, body="Summary."):
     return {"databaseId": gid, "author": {"login": "me"}, "body": body, "state": state, "url": f"u{gid}"}
 
 
-def pull_request(threads=(), reviews=()):
+def pull_request(threads=(), reviews=(), total=None):
     return {"number": 7, "url": "https://gh/pull/7", "headRefName": "feat",
-            "reviewThreads": {"nodes": list(threads)}, "reviews": {"nodes": list(reviews)}, "comments": {"nodes": []}}
+            "reviewThreads": {"totalCount": len(threads) if total is None else total, "nodes": list(threads)},
+            "reviews": {"nodes": list(reviews)}, "comments": {"nodes": []}}
 
 
 def posted_row(comment_id, kind="line"):
@@ -132,6 +133,10 @@ class FoldInTest(FoldInCase):
         self.fold(thread(1, replies=["Fair.", "Done."]))
         self.assertIn("replies: @you: Fair.; @you: Done.", self.read("merged.md"))
 
+    def test_counts_the_threads_past_the_first_page(self):
+        folded = pr_comments.fold_in(self.run_dir, pull_request([thread(1)], total=130), DATE)
+        self.assertEqual(folded.unread_threads, 129)
+
     def test_writes_no_threads_file_without_posted_findings(self):
         self.fold(thread(1))
         self.assertFalse(os.path.exists(render.threads_path(self.run_dir)))
@@ -228,6 +233,10 @@ class PostedThreadStateTest(PostedThreadCase):
         self.fold(thread(1, isOutdated=True, line=None))
         self.assertEqual((self.row(40)["outdated"], self.row(40)["line"]), ("1", ""))
 
+    def test_records_the_lines_of_a_range_thread(self):
+        self.fold(thread(1, startLine=2, line=4))
+        self.assertEqual(self.row(40)["line"], "2-4")
+
     def test_flags_a_thread_the_viewer_cannot_resolve(self):
         self.fold(thread(1, viewerCanResolve=False))
         self.assertEqual(self.row(40)["can_resolve"], "0")
@@ -296,8 +305,8 @@ class ShortlistTest(RunCase):
 
 
 class SummaryTest(unittest.TestCase):
-    def summary(self, linked=0, left_out=0):
-        return pr_comments.summary(12, pr_comments.Folded([5, 6, 7], 1, linked, left_out), [(5, 1, 0.5)])
+    def summary(self, linked=0, left_out=0, unread=0):
+        return pr_comments.summary(12, pr_comments.Folded([5, 6, 7], 1, linked, left_out, unread), [(5, 1, 0.5)])
 
     def test_counts_new_updated_and_candidates(self):
         self.assertEqual(self.summary(), "PR #12: 3 new comments, 1 updated, 1 candidate links for 1 comments to judge")
@@ -307,6 +316,9 @@ class SummaryTest(unittest.TestCase):
 
     def test_adds_the_pending_threads_left_out(self):
         self.assertIn(", 2 threads of your own pending review left out, ", self.summary(left_out=2))
+
+    def test_adds_the_threads_past_the_first_page(self):
+        self.assertIn(", 30 review threads past the first page not read; ", self.summary(unread=30))
 
 
 class MainTest(RunCase):
