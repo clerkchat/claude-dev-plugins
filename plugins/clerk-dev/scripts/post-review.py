@@ -533,8 +533,13 @@ def write_payload(run, calls):
     with open(p, "w", encoding="utf-8") as fh: json.dump({"calls": calls}, fh, indent=1)
     print(f"dry run: wrote {len(calls)} calls to {p}", file=sys.stderr)
 
-def reviewed_commit(run):
-    return rf.reviewed_head(run) or sys.exit("target.txt has no HEAD line")
+def reviewed_commit(run, repo):
+    head = rf.reviewed_head(run) or sys.exit("target.txt has no HEAD line")
+    return head if len(head) == 40 else full_sha(head, repo)
+
+def full_sha(commit, repo):
+    r = subprocess.run(["git", "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"], cwd=repo, capture_output=True, text=True)
+    return r.stdout.strip() or sys.exit(f"target.txt names commit {commit}, which git does not find in {repo}")
 
 def recorded_pr(run):
     number, url = (rf.read_text(os.path.join(run, "pr", "pr.txt")).split("\t") + [""])[:2]
@@ -763,11 +768,15 @@ def own_command(a, action):
     return shlex.join(["python3", os.path.abspath(__file__), os.path.abspath(a.run), "--repo", os.path.abspath(a.repo), *pr, *action])
 
 def confirm(a, ctx, what, action):
+    if a.confirm is not None: return confirmed_by_flag(a, ctx)
     try: typed = ask_terminal(f"Type the pull request number ({ctx['pr']}) to {what}: ").strip()
     except OSError:
-        sys.exit(f"nothing sent; to {what}, you confirm at a terminal by typing the pull request number, and there is none here; "
-                 f"run this yourself:\n! {own_command(a, action)}")
+        sys.exit(f"nothing sent; to {what}, confirm with --confirm {ctx['pr']} once the user has said yes to it, "
+                 f"or run this at a terminal:\n! {own_command(a, action)}")
     if typed != str(ctx["pr"]): sys.exit(f"nothing sent; you typed {typed!r}, not the pull request number {ctx['pr']}")
+
+def confirmed_by_flag(a, ctx):
+    if a.confirm != ctx["pr"]: sys.exit(f"nothing sent; --confirm {a.confirm} is not the pull request number {ctx['pr']}")
 
 def submit_confirmation(verdict, drafts, warned):
     if not (drafts or warned or verdict in CONFIRMED_VERDICTS): return None
@@ -1040,7 +1049,8 @@ def main(argv=None):
     action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
     action.add_argument("--submit", choices=list(VERDICTS),
                         help="submit the pending review with this verdict; approve, request-changes, and comment on a pending review "
-                             "that holds drafts of your own or text that drew a warning ask you to type the pull request number at a terminal")
+                             "that holds drafts of your own or text that drew a warning ask you to type the pull request number at a terminal, "
+                             "or take it as --confirm PR")
     action.add_argument("--close", nargs="?", const="", metavar="N[,M]",
                         help="list the posted findings marked fixed whose threads are still open; "
                              "with numbers, reply and resolve those threads once you type the pull request number at a terminal")
@@ -1050,13 +1060,15 @@ def main(argv=None):
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
     action.add_argument("--save-drafts", metavar="FILE",
                         help="save the post-drafter's answer in FILE as posted/draft-<merged id>.md, one per Post-marked finding; print N=<path> for each")
+    ap.add_argument("--confirm", type=int, metavar="PR",
+                    help="the pull request number, given in place of typing it at a terminal, once the user has said yes to this step")
     ap.add_argument("--dry-run", action="store_true", help="write the calls to <run>/posted/payload.json instead of making them")
     a = ap.parse_args(argv)
     if a.dry_run and not (a.post or a.submit or a.close or a.update_published):
         ap.error("--dry-run goes with --post, --submit, --close N, or --update-published N")
     if a.keep_open is not None: return keep_open(a.run, a.keep_open)
     if a.save_drafts: return save_drafts(a.run, a.save_drafts)
-    reviewed = reviewed_commit(a.run)
+    reviewed = reviewed_commit(a.run, a.repo)
     ctx = {**fetch_pr(a.repo, a.run, a.pr, reviewed), "local": local_paths(a.run, a.repo)}
     ctx["kept"] = kept_body(a.run, ctx)
     if a.submit: return submit(a, ctx, a.submit)

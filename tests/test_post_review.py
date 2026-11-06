@@ -940,7 +940,18 @@ class WhenThereIsNoTerminalTests:
 
     def test_gives_the_command_to_run_with_a_bang(self):
         command = shlex.join(["python3", post.__file__, self.run_dir, "--repo", self.repo_path, *self.args])
-        self.assertTrue(self.refusal(*self.args).endswith(f"run this yourself:\n! {command}"))
+        self.assertTrue(self.refusal(*self.args).endswith(f"run this at a terminal:\n! {command}"))
+
+    def test_names_the_confirm_flag(self):
+        self.assertIn("confirm with --confirm 7 once the user has said yes to it", self.refusal(*self.args))
+
+    def test_sends_with_the_pull_request_number_as_confirm(self):
+        self.main(*self.args, "--confirm", "7")
+        self.assertGreater(self.writes(), 0)
+
+    def test_refuses_another_number_as_confirm(self):
+        self.assertEqual(self.refusal(*self.args, "--confirm", "8"), "nothing sent; --confirm 8 is not the pull request number 7")
+        self.assertEqual(self.writes(), 0)
 
 
 class ApproveConfirmationTest(TerminalConfirmationTests, ConfirmedSubmitCase):
@@ -1621,6 +1632,23 @@ class WhenTheRunRecordedNoPullRequestTest(ReviewedPrCase):
     def test_asks_for_a_pr_when_nothing_names_one(self):
         self.branch_pr.side_effect = gh_api.GhError("no pull requests found")
         self.assertIn("pass --pr N", self.refusal())
+
+
+class ReviewedCommitTest(GhRunCase):
+    def setUp(self):
+        super().setUp()
+        self.repo = init_repo(self.path("repo"), with_origin=False)
+        self.sha = self.repo.git("rev-parse", "HEAD")
+
+    def test_resolves_a_short_hash_to_the_full_one(self):
+        self.write_target("pr 7", MERGE_BASE, self.sha[:9])
+        self.assertEqual(post.reviewed_commit(self.run_dir, self.repo.path), self.sha)
+
+    def test_refuses_a_hash_git_does_not_find(self):
+        self.write_target("pr 7", MERGE_BASE, "0123456789")
+        with self.assertRaises(SystemExit) as raised:
+            post.reviewed_commit(self.run_dir, self.repo.path)
+        self.assertIn("target.txt names commit 0123456789, which git does not find", str(raised.exception))
 
 
 def reply_data(n):

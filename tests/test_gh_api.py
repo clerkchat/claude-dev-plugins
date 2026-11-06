@@ -35,6 +35,13 @@ class GhApiTest(unittest.TestCase):
             gh_api.gh(["pr", "view"], "/w")
         self.assertIn("boom", str(raised.exception))
 
+    def test_gh_failure_carries_what_github_answered(self):
+        self.run.return_value = completed('{"message":"Unprocessable Entity","errors":["commit_id is not part of the pull request"]}',
+                                          returncode=1, stderr="gh: Unprocessable Entity (HTTP 422)")
+        with self.assertRaises(gh_api.GhError) as raised:
+            gh_api.gh(["api", "x"], "/w")
+        self.assertIn("commit_id is not part of the pull request", str(raised.exception))
+
     def test_gh_says_when_gh_is_not_installed(self):
         self.which.return_value = None
         with self.assertRaises(gh_api.GhError) as raised:
