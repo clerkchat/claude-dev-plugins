@@ -2,7 +2,29 @@
 name: review-fix
 description: Fix, address, or recheck a finding from a /clerk-dev:review report. Use whenever the user says "fix finding N", "fix 3 and 5 as recommended", "fix 4 but ...", "address finding N", "recheck N", or refers to a finding in a .clerk-dev/ report and asks for a change. Hands each fix to the building skill's intake, which builds and commits it, then rechecks it with the original lens and updates the report's tracking.
 argument-hint: "N[,M...] [as recommended | but <adjustment>] [run label]"
-allowed-tools: Bash(git *), Bash(python3 *), Bash(gh pr view *), Read, Grep, Glob, Agent, Write
+allowed-tools:
+  - Bash(git add *)
+  - Bash(git commit *)
+  - Bash(git diff *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(gh pr view *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/followups.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/items.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py *)
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Write
 ---
 
 # Fixing review findings
