@@ -36,6 +36,8 @@ instruction other than defer or ignore.
 import argparse, datetime, os, re, subprocess, sys
 from records import load_script
 
+rr = load_script("render-report.py")
+
 CLOSED_STATUS = {"fixed", "wont-fix", "deferred"}
 CLOSED_CHOICE = {"defer", "ignore"}
 QUEUED_CHOICE = {"fix", "noted", "discuss"}
@@ -65,7 +67,7 @@ def load_findings(run):
 def state(run):
     status = {int(r[0]): r for r in tsv(os.path.join(run, "status.tsv")) if r[0].isdigit()}
     instr = {int(r[0]): (r[1] if len(r) > 1 else "") for r in tsv(os.path.join(run, "instructions.tsv")) if r[0].isdigit()}
-    numbers = {int(r[1]): r[0] for r in tsv(os.path.join(run, "numbers.tsv")) if len(r) > 1 and r[1].isdigit()}
+    numbers = {mid: str(n) for mid, n in rr.read_numbers(run).items()}
     return status, instr, numbers
 
 def is_open(mid, status, instr):

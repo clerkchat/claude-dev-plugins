@@ -74,7 +74,7 @@ import ids
 
 sf = load_script("stale-findings.py")
 not_done = load_script("items.py").not_done
-rr = load_script("render-report.py")
+rr = sf.rr
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
@@ -715,9 +715,7 @@ def awaits_posting(row, note):
     return not rr.is_posted(row) or rr.stale_text(row, note)
 
 def finding_groups(run, status, instr, numbers):
-    sections = {}
-    for r in sf.tsv(os.path.join(run, "numbers.tsv")):
-        if len(r) > 2 and r[1].isdigit(): sections[int(r[1])] = r[2]
+    sections = rr.read_sections(run)
     unmarked, queue, discuss, post, inprog, new, by_section = {}, [], [], [], [], [], {}
     posted, marks = rr.read_posted(run), rr.read_instructions(run)
     ap = os.path.join(run, "reconcile", "appended.tsv")

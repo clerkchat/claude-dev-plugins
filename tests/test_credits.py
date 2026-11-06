@@ -1,8 +1,10 @@
+import datetime
 import os
+import shutil
 import sys
 import unittest
 
-from helpers import SCRIPTS, RunCase, run_ok, run_script
+from helpers import SCRIPTS, RunCase, merged_md, run_ok, run_script, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -146,10 +148,16 @@ class CreditCardTest(CreditCase):
 
 
 class CreditSecondOpinionTest(CreditCase):
-    def test_shows_the_verifier_note(self):
-        self.write("verify/9.md", "verdict: adjusted | confidence: 80 | note: True for one path only.")
+    def opinion(self, note):
+        self.write("verify/9.md", f"verdict: adjusted | confidence: 80 | note: {note}")
         self.render()
-        self.assertIn("##### Second opinion\n\nTrue for one path only.", self.card(2))
+        return self.card(2)
+
+    def test_shows_the_verifier_note(self):
+        self.assertIn("##### Second opinion\n\nTrue for one path only.", self.opinion("True for one path only."))
+
+    def test_shows_a_note_with_a_pipe_whole(self):
+        self.assertIn("True for string | null only.", self.opinion("True for string | null only."))
 
 
 class CreditInstructTest(CreditCase):
@@ -350,6 +358,16 @@ class CreditCarriedWithALegacyStatusTest(SinceCase):
         self.assertIn("2\t9\tcredit\n", self.read("numbers.tsv"))
 
 
+class CreditResolvedByRecheckTest(SinceCase):
+    def setUp(self):
+        super().setUp()
+        self.write("reconcile/since.tsv", "prev_id\toutcome\tnote\n9\tresolved\t\n")
+        self.compare("7\t7\tcarried\t1\topen\t\n", "9\t9\tcarried\t2\tfixed\tabc1234\n")
+
+    def test_is_left_out_of_resolved(self):
+        self.assertIn("- Resolved, confirmed by recheck: 0\n", self.report())
+
+
 class CreditNewSinceThePreviousReviewTest(SinceCase):
     def test_is_left_out_of_new(self):
         self.compare("7\t7\tcarried\t1\topen\t\n")
@@ -373,6 +391,33 @@ class CarryTickedCreditTest(CreditCase):
 
     def test_carries_a_ticked_ignore_as_an_instruction_only(self):
         self.assertEqual(self.carry_tick("Ignore"), ("ignore", None))
+
+
+class CarryAgreesWithRenderTest(CreditCase):
+    def setUp(self):
+        super().setUp()
+        self.render()
+        self.edit_report("- [ ] Ignore", "- [x] Ignore")
+        self.write_status({9: ("fixed", "abc1234")})
+        self.twin = self.path("twin")
+        shutil.copytree(self.run_dir, self.twin)
+        run_ok("carry", self.run_dir, self.path("cur"))
+        run_ok("render-report", self.twin, "--target", "t", "--repo", self.tmp, "--date", datetime.date.today().isoformat(), "--wrap", "0")
+
+    def both(self, name):
+        with open(os.path.join(self.twin, name), encoding="utf-8") as f:
+            return self.read(name), f.read()
+
+    def test_mirrors_the_ignore_into_status(self):
+        self.assertEqual(self.status(7)["status"], "wont-fix")
+
+    def test_writes_the_status_render_writes(self):
+        carried, rendered = self.both("status.tsv")
+        self.assertEqual(carried, rendered)
+
+    def test_writes_the_instructions_render_writes(self):
+        carried, rendered = self.both("instructions.tsv")
+        self.assertEqual(carried, rendered)
 
 
 class CreditOverlappingAProposalTest(CreditCase):
@@ -468,6 +513,48 @@ class ReconcileMatchTest(ReconcileCase):
             self.assertEqual(f.read().splitlines()[1:], [])
 
 
+class AppendCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(7, "a.py"), credit(9, "c.py"))
+        self.new = self.path("new.md")
+        write_file(self.new, merged_md(credit(1, "c.py")))
+
+    def append(self, judged):
+        write_file(self.path("judged.tsv"), "new_id\tcarried_id\tverdict\n" + judged)
+        return run_ok("reconcile", "--append", self.new, self.run_dir, "--judged", self.path("judged.tsv"))
+
+    def appended(self):
+        return self.read("reconcile/appended.tsv").splitlines()[1:]
+
+
+class AppendCreditJudgedStaleTest(AppendCase):
+    def setUp(self):
+        super().setUp()
+        self.out = self.append("1\t9\tstale\n")
+
+    def test_does_not_drop_the_new_credit(self):
+        self.assertEqual(self.read("reconcile/dropped.tsv"), "")
+
+    def test_folds_its_evidence_into_the_carried_credit(self):
+        self.assertIn("evidence: read c.py | read c.py", self.read("merged.md"))
+
+    def test_warns_that_it_is_taken_as_a_duplicate(self):
+        self.assertIn("new finding 1: a credit judged stale; treating it as a duplicate of 9", self.out)
+
+
+class AppendJudgedAgainstANonCandidateTest(AppendCase):
+    def setUp(self):
+        super().setUp()
+        self.out = self.append("1\t7\tduplicate\n")
+
+    def test_appends_the_new_finding(self):
+        self.assertEqual(self.appended(), ["10"])
+
+    def test_warns_that_the_verdict_is_ignored(self):
+        self.assertIn("new finding 1: judged against 7, which was not among its candidates", self.out)
+
+
 class FinalReportTest(RunCase):
     def test_names_the_credit_lens_as_left_out_by_design(self):
         self.write_merged(defect(7, "a.py"))
@@ -487,6 +574,15 @@ class FinalReportTest(RunCase):
         self.write("reconcile/appended.tsv", "merged_id\n9\n")
         run_ok("final-report", self.run_dir)
         self.assertNotIn("Guards the retry", self.read("final-review-report.md"))
+
+    def test_names_an_appended_finding_missing_from_merged_by_its_id(self):
+        self.write_merged(defect(7, "a.py"))
+        self.write_numbers({7: "fix", 12: "look"})
+        self.write_target("branch", "a" * 40, "b" * 40)
+        self.write("raw/security.md", "")
+        self.write("reconcile/appended.tsv", "merged_id\n12\n")
+        run_ok("final-report", self.run_dir)
+        self.assertIn("merged 12", self.read("final-review-report.md"))
 
 
 if __name__ == "__main__":

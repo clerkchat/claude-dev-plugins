@@ -465,6 +465,21 @@ class CarryPostedTest(PostCase):
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
 
 
+class CarryWithoutMergedTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_status({7: ("wont-fix", "not ours")})
+        self.cur = self.path("cur")
+        run_ok("carry", self.run_dir, self.cur)
+
+    def test_carries_the_status(self):
+        self.assertEqual(render.read_status(self.cur)[7]["status"], "wont-fix")
+
+    def test_carries_no_findings(self):
+        with open(os.path.join(self.cur, "reconcile", "matches.tsv"), encoding="utf-8") as f:
+            self.assertEqual(f.read().splitlines()[1:], [])
+
+
 TWO_CHOICES = [render.Choice("post", "Post", "post"), render.Choice("ignore", "Ignore", "ignore", note="reason")]
 
 

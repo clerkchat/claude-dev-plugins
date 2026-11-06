@@ -27,7 +27,7 @@ import argparse, json, os, re, sys
 from records import load_script
 from gh_api import graphql, pr_number, repo_owner_name
 
-rc = load_script("reconcile.py"); mf = rc.mf
+rc = load_script("reconcile.py"); mf, rr = rc.mf, rc.rr
 
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName
@@ -139,10 +139,7 @@ def main():
     # shortlist candidate findings for each new comment; a judge decides
     allm = rc.load(a.run)
     agents = {i: e for i, e in allm.items() if e.get("lens") != "pr-review"}
-    reported = set()
-    np_ = os.path.join(a.run, "numbers.tsv")
-    if os.path.exists(np_):
-        reported = {int(l.split("\t")[1]) for l in open(np_).read().splitlines()[1:] if l.split("\t")[1].isdigit()}
+    reported = set(rr.read_numbers(a.run))
     rows = []
     for mid in new_ids:
         c = allm[mid]; cw = words(c); scored = []

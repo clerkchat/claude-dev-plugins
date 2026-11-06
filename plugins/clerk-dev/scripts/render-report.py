@@ -115,10 +115,10 @@ def read_verdicts(run):
     return v
 
 def parse_verdict(t):
-    def g(k, d=""):
-        m = re.search(rf"{k}:\s*([^|\n]+)", t); return m.group(1).strip() if m else d
+    def g(k, d="", stop="|\n"):
+        m = re.search(rf"{k}:\s*([^{stop}]+)", t); return m.group(1).strip() if m else d
     conf = re.sub(r"\D", "", g("confidence", "0")) or "0"
-    return {"verdict": g("verdict", "confirmed").lower(), "confidence": int(conf), "severity": g("severity", "").lower(), "note": g("note", ""),
+    return {"verdict": g("verdict", "confirmed").lower(), "confidence": int(conf), "severity": g("severity", "").lower(), "note": g("note", "", "\n"),
             "origin": g("origin", "").lower(), "fix_size": g("fix_size", "").lower()}
 
 ORIGIN_WORDS = {"new": "New on this branch", "worsened": "Made worse by this branch", "existing": "Already on main: fix in a separate pull request"}
@@ -1028,9 +1028,23 @@ def parse_args():
                     help="set a status by finding number (or #<merged id>): fixed, in-progress, wont-fix, deferred, open")
     return ap.parse_args()
 
-def apply_statuses(run, repo, nums, specs, today):
-    global STATUS
+def load_triage(run, entries, today):
+    global CREDITS, STATUS, INSTR, POSTED
+    CREDITS = credit_ids(entries)
     STATUS = {mid: st for mid, st in import_hand_edits(run, read_status(run), today).items() if mid not in CREDITS}
+    INSTR = read_instructions(run)
+    changed = import_instruction_edits(run, INSTR, today)
+    mirror_decisions(changed, today)
+    POSTED = read_posted(run)
+    import_posted_edits(run, today)
+    return changed
+
+def write_triage(run):
+    write_instructions(run, INSTR)
+    write_status(run, STATUS)
+    if POSTED: write_posted(run, POSTED)
+
+def apply_statuses(run, repo, nums, specs, today):
     for spec in specs:
         m = re.match(r"^(#?\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
         if not m or m.group(2) not in STATUS_WORDS:
@@ -1062,21 +1076,14 @@ def add_note(spec, nums):
     cur = INSTR.setdefault(mid, {"choice": "", "note": "", "date": "", "also": ""})
     cur["text"] = (cur.get("text", "").rstrip() + "\n\n" + add.strip()).strip()
 
-def apply_instructions(run, nums, instruct_specs, note_specs, today):
-    global INSTR
-    INSTR = read_instructions(run)
-    changed = import_instruction_edits(run, INSTR, today)
-    for spec in instruct_specs: changed.add(set_instruction(spec, nums, today))
+def mirror_decisions(mids, today):
+    for mid in mids - CREDITS: mirror_decision(mid, today)
+
+def apply_instructions(nums, instruct_specs, note_specs, today):
     # Ignore and Defer are decisions about the outcome: mirror them into status
     # when the finding is still open; undoing them reopens it.
-    for mid in changed - CREDITS: mirror_decision(mid, today)
+    mirror_decisions({set_instruction(spec, nums, today) for spec in instruct_specs}, today)
     for spec in note_specs: add_note(spec, nums)
-
-def apply_posted(run, drafts, today):
-    global POSTED
-    POSTED = read_posted(run)
-    import_posted_edits(run, today)
-    for mid, text in drafts: record_posted(run, mid, text, "drafted", today)
 
 def warn_unlabeled_options(merged):
     for e in merged:
@@ -1226,7 +1233,7 @@ def since_lines(numbered, routed):
     still = sum(1 for e in numbered if e["id"] in RECON["matches"] and STATUS.get(e["id"], {}).get("status", "open") in ("open", "in-progress") and RECON["matches"][e["id"]].get("how") != "reopened")
     resolved = [u for u in RECON["unmatched"] if RECON["since"].get(u["prev_id"], {}).get("outcome") == "resolved"]
     resolved += [{"title": TITLE_BY_ID.get(pid, ""), "prev_number": RECON["matches"].get(pid, {}).get("prev_number", ""), "prev_ref": RECON["matches"].get(pid, {}).get("prev_ref", "")}
-                 for pid, v in RECON["since"].items() if v.get("outcome") == "resolved" and RECON["matches"].get(pid, {}).get("how") == "carried"]
+                 for pid, v in RECON["since"].items() if v.get("outcome") == "resolved" and RECON["matches"].get(pid, {}).get("how") == "carried" and pid not in CREDITS]
     unchecked = [u for u in RECON["unmatched"] if u["prev_status"] == "fixed" and u["prev_id"] not in RECON["since"]]
     notfound = [u for u in RECON["unmatched"] if u["prev_status"] in ("open", "in-progress") and RECON["since"].get(u["prev_id"], {}).get("outcome", "not-found") == "not-found"]
     answered = sum(1 for e in numbered if RECON["prior"].get(e["id"], {}).get("outcome") == "answered")
@@ -1328,15 +1335,14 @@ def main():
     mf = load_merge_module()
     merged = read_findings(a.run, mf)
     verdicts, labels = read_verdicts(a.run), read_labels(a.run)
-    global NAMES, TITLES, RUN, RECON, PR_LINKS, IDNUM, TITLE_BY_ID, CREDITS
-    NAMES, TITLES, RUN, CREDITS = read_plain_names(a.routing), report_titles(a.run, mf), a.run, credit_ids(merged)
+    global NAMES, TITLES, RUN, RECON, PR_LINKS, IDNUM, TITLE_BY_ID
+    NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run, mf), a.run
     nums = read_numbers(a.run)
     drafts = [posted_draft(spec, nums) for spec in a.posted]
+    load_triage(a.run, merged, today)
     apply_statuses(a.run, a.repo, nums, a.set, today)
-    apply_instructions(a.run, nums, a.instruct, a.note, today)
-    write_instructions(a.run, INSTR)
-    write_status(a.run, STATUS)
-    apply_posted(a.run, drafts, today)
+    apply_instructions(nums, a.instruct, a.note, today)
+    for mid, text in drafts: record_posted(a.run, mid, text, "drafted", today)
     warn_unlabeled_options(merged)
     RECON, PR_LINKS = read_reconcile(a.run), pr_links(merged)
     routed, unverified, rejected, hidden_minor = route_findings(merged, verdicts, a)
@@ -1346,7 +1352,7 @@ def main():
     IDNUM = {e["id"]: e["_n"] for e in numbered}
     TITLE_BY_ID = {e["id"]: title_of(e, TITLES) for e in merged}
     check_posted_notes()
-    if POSTED: write_posted(a.run, POSTED)
+    write_triage(a.run)
     text = render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor, overlapping)
     outp = write_report(a, text, numbered)
     write_numbers(a.run, numbered, prior_nums)

@@ -27,6 +27,7 @@ import argparse, datetime, os, re
 from records import ROUTING, load_script, read_plain_names
 
 sf = load_script("stale-findings.py")
+rr = sf.rr
 
 CATEGORIES = [
     ("correctness", "Breaking correctness", "crashes on common paths, silently wrong results, data loss"),
@@ -68,7 +69,8 @@ def ref(run, num, title):
 def analyze(run):
     findings = sf.load_findings(run)
     status, instr, numbers = sf.state(run)
-    sections = {int(r[1]): r[2] for r in sf.tsv(os.path.join(run, "numbers.tsv")) if len(r) > 2 and r[1].isdigit()}
+    sections = rr.read_sections(run)
+    credits = rr.credit_ids(rr.read_findings(run, rr.mf))
     rd = os.path.join(run, "reconcile")
     appended = {int(r[0]) for r in sf.tsv(os.path.join(rd, "appended.tsv")) if r and r[0].isdigit()}
     new_of = {int(r[1]): int(r[0]) for r in sf.tsv(os.path.join(rd, "appended-map.tsv")) if len(r) > 1 and r[0].isdigit() and r[1].isdigit()}
@@ -77,12 +79,12 @@ def analyze(run):
 
     kept = []
     for mid in sorted(appended, key=lambda m: int(numbers.get(m, 10**6))):
-        if mid not in numbers or mid not in findings: continue
+        if mid not in numbers or mid in credits: continue
         bar = ""
         for p in (os.path.join(run, "final", "verify", f"{new_of.get(mid, '')}.md"), os.path.join(run, "verify", f"{mid}.md")):
             m = re.search(r"^bar:\s*(.*)$", read(p), re.M)
             if m: bar = m.group(1); break
-        cat = category_of(bar) or category_of(str(findings[mid].get("context", "")))
+        cat = category_of(bar) or category_of(str(findings.get(mid, {}).get("context", "")))
         kept.append((numbers[mid], mid, title(mid), cat or "category not stated"))
     reopened = [(numbers[int(r[1])], int(r[1]), title(int(r[1]))) for r in judged
                 if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and status.get(int(r[1]), ["", ""])[1] != "fixed"]

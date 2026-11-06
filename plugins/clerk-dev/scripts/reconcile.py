@@ -37,6 +37,7 @@ import argparse, os, re, sys
 from records import load_script
 
 mf = load_script("merge-findings.py")
+rr = load_script("render-report.py")
 
 STOP = set("the a an and or of to in on for is are be by with that this it as at from not no when so then than its into".split())
 
@@ -102,6 +103,21 @@ def _cause(n):
     claim = re.split(r"(?<=[.!?])\s", str(n["_raw"].get("claim", "")).strip())[0]
     return f"{n['_raw'].get('lens','')}|{n['file']}:{n['line'] or ''}|{claim}".replace("\t", " ")
 
+def judged_verdicts(path, new, cands):
+    verdict = {}
+    for l in open(path):
+        f = [x.strip() for x in l.rstrip("\n").split("\t")]
+        if len(f) < 3 or not f[0].isdigit() or f[2] not in VERDICTS: continue
+        nid, cid, v = int(f[0]), f[1], f[2]
+        if not cid.isdigit() or int(cid) not in cands.get(nid, []):
+            print(f"new finding {nid}: judged against {cid or 'nothing'}, which was not among its candidates; ignoring that verdict", file=sys.stderr)
+            continue
+        if v in ("regressed", "stale") and mf.is_credit(new[nid]):
+            print(f"new finding {nid}: a credit judged {v}; treating it as a duplicate of {cid}", file=sys.stderr)
+            v = "duplicate"
+        verdict[nid] = (int(cid), v)
+    return verdict
+
 def append_mode(new_path, cur, judged=None):
     """Fold findings from a delta review (or a recheck) into a run.
 
@@ -157,11 +173,7 @@ def append_mode(new_path, cur, judged=None):
                     fh.write(f"{nid}\t{cid}\t{st}\t{since.get(cid, '')}\n")
         print(f"{len(cands)} of {len(new)} new findings have candidate carried matches; judge reconcile/append-candidates.tsv, then rerun with --judged", file=sys.stderr)
         return
-    verdict = {}
-    if judged:
-        for l in open(judged):
-            f = l.rstrip("\n").split("\t")
-            if len(f) >= 3 and f[0].isdigit() and f[2].strip() in VERDICTS: verdict[int(f[0])] = (int(f[1]), f[2].strip())
+    verdict = judged_verdicts(judged, new, cands) if judged else {}
     mpath = os.path.join(rd, "matches.tsv")
     mrows = [l.rstrip("\n").split("\t") for l in open(mpath)] if os.path.exists(mpath) else [["cur_id","prev_id","how","prev_number","prev_status","prev_ref","cause"]]
     if len(mrows[0]) < 7: mrows[0] = mrows[0][:6] + ["cause"]
@@ -223,7 +235,7 @@ def main():
     rd = os.path.join(a.cur, "reconcile"); os.makedirs(rd, exist_ok=True)
     prev, cur = load(a.prev), load(a.cur)
     pstatus = {int(r[0]): r for r in tsv(os.path.join(a.prev, "status.tsv")) if r and r[0].isdigit()}
-    pnum = {int(r[1]): r[0] for r in tsv(os.path.join(a.prev, "numbers.tsv")) if len(r) > 1 and r[1].isdigit()}
+    pnum = {mid: str(n) for mid, n in rr.read_numbers(a.prev).items()}
     def pinfo(pid):
         s = pstatus.get(pid)
         return (pnum.get(pid, ""), s[1] if s else "open", s[2] if s and len(s) > 2 else "")
