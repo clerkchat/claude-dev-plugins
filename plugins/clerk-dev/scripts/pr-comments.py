@@ -84,10 +84,13 @@ def thread_item(t):
             dict(path=t["path"], line=t["line"], oline=t["originalLine"], replies=replies_of(t),
                  resolved=t["isResolved"], outdated=t["isOutdated"]))
 
-def github_items(p, threads):
+def submitted_reviews(p):
+    return [r for r in p["reviews"]["nodes"] if r["body"].strip() and r["state"] != "PENDING"]
+
+def github_items(p, threads, own_review_ids=()):
     items = [thread_item(t) for t in threads]
-    for r in p["reviews"]["nodes"]:
-        if r["body"].strip() and r["state"] != "PENDING":
+    for r in submitted_reviews(p):
+        if str(r["databaseId"]) not in own_review_ids:
             items.append(("review", r["databaseId"], login(r), r["body"], r["url"], dict(state=r["state"])))
     for c in p["comments"]["nodes"]:
         if c["body"].strip():
@@ -177,8 +180,10 @@ def fold_in(run, p, today):
     open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
     open(os.path.join(pd, "pr.txt"), "w").write(f"{p['number']}\t{p['url']}\n")
     threads = link_threads(run, p, today)
-    new_ids, updated = import_items(run, github_items(p, threads.imported))
-    return Folded(new_ids, updated, len(threads.linked), threads.left_out)
+    own = {row["review_id"] for row in rr.read_posted(run).values() if row.get("review_id")}
+    own_reviews = [r for r in submitted_reviews(p) if str(r["databaseId"]) in own]
+    new_ids, updated = import_items(run, github_items(p, threads.imported, own))
+    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out)
 
 def shortlist(run, new_ids):
     allm = rc.load(run)

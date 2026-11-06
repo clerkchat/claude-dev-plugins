@@ -145,6 +145,22 @@ class PostQueueTests(PostQueueCase):
         self.assertNotIn("post the review", out)
 
 
+class CloseStepTests(PostQueueCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted.tsv", POSTED_HEADER + "".join(f"{n}\tposted\tinline\t\tT{n}\t{n}\t\ta.py\t1\t1\tRIGHT\tline\t\n" for n in (1, 2, 3, 4)))
+        self.write_status({1: ("fixed", "abc"), 2: ("fixed", "abc")})
+        self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\n"
+                   "1\t1\tT1\topen\t0\t1\t1\t\td\n2\t2\tT2\tresolved\t0\t1\t1\t\td\n")
+
+    def test_names_the_fixed_findings_with_an_open_thread(self):
+        self.assertIn("Close the posted thread of finding 1 (`post-review.py --close`).", self.full_status())
+
+    def test_names_nothing_when_no_thread_is_open(self):
+        self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\n")
+        self.assertNotIn("Close the posted thread", self.full_status())
+
+
 class CreditsInStatusTests(PostQueueCase):
     CREDIT = "- id: 5\n  lens: credit\n  file: a.py\n  line: 1\n  title: Credit 5\n  claim: Guards it.\n"
 

@@ -59,6 +59,11 @@ class GithubItemsTest(unittest.TestCase):
         self.assertEqual(self.items(reviews=[review(2, "COMMENTED", body="  ")]), [])
 
 
+    def test_skips_a_review_posted_by_this_plugin(self):
+        items = pr_comments.github_items(pull_request(reviews=[review(2, "COMMENTED"), review(4, "COMMENTED")]), [], {"2"})
+        self.assertEqual([gid for _, gid, *_ in items], [4])
+
+
 class SortThreadsTest(unittest.TestCase):
     def sort(self, *threads, linking=None):
         return pr_comments.sort_threads(pull_request(threads), linking or {})
@@ -190,6 +195,24 @@ class PostedThreadTest(PostedThreadCase):
 
     def test_writes_no_row_for_a_body_posting(self):
         self.assertNotIn(42, render.read_threads(self.run_dir))
+
+
+class PostedReviewTest(PostedThreadCase):
+    def setUp(self):
+        super().setUp()
+        posted = render.read_posted(self.run_dir)
+        posted[42]["review_id"] = "2"
+        render.write_posted(self.run_dir, posted)
+        self.folded = self.fold(reviews=[review(2, "COMMENTED", "Our summary."), review(4, "COMMENTED", "Their summary.")])
+
+    def test_does_not_import_it(self):
+        self.assertNotIn("Our summary.", self.read("merged.md"))
+
+    def test_counts_it_as_linked(self):
+        self.assertEqual(self.folded.linked, 1)
+
+    def test_still_imports_a_review_of_someone_else(self):
+        self.assertIn("Their summary.", self.read("merged.md"))
 
 
 class PostedThreadStateTest(PostedThreadCase):
