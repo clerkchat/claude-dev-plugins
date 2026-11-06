@@ -221,6 +221,32 @@ Readers:
   it will change, as context, and notes on a finding when the follow-up's
   contract overrides its recommendation.
 
+## Cleanups
+
+A cleanup is an item of kind `cleanup` in the backlog: code a change added that
+is meant to go away, such as a feature gate, a compatibility branch, or a
+deprecated shim. `removes` names the code the way it appears in the source (a
+flag key, an enum member, a function or module name), which `backlog.py check`
+searches for with `git grep -F`; `trigger` is the condition for removing it
+that the plugin cannot check ("once every client sends exportId").
+
+When a review's rollout lens or a builder's report says a change adds one, offer
+in one line: "file a cleanup to remove `<key>` when <condition>?" On yes, file
+it in this worktree's repository's backlog, the repository whose code it
+removes:
+
+```
+backlog.py add <worktree> "Remove <key>" --kind cleanup --scope new \
+  --removes <key> --trigger "<condition>" --from <source>
+```
+
+with `--body <file>` holding what the removal involves when the source says.
+The source is `<run> rollout` for a review's line, `BUILD-n` for a logged
+handoff, else the handoff's source item (`<run> N` for a finding, the
+follow-up's `BL-n`, "this session" for a request). On no, nothing is filed.
+The `review-triage` skill makes the offers for a review, the `building` skill
+for a handoff.
+
 ## Guidance from answers
 
 When the user answers a question (a design question, a builder's stopped
@@ -478,21 +504,40 @@ done as written):
 - `Fix as noted`: do it as the note after the colon says ("Fix as noted: use
   the banner, not a toast").
 - `Discuss`: talk it through with the user before anything else happens.
-- `Defer`: not now. Add a deferred item with `deferred.py add <worktree>
-  "<what>" --from <source> --path "<what was done for now>" --open "<what is
-  left>" [--revisit "<when to look again>"]`, where the source is the finding
-  (`<run> N`), question (`BRIEF-18-1.Q-6`), pass item (`PASS-3.4`),
-  handoff (`BUILD-9`), or "this session". Then set the source's status to `deferred`
-  with its Outcome naming the new DEFER id: `render-report.py --set N=deferred:DEFER-3`
-  for a finding, `items.py status <file> Q-3 deferred --ref DEFER-3` for a design
-  question, `passes.py done <worktree> PASS-3 4 --na "deferred, DEFER-3"` for a pass
-  item. "Deferred items" below says what they are. A follow-up (`BL-4`) is
-  deferred by handing it to new work instead, `backlog.py rescope <worktree>
-  BL-4 new`: it stays owed in the backlog, with no deferred item. A survey item
-  (`SURVEY-2.Q-3`) parks an idea instead, since nothing was done for now:
-  `backlog.py add <worktree> "<what>" --kind idea --from SURVEY-2.Q-3 --why
-  "..." --when "..."`, then `items.py status <survey file> Q-3 deferred --ref
-  BL-7`, and no deferred item.
+- `Defer`: not now. What it does depends on the source. A finding, design
+  question, pass item, or handoff gets a deferred item, added with
+  `deferred.py add <worktree> "<what>" --from <source> --path "<what was done
+  for now>" --open "<what is left>" [--revisit "<when to look again>"]`, where
+  the source is the finding (`<run> N`), question (`BRIEF-18-1.Q-6`), pass item
+  (`PASS-3.4`), handoff (`BUILD-9`), or "this session" ("Deferred items" below
+  says what they are), and its status becomes `deferred` with its Outcome
+  naming the new DEFER id:
+  - Finding: `render-report.py --set N=deferred:DEFER-3`.
+  - Design question: `items.py status <file> Q-3 deferred --ref DEFER-3`.
+  - Pass item: `passes.py done <worktree> PASS-3 4 --na "deferred, DEFER-3"`.
+  - Finding sent to the backlog, on the user's spoken request ("send it to
+    the backlog, as a cleanup"; a ticked Defer with a note naming the backlog
+    does not count): nothing was done for now, so no deferred item. Write
+    the finding's context, steps, impact, and recommendation from `merged.md`,
+    with `overrides/<merged id>.md` laid over it, to
+    `<run>/backlog-<merged id>.md`, then `backlog.py add <worktree> "<the
+    finding's title>" --kind idea|cleanup --scope new --from "<run> N" --body
+    <that file>`. For a cleanup add `--removes <the code the finding names>`
+    (asked for in one line when it names none) and `--trigger "<condition>"`
+    when the discussion named one. Then one render with `--instruct
+    N=defer:<item id>`, which also sets the status to `deferred` with the item
+    id as the outcome; never `--set` it too. Leave `--scope` out when the user
+    names the feature, so it defaults to the hub's branch. Pass `--repo NAME`
+    only when the user names another repository: the item id is then
+    `<repo>:BL-n`, and when the registry does not name the repository
+    `backlog.py add` refuses in one line; relay it and leave the finding as it
+    was.
+  - Follow-up (`BL-4`): hand it to new work instead, `backlog.py rescope
+    <worktree> BL-4 new`; it stays owed in the backlog, with no deferred item.
+  - Survey item (`SURVEY-2.Q-3`): park an idea, since nothing was done for
+    now: `backlog.py add <worktree> "<what>" --kind idea --from SURVEY-2.Q-3
+    --why "..." --when "..."`, then `items.py status <survey file> Q-3
+    deferred --ref BL-7`, and no deferred item.
 - `Ignore`: not at all; the status becomes `wont-fix` (`dropped` for a backlog
   item), with why.
 - `Post`: send it to the pull request's author as a comment on the user's

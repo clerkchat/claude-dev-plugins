@@ -68,7 +68,8 @@ Fix as recommended never runs it: the user has already chosen.
    Guidance rules adjust the profile's weights. A decisive answer can override
    the profile; say so when it does.
 4. **Options, each in its smallest form.** List the realistic options, usually
-   two to four, including Defer or Ignore when they are real. Shrink each to
+   two to four, including Defer, Ignore, or send to the backlog (as an idea or a cleanup)
+   when they are real. Shrink each to
    its smallest form before weighing it: the least change that still gets the
    option's benefit. For live code, find it as "Changing live code"
    describes. Judged in the abstract, the right fix often looks riskier than

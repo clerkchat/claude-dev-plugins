@@ -368,8 +368,8 @@ status lives only here; the brief is not edited for it.
 ## After each handoff
 
 1. **Read the report.** Read it by its `status`, `size`, `scope`, `files:`,
-   `requirements:`, `questions:`, `deviations:`, `rollout:`, `follow-ups:`,
-   and `contract:` lines. A report that is empty, misses a line of the
+   `requirements:`, `questions:`, `deviations:`, `rollout:`, `cleanups:`,
+   `follow-ups:`, and `contract:` lines. A report that is empty, misses a line of the
    builder's report, or has them out of order is sent back once, to the same
    builder with SendMessage, asking for the report alone; a second such report
    is handled as `status: stopped` with that as its reason, and its `files:`
@@ -435,10 +435,13 @@ status lives only here; the brief is not edited for it.
    owing repository's backlog, as Follow-ups in `skills/review/tracking.md`
    describes, with the commit as `--origin "<this repo> <sha>"`. When `contract:` is not "none",
    check every related worktree as "Clients of a changed contract" below
-   describes.
+   describes. Offer each `cleanups:` line as Cleanups in
+   `skills/review/tracking.md` describes, with `--from BUILD-n` when the
+   handoff is logged, otherwise the source item. In a queue, collect the offers
+   and make them once when the queue ends, so no handoff waits on an answer.
 9. Say one line: the handoff, the commit, the tests, anything accepted, the
    rollout considerations when `rollout:` is not "none", the worktrees that
-   got a follow-up (with its `<repo>:BL-n`), the source items step 7 closed, and the count it moves
+   got a follow-up (with its `<repo>:BL-n`), each cleanup filed, the source items step 7 closed, and the count it moves
    ("BUILD-15 done in 4c1e2ab, tests pass: BRIEF-52 now 27 of 32").
 
 **Leftover edits.** A stopped report whose `files:` is not "none" left edits.

@@ -164,7 +164,9 @@ for nothing wider.
      resolved.
    - The follow-ups "After each handoff" in the `building` skill filed for
      this commit, each in a sentence naming the follow-up id and the
-     repository that owes it; omit when none. The renderer shows it as a
+     repository that owes it, and the cleanup filed for this commit from the report's `cleanups:` line, in a
+     sentence naming its id and the code it removes; omit each when none was
+     filed. The renderer shows it as a
      "Resolution" subsection at the end of the card. On a later fix of the
      same finding, append a paragraph rather than rewriting the earlier ones.
 7. If the recheck says partly resolved or unresolved, make one second attempt

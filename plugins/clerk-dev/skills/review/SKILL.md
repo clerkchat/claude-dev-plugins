@@ -1009,6 +1009,13 @@ findings about the same defect in different files stay separate and the verifier
 sees both. A credit (lens `credit`) never merges with a finding of another kind;
 two credits on overlapping lines merge as findings do.
 
+After merging, read the `Cleanups owed` section of every `raw/rollout*.md` and
+write the lines that are not `none` to `<run>/cleanups.md` with Write, one per
+line as the lens wrote them; write nothing when there are none. An incremental
+or final run adds the lines whose key the file does not already hold and keeps
+the rest. The `review-triage` skill offers to file them ("Cleanups" in
+`skills/review/tracking.md`); a headless run only writes the file.
+
 ## Step 6b: reconcile with the previous review
 
 Skip with `--fresh`, or when no earlier run for the same target has a
@@ -1207,6 +1214,9 @@ The renderer script produces the document; you supply three short inputs:
 3. `<run>/not-reviewed.md`: one line each for excluded files with size when it
    matters, parts no lens looked at, focuses that did not run, and documents
    dropped by the selection cap.
+
+When `<run>/cleanups.md` exists, `summary.md` ends with one more sentence naming
+its keys and saying that triage offers to file their cleanups.
 
 Then run
 `render-report.py <run> --target <target> --branch <branch> --base
@@ -1626,7 +1636,8 @@ unverified), `merged.md` (and `merged-new.md` in incremental runs),
 printed them; `followups-<repo>.md` per repository in feature runs),
 `reconcile/`, `pr/` (with `threads.tsv`, the posted findings' threads as step
 7b last saw them), `titles.tsv`, `overrides/`, `summary.md`,
-`not-reviewed.md`, `numbers.tsv`, `status.tsv`, `instructions.tsv`,
+`not-reviewed.md`, `cleanups.md` (the rollout lens's `Cleanups owed` lines, when
+there are any), `numbers.tsv`, `status.tsv`, `instructions.tsv`,
 `notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `posted/` (`<id>.md` posted
 texts, `draft-<id>.md` drafts saved by `--save-drafts`, `answer-<n>.md` the
 drafter's answers, `review.md` the review body, `pending-<review id>.md` the

@@ -135,3 +135,17 @@ on deploy mechanics you cannot see; say what would confirm it.
 
 Changes that are purely additive and gated, with no migration and no payload
 change, usually produce an empty findings block. That is a valid result.
+
+## Cleanups owed
+
+In review mode only, never when the design-check skill runs this lens, end
+your output with a `Cleanups owed` section, after the findings block and beside
+`For other lenses`, `Noticed, out of scope`, and `Coverage`: one line for each
+feature gate, compatibility branch, or deprecated shim the change adds, as
+
+`<key>: <what it guards or keeps>; remove when <condition>`
+
+where the key is the identifier as it appears in the code (flag key, enum
+member, function or module name), so `git grep -F` finds it. Write `none` when
+the change adds nothing of the kind. A correctly gated addition is still not a
+finding; the findings block stays empty for it.

@@ -92,6 +92,14 @@ done. On yes, follow the `followups` skill to the end, then continue with
 the next check. On no, go on; the check below still sees any follow-up commits
 made earlier.
 
+### Cleanups owed
+
+When `<run>/cleanups.md` exists, offer each of its lines that ends with neither
+` filed: BL-n` nor ` declined`, as "Cleanups" in `skills/review/tracking.md`
+describes, with `--from "<run> rollout"`. On yes, append ` filed: <item id>` to
+the line; on no, append ` declined`. With `check`, do not offer; say how many
+lines are unfiled. Name each item filed with its gloss.
+
 ### Findings whose code moved
 
 Run
@@ -200,7 +208,13 @@ skipped without deciding counts as left and stays marked.
    an `Explore` agent the question and keep only its answer.
 4. Record the decision as described under Recording a decision, including any
    rule it sets beyond its finding (Rules beyond the finding), then, for a fix, run it right away
-   by following the `review-fix` skill in queue mode.
+   by following the `review-fix` skill in queue mode. A discussion may end
+   with "send it to the backlog, as an idea" or "as a cleanup"; record that as
+   "Items" in `skills/review/tracking.md` describes for a finding sent to the
+   backlog, and close with the item named with its gloss ("12 sent to the
+   backlog as BL-7, a cleanup to remove `EXPORT_V2_FLAG`"). A send alone needs
+   no Notes paragraph; write one when the discussion settled more than the
+   send.
 5. Move to the next. Before the next one, drop the previous one's detail; the
    file is the record.
 
@@ -215,6 +229,9 @@ When the last discussion is decided, look back over the pass as "Lessons
 from a discussion" in `skills/review/tracking.md` describes, from the decisions
 recorded in the report when the conversation was cleared partway. Then
 run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
+
+The same words said outside a discussion ("send finding 12 to the backlog as a
+cleanup") mean the same: record the send as step 4 does.
 
 ## Pass 3: posting
 

@@ -115,6 +115,21 @@ class LensConcernsTest(unittest.TestCase):
                 self.assertIsNone(lens_mode.na(lens_mode.line(concern, "Review")))
 
 
+class RolloutCleanupsOwedTest(unittest.TestCase):
+    def setUp(self):
+        self.text = lens_text("rollout")
+
+    def test_is_a_section_of_the_lens(self):
+        self.assertTrue(records.has_section(self.text, "Cleanups owed"))
+
+    def test_follows_the_concerns(self):
+        found = heading_names(self.text)
+        self.assertLess(found.index("Concerns"), found.index("Cleanups owed"))
+
+    def test_is_not_read_as_a_concern(self):
+        self.assertEqual([c.number for c in lens_mode.concerns("rollout")], list(range(1, 9)))
+
+
 class PassModeTextTest(unittest.TestCase):
     def test_catalogue_names_no_lens_without_pass_lines(self):
         self.assertIn("tech-debt", catalogue_lenses())
