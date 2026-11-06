@@ -93,7 +93,7 @@ def block(path, log_n):
         out.append("- Workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows))
     else:
         out.append("- Workspace: none")
-    out.append(f"- Open follow-ups: {len(rs.branch_followups(wt))}")
+    out.append(f"- Open follow-ups: {len(load_script("backlog.py").owed_followups(wt))}")
     out.append(f"- Latest run: {latest_run(wt, head)}")
 
     if base:

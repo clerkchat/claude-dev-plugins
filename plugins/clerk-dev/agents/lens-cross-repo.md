@@ -101,7 +101,8 @@ reader can check your map.
      together satisfy it?
 11. **Follow-ups.**
    - Review: for each repository's `followups-<repo>.md` in `DOCS` (its open
-     backlog follow-ups, one `BL-n` line each), check
+     backlog follow-ups, one `BL-n` line each with its origin, and its
+     contract, finding, and instruction indented under it), check
      each open item against that repository's diff. An item whose contract
      change is now matched is resolved work left open; an item with no matching
      change is still owed, and is a finding when the producing side has already

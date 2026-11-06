@@ -337,6 +337,73 @@ class OrphanTests(BacklogCase):
         self.assertEqual(self.ids_listed("--scope", "new"), ["BL-1", "BL-2"])
 
 
+class OwedTests(BacklogCase):
+    def setUp(self):
+        super().setUp()
+        git(self.api.path, "branch", "-q", "feat/other")
+        self.worktree(self.api, "api/gone", "feat/gone")
+        self.followup("Owed here")
+        self.followup("New work", "--scope", "new")
+        self.followup("Owed to another feature", "--scope", "feat/other")
+        self.followup("Owed to the gone branch", "--scope", "feat/gone")
+        self.idea("Feature idea")
+        self.followup("Done here")
+        self.ok("set", self.feat, "BL-6", "done", "--ref", "1a2b3c4")
+        git(self.api.path, "worktree", "remove", self.path("api/gone"))
+        git(self.api.path, "branch", "-q", "-D", "feat/gone")
+
+    def test_lists_only_the_open_follow_ups_scoped_to_this_branch(self):
+        self.assertEqual(self.ids_listed("--owed"), ["BL-1"])
+
+    def test_all_adds_the_closed_ones_scoped_here(self):
+        self.assertEqual(self.ids_listed("--owed", "--all"), ["BL-1", "BL-6"])
+
+    def test_the_in_process_read_is_the_same_set(self):
+        self.assertEqual([it["id"] for it in backlog.owed_followups(self.feat)], ["BL-1"])
+
+    def test_a_kind_or_scope_beside_it_is_refused(self):
+        self.assertEqual(self.refused("list", self.feat, "--owed", "--scope", "new"), "--owed and --parked take no --kind, --scope, or --repo")
+
+
+class ParkedTests(TwoRepositoryCase):
+    def setUp(self):
+        super().setUp()
+        self.link_workspace(self.feat, "api", [("api", self.feat), ("web", self.web_feat)])
+        self.idea("Phone digits", wt=self.web_feat)
+        self.idea("Web's own new idea", "--scope", "new", wt=self.web_feat)
+
+    def test_lists_the_features_ideas_from_the_hub(self):
+        self.assertEqual(self.ids_listed("--parked", wt=self.web_feat), ["api:BL-1"])
+
+    def test_matches_the_count_status_gives(self):
+        self.assertEqual(len(self.listed("--parked", wt=self.web_feat)), len(backlog.feature_ideas(self.web_feat)))
+
+
+class FollowUpLineTests(BacklogCase):
+    def setUp(self):
+        super().setUp()
+        self.followup("Handle exportId", "--contract", "changed: GET /download now requires exportId", "--finding", "api 8")
+        self.ok("instruct", self.feat, "BL-1", "Refine")
+
+    def test_the_line_shows_its_origin_as_where_it_came_from(self):
+        self.assertEqual(self.listed("--owed"), ["BL-1 followup owed feat/x: Handle exportId  [from web 7c1e2ab]"])
+
+    def test_full_puts_contract_finding_and_instruction_under_it(self):
+        self.assertEqual(self.listed("--owed", "--full")[1:], ["  contract: changed: GET /download now requires exportId", "  finding: api 8", "  instruction: Refine"])
+
+
+class IdeaLineTests(BacklogCase):
+    def setUp(self):
+        super().setUp()
+        self.idea("Phone digits", "--why", "Fewer typos.", "--when", "After the card ships.")
+
+    def test_full_puts_why_and_when_under_it(self):
+        self.assertEqual(self.listed("--parked", "--full")[1:], ["  why: Fewer typos.", "  when: After the card ships."])
+
+    def test_without_full_it_is_one_line(self):
+        self.assertEqual(len(self.listed("--parked")), 1)
+
+
 class SetTests(BacklogCase):
     def setUp(self):
         super().setUp()

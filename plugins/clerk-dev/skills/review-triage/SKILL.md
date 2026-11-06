@@ -81,8 +81,8 @@ against code that has changed or is about to.
 
 ### Open follow-ups
 
-Run `backlog.py list <worktree> --kind followup`: this repository's open
-backlog follow-ups for the branch. When items are open, the other
+Run `backlog.py list <worktree> --owed`: the open backlog follow-ups this
+branch owes. When items are open, the other
 repository has already changed a contract on this branch and this one is out of
 step until they are done; a finding fixed first may be fixed against code the
 follow-up rewrites. Ask once: "<n> follow-ups are open (<their

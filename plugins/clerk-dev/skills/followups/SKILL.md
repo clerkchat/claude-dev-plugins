@@ -33,9 +33,12 @@ report is the only thing an item should add here.
 
 ## Before the first item
 
-1. List the open items: `backlog.py list <worktree> --kind followup`, and read
-   each one's fields (instruction, origin, contract, finding) and need with
-   `backlog.py show <worktree> BL-4`. With item ids as the argument, take only
+1. List the open items this branch owes, with their fields (origin,
+   contract, finding, instruction): `backlog.py list <worktree> --owed
+   --full`; read an item's need beyond its title with `backlog.py show
+   <worktree> BL-4`. Follow-ups scoped to new work are not this branch's: the
+   `status` skill offers them for taking up, and they join this list only once
+   rescoped to the branch. With item ids as the argument, take only
    those; otherwise all open items, in id order. Sort them by instruction
    (the vocabulary is "Items" in `skills/review/tracking.md`):
    - none, `Fix as recommended`, or `Fix as noted`: the work list, done in id

@@ -203,8 +203,9 @@ the user says it is done.
 
 Readers:
 
-- Every review run writes its worktree's open follow-ups
-  (`backlog.py list <worktree> --kind followup`, as printed) to
+- Every review run writes the follow-ups its branch owes, each with its
+  origin, contract, finding, and instruction (`backlog.py list <worktree>
+  --owed --full`, as printed) to
   `<run>/followups.md` (`<run>/followups-<repo>.md` per repository in feature
   mode) and adds that file to `DOCS` when it has items. The completeness lens reports open items the diff should have
   addressed and items the diff addressed without closing.

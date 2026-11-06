@@ -20,6 +20,7 @@ FIELDS = ("id", "kind", "title", "status", "scope", "repos", "area", "repo", "br
 PROVENANCE = ("repo", "branch", "date", "from")
 OWN_ARGS = {IDEA: ("why", "when"), CLEANUP: ("trigger", "removes"), FOLLOWUP: ("origin", "contract", "finding")}
 SECTIONS = (("why", "Why"), ("when", "When"))
+DETAILS = {**OWN_ARGS, FOLLOWUP: ("contract", "finding", "instruction")}
 DEFAULT_FROM = "this session"
 FILE_RE = re.compile(r"^(\d+)\.md$")
 DETACHED = "HEAD"
@@ -130,12 +131,20 @@ def my_names(reader, cfg):
     me = config.by_common_dir(cfg, records.common_dir(reader.wt))
     return {reader.own.name} | ({me.name} if me else set())
 
-def hub_ideas(reader, hub, branch): return [it for it in reader.items(hub) if it.get("kind") == IDEA and it.get("scope") == branch]
+def is_open(it): return it.get("status") in OPEN
+
+def scoped(reader, store, kind, branch):
+    if not branch: return []
+    return [it for it in reader.items(store) if it.get("kind") == kind and it.get("scope") == branch]
 
 def feature_ideas(wt, include_closed=False):
     reader = Reader(wt)
     hub = hub_store(wt, reader.own)
-    return [it for it in hub_ideas(reader, hub, branch_of(hub.wt)) if include_closed or it.get("status") in OPEN]
+    return [it for it in scoped(reader, hub, IDEA, branch_of(hub.wt)) if include_closed or is_open(it)]
+
+def owed_followups(wt, include_closed=False):
+    reader = Reader(wt)
+    return [it for it in scoped(reader, reader.own, FOLLOWUP, reader.own_branch) if include_closed or is_open(it)]
 
 def read(wt, kind=None, scope=None, include_closed=False, repo=None):
     reader = Reader(wt)
@@ -148,7 +157,7 @@ def read(wt, kind=None, scope=None, include_closed=False, repo=None):
         in_view = lambda it: include_closed or it["orphaned"] or it.get("scope") in views
         found = [it for it in reader.items(reader.own) if in_view(it)]
         if kind in (None, IDEA) and not same_store(hub, reader.own):
-            found += hub_ideas(reader, hub, branch)
+            found += scoped(reader, hub, IDEA, branch)
         if kind != FOLLOWUP:
             cfg = config.load()
             mine = my_names(reader, cfg)
@@ -158,7 +167,7 @@ def read(wt, kind=None, scope=None, include_closed=False, repo=None):
     return [it for it in found
             if (kind is None or it.get("kind") == kind)
             and (scope is None or it["orphaned"] or it.get("scope") == scope)
-            and (include_closed or it.get("status") in OPEN)]
+            and (include_closed or is_open(it))]
 
 def stores_for(wt, repo, own):
     if repo: return [locate(wt, repo)]
@@ -290,7 +299,7 @@ def fetch_line(store):
     return f"last fetch: {fetched[0]} ({fetched[1]})" if fetched else "last fetch: none (no FETCH_HEAD)"
 
 def owed_cleanups(reader, store):
-    return [it for it in reader.items(store) if it.get("kind") == CLEANUP and it.get("status") in (OWED, IN_PROGRESS)]
+    return [it for it in reader.items(store) if it.get("kind") == CLEANUP and is_open(it)]
 
 def gone_cleanups(reader):
     greppable = [it for it in owed_cleanups(reader, reader.own) if it.get("removes")]
@@ -310,12 +319,25 @@ def check(wt, text=None):
     lines = [grep_line(store, main, it) if it.get("removes") else trigger_line(it) for it in cleanups]
     return lines + [fetch_line(store)]
 
+def source(it): return it.get("origin") if it.get("kind") == FOLLOWUP else it.get("from")
+
+def field(it, arg): return prose(it, arg) if arg in dict(SECTIONS) else it.get(arg, "")
+
+def details(it):
+    values = ((arg, field(it, arg)) for arg in DETAILS.get(it.get("kind"), ()))
+    return [f"  {arg}: {value}" for arg, value in values if value]
+
 def line(it):
     tail = [f"area {it['area']}"] if it.get("area") else []
-    if it.get("from"): tail.append(f"from {it['from']}")
+    if source(it): tail.append(f"from {source(it)}")
     if it["orphaned"]: tail.append(f"from {it['scope']}, branch gone")
     if it.get("touches"): tail.append(f"owned by {it['owner']}, also touches {it['touches']}")
     return f"{it['qualified']} {it['kind']} {it['status']} {it.get('scope', '')}: {it.get('title', '')}" + (f"  [{'; '.join(tail)}]" if tail else "")
+
+def listing(a):
+    if a.owed: return owed_followups(a.wt, a.all)
+    if a.parked: return feature_ideas(a.wt, a.all)
+    return read(a.wt, a.kind, a.scope, a.all, a.repo)
 
 def main():
     ap = argparse.ArgumentParser(description="The repository's backlog, <git common dir>/clerk-dev/backlog/: ideas, cleanups, and follow-ups as one file per item, BL-n per repository, <repo>:BL-n from elsewhere.")
@@ -328,6 +350,10 @@ def main():
         for arg in args: ad.add_argument(f"--{arg}", help=f"{kind} only")
     ad.add_argument("--repo", help="file into this repository's backlog, from workspace.md or the registry")
     li = sp.add_parser("list"); li.add_argument("wt"); li.add_argument("--kind", choices=KINDS); li.add_argument("--scope"); li.add_argument("--all", action="store_true"); li.add_argument("--repo")
+    view = li.add_mutually_exclusive_group()
+    view.add_argument("--owed", action="store_true", help="the follow-ups this branch owes: scoped to its branch, without new work or orphans")
+    view.add_argument("--parked", action="store_true", help="the feature's parked ideas: scoped to the hub's branch, as status counts them")
+    li.add_argument("--full", action="store_true", help="each item's own fields under its line: why and when, trigger and removes, contract, finding, and instruction")
     for c in ("show", "path"): p = sp.add_parser(c); p.add_argument("wt"); p.add_argument("iid")
     st = sp.add_parser("set"); st.add_argument("wt"); st.add_argument("iid"); st.add_argument("status"); st.add_argument("--ref")
     ins = sp.add_parser("instruct"); ins.add_argument("wt"); ins.add_argument("iid"); ins.add_argument("instruction"); ins.add_argument("--note")
@@ -337,7 +363,8 @@ def main():
     records.guard(a.wt)
     if a.cmd == "add": print(add(a.wt, a))
     elif a.cmd == "list":
-        for it in read(a.wt, a.kind, a.scope, a.all, a.repo): print(line(it))
+        if (a.owed or a.parked) and (a.kind or a.scope or a.repo): sys.exit("--owed and --parked take no --kind, --scope, or --repo")
+        for it in listing(a): print("\n".join([line(it)] + (details(it) if a.full else [])))
     elif a.cmd == "show": sys.stdout.write(open(find(a.wt, a.iid)[1], encoding="utf-8").read())
     elif a.cmd == "path": print(find(a.wt, a.iid)[1])
     elif a.cmd == "set":

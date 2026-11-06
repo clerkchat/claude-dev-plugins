@@ -93,15 +93,6 @@ def short(text, n=90):
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
-def branch_followups(wt, include_closed=False):
-    branch = bl.branch_of(wt)
-    if not branch: return []
-    try: found = bl.read(wt, bl.FOLLOWUP, branch, include_closed)
-    except SystemExit: return []
-    return [it for it in found if it.get("scope") == branch]
-
-def still_open(its): return [it for it in its if it.get("status") in bl.OPEN]
-
 def origin_repo(it): return re.split(r"[ @]", it.get("origin", ""))[0]
 
 def workspace_rows(wt):
@@ -132,7 +123,7 @@ def other_repos(wt, rows, d):
     follow-ups name."""
     rc = load_script("records.py"); me = repo_name(wt, rows)
     named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
-    named |= {origin_repo(i) for i in branch_followups(wt)}
+    named |= {origin_repo(i) for i in bl.owed_followups(wt)}
     return sorted(n for n in named if n and n != me)
 
 def plan_gaps(d):
@@ -305,7 +296,7 @@ def takeable(its):
     return [it for it in its if it.get("kind") == bl.FOLLOWUP and (it.get("scope") == bl.NEW or it["orphaned"])]
 
 def backlog_lines(wt, reader, own):
-    its = still_open(own)
+    its = list(filter(bl.is_open, own))
     if not its: return [], []
     lines = [f"**Backlog:** {len(its)} open ({kind_counts(its)})."]
     lines += [f"- oldest: {item_line(it, 'since ' + (it.get('date') or 'an unknown date'))}" for it in oldest(its)]
@@ -797,7 +788,7 @@ def blockers_view(wt, out, logs, run, have_run):
         if not c["open"]: continue
         sfq = open_questions(d, c)[1]
         if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
-    open_items = branch_followups(wt)
+    open_items = bl.owed_followups(wt)
     fix = []
     if have_run:
         status, instr, numbers = sf.state(run)
@@ -907,8 +898,8 @@ def main():
         out.append(f"**Working tree:** {len(staged)} files staged, {len(unstaged)} with unstaged changes.")
 
     # Follow-ups here
-    items = branch_followups(wt, include_closed=True)
-    open_items = still_open(items)
+    items = bl.owed_followups(wt, include_closed=True)
+    open_items = list(filter(bl.is_open, items))
     reader = bl.Reader(wt)
     own = reader.items(reader.own)
     out.append("")
@@ -923,7 +914,7 @@ def main():
     me = repo_name(wt, rows)
     rel = []
     for name, other in related_worktrees(wt, rows):
-        its = branch_followups(other)
+        its = bl.owed_followups(other)
         from_me = [i for i in its if origin_repo(i) == me]
         rel.append(f"{name} {len(its)} open" + (f" ({len(from_me)} from {me})" if its else ""))
     if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")

@@ -469,8 +469,8 @@ related worktree yourself, without a model:
    sets them up.
 2. Search each: `git -C <worktree> grep -l -F -e <term> -e <term> ...` with the
    terms after `search:`. Print only the count of files per worktree.
-3. A worktree with hits and no follow-up yet for this change (its repository's
-   `backlog.py list <worktree> --kind followup`) gets one, through `backlog.py
+3. A worktree with hits and no follow-up yet for this change (`backlog.py list
+   <that worktree> --owed --full`) gets one, through `backlog.py
    add --kind followup` in that repository's backlog as Follow-ups in
    `skills/review/tracking.md` describes, with the builder's contract sentence
    in the `changed:` form as `--contract`, this commit as `--origin "<this

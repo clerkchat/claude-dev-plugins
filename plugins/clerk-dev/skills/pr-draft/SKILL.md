@@ -88,8 +88,8 @@ For each repository, read:
   --active`, then the briefs, decisions, and designs that bear on this
   repository), the open items in briefs (`records.py digest <worktree>`), and
   the open items in `.clerk-dev/deferred.md`, and the worktree's open backlog
-  follow-ups (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py list
-  <worktree> --kind followup`);
+  follow-ups this branch owes (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py
+  list <worktree> --owed`);
   these become Left out on purpose items. Keep what a reviewer would weigh
   before merging: wrong behavior and undecided design. Gaps (what the change
   does not cover yet) stay out of the draft; they go in the report, for the

@@ -370,7 +370,7 @@ def index(d, wt):
         if not live: rows += ["No active records.", ""]
     parked = backlog_mod().feature_ideas(wt)
     if parked:
-        rows += ["## Ideas", "", f"Parked, {len(parked)}, in the backlog; `backlog.py list <worktree> --kind idea` shows them with why and when.", ""]
+        rows += ["## Ideas", "", f"Parked, {len(parked)}, in the backlog; `backlog.py list <worktree> --parked --full` shows them with why and when.", ""]
         rows += [f"- **{i['qualified']}**{' (' + i['area'] + ')' if i.get('area') else ''}: {i.get('title', '')}" for i in parked] + [""]
     cs = checks(d)
     if cs:

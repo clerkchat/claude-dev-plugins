@@ -775,8 +775,8 @@ it with the shipped script. Give it the target and the script path and have it:
    `tracking.md`) and the review does not read them. Select only documents that
    are new or modified on the branch, or whose text mentions a changed path or
    the branch name; order by modification time; keep at most eight and report
-   how many were dropped. Also write this worktree's open follow-ups,
-   `backlog.py list <worktree> --kind followup` as printed, to
+   how many were dropped. Also write the follow-ups this branch owes,
+   `backlog.py list <worktree> --owed --full` as printed, to
    `<run>/followups.md`, and include that file when it has items (see
    `tracking.md`); it does not count against the eight. With `--pass`, the only document is the pass's piece record: skip the
    work-tracking selection above (the PR is still collected). Otherwise include the feature's
@@ -1574,8 +1574,8 @@ skills, and repo context, and writes its run and report under that worktree's
    `CONTEXT`, `GUIDANCE` blocks (`GUIDANCE` is that repository's guidance
    file, `records.py guidance <its worktree> --context <its CONTEXT> --out
    <run>/guidance-<repo>.md`, whose branch scope says what that side meant to change), plus `MODE`,
-   `PR`, and `DOCS`; `DOCS` includes each repository's open follow-ups,
-   `backlog.py list <its worktree> --kind followup` as printed, written to
+   `PR`, and `DOCS`; `DOCS` includes the follow-ups each repository's branch
+   owes, `backlog.py list <its worktree> --owed --full` as printed, written to
    `<run>/followups-<repo>.md` beside its guidance file, when it has items
    (see `tracking.md`). Merge, verify,
    and number its findings in this session's run directory as usual.
@@ -1632,8 +1632,8 @@ cross-repository check is starting and roughly how long it takes.
 instance list), `progress.md`, `raw/<lens>[-<slice>].md`, `so-far.md` (interim,
 unverified), `merged.md` (and `merged-new.md` in incremental runs),
 `verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
-`followups.md` (the worktree's open backlog follow-ups, as `backlog.py list`
-printed them; `followups-<repo>.md` per repository in feature runs),
+`followups.md` (the follow-ups the branch owes, as `backlog.py list --owed
+--full` printed them; `followups-<repo>.md` per repository in feature runs),
 `reconcile/`, `pr/` (with `threads.tsv`, the posted findings' threads as step
 7b last saw them), `titles.tsv`, `overrides/`, `summary.md`,
 `not-reviewed.md`, `cleanups.md` (the rollout lens's `Cleanups owed` lines, when

@@ -218,7 +218,8 @@ the conversation drops without deciding, at most once per pause, listing them
 in a line each.
 
 "What ideas did we park", "anything parked for the harness": `backlog.py list
-<worktree> --kind idea`, each line naming its area. When the work reaches an
+<worktree> --parked --full`, the feature's open ideas as status counts them,
+each line naming its area, with its why and when under it. When the work reaches an
 idea's trigger, mention it in a line. When an idea is taken up, write the
 record it becomes and `backlog.py set <worktree> BL-7 adopted --ref <record
 id>`; when it is ruled out, `backlog.py set <worktree> BL-7 dropped --ref
