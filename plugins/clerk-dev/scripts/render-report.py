@@ -78,6 +78,8 @@ STATUS = {}
 INSTR = {}
 POSTED = {}
 THREADS = {}
+CLOSABLE = {}
+KEPT_OPEN = {}
 PR_LINKS = {}
 RECON = {"label": "", "matches": {}, "prior": {}, "since": {}, "unmatched": []}
 RUN = "."
@@ -319,7 +321,7 @@ def recommendation(e):
 
 def instruction_tail(e):
     out = ["##### Instruction", ""] + instruction_block(INSTR.get(e["id"]), choices_for(e["id"]))
-    return out + (posted_block(e["id"]) if choice_of(e["id"]) == "post" else [])
+    return out + (posted_block(e["id"]) if choice_of(e["id"]) == "post" or has_comment(POSTED.get(e["id"], {})) else [])
 
 def _card_tail(e):
     body = read_text(os.path.join(RUN, "resolution", f"{e['id']}.md"))
@@ -496,12 +498,14 @@ def read_card_blocks(run):
 def status_box(head):
     return next((line for line in head if CHECKBOX_RE.match(line)), None)
 
+COMMIT_TOKEN = re.compile(r"\b[0-9a-f]{7,40}\b")
+
 def log_commits(run, repo, mid, stt):
     """Append every commit a status names to commits.tsv (merged id, commit,
     status, date). status.tsv keeps one ref per finding, so without this the
     first commit of a fix that took two is forgotten, and later tools count
     it as unreviewed work."""
-    toks = re.findall(r"\b[0-9a-f]{7,40}\b", stt.get("ref", ""))
+    toks = COMMIT_TOKEN.findall(stt.get("ref", ""))
     if not toks: return
     r = subprocess.run(["git", "-C", repo, "cat-file", "--batch-check=%(objectname) %(objecttype)"],
                        input="".join(t + "^{commit}\n" for t in toks), capture_output=True, text=True)
@@ -780,6 +784,29 @@ def read_threads(run):
 def write_threads(run, rows):
     write_keyed(threads_path(run), THREAD_FIELDS, rows)
 
+KEPT_OPEN_FIELDS = ("reason", "date")
+
+def kept_open_path(run):
+    return os.path.join(run, "posted", "keep.tsv")
+
+def read_kept_open(run):
+    return read_keyed(kept_open_path(run), KEPT_OPEN_FIELDS)
+
+def write_kept_open(run, rows):
+    write_keyed(kept_open_path(run), KEPT_OPEN_FIELDS, rows)
+
+Closable = namedtuple("Closable", "posted status thread")
+
+def closable(run):
+    posted, status, threads, kept = read_posted(run), read_status(run), read_threads(run), read_kept_open(run)
+    credits = credit_ids(read_findings(run, mf))
+    return {mid: Closable(row, status[mid], threads[mid]) for mid, row in sorted(posted.items())
+            if has_thread(row) and mid not in credits and mid not in kept
+            and status.get(mid, {}).get("status") == "fixed" and threads.get(mid, {}).get("state") == "open"}
+
+def still_open(st):
+    return "marked fixed" + (f" in {st['ref']}" if st.get("ref") else "") + "; its thread on GitHub is still open"
+
 def read_findings(run, mf):
     overrides = read_overrides(run, mf)
     merged = read_merged(os.path.join(run, "merged.md"), mf)
@@ -811,7 +838,7 @@ def stale_text(row, note):
     return bool(row) and row["note"] != note and row["state"] != "edited"
 
 def is_stale(mid):
-    return stale_text(POSTED.get(mid), INSTR.get(mid, {}).get("note", ""))
+    return choice_of(mid) == "post" and stale_text(POSTED.get(mid), INSTR.get(mid, {}).get("note", ""))
 
 def check_posted_notes():
     for mid in sorted(POSTED):
@@ -841,7 +868,16 @@ def posted_block(mid):
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
     else: body = [posted_fence(text), text, posted_fence(text)]
-    return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {})) + posted_thread_lines(THREADS.get(mid))
+    return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {})) + posted_thread_lines(THREADS.get(mid)) + close_lines(mid)
+
+def close_lines(mid):
+    if mid in CLOSABLE:
+        words = still_open(CLOSABLE[mid].status)
+        return [words[:1].upper() + words[1:] + ".", ""]
+    if mid in KEPT_OPEN and THREADS.get(mid, {}).get("state") == "open":
+        reason = KEPT_OPEN[mid]["reason"].strip()
+        return ["Thread kept open" + (f": {code_spans(reason)}" if reason else "") + ".", ""]
+    return []
 
 def thread_states(row):
     return [w for w in (row["state"], "outdated" if row["outdated"] == "1" else "") if w and w != "open"]
@@ -1364,6 +1400,12 @@ def write_numbers(run, numbered, prior_nums):
     kept = [(n, mid) for mid, n in prior_nums.items() if mid not in shown]
     open(os.path.join(run, "numbers.tsv"), "w").write("number\tmerged_id\tsection\n" + "".join(f"{e['_n']}\t{e['id']}\t{e['_sec']}\n" for e in numbered) + "".join(f"{n}\t{mid}\thidden\n" for n, mid in sorted(kept)))
 
+def report_closable(run):
+    global CLOSABLE, KEPT_OPEN
+    CLOSABLE, KEPT_OPEN = closable(run), read_kept_open(run)
+    for mid, c in CLOSABLE.items():
+        print(f"posted finding {IDNUM.get(mid, f'#{mid}')}: {still_open(c.status)}", file=sys.stderr)
+
 def main():
     a = parse_args()
     today = a.date or ""
@@ -1388,6 +1430,7 @@ def main():
     TITLE_BY_ID = {e["id"]: title_of(e, TITLES) for e in merged}
     check_posted_notes()
     write_triage(a.run)
+    report_closable(a.run)
     text = render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor, overlapping)
     outp = write_report(a, text, numbered)
     write_numbers(a.run, numbered, prior_nums)

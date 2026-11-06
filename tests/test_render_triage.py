@@ -467,14 +467,16 @@ class PostedLinkTest(PostedCommentCase):
         self.assertEqual((self.posted(7)["state"], self.posted(7)["comment_id"]), ("edited", "5"))
 
 
-class PostedThreadTest(PostedCommentCase):
+class PostedThreadCase(PostedCommentCase):
     def show_thread(self, **fields):
         row = {"comment_id": "5", "thread_id": "T5", "state": "open", "outdated": "0", "can_resolve": "1",
                "line": "12", "replies": "", "date": "2026-11-06", **fields}
         render.write_threads(self.run_dir, {7: row})
-        self.render()
+        self.out = self.render()
         return self.after_the_link()
 
+
+class PostedThreadTest(PostedThreadCase):
     def test_adds_nothing_for_an_open_thread_without_replies(self):
         self.assertNotRegex(self.show_thread(), "Replies:|State:")
 
@@ -498,6 +500,58 @@ class PostedThreadTest(PostedCommentCase):
         self.edit_report("Say it plainly.", "Say it gently.")
         self.render()
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
+
+
+class WhenAPostedFindingIsMarkedFixedTest(PostedThreadCase):
+    STILL_OPEN = "marked fixed in abc1234; its thread on GitHub is still open"
+
+    def setUp(self):
+        super().setUp()
+        self.render("--set", "1=fixed:abc1234")
+
+    def test_says_so_on_every_render(self):
+        self.show_thread()
+        self.assertIn(f"posted finding 1: {self.STILL_OPEN}", self.out)
+
+    def test_says_so_in_the_posted_block(self):
+        self.assertIn("\nMarked fixed in abc1234; its thread on GitHub is still open.\n", self.show_thread())
+
+    def test_stops_once_the_thread_is_resolved(self):
+        self.show_thread(state="resolved")
+        self.assertNotIn(self.STILL_OPEN, self.out + self.report())
+
+    def test_stops_once_the_thread_is_missing(self):
+        self.show_thread(state="missing")
+        self.assertNotIn(self.STILL_OPEN, self.out + self.report())
+
+
+class WhenAPostedThreadIsKeptOpenTest(PostedThreadCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--set", "1=fixed:abc1234")
+        render.write_kept_open(self.run_dir, {7: {"reason": "the author wants a follow-up", "date": ""}})
+
+    def test_says_it_is_kept_open_with_the_reason(self):
+        self.assertIn("\nThread kept open: the author wants a follow-up.\n", self.show_thread())
+
+    def test_no_longer_says_it_is_still_open(self):
+        self.show_thread()
+        self.assertNotIn("still open", self.out + self.report())
+
+
+class WhenAPostedFindingIsNoLongerMarkedPostTest(PostedThreadCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--instruct", "1=none")
+
+    def test_still_shows_the_posted_block(self):
+        self.assertIn(f"[comment]({self.URL})", self.posted_section(1))
+
+    def test_shows_the_thread(self):
+        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies="@bob: Fair."))
+
+    def test_does_not_ask_for_a_redraft(self):
+        self.assertNotIn("to be redrafted", self.posted_section(1))
 
 
 class CarryPostedTest(PostCase):
