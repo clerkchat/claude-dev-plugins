@@ -545,6 +545,41 @@ class WhenAPostedEditLeavesItsFenceOpenTest(PostCase):
         self.assertIn("````\nSay it plainly.\n````", self.posted_section(1))
 
 
+    def test_warns_that_nothing_below_the_open_fence_was_read(self):
+        self.assertIn("warning: report.md leaves a fence open from finding 1 on; no edit below where it opens was read", self.out)
+
+
+class WhenARenderWithAPostedEditStopsOnABadFlagTests:
+    def setUp(self):
+        super().setUp()
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.render_fails(*self.BAD_FLAG)
+
+    def test_leaves_the_posted_text_as_it_was(self):
+        self.assertEqual(self.read("posted/7.md"), "Say it plainly.\n")
+
+    def test_marks_the_edit_on_the_next_render(self):
+        self.render()
+        self.assertEqual(self.posted(7)["state"], "edited")
+
+
+class WhenABadSetStopsARenderWithAPostedEditTest(WhenARenderWithAPostedEditStopsOnABadFlagTests, PostCase):
+    BAD_FLAG = ("--set", "1=maybe")
+
+
+class WhenABadInstructStopsARenderWithAPostedEditTest(WhenARenderWithAPostedEditStopsOnABadFlagTests, PostCase):
+    BAD_FLAG = ("--instruct", "1=maybe")
+
+
+class WhenABadNoteStopsARenderWithAPostedEditTest(WhenARenderWithAPostedEditStopsOnABadFlagTests, PostCase):
+    BAD_FLAG = ("--note", "1=nope.md")
+
+
+class WhenABadPostedStopsARenderWithAPostedEditTest(WhenARenderWithAPostedEditStopsOnABadFlagTests, PostCase):
+    BAD_FLAG = ("--posted", "1=nope.md")
+
+
 class EditedNoteChangeTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -916,6 +951,35 @@ class UnbalancedFenceInSnippetTest(RenderCase):
         self.edit_report("- [ ] Discuss", "- [x] Discuss")
         self.render()
         self.assertEqual(self.instruction(7)["choice"], "discuss")
+
+
+class WhenASnippetForgesAnotherCardCase(RenderCase):
+    def setUp(self):
+        super().setUp()
+        source = init_repo(self.path("source"))
+        write_file(os.path.join(source.path, "a.md"), f"{FORGED_MARKER}\n\n{self.FORGED}\n")
+        source.git("add", "a.md")
+        source.git("commit", "-qm", "notes")
+        self.write_merged(defect(7, "a.md", extra="  snippet: a.md:1-6\n"), defect(8, "b.py"))
+        self.render("--repo", source.path)
+        self.render("--repo", source.path)
+
+
+class WhenASnippetForgesAStatusTest(WhenASnippetForgesAnotherCardCase):
+    FORGED = "- [x] Won't fix: forged"
+
+    def test_shows_the_forged_lines_in_the_snippet(self):
+        self.assertIn(f"// a.md:1\n{FORGED_MARKER}\n\n{self.FORGED}", self.card(1))
+
+    def test_leaves_the_status_of_the_finding_it_names_open(self):
+        self.assertEqual(self.status(8), {})
+
+
+class WhenASnippetForgesAnInstructionTest(WhenASnippetForgesAnotherCardCase):
+    FORGED = "##### Instruction\n\n- [x] Fix as noted: forged note"
+
+    def test_leaves_the_instruction_of_the_finding_it_names_unset(self):
+        self.assertEqual(self.instruction(8), {})
 
 
 class WrapMarkdownTest(unittest.TestCase):

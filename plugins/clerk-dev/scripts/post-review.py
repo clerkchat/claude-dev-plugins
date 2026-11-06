@@ -255,6 +255,18 @@ def submitted_review(it):
 def recorded_comments(rows):
     return {row["comment_id"] for row in rows.values() if row.get("comment_id")}
 
+def own_drafts(ctx, rows):
+    ours = recorded_comments(rows)
+    return [c for c in ctx["comments"] if c["id"] in pending_comments(ctx) and str(c["id"]) not in ours]
+
+def draft_line(comment):
+    line = comment.get("line") or comment.get("original_line")
+    first = (comment.get("body") or "").strip().partition("\n")[0]
+    return f"  {comment.get('path', '')}" + (f":{line}" if line else "") + f": {first}"
+
+def own_draft_lines(drafts):
+    return ["your own drafts in this pending review; submitting publishes them too:", *map(draft_line, drafts)] if drafts else []
+
 def holds(comment, a, text):
     at = comment.get("subject_type") == "file" if a["kind"] == "file" else a["end_line"] in (comment.get("line"), comment.get("original_line"))
     return comment.get("path") == a["path"] and at and comment.get("body") == text
@@ -634,6 +646,7 @@ def preview(run, ctx, items, reviewed):
     if not rf.same_commit(ctx["head"], reviewed):
         out.append(f"head moved: the pull request head is {ctx['head'][:9]}, the review judged {reviewed[:9]}; comments anchor on the reviewed commit")
     out.append(pending_line(ctx, reviewed, "--post"))
+    out += own_draft_lines(own_drafts(ctx, rows))
     print("\n".join(out))
 
 def posted_where(it, c):
@@ -729,6 +742,11 @@ def confirm(a, ctx, what, action):
                  f"run this yourself:\n! {own_command(a, action)}")
     if typed != str(ctx["pr"]): sys.exit(f"nothing sent; you typed {typed!r}, not the pull request number {ctx['pr']}")
 
+def submit_confirmation(verdict, drafts):
+    if not (drafts or verdict in CONFIRMED_VERDICTS): return None
+    also = f", publishing {len(drafts)} draft" + ("" if len(drafts) == 1 else "s") + " of your own with it" if drafts else ""
+    return CONFIRMED_VERDICTS.get(verdict, "submit as comment") + also
+
 def submit(a, ctx, verdict):
     p = ctx["pending"]
     if not p: sys.exit("no pending review on the pull request; run --post first")
@@ -736,9 +754,12 @@ def submit(a, ctx, verdict):
     if str(p["id"]) not in rf.review_ids(rows):
         sys.exit(f"nothing sent; pending review {p['id']} holds nothing this run posted; run --post first, or submit it on GitHub")
     body = checked_body(a.run, ctx, rows, p["id"])
+    drafts = own_drafts(ctx, rows)
+    if drafts: print("\n".join(own_draft_lines(drafts)), file=sys.stderr)
     calls = [{"method": "POST", "path": f"{pulls_path(ctx)}/reviews/{p['id']}/events", "fields": {"event": VERDICTS[verdict], "body": body}}]
     if a.dry_run: write_payload(a.run, calls); return
-    if verdict in CONFIRMED_VERDICTS: confirm(a, ctx, CONFIRMED_VERDICTS[verdict], ["--submit", verdict])
+    what = submit_confirmation(verdict, drafts)
+    if what: confirm(a, ctx, what, ["--submit", verdict])
     execute(calls, a.repo, ctx)
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
@@ -990,7 +1011,8 @@ def main(argv=None):
     action = ap.add_mutually_exclusive_group()
     action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
     action.add_argument("--submit", choices=list(VERDICTS),
-                        help="submit the pending review with this verdict; approve and request-changes ask you to type the pull request number at a terminal")
+                        help="submit the pending review with this verdict; approve, request-changes, and comment on a pending review "
+                             "that holds drafts of your own ask you to type the pull request number at a terminal")
     action.add_argument("--close", nargs="?", const="", metavar="N[,M]",
                         help="list the posted findings marked fixed whose threads are still open; "
                              "with numbers, reply and resolve those threads once you type the pull request number at a terminal")

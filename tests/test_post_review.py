@@ -934,6 +934,71 @@ class WhenSubmittingAsCommentTest(ConfirmedSubmitCase):
         self.assertEqual(self.writes(), 1)
 
 
+OWN_DRAFT = review_comment(20, "src/z.py", line=4, body="Rough idea.\nMore later.")
+OWN_DRAFTS_LINES = "your own drafts in this pending review; submitting publishes them too:\n  src/z.py:4: Rough idea."
+
+
+class YourOwnDraftsInThePendingReview:
+    def setUp(self):
+        super().setUp()
+        self.ctx["comments"] = []
+        self.pend()
+        self.add_to_pending(OWN_DRAFT)
+
+    def add_to_pending(self, comment):
+        self.ctx["comments"].append(comment)
+        self.ctx["pending"]["comments"][comment["id"]] = comment["node_id"]
+
+
+class WhenThePendingReviewHoldsYourOwnDraftsTest(YourOwnDraftsInThePendingReview, PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+
+    def test_lists_them_in_the_preview(self):
+        self.assertIn(OWN_DRAFTS_LINES, self.main())
+
+    def test_leaves_out_a_comment_this_run_posted(self):
+        self.add_to_pending(review_comment(1, "src/a.py", line=11))
+        self.posted_row(1)
+        self.assertNotIn("src/a.py:11: Finding 1 text.", self.main())
+
+    def test_leaves_out_a_comment_it_records_as_already_on_github(self):
+        self.add_to_pending(review_comment(1, "src/a.py", line=13, subject_type="line", pull_request_review_id=55))
+        self.assertNotIn("src/a.py:13: Finding 1 text.", self.main())
+
+
+class WhenSubmittingWithYourOwnDraftsCase(YourOwnDraftsInThePendingReview, ConfirmedSubmitCase):
+    VERDICT = "comment"
+    PROMPT = "Type the pull request number (7) to submit as comment, publishing 1 draft of your own with it: "
+
+    def setUp(self):
+        super().setUp()
+        self.add_to_pending(review_comment(1, "src/a.py", line=11))
+
+
+class WhenSubmittingAsCommentWithYourOwnDraftsTest(TerminalConfirmationTests, WhenSubmittingWithYourOwnDraftsCase):
+    def test_lists_them_on_a_dry_run(self):
+        self.main(*self.args, "--dry-run")
+        self.assertIn(OWN_DRAFTS_LINES, self.err)
+
+    def test_leaves_out_the_comments_this_run_posted(self):
+        self.main(*self.args, "--dry-run")
+        self.assertNotIn("src/a.py", self.err)
+
+
+class WhenApprovingWithYourOwnDraftsTest(WhenSubmittingWithYourOwnDraftsCase):
+    VERDICT = "approve"
+
+    def test_names_them_in_the_confirmation(self):
+        self.main(*self.args)
+        self.terminal.assert_called_once_with("Type the pull request number (7) to approve, publishing 1 draft of your own with it: ")
+
+
+class WhenThereIsNoTerminalOnCommentWithYourOwnDraftsTest(WhenThereIsNoTerminalTests, WhenSubmittingWithYourOwnDraftsCase):
+    pass
+
+
 class ConfirmedUpdatePublishedCase(PublishedCase):
     def setUp(self):
         super().setUp()

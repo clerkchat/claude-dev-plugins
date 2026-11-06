@@ -294,7 +294,9 @@ submitted is public at once, so posting leaves it alone and the preview lists
 it under its own heading; sending it is a command you run yourself with `!`,
 which asks you to type the pull request number at the terminal. You choose the
 verdict: Comment is submitted from the session, but Approve and Request changes
-are commands you run the same way.
+are commands you run the same way. So is Comment when your pending review also
+holds comments you drafted on GitHub: submitting publishes them too, so the
+preview and the submit step list them first.
 
 A finding carried into a re-review after the author pushed is posted where its
 lines are now; when the commits since changed those lines, it goes on the file

@@ -402,17 +402,17 @@ CHECKBOX_RE = re.compile(r"^- \[( |x|X)\] (.*)$")
 
 def card_segments(lines):
     segments = []
-    for line in lines:
-        m = FINDING_MARKER.match(line)
+    for line, kind in fenced_lines(lines):
+        m = FINDING_MARKER.match(line) if kind == PROSE else None
         if m: segments.append((int(m.group(1)), []))
-        elif segments: segments[-1][1].append(line)
+        elif segments: segments[-1][1].append((line, kind))
     return segments
 
 def card_blocks(lines):
     cards = {}
     for mid, body in card_segments(lines):
         block, live = cards.setdefault(mid, {}).setdefault("", []), True
-        for line, kind in fenced_lines(body):
+        for line, kind in body:
             if kind == PROSE and (line.startswith("#") or line == "---"):
                 if line.startswith(("#### ", "### ", "## ", "# ")): live = False
                 heading = line.strip()[len("##### "):] if line.startswith("##### ") else None
@@ -421,10 +421,19 @@ def card_blocks(lines):
             if block is not None: block.append(line)
     return cards
 
+def warn_open_fence(run, lines, cards):
+    if not open_fence(lines): return
+    last = list(cards)[-1] if cards else None
+    where = f"from finding {read_numbers(run).get(last, f'#{last}')} on" if cards else "above the findings"
+    print(f"warning: report.md leaves a fence open {where}; no edit below where it opens was read", file=sys.stderr)
+
 def read_card_blocks(run):
     p = os.path.join(run, "report.md")
     if not os.path.exists(p): return {}
-    with open(p, encoding="utf-8") as fh: return card_blocks(fh.read().split("\n"))
+    with open(p, encoding="utf-8") as fh: lines = fh.read().split("\n")
+    cards = card_blocks(lines)
+    warn_open_fence(run, lines, cards)
+    return cards
 
 def status_box(head):
     return next((line for line in head if CHECKBOX_RE.match(line)), None)
@@ -459,13 +468,13 @@ def read_snapshot(run, name):
             if len(parts) == 2 and parts[0].isdigit(): snap[int(parts[0])] = parts[1]
     return snap
 
-def import_hand_edits(run, st, today):
+def import_hand_edits(run, cards, st, today):
     """Read checkbox lines from the existing report.md. A ticked box the
     status file does not know about becomes fixed, won't fix, or deferred by
     its wording, with a commit hash if the line has one; an unticked box over
     a done status reopens it."""
     snap = read_snapshot(run, "rendered-status.tsv")
-    for mid, blocks in read_card_blocks(run).items():
+    for mid, blocks in cards.items():
         line = status_box(blocks[""])
         if line is None or snap.get(mid) == line or mid in CREDITS: continue
         m = CHECKBOX_RE.match(line)
@@ -691,8 +700,8 @@ def warn_unclosed_posted(run, cards, texts):
             print(f"warning: finding {nums.get(mid, f'#{mid}')}: its Posted text opens a fence it never closes; the edit was not read, "
                   "and the report shows the stored text again", file=sys.stderr)
 
-def import_posted_edits(run, today):
-    snap, cards = read_snapshot(run, "rendered-posted.tsv"), read_card_blocks(run)
+def import_posted_edits(run, cards, today):
+    snap = read_snapshot(run, "rendered-posted.tsv")
     texts = posted_blocks(cards)
     warn_unclosed_posted(run, cards, texts)
     for mid, text in texts.items():
@@ -776,14 +785,14 @@ def ticked_instruction(lines, choices=CHOICES):
 def choice_labels(choices):
     return " and ".join(c.label for c in choices)
 
-def import_instruction_edits(run, ins, today):
+def import_instruction_edits(run, cards, ins, today):
     """Read Instruction blocks from the existing report.md. A block counts as a
     hand edit only when it differs from what the renderer last wrote
     (rendered-instructions.tsv), so a stale report never undoes a change made
     through --instruct. Returns the changed ids."""
     snap = read_snapshot(run, "rendered-instructions.tsv")
     changed = set()
-    for mid, blocks in read_card_blocks(run).items():
+    for mid, blocks in cards.items():
         lines, text = instruction_fields(blocks.get("Instruction", []))
         if not lines or snap.get(mid) == snapshot_key(lines, text): continue
         ticked, note, option, refused = ticked_instruction(lines, choices_for(mid))
@@ -854,6 +863,12 @@ def posted_draft(spec, nums):
     if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
     return mid, text
 
+Flags = namedtuple("Flags", "statuses instructions notes drafts")
+
+def checked_flags(a, nums):
+    return Flags([status_spec(spec, nums) for spec in a.set], [instruct_spec(spec, nums) for spec in a.instruct],
+                 [file_spec("--note", spec, nums) for spec in a.note], [posted_draft(spec, nums) for spec in a.posted])
+
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("--target", required=True); ap.add_argument("--branch", default=""); ap.add_argument("--base", default=""); ap.add_argument("--head", default="HEAD")
@@ -872,16 +887,21 @@ def parse_args():
                     help="set a status by finding number (or #<merged id>): fixed, in-progress, wont-fix, deferred, open")
     return ap.parse_args()
 
-def load_triage(run, entries, today):
-    global CREDITS, STATUS, INSTR, POSTED, FOUND, REVIEWED
+def load_credits(entries):
+    global CREDITS
     CREDITS = credit_ids(entries)
+
+def load_triage(run, entries, today):
+    global STATUS, INSTR, POSTED, FOUND, REVIEWED
+    load_credits(entries)
     FOUND, REVIEWED = {e["id"]: e for e in entries}, reviewed_head(run)
-    STATUS = {mid: st for mid, st in import_hand_edits(run, read_status(run), today).items() if mid not in CREDITS}
+    cards = read_card_blocks(run)
+    STATUS = {mid: st for mid, st in import_hand_edits(run, cards, read_status(run), today).items() if mid not in CREDITS}
     INSTR = read_instructions(run)
-    changed = import_instruction_edits(run, INSTR, today)
+    changed = import_instruction_edits(run, cards, INSTR, today)
     mirror_decisions(changed, today)
     POSTED = read_posted(run)
-    import_posted_edits(run, today)
+    import_posted_edits(run, cards, today)
     return changed
 
 def write_triage(run):
@@ -889,24 +909,30 @@ def write_triage(run):
     write_status(run, STATUS)
     if POSTED: write_posted(run, POSTED)
 
-def apply_statuses(run, repo, nums, specs, today):
-    for spec in specs:
-        m = re.match(r"^(#?\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
-        if not m or m.group(2) not in STATUS_WORDS:
-            sys.exit(f"bad --set {spec!r}; use N=fixed:<sha>, N=wont-fix:<reason>, N=deferred:<ref>, N=in-progress:<files>, N=open")
-        mid = finding_id(m.group(1), nums)
-        if mid in CREDITS: sys.exit(f"bad --set {spec!r}; finding {m.group(1)} is a credit, which has no status")
-        STATUS[mid] = {"status": m.group(2), "ref": (m.group(3) or "").strip(), "date": today}
+def status_spec(spec, nums):
+    m = re.match(r"^(#?\d+)=([a-z-]+)(?::(.*))?$", spec.strip())
+    if not m or m.group(2) not in STATUS_WORDS:
+        sys.exit(f"bad --set {spec!r}; use N=fixed:<sha>, N=wont-fix:<reason>, N=deferred:<ref>, N=in-progress:<files>, N=open")
+    mid = finding_id(m.group(1), nums)
+    if mid in CREDITS: sys.exit(f"bad --set {spec!r}; finding {m.group(1)} is a credit, which has no status")
+    return mid, m.group(2), (m.group(3) or "").strip()
+
+def apply_statuses(run, repo, statuses, today):
+    for mid, status, ref in statuses:
+        STATUS[mid] = {"status": status, "ref": ref, "date": today}
         log_commits(run, repo, mid, STATUS[mid])
 
-def set_instruction(spec, nums, today):
+def instruct_spec(spec, nums):
     m = INSTRUCT_RE.match(spec.strip())
     if not m or (m.group(3) and not takes_option(m.group(2))): sys.exit(f"bad --instruct {spec!r}; use {instruct_usage()}")
     mid = finding_id(m.group(1), nums)
     if m.group(2) != "none" and not any(c.key == m.group(2) for c in choices_for(mid)):
         sys.exit(f"bad --instruct {spec!r}; finding {m.group(1)} is a credit: use {instruct_usage(CREDIT_CHOICES)}")
-    INSTR[mid] = {**INSTR.get(mid, {}), "choice": "" if m.group(2) == "none" else m.group(2), "note": (m.group(4) or "").strip(), "date": today, "also": "",
-                  "option": split_option("x" + (m.group(3) or ""))[1]}
+    return mid, "" if m.group(2) == "none" else m.group(2), (m.group(4) or "").strip(), split_option("x" + (m.group(3) or ""))[1]
+
+def set_instruction(instruction, today):
+    mid, choice, note, option = instruction
+    INSTR[mid] = {**INSTR.get(mid, {}), "choice": choice, "note": note, "date": today, "also": "", "option": option}
     return mid
 
 def mirror_decision(mid, today):
@@ -916,19 +942,18 @@ def mirror_decision(mid, today):
     elif ch == "defer" and cur in ("open", "in-progress"): STATUS[mid] = {"status": "deferred", "ref": note, "date": today}
     elif ch in ("fix", "noted", "discuss", "") and cur in ("wont-fix", "deferred"): STATUS[mid] = {"status": "open", "ref": "", "date": today}
 
-def add_note(spec, nums):
-    mid, add = file_spec("--note", spec, nums)
+def add_note(mid, add):
     cur = INSTR.setdefault(mid, {"choice": "", "note": "", "date": "", "also": ""})
     cur["text"] = (cur.get("text", "").rstrip() + "\n\n" + add.strip()).strip()
 
 def mirror_decisions(mids, today):
     for mid in mids - CREDITS: mirror_decision(mid, today)
 
-def apply_instructions(nums, instruct_specs, note_specs, today):
+def apply_instructions(instructions, notes, today):
     # Ignore and Defer are decisions about the outcome: mirror them into status
     # when the finding is still open; undoing them reopens it.
-    mirror_decisions({set_instruction(spec, nums, today) for spec in instruct_specs}, today)
-    for spec in note_specs: add_note(spec, nums)
+    mirror_decisions({set_instruction(i, today) for i in instructions}, today)
+    for mid, add in notes: add_note(mid, add)
 
 def warn_unlabeled_options(merged):
     for e in merged:
@@ -1185,11 +1210,12 @@ def main():
     global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID
     NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run), a.run
     nums = read_numbers(a.run)
-    drafts = [posted_draft(spec, nums) for spec in a.posted]
+    load_credits(merged)
+    flags = checked_flags(a, nums)
     load_triage(a.run, merged, today)
-    apply_statuses(a.run, a.repo, nums, a.set, today)
-    apply_instructions(nums, a.instruct, a.note, today)
-    for mid, text in drafts: record_posted(a.run, mid, text, "drafted", today)
+    apply_statuses(a.run, a.repo, flags.statuses, today)
+    apply_instructions(flags.instructions, flags.notes, today)
+    for mid, text in flags.drafts: record_posted(a.run, mid, text, "drafted", today)
     warn_unlabeled_options(merged)
     RECON, PR_LINKS, THREADS = read_reconcile(a.run), pr_links(merged), posted_threads(a.run, POSTED)
     routed, unverified, rejected, hidden_minor = route_findings(merged, verdicts, a)
