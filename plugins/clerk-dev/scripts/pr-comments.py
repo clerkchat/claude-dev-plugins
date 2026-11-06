@@ -138,7 +138,7 @@ def main():
 
     # shortlist candidate findings for each new comment; a judge decides
     allm = rc.load(a.run)
-    agents = {i: e for i, e in allm.items() if e.get("lens") != "pr-review"}
+    agents = {i: e for i, e in allm.items() if e.get("lens") != "pr-review" and not mf.is_credit(e)}
     reported = set(rr.read_numbers(a.run))
     rows = []
     for mid in new_ids:

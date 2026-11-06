@@ -81,6 +81,14 @@ class ImportingCommentsTest(RunCase):
         self.fetch(pull_request([thread(1, "SUBMITTED", "Soon.")]))
         self.assertEqual(self.read("merged.md").count("- id: "), 1)
 
+    def test_a_credit_is_never_a_candidate_for_a_comment(self):
+        self.write("merged.md", merged_md(
+            "- id: 1\n  lens: credit\n  file: a.py\n  line: 1\n  title: Looks off\n  claim: Looks off here.\n",
+            "- id: 2\n  lens: correctness\n  file: a.py\n  line: 1\n  title: Looks off\n  claim: Looks off here.\n"))
+        self.fetch(pull_request([thread(1, "SUBMITTED", "Looks off.")]))
+        self.assertEqual(self.read("pr/candidates.tsv").split("\n")[1].split("\t")[1], "2")
+        self.assertNotIn("\t1\t", self.read("pr/candidates.tsv"))
+
 
 if __name__ == "__main__":
     unittest.main()

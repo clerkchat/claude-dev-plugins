@@ -732,6 +732,9 @@ def finding_groups(run, status, instr, numbers):
         elif choice == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")): post.append(numbers[mid])
         elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
+    for mid in sections:
+        if sections[mid] == "credit" and mid in numbers and re.sub(r"\(.*\)$", "", instr.get(mid, "")) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")):
+            post.append(numbers[mid])
     return unmarked, queue, discuss, post, inprog, new, by_section
 
 def blockers_view(wt, out, logs, run, have_run):
@@ -923,7 +926,7 @@ def main():
             moved = []
         closed = sum(1 for m in findings if m in numbers and not sf.is_open(m, status, instr))
         out.append("")
-        out.append(f"**Findings:** {len(numbers)} in the report, {closed} closed (fixed, won't fix, deferred, ignored).")
+        out.append(f"**Findings:** {sum(1 for m in findings if m in numbers)} in the report, {closed} closed (fixed, won't fix, deferred, ignored).")
         for sec, nums in unmarked.items():
             nums.sort(key=int)
             out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({number_list(nums)})")

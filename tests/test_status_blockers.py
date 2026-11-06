@@ -101,7 +101,7 @@ class BlockersTests(BlockersCase):
 POSTED_HEADER = "merged_id\tstate\tnote\tdate\tthread_id\tcomment_id\turl\tpath\tline\tend_line\tside\tkind\treview_id\n"
 
 
-class PostQueueTests(BlockersCase):
+class PostQueueCase(BlockersCase):
     def setUp(self):
         super().setUp()
         self.write_run({1: "look", 2: "look", 3: "look", 4: "look"}, instructions=[(n, "post") for n in (1, 2, 3, 4)])
@@ -115,6 +115,8 @@ class PostQueueTests(BlockersCase):
         self.assertEqual(code, 0, out)
         return out
 
+
+class PostQueueTests(PostQueueCase):
     def test_without_posted_tsv_every_post_finding_is_queued(self):
         out = self.full_status()
         self.assertIn("marked to post, not yet posted or changed since posting: 4 (1, 2, 3, 4)", out)
@@ -141,6 +143,30 @@ class PostQueueTests(BlockersCase):
         out = self.full_status()
         self.assertNotIn("marked to post", out)
         self.assertNotIn("post the review", out)
+
+
+class CreditsInStatusTests(PostQueueCase):
+    CREDIT = "- id: 5\n  lens: credit\n  file: a.py\n  line: 1\n  title: Credit 5\n  claim: Guards it.\n"
+
+    def setUp(self):
+        super().setUp()
+        self.write_merged(*(FINDING.format(n=n) for n in (1, 2, 3, 4)), self.CREDIT)
+        self.write_numbers({1: "look", 2: "look", 3: "look", 4: "look", 5: "credit"})
+        self.write_instructions({n: ("post", "") for n in (1, 2, 3, 4, 5)})
+
+    def test_a_post_marked_credit_is_queued_to_post(self):
+        self.assertIn("marked to post, not yet posted or changed since posting: 5 (1, 2, 3, 4, 5)", self.full_status())
+
+    def test_a_credit_is_not_counted_as_a_finding(self):
+        self.assertIn("**Findings:** 4 in the report", self.full_status())
+
+    def test_a_credit_only_post_mark_prompts_to_post(self):
+        self.write_instructions({5: ("post", "")})
+        self.assertIn('"post the review"', self.full_status())
+
+    def test_a_posted_credit_is_not_queued(self):
+        self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4, 5)])
+        self.assertNotIn("marked to post", self.full_status())
 
 
 if __name__ == "__main__":
