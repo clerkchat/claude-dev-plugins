@@ -6,8 +6,12 @@ class GhError(SystemExit):
 def gh(args, cwd, stdin=None):
     if not shutil.which("gh"): raise GhError("gh is not installed; install the GitHub CLI and sign in with gh auth login")
     r = subprocess.run(["gh"] + args, capture_output=True, text=True, cwd=cwd, input=stdin)
-    if r.returncode != 0: raise GhError(f"gh {' '.join(args[:3])} failed: {r.stderr.strip()}")
+    if r.returncode != 0: raise GhError(f"gh {' '.join(args[:3])} failed: {failure_detail(r)}")
     return r.stdout
+
+def failure_detail(r):
+    said = r.stdout.strip()
+    return r.stderr.strip() + (f"\n{said}" if said else "")
 
 def send_json(args, payload, cwd):
     out = gh(args + ["--input", "-"], cwd, json.dumps(payload)) if payload is not None else gh(args, cwd)
