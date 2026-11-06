@@ -976,6 +976,10 @@ is discovered.
 3. Run `reconcile.py <previous> <run> --seed` to carry statuses that still apply
    (in progress, won't fix, deferred) and earlier resolution text. A finding
    that was marked fixed and was found again is not carried: it is reopened.
+   It carries a posted finding's thread, kept-open row, and closing reply only
+   across a judged match or a line match whose wording overlaps by at least
+   0.5, and names the posted findings a looser match left behind; relay that
+   line. Their threads come in as pull request comments.
 4. Recheck every earlier finding that was marked fixed and has no match. Absence
    from a blind run is not proof: a lens may simply not have looked. Use the
    Rechecking procedure in the `review-fix` skill with the patch set to the
@@ -1379,7 +1383,8 @@ drafted text becomes stale and the render says to redraft it; an edited text
 stands, and the render warns; relay that warning. Once posted, the block adds
 where it went ("Posted on `path:12-14`, [comment](url).", or "in the review
 body"), and "changed since posting" after a later edit, which the next post
-sends as an update of that comment; then the thread as step 7b last saw it,
+sends as an update of that comment (of the review's body, for one in the body
+of a submitted review); then the thread as step 7b last saw it,
 with the author's replies and its state, worded as on a pull request comment's
 card. A card with a posted comment keeps its Posted block when it is no longer
 marked Post, as after a re-review. Post leaves the status alone. The
@@ -1391,7 +1396,8 @@ render stamps the report with a generation number and keeps what it wrote under
 `.render/<generation>/`; a saved report is compared with the render it came
 from, so a buffer saved after a later render contributes only the lines the user
 changed. The stamp names what survives a render: the checkboxes, the Notes
-lines, and the Posted text. The previous report is kept as `report.prev.md`.
+lines, and the Posted text. A Posted text whose fence the edit left open is not
+read: the render warns and shows the stored text again; relay that warning. The previous report is kept as `report.prev.md`.
 Two ticked boxes use the first, and the card and the render's warning say so; relay that warning to
 the user. Edits anywhere else in the report are not kept. Agents set
 instructions with `--instruct N=<choice>[:note]` and add notes with

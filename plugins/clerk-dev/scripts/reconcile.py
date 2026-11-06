@@ -38,7 +38,9 @@ again is reopened, so it is not carried), and copies previous resolution
 text into CUR_RUN/resolution/ prefixed with the previous run's label. It also
 copies each matched finding's posted.tsv row, posted/keep.tsv row, posted
 text (posted/<id>.md), and closing reply (posted/close-<id>.md) under its new
-id, unless the current run already has a posted.tsv row for it. When a previous
+id, unless the current run already has a posted.tsv row for it, and only across
+a judged match, a recheck, or a line match whose wording overlaps by at least
+0.5; it names the posted findings a looser match left behind. When a previous
 finding posted as a thread on GitHub matched nothing, it prints "N posted
 findings not found again (...)": those threads come in as pull request
 comments on the next pr-comments.py fetch.
@@ -69,6 +71,8 @@ def comparable(a, b):
 
 def jac(a, b):
     return len(a & b) / len(a | b) if a and b else 0.0
+
+TEXT_MATCH = 0.5
 
 VERDICTS = ("duplicate", "regressed", "stale", "different")
 APPEND_CANDIDATE_HEADER = ("new_id", "carried_id", "carried_status", "recheck")
@@ -234,9 +238,27 @@ def seed_postings(prev, cur, pairs):
         seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
     return len(seeded)
 
+def prev_name(pid, pnum):
+    return f"finding {pnum[pid]}" if pid in pnum else f"#{pid}"
+
 def lost_line(lost, pnum):
-    names = ", ".join(f"finding {pnum[pid]}" if pid in pnum else f"#{pid}" for pid in lost)
+    names = ", ".join(prev_name(pid, pnum) for pid in lost)
     return f"{len(lost)} posted findings not found again ({names}); their threads come in as pull request comments"
+
+def loose_line(loose, pnum):
+    names = ", ".join(f"{prev_name(pid, pnum)} with #{cid}" for pid, cid in loose)
+    return (f"{len(loose)} posted findings matched only loosely, so their postings were not carried ({names}); "
+            "their threads come in as pull request comments")
+
+CARRIES_POSTINGS = ("judge", "recheck")
+
+def carries_postings(how, prev_finding, cur_finding):
+    if how in CARRIES_POSTINGS: return True
+    return how == "line" and bool(prev_finding and cur_finding) and jac(words(cur_finding), words(prev_finding)) >= TEXT_MATCH
+
+def confident_pairs(prev, cur, pairs, matches):
+    prev_found, cur_found = load(prev), load(cur)
+    return [(pid, cid) for pid, cid in pairs if carries_postings(matches[cid]["how"], prev_found.get(pid), cur_found.get(cid))]
 
 def seed_resolution(prev, cur, pid, cid, label):
     src = os.path.join(prev, "resolution", f"{pid}.md")
@@ -254,12 +276,14 @@ def seed(prev, cur, label, pnum):
         if m["prev_status"] in ("in-progress", "wont-fix", "deferred") and cid not in st:
             st[cid] = {"status": m["prev_status"], "ref": m["prev_ref"], "date": ""}; carried += 1
         seed_resolution(prev, cur, pid, cid, label)
-    seeded_posted = seed_postings(prev, cur, pairs)
+    confident = confident_pairs(prev, cur, pairs, matches)
+    seeded_posted = seed_postings(prev, cur, confident)
     rf.write_status(cur, st)
-    matched = {pid for pid, _ in pairs}
-    lost = [pid for pid, row in sorted(rf.read_posted(prev).items()) if rf.has_thread(row) and pid not in matched]
+    matched, prev_posted = {pid for pid, _ in pairs}, rf.read_posted(prev)
+    lost = [pid for pid, row in sorted(prev_posted.items()) if rf.has_thread(row) and pid not in matched]
+    loose = [(pid, cid) for pid, cid in pairs if pid in prev_posted and (pid, cid) not in confident]
     print(f"seeded {carried} statuses" + (f" and {seeded_posted} posted findings" if seeded_posted else "") + f" from {label}"
-          + (f"; {lost_line(lost, pnum)}" if lost else ""), file=sys.stderr)
+          + (f"; {lost_line(lost, pnum)}" if lost else "") + (f"; {loose_line(loose, pnum)}" if loose else ""), file=sys.stderr)
 
 def judged_same(path):
     pairs = []
@@ -285,7 +309,7 @@ def proposed_matches(prev, cur, pinfo):
             sim = jac(cw, words(p))
             same_file = c["file"] == p["file"]
             near = same_file and c["line"] and p["line"] and abs(c["line"] - p["line"]) <= 15
-            if same_file and (near and sim >= 0.2 or sim >= 0.5):
+            if same_file and (near and sim >= 0.2 or sim >= TEXT_MATCH):
                 pairs.append((2 + sim, cid, pid, "line" if near else "text"))
             elif (same_file and sim >= 0.25) or (not same_file and sim >= 0.6):
                 cands.append((sim, cid, pid))

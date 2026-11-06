@@ -202,11 +202,32 @@ def print_warnings(label, warnings):
 def drafted_elsewhere(it, e, reviewed):
     return it["action"] == "new" and e is not None and rf.code_moved(it["row"], rf.drafted_for(e, it["note"], reviewed))
 
+SENDS = ("new", "update")
+
+def pending_id(ctx):
+    return str(ctx["pending"]["id"]) if ctx["pending"] else ""
+
+def submitted_review(it, ctx):
+    row = it["row"]
+    return row["review_id"] if it["action"] == "update" and row["kind"] == "body" and row["review_id"] != pending_id(ctx) else None
+
+def recorded_comments(rows):
+    return {row["comment_id"] for row in rows.values() if row.get("comment_id")}
+
+def holds(comment, a, text):
+    at = comment.get("subject_type") == "file" if a["kind"] == "file" else a["end_line"] in (comment.get("line"), comment.get("original_line"))
+    return comment.get("path") == a["path"] and at and comment.get("body") == text
+
+def already_on_github(it, ctx, taken):
+    a = it["anchor"]
+    if it["action"] != "new" or not a or a["kind"] == "body": return None
+    return next((c for c in ctx["comments"] if str(c["id"]) not in taken and holds(c, a, it["text"])), None)
+
 def plan_items(run, ctx, hunks, reviewed):
     ins, rows, nums, found = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run), findings(run)
     sections = rf.read_sections(run)
     titles = rf.report_titles(run)
-    items = []
+    items, taken = [], recorded_comments(rows)
     for mid in in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums):
         e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
         it = {**item_head(mid, nums, found, titles), "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
@@ -230,18 +251,33 @@ def plan_items(run, ctx, hunks, reviewed):
         it["text"], it["downgraded"] = outgoing(raw, plain)
         problem, it["warnings"] = screen(it["text"], ctx["local"])
         it["problem"] = it["problem"] or problem
+        it["submitted"], it["existing"] = submitted_review(it, ctx), already_on_github(it, ctx, taken)
+        if it["existing"]: it["action"] = "adopt"; taken.add(str(it["existing"]["id"]))
         items.append(it)
     return items
+
+def review_head(run):
+    head = rf.read_text(rf.review_text_path(run))
+    return unwrap(head) if head else ""
+
+def our_texts(run):
+    posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post"]
+    return [DEFAULT_BODY, review_head(run), *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
+
+def before_ours(body, ours):
+    return body[:min((at for at in (body.find(t) for t in ours if t) if at >= 0), default=len(body))].strip()
 
 def kept_body(run, ctx):
     p = ctx["pending"]
     if not p: return ""
     if os.path.exists(rf.kept_body_path(run, p["id"])): return rf.read_text(rf.kept_body_path(run, p["id"]))
-    return "" if str(p["id"]) in rf.review_ids(rf.read_posted(run)) else (p.get("body") or "").strip()
+    return "" if str(p["id"]) in rf.review_ids(rf.read_posted(run)) else before_ours(p.get("body") or "", our_texts(run))
+
+def saved_body(run, review_id):
+    return rf.read_text(rf.kept_body_path(run, review_id))
 
 def review_body(run, rows, review_id, kept):
-    head = rf.read_text(rf.review_text_path(run))
-    parts = [part for part in (kept, unwrap(head) if head else "") if part] or [DEFAULT_BODY]
+    parts = [part for part in (kept, review_head(run)) if part] or [DEFAULT_BODY]
     for mid in sorted(rows):
         row = rows[mid]
         if row.get("kind") == "body" and str(row.get("review_id")) == str(review_id):
@@ -272,27 +308,45 @@ def update_call(ctx, it):
     return {"method": "PATCH", "path": f"repos/{ctx['owner']}/{ctx['name']}/pulls/comments/{comment}",
             "fields": {"body": it["text"]}, "finding": it["id"]}
 
+def placed(a, review_id):
+    return {"kind": a["kind"], "path": a["path"], "line": str(a["line"] or ""), "end_line": str(a["end_line"] or ""),
+            "side": "RIGHT" if a["kind"] in LINE_KINDS else "", "review_id": review_id}
+
+def existing_ids(comment):
+    return {"thread_id": "", "comment_id": str(comment["id"]), "url": comment.get("html_url", "")}
+
+def sent_ids(it):
+    if it["anchor"]["kind"] == "body": return {"thread_id": "", "comment_id": "", "url": Ref("review", "html_url")}
+    return {k: Ref(result_key(it["id"]), k) for k in ("thread_id", "comment_id", "url")}
+
 def planned_rows(rows, sending, review_id, today):
     out = dict(rows)
     for it in sending:
         a, row = it["anchor"], it["row"]
         new = {"state": "posted", "date": today, "note": row.get("note", it["note"])}
-        if a["kind"] == "body":
-            new.update(thread_id="", comment_id="", url=Ref("review", "html_url"))
-        elif it["action"] == "new":
-            new.update({k: Ref(result_key(it["id"]), k) for k in ("thread_id", "comment_id", "url")})
-        if it["action"] == "new" or a["kind"] == "body":
-            new.update(kind=a["kind"], path=a["path"], line=str(a["line"] or ""), end_line=str(a["end_line"] or ""),
-                       side="RIGHT" if a["kind"] in LINE_KINDS else "", review_id=review_id)
+        if it["action"] == "adopt":
+            new.update(placed(a, str(it["existing"].get("pull_request_review_id") or "")), **existing_ids(it["existing"]))
+        elif it["action"] == "new" or (a["kind"] == "body" and not it["submitted"]):
+            new.update(placed(a, review_id), **sent_ids(it))
         out[it["id"]] = {**row, **new}
     return out
 
-def post_calls(ctx, sending, body, reviewed):
+def submitted_ids(sending):
+    return sorted({it["submitted"] for it in sending if it["submitted"]})
+
+def submitted_label(review_id):
+    return f"body of submitted review {review_id}"
+
+def submitted_body(run, rows, review_id):
+    return review_body(run, rows, review_id, saved_body(run, review_id))
+
+def post_calls(ctx, sending, body, submitted, reviewed):
     base, pending = pulls_path(ctx), ctx["pending"]
     calls = [] if pending else [{"method": "POST", "path": f"{base}/reviews", "fields": {"commit_id": reviewed, "body": body}, "as": "review"}]
     review_node = pending["node_id"] if pending else Ref("review", "node_id")
     calls += [thread_call(it, review_node) for it in sending if it["action"] == "new" and it["anchor"]["kind"] != "body"]
     calls += [update_call(ctx, it) for it in sending if it["action"] == "update" and it["anchor"]["kind"] != "body"]
+    calls += [{"method": "PUT", "path": f"{base}/reviews/{rid}", "fields": {"body": text}, "body_of": rid} for rid, text in submitted.items()]
     if pending: calls.append({"method": "PUT", "path": f"{base}/reviews/{pending['id']}", "fields": {"body": body}})
     return calls
 
@@ -322,18 +376,27 @@ def undo_of(call, results, items):
         return {"graphql": "deletePullRequestReviewComment", "variables": {"id": added["comment_node"]}}, f"{name}'s comment {added['url']}"
     if call.get("as") == "review":
         return {"method": "DELETE", "path": f"{call['path']}/{results['review']['id']}"}, f"pending review {results['review']['id']}"
+    if "body_of" in call: return None, f"the {submitted_label(call['body_of'])}, which keeps its new text"
     return None, f"{name}'s comment {row_url(call, items)}, which keeps its new text"
 
-def unknown_of(call, results, items, ctx):
+def pending_now(call, repo):
+    try: return next((r for r in gh_api.rest_list(call["path"], repo) if r["state"] == "PENDING"), None)
+    except FAILURES: return None
+
+def began_review(call, repo):
+    found = pending_now(call, repo)
+    left = (f" (pending review {found['id']} is on the pull request now and was left as it is, since it may be one started elsewhere)"
+            if found else "")
+    return "a pending review this batch began" + left
+
+def unknown_of(call, results, items, ctx, repo):
     name = finding_name(call, items)
-    if call.get("as") == "review": return "a pending review this batch began"
+    if call.get("as") == "review": return began_review(call, repo)
     if is_thread(call): return f"{name}'s comment on pending review {(ctx['pending'] or results.get('review') or {}).get('id', '')}"
     if "finding" in call: return f"{name}'s new text on its comment {row_url(call, items)}"
     return f"{call.get('method', '')} {call.get('path', '')}"
 
 def recover(call, results, repo, ctx):
-    if call.get("as") == "review":
-        return next((r for r in gh_api.rest_list(call["path"], repo) if r["state"] == "PENDING"), None)
     if not (is_thread(call) and ctx["pending"]): return None
     v, known = call["variables"], set(ctx["pending"]["comments"]) | {r.get("comment_id") for r in results.values()}
     found = next((c for c in gh_api.rest_list(f"{pulls_path(ctx)}/reviews/{ctx['pending']['id']}/comments", repo)
@@ -351,7 +414,7 @@ def rollback(done, results, repo, items, ctx, inflight):
     maybe = []
     found = found_by(inflight, results, repo, ctx)
     if found: results[inflight["as"]] = found; done = [*done, inflight]
-    else: maybe.append((inflight, unknown_of(inflight, results, items, ctx)))
+    else: maybe.append((inflight, unknown_of(inflight, results, items, ctx, repo)))
     left = []
     for call in reversed(done):
         undo, what = undo_of(call, results, items)
@@ -427,13 +490,14 @@ def fetch_pr(repo, run, pr, reviewed):
     ctx["files"] = [f["filename"] for f in gh_api.rest_list(f"{base}/files", repo)]
     reviews = gh_api.rest_list(f"{base}/reviews", repo)
     ctx["review_ids"] = {str(r["id"]) for r in reviews}
-    ctx["comment_ids"] = {str(c["id"]) for c in gh_api.rest_list(f"{base}/comments", repo)}
+    ctx["comments"] = gh_api.rest_list(f"{base}/comments", repo)
     pending = next((r for r in reviews if r["state"] == "PENDING"), None)
     if pending:
         comments = gh_api.rest_list(f"{base}/reviews/{pending['id']}/comments", repo)
         ctx["pending"] = {"id": pending["id"], "node_id": pending["node_id"], "commit_id": pending["commit_id"],
                           "html_url": pending.get("html_url", ""), "body": pending.get("body") or "", "comments": {c["id"]: c["node_id"] for c in comments}}
-        ctx["comment_ids"] |= {str(c) for c in ctx["pending"]["comments"]}
+        ctx["comments"] = [*ctx["comments"], *comments]
+    ctx["comment_ids"] = {str(c["id"]) for c in ctx["comments"]}
     return ctx
 
 def current_review(ctx):
@@ -452,12 +516,21 @@ def indent(text):
 def warning_lines(warnings):
     return [f"  warning: {w}" for w in warnings]
 
-def checked_body(run, ctx, rows, review_id):
-    body = review_body(run, rows, review_id, ctx["kept"])
+def checked(label, body, ctx):
     problem, warnings = screen(body, ctx["local"])
-    if problem: sys.exit(f"nothing sent; the review body: {problem}")
-    print_warnings("review body:", warnings)
+    if problem: sys.exit(f"nothing sent; the {label}: {problem}")
+    print_warnings(f"{label}:", warnings)
     return body
+
+def checked_body(run, ctx, rows, review_id):
+    return checked("review body", review_body(run, rows, review_id, ctx["kept"]), ctx)
+
+def body_lines(label, body, ctx):
+    problem, warnings = screen(body, ctx["local"])
+    return [f"{label}:", indent(body)] + ([f"  cannot post: {problem}"] if problem else []) + warning_lines(warnings)
+
+def updates_what(it):
+    return f"the {submitted_label(it['submitted'])}" if it["submitted"] else "the comment"
 
 def preview(run, ctx, items, reviewed):
     out = [f"pull request: {ctx['owner']}/{ctx['name']}#{ctx['pr']}"]
@@ -470,37 +543,49 @@ def preview(run, ctx, items, reviewed):
         if it["moved"]: out.append("  the code moved since its text was drafted")
         if it["downgraded"]: out.append("  suggestion sent as a plain code block")
         if it["action"] == "skip": out.append(f"  already posted: {it['row'].get('url', '')}"); continue
-        if it["action"] == "update": out.append("  changed since posting: --post updates the comment")
+        if it["action"] == "adopt":
+            out.append(f"  already on GitHub, though this run has no record of it: {it['existing'].get('html_url', '')}; --post records it"); continue
+        if it["action"] == "update": out.append(f"  changed since posting: --post updates {updates_what(it)}")
         if it["problem"]: out.append(f"  cannot post: {it['problem']}"); continue
         out += ["  text:", indent(it["text"])] + warning_lines(it["warnings"])
     review_id = current_review(ctx)
-    rows = planned_rows(rf.read_posted(run), [it for it in items if it["action"] != "skip" and not it["problem"]], review_id, "")
-    body = review_body(run, rows, review_id, ctx["kept"])
-    problem, warnings = screen(body, ctx["local"])
-    out += ["review body:", indent(body)] + ([f"  cannot post: {problem}"] if problem else []) + warning_lines(warnings)
+    sending = [it for it in items if it["action"] != "skip" and not it["problem"]]
+    rows = planned_rows(rf.read_posted(run), sending, review_id, "")
+    out += body_lines("review body", review_body(run, rows, review_id, ctx["kept"]), ctx)
     if ctx["kept"]: out.append(f"  keeps the text already in pending review {ctx['pending']['id']} on GitHub, with this run's text below it")
+    for rid in submitted_ids(sending): out += body_lines(submitted_label(rid), submitted_body(run, rows, rid), ctx)
     if not rf.same_commit(ctx["head"], reviewed):
         out.append(f"head moved: the pull request head is {ctx['head'][:9]}, the review judged {reviewed[:9]}; comments anchor on the reviewed commit")
     out.append(pending_line(ctx, reviewed, "--post"))
     print("\n".join(out))
 
+def posted_where(it, c):
+    if it["submitted"]: return f"in the {submitted_label(it['submitted'])}"
+    return "in the review body" if it["anchor"]["kind"] == "body" else f"comment {c.get('comment_id', '')} {c.get('url', '')}"
+
 def posted_lines(sending, results):
-    review = results["review"]
-    out = [f"  review {review['id']} {review.get('html_url', '')}"]
-    for it in sending:
-        c = results.get(result_key(it["id"])) or it["row"]
-        where = "in the review body" if it["anchor"]["kind"] == "body" else f"comment {c.get('comment_id', '')} {c.get('url', '')}"
-        out.append(f"  {named(it)}: {where}")
-    return out
+    review = results.get("review")
+    out = [f"  review {review['id']} {review.get('html_url', '')}"] if review else []
+    return out + [f"  {named(it)}: {posted_where(it, results.get(result_key(it['id'])) or it['row'])}" for it in sending]
+
+def batch_calls(run, ctx, sending, rows, review_id, reviewed):
+    submitted = {rid: checked(submitted_label(rid), submitted_body(run, rows, rid), ctx) for rid in submitted_ids(sending)}
+    return post_calls(ctx, sending, checked_body(run, ctx, rows, review_id), submitted, reviewed)
+
+def posted_summary(items, sending, adopted, results):
+    new = sum(it["action"] == "new" for it in sending)
+    parts = [f"posted {new} comments and updated {len(sending) - new} on review {results['review']['id']}"] if sending else []
+    parts += [f"recorded {len(adopted)} already on GitHub"] if adopted else []
+    return "; ".join(parts + [f"skipped {len(items) - len(sending) - len(adopted)} already posted"])
 
 def post(a, ctx, items, reviewed):
-    sending = [it for it in items if it["action"] != "skip"]
+    sending, adopted = [it for it in items if it["action"] in SENDS], [it for it in items if it["action"] == "adopt"]
     refuse_blocked(sending)
-    if not sending: print("nothing to post: every Post-marked finding is already posted", file=sys.stderr); return
+    if not (sending or adopted): print("nothing to post: every Post-marked finding is already posted", file=sys.stderr); return
     review_id = current_review(ctx)
-    rows = planned_rows(rf.read_posted(a.run), sending, review_id, datetime.date.today().isoformat())
-    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed)
-    print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
+    rows = planned_rows(rf.read_posted(a.run), sending + adopted, review_id, datetime.date.today().isoformat())
+    calls = batch_calls(a.run, ctx, sending, rows, review_id, reviewed) if sending else []
+    if sending: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
     if a.dry_run: write_payload(a.run, calls); return
     results = execute(calls, a.repo, ctx, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
@@ -511,9 +596,7 @@ def post(a, ctx, items, reviewed):
     except BaseException:
         print("\n".join(["posted.tsv was not updated; this batch is on GitHub:", *posted_lines(sending, results)]), file=sys.stderr)
         raise
-    new = sum(it["action"] == "new" for it in sending)
-    print(f"posted {new} comments and updated {len(sending) - new} on review {results['review']['id']}; "
-          f"skipped {len(items) - len(sending)} already posted", file=sys.stderr)
+    print(posted_summary(items, sending, adopted, results), file=sys.stderr)
 
 def submit(a, ctx, verdict):
     p = ctx["pending"]

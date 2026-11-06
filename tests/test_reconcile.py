@@ -31,6 +31,10 @@ class SeedCase(TwoRunsCase):
     def seed(self):
         return run_ok("reconcile", self.prev, self.cur, "--seed")
 
+    def match_as(self, how):
+        write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
+                   f"cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\t{how}\t7\topen\t\n")
+
     def cur_text(self, name):
         with open(os.path.join(self.cur, name), encoding="utf-8") as f:
             return f.read()
@@ -96,6 +100,53 @@ class SeedPostedTest(SeedCase):
 
     def test_names_the_posted_findings_not_found_again(self):
         self.assertIn("; 1 posted findings not found again (finding 8); their threads come in as pull request comments", self.out)
+
+
+def other_defect(mid, path):
+    return (f"- id: {mid}\n  lens: correctness\n  severity: major\n  confidence: 90\n  file: {path}\n  line: 5\n"
+            f"  claim: Finding {mid} leaks a handle in the retry loop.\n  impact: It matters.\n  fix: Close it.\n")
+
+
+class SeedOtherFindingCase(SeedCase):
+    def setUp(self):
+        super().setUp()
+        write_file(os.path.join(self.cur, "merged.md"), merged_md(other_defect(1, "a.py"), defect(2, "c.py")))
+        self.post({7: posted_row(5)})
+        self.write("posted/close-7.md", "Thanks, that does it.\n")
+
+
+class SeedLooseLineMatchTest(SeedOtherFindingCase):
+    def setUp(self):
+        super().setUp()
+        self.out = self.seed()
+
+    def test_carries_no_posted_row(self):
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted.tsv")))
+
+    def test_copies_no_posted_text(self):
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted", "1.md")))
+
+    def test_copies_no_closing_reply(self):
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted", "close-1.md")))
+
+    def test_names_the_posted_finding_left_behind(self):
+        self.assertIn("; 1 posted findings matched only loosely, so their postings were not carried (finding 7 with #1); "
+                      "their threads come in as pull request comments", self.out)
+
+
+class SeedJudgedMatchTest(SeedOtherFindingCase):
+    def test_carries_the_posted_row(self):
+        self.match_as("judge")
+        self.seed()
+        self.assertEqual(run_files.read_posted(self.cur)[1]["comment_id"], "5")
+
+
+class SeedTextMatchTest(SeedCase):
+    def test_carries_no_posted_row(self):
+        self.post({7: posted_row(5)})
+        self.match_as("text")
+        self.seed()
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted.tsv")))
 
 
 class SeedPendingReviewTest(SeedCase):

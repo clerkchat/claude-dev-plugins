@@ -674,9 +674,21 @@ def posted_blocks(cards):
 def flat(text):
     return " ".join(text.split())
 
+def opens_fence(block):
+    return any(kind == FENCE_LINE for _, kind in fenced_lines(block))
+
+def warn_unclosed_posted(run, cards, texts):
+    nums = read_numbers(run)
+    for mid in sorted(cards):
+        if mid not in texts and opens_fence(cards[mid].get("Posted", [])):
+            print(f"warning: finding {nums.get(mid, f'#{mid}')}: its Posted text opens a fence it never closes; the edit was not read, "
+                  "and the report shows the stored text again", file=sys.stderr)
+
 def import_posted_edits(run, today):
-    snap = read_snapshot(run, "rendered-posted.tsv")
-    for mid, text in posted_blocks(read_card_blocks(run)).items():
+    snap, cards = read_snapshot(run, "rendered-posted.tsv"), read_card_blocks(run)
+    texts = posted_blocks(cards)
+    warn_unclosed_posted(run, cards, texts)
+    for mid, text in texts.items():
         if flat(text) not in (snap.get(mid), flat(posted_text(run, mid))): record_posted(run, mid, text, "edited", today)
 
 def instruction_lines(i, choices=CHOICES):

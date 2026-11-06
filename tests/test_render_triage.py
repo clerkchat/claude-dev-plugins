@@ -475,6 +475,23 @@ class PostedEditTest(PostCase):
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
 
 
+class WhenAPostedEditLeavesItsFenceOpenTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.\n````", "Say it gently.")
+        self.out = self.render()
+
+    def test_warns_that_the_edit_was_not_read(self):
+        self.assertIn("warning: finding 1: its Posted text opens a fence it never closes; the edit was not read", self.out)
+
+    def test_keeps_the_stored_text(self):
+        self.assertEqual(self.read("posted/7.md"), "Say it plainly.\n")
+
+    def test_shows_the_stored_text_again(self):
+        self.assertIn("````\nSay it plainly.\n````", self.posted_section(1))
+
+
 class EditedNoteChangeTest(PostCase):
     def setUp(self):
         super().setUp()

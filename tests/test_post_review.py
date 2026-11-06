@@ -39,14 +39,15 @@ def thread_data(n):
 
 
 NO_COMMENT = {"data": {"addPullRequestReviewThread": {"thread": None}}}
+ANOTHER_PENDING = [{"id": 56, "node_id": "PRR_56", "state": "PENDING"}]
 
 
 def thread_answer(variables):
     return thread_data(1 if variables.get("path") == "src/a.py" else 3)
 
 
-def review_comment(n, path):
-    return {"id": 900 + n, "node_id": f"PRRC_{n}", "html_url": f"https://gh/c/{900 + n}", "path": path, "body": f"Finding {n} text."}
+def review_comment(n, path, **fields):
+    return {"id": 900 + n, "node_id": f"PRRC_{n}", "html_url": f"https://gh/c/{900 + n}", "path": path, "body": f"Finding {n} text.", **fields}
 
 
 class PostCase(GhRunCase):
@@ -57,7 +58,7 @@ class PostCase(GhRunCase):
         self.write_target("pr 7", MERGE_BASE, HEAD)
         self.marks = {}
         self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "merge_base": MERGE_BASE, "files": ["src/a.py", "src/b.py"],
-                    "pending": None, "review_ids": {"55"}, "comment_ids": {"901"}}
+                    "pending": None, "review_ids": {"55"}, "comment_ids": {"901"}, "comments": []}
         patcher = mock.patch.object(post, "fetch_pr", side_effect=lambda *a: self.ctx)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -511,6 +512,11 @@ class WhenThePendingReviewHasABodyTest(PostCase):
         self.posted_row(3)
         self.assertEqual(self.review_body(), post.DEFAULT_BODY)
 
+    def test_takes_out_the_text_of_a_batch_this_run_never_recorded(self):
+        self.write("posted/review.md", "Nice work.")
+        self.pend(body="My summary.\n\nNice work.")
+        self.assertEqual(self.review_body(), "My summary.\n\nNice work.")
+
 
 class AfterAReReviewOfAPendingReviewTest(PostCase):
     def setUp(self):
@@ -547,6 +553,40 @@ class RepostTest(PostCase):
     def test_updates_a_comment_of_a_submitted_review_through_rest(self):
         self.posted_row(1, state="edited")
         self.assertEqual((self.call_for(1)["method"], self.call_for(1)["path"]), ("PATCH", "repos/acme/widgets/pulls/comments/901"))
+
+
+class SubmittedBodyCommentCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx["review_ids"] = {"54", "55"}
+        self.mark(1, note="in the review body", text="Finding 1 reworded.")
+        self.posted_row(1, state="edited", kind="body", path="", line="", end_line="", side="", thread_id="", comment_id="",
+                        url="https://gh/r/54", review_id="54")
+
+
+class WhenABodyCommentOfASubmittedReviewChangedTest(SubmittedBodyCommentCase):
+    def setUp(self):
+        super().setUp()
+        self.pend()
+
+    def body_of(self, review_id):
+        return next(c["fields"]["body"] for c in self.calls() if c.get("path") == f"repos/acme/widgets/pulls/7/reviews/{review_id}")
+
+    def test_puts_the_new_text_in_the_body_of_that_review(self):
+        self.assertEqual(self.body_of(54), post.DEFAULT_BODY + "\n\nFinding 1 reworded.")
+
+    def test_keeps_the_text_saved_from_that_review_above_it(self):
+        self.write("posted/pending-54.md", "My summary.")
+        self.assertEqual(self.body_of(54), "My summary.\n\nFinding 1 reworded.")
+
+    def test_leaves_it_out_of_the_pending_review(self):
+        self.assertEqual(self.body_of(55), post.DEFAULT_BODY)
+
+    def test_says_it_updates_the_body_of_that_review(self):
+        self.assertIn("changed since posting: --post updates the body of submitted review 54", self.main())
+
+    def test_shows_the_new_body_of_that_review(self):
+        self.assertIn("body of submitted review 54:\n    Comments from my review of this pull request.\n\n    Finding 1 reworded.", self.main())
 
 
 class DeletedOnGitHubTest(PostCase):
@@ -649,6 +689,9 @@ class LiveCase(PostCase):
     def deleted_comments(self):
         return [c.args[1] for c in self.graphql.call_args_list if "deletePullRequestReviewComment" in c.args[0]]
 
+    def deleted_reviews(self):
+        return [c.args[1] for c in self.rest.call_args_list if c.args[0] == "DELETE"]
+
     def stopped(self, error):
         err = io.StringIO()
         with self.assertRaises(error), redirect_stderr(err):
@@ -697,6 +740,58 @@ class PlaceholderLookalikeTest(LiveCase):
         self.mark(1, note="{unknown.key}")
         self.main("--post")
         self.assertEqual(run_files.read_posted(self.run_dir)[1]["note"], "{unknown.key}")
+
+
+class WhenPostingAChangedBodyCommentOfASubmittedReviewTest(SubmittedBodyCommentCase, LiveCase):
+    def test_keeps_its_row_on_that_review(self):
+        self.main("--post")
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["review_id"], "54")
+
+
+class WhenAnEarlierBatchReachedGitHubUnrecordedTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.pend()
+        self.ctx["comments"] = [review_comment(1, "src/a.py", line=13, original_line=13, subject_type="line", pull_request_review_id=55)]
+
+    def sent_findings(self):
+        return [c["finding"] for c in self.calls() if "finding" in c]
+
+    def test_sends_no_thread_for_a_comment_already_there(self):
+        self.assertEqual(self.sent_findings(), [3])
+
+    def test_says_so_in_the_preview(self):
+        self.assertIn("already on GitHub, though this run has no record of it: https://gh/c/901; --post records it", self.main())
+
+    def test_records_it(self):
+        self.main("--post")
+        row = run_files.read_posted(self.run_dir)[1]
+        self.assertEqual({k: row[k] for k in ("state", "comment_id", "url", "kind", "line", "end_line", "review_id")},
+                         {"state": "posted", "comment_id": "901", "url": "https://gh/c/901", "kind": "range", "line": "11", "end_line": "13",
+                          "review_id": "55"})
+
+    def test_records_one_in_a_submitted_review_under_that_review(self):
+        self.ctx["pending"] = None
+        self.ctx["comments"][0]["pull_request_review_id"] = 54
+        self.main("--post")
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["review_id"], "54")
+
+    def test_records_them_without_a_call_when_every_comment_is_there(self):
+        self.ctx["comments"].append(review_comment(3, "src/b.py", subject_type="file", pull_request_review_id=55))
+        self.main("--post")
+        self.assertEqual((self.graphql.call_count, self.rest.call_count, sorted(run_files.read_posted(self.run_dir))), (0, 0, [1, 3]))
+
+    def test_sends_one_whose_comment_is_on_another_line(self):
+        self.ctx["comments"][0].update(line=12, original_line=12)
+        self.assertEqual(self.sent_findings(), [1, 3])
+
+    def test_sends_one_whose_comment_says_something_else(self):
+        self.ctx["comments"][0]["body"] = "Something else."
+        self.assertEqual(self.sent_findings(), [1, 3])
+
+    def test_leaves_a_comment_another_finding_recorded(self):
+        self.posted_row(5, kind="body", comment_id="901")
+        self.assertEqual(self.sent_findings(), [1, 3])
 
 
 class LiveRollbackTest(LiveCase):
@@ -778,10 +873,15 @@ class WhenGitHubErrsOnTheReviewItMayHaveCreatedTest(LiveCase):
         super().setUp()
         self.rest_rejects("POST")
 
-    def test_deletes_the_pending_review_it_finds(self):
-        self.listed.return_value = [{"id": 56, "node_id": "PRR_56", "state": "PENDING"}]
+    def test_leaves_a_pending_review_it_finds(self):
+        self.listed.return_value = ANOTHER_PENDING
         self.rejected()
-        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/56"))
+        self.assertEqual(self.deleted_reviews(), [])
+
+    def test_names_the_pending_review_it_left(self):
+        self.listed.return_value = ANOTHER_PENDING
+        self.assertIn("a pending review this batch began (pending review 56 is on the pull request now and was left as it is",
+                      self.rejected())
 
     def test_says_a_review_may_be_left_when_it_finds_none(self):
         self.assertIn("GitHub answered with an error; possibly on GitHub: a pending review this batch began", self.rejected())
@@ -812,10 +912,10 @@ class WhenInterruptedWhileCreatingTheReviewTest(LiveCase):
         super().setUp()
         self.rest_rejects("POST", KeyboardInterrupt())
 
-    def test_deletes_the_pending_review_it_finds(self):
-        self.listed.return_value = [{"id": 56, "node_id": "PRR_56", "state": "PENDING"}]
+    def test_leaves_a_pending_review_it_finds(self):
+        self.listed.return_value = ANOTHER_PENDING
         self.stopped(KeyboardInterrupt)
-        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/56"))
+        self.assertEqual(self.deleted_reviews(), [])
 
     def test_says_a_review_may_be_left_when_it_finds_none(self):
         self.assertIn("possibly on GitHub: a pending review this batch began", self.stopped(KeyboardInterrupt))
@@ -969,6 +1069,9 @@ class FetchPrTest(FetchPrCase):
 
     def test_knows_which_comments_are_on_github_submitted_or_pending(self):
         self.assertEqual(self.ctx["comment_ids"], {"8", "9"})
+
+    def test_keeps_the_comments_submitted_or_pending_to_match_a_batch_against(self):
+        self.assertEqual([c["id"] for c in self.ctx["comments"]], [8, 9])
 
     def test_finds_the_merge_base_of_the_reviewed_commit_with_the_base(self):
         self.assertEqual((self.ctx["merge_base"], self.gh.call_args_list[-1].args[0][1]),

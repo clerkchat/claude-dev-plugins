@@ -210,7 +210,11 @@ drafted" when the finding's anchor or the reviewed commit is not the one the
 text was drafted for (its suggestion then goes as a plain code block), "cannot
 post: ..." when a text is missing, names a local path of this machine, holds a
 `{#<id>}` cross-reference token, or its file is not in the pull request,
-"already posted" or "changed since posting", the text as it will be sent, and
+"already posted" or "changed since posting" (for a comment in the body of a
+submitted review, the preview shows that review's new body too), "already on
+GitHub, though this run has no record of it" for a comment an earlier batch
+posted without recording it (`--post` records it without sending it again),
+the text as it will be sent, and
 a warning when the text names internal material (a `.clerk-dev` path, a
 home-directory path, a record id, a confidence, a lens, a finding number, a
 run label), mentions someone (`@name`, which GitHub notifies), names an issue
@@ -253,8 +257,12 @@ branch's pull request.
    `<run>/posted/draft-<merged id>.md`, prints `N=<path>` for each on its
    output and each finding's form, proposal for a repeat, or reason not
    drafted on its errors, and saves nothing when the answer holds anything
-   else, a finding not marked Post, or one finding twice; then say what it
-   refused and draft the batch again. Apply the drafts in one render with
+   else, a finding not marked Post, or one finding twice. When it refuses,
+   say what it refused and draft the batch once more, with its refusal line
+   (the answer's line number and what it expected) quoted above the batch as
+   the correction to make; leave out a finding it named as not marked Post.
+   After a second refusal of the same batch, stop drafting it and tell the
+   user which findings it held and the refusal line. Apply the drafts in one render with
    `--posted N=<path>` for each line it printed, and no other draft file. Tell
    the user which findings were not drafted and why. When the
    `clerk-dev:post-drafter` agent type is not available (a session started
@@ -282,10 +290,15 @@ branch's pull request.
    counting the comments that are new or changed since posting. On yes, run the
    same command with `--post`. It adds every comment to the user's pending
    review, creating one on the reviewed commit when there is none, and updates
-   comments whose text changed since posting; findings already posted and
-   unchanged are skipped. If GitHub answers any part with an error, it deletes
-   what the batch added, the call that failed included when GitHub applied it
-   anyway, and names anything that may still be there; relay its error.
+   comments whose text changed since posting, a review-body comment of a
+   submitted review in that review's body; findings already posted and
+   unchanged are skipped, and comments already on GitHub with the same file,
+   line, and text are recorded instead of sent again. If GitHub answers any
+   part with an error, it deletes what the batch added, the call that failed
+   included when GitHub applied it anyway, and names anything that may still
+   be there; relay its error. It never deletes a pending review it did not
+   get back from GitHub: when creating the review fails, it names a pending
+   review it finds and leaves it, since that one may be the user's.
 8. Render, and report what went where, one line per finding from its Posted
    line ("4 on `src/a.ts:12-14`", "9 in the review body"), and whether the
    pending review already existed or was created. The comments are visible
