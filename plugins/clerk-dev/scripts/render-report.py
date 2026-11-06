@@ -248,7 +248,8 @@ def snippet(repo, head, spec):
     if not lines: return ""
     lines = textwrap.dedent("\n".join(lines)).splitlines()
     ext = os.path.splitext(path)[1].lstrip(".") or "text"
-    return f"```{ext}\n// {path}:{a}\n" + "\n".join(lines) + "\n```"
+    body = "\n".join(lines); fence = fence_around(body, 3)
+    return f"{fence}{ext}\n// {path}:{a}\n" + body + f"\n{fence}"
 
 def area_of(e, labels):
     sl = sorted(s for s in e["slices"] if s not in ("whole", "all"))
@@ -791,8 +792,11 @@ def check_posted_notes():
         else:
             print(f"finding {n}: note changed; redraft the posted text", file=sys.stderr)
 
+def fence_around(text, shortest):
+    return "`" * max([shortest] + [len(r) + 1 for r in re.findall(r"^\s*(`{3,})", text, re.M)])
+
 def posted_fence(text):
-    return "`" * max([4] + [len(r) + 1 for r in re.findall(r"^(`{3,})", text, re.M)])
+    return fence_around(text, 4)
 
 def posted_link(row):
     if not has_comment(row): return []
