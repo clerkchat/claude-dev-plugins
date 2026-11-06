@@ -397,6 +397,12 @@ class CarryPostedTest(PostCase):
         with open(os.path.join(cur, name), encoding="utf-8") as f:
             return f.read()
 
+    def test_carries_a_run_without_posted_texts_without_creating_them(self):
+        self.render()
+        cur = self.carry()
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted.tsv")))
+        self.assertFalse(os.path.exists(os.path.join(cur, "posted.tsv")))
+
     def test_carries_the_drafted_text_and_its_state(self):
         self.render("--posted", f"1={self.draft}")
         cur = self.carry()
