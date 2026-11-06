@@ -6,7 +6,7 @@ Usage: preflight.py [WORKTREE ...] [--log N]
 For each worktree (default: the current directory) prints a Markdown block:
   - the worktree root, branch, HEAD, and git common directory;
   - the repository's setup lines (<common dir>/clerk-dev/setup) and repo context;
-  - the remote main (origin/HEAD), or that it is missing;
+  - the remote main, or that it is missing;
   - when the last fetch was (FETCH_HEAD in the common directory);
   - the merge base with the remote main and the commit count since it;
   - the branch's commit messages (newest N, default 50), `diff --stat`
@@ -18,7 +18,7 @@ For each worktree (default: the current directory) prints a Markdown block:
 Never fetches, writes nothing, and always exits 0: a missing piece is
 printed as missing rather than failing the call.
 """
-import argparse, datetime, os, re, subprocess, time
+import argparse, os, re, subprocess
 from records import load_script
 
 rs = load_script("status.py")
@@ -28,11 +28,6 @@ def git_raw(repo, *args):
     """Like git(), but keeps leading whitespace, which aligns `--stat` and `status --short`."""
     r = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
     return r.stdout.rstrip() if r.returncode == 0 else ""
-
-def age(seconds):
-    if seconds < 3600: return f"{int(seconds // 60)} minutes ago"
-    if seconds < 2 * 86400: return f"{int(seconds // 3600)} hours ago"
-    return f"{int(seconds // 86400)} days ago"
 
 def fence(text):
     return ["```", text.rstrip() or "(none)", "```"]
@@ -69,26 +64,21 @@ def block(path, log_n):
     rows = rs.workspace_rows(wt)
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")
-    common = git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    rec = load_script("records.py")
+    common = rec.common_dir(wt)
     out += [f"## {rs.repo_name(wt, rows)} ({branch})", "",
             f"- Worktree: `{wt}`", f"- HEAD: `{head[:9]}`", f"- Common dir: `{common}`"]
 
-    rec = load_script("records.py")
     setup = rec.setup_path(wt)
     lines = open(setup, encoding="utf-8").read().strip().splitlines() if os.path.exists(setup) else []
     out.append(f"- Setup: {'; '.join(lines) if lines else 'none'}")
     context = rec.repo_context_path(wt)
     out.append(f"- Repo context: `{context}`" if os.path.exists(context) else "- Repo context: none")
 
-    main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD")
-    out.append(f"- Remote main: `{main}`" if main else "- Remote main: missing (origin/HEAD is not set)")
-    fh = os.path.join(common, "FETCH_HEAD")
-    if os.path.exists(fh):
-        mtime = os.path.getmtime(fh)
-        stamp = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-        out.append(f"- Last fetch: {stamp} ({age(time.time() - mtime)})")
-    else:
-        out.append("- Last fetch: never (no FETCH_HEAD)")
+    main = rec.remote_main(wt)
+    out.append(f"- Remote main: `{main}`" if main else "- Remote main: missing (no origin/HEAD, origin/main, or origin/master)")
+    fetched = rec.last_fetch(common)
+    out.append(f"- Last fetch: {fetched[0]} ({fetched[1]})" if fetched else "- Last fetch: never (no FETCH_HEAD)")
 
     base = git(wt, "merge-base", "HEAD", main) if main else ""
     if base:

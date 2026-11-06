@@ -2,11 +2,11 @@ import re
 from typing import NamedTuple
 
 RECORD, REF, CHECK, SURVEY = "record", "ref", "check", "survey"
-IDEA, PASS, BUILD, MILESTONE, DEFERRED, QUESTION, FOLLOWUP = "idea", "pass", "build", "milestone", "deferred", "question", "followup"
+IDEA, PASS, BUILD, MILESTONE, DEFERRED, QUESTION, FOLLOWUP, BACKLOG = "idea", "pass", "build", "milestone", "deferred", "question", "followup", "backlog"
 
 RECORD_LEADS = {"brainstorm": "STORM-", "design": "DESIGN-", "decision": "DEC-", "guidance": "GUIDE-",
                 "pieces": "PIECES-", "plan": "PLAN-", "brief": "BRIEF-"}
-ITEM_LEADS = {IDEA: "IDEA-", PASS: "PASS-", BUILD: "BUILD-", MILESTONE: "MILE-", DEFERRED: "DEFER-", QUESTION: "Q-", FOLLOWUP: "F"}
+ITEM_LEADS = {IDEA: "IDEA-", PASS: "PASS-", BUILD: "BUILD-", MILESTONE: "MILE-", DEFERRED: "DEFER-", QUESTION: "Q-", FOLLOWUP: "F", BACKLOG: "BL-"}
 ALIASES = {"IDEAS-": RECORD, "R": RECORD, "I": IDEA, "P": PASS, "B": BUILD, "M": MILESTONE, "D": DEFERRED, "Q": QUESTION}
 TYPE_ALIASES = {"spec": "brief", "capabilities": "pieces"}
 SURVEY_LEAD = "SURVEY-"

@@ -44,17 +44,18 @@ def plugin_text_files():
 FEATURE_MD = "# Feature: test\n\n## Summary\n\nA test feature.\n"
 
 
-def run_script(name, *args):
+def run_script(name, *args, env=None):
     done = subprocess.run(
         ["python3", os.path.join(SCRIPTS, name + ".py"), *map(str, args)],
         capture_output=True,
         text=True,
+        env=env,
     )
     return done.returncode, (done.stdout + done.stderr).rstrip("\n")
 
 
-def run_ok(name, *args):
-    code, out = run_script(name, *args)
+def run_ok(name, *args, env=None):
+    code, out = run_script(name, *args, env=env)
     if code != 0:
         raise AssertionError(f"{name} {args} failed: {out}")
     return out

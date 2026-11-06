@@ -60,9 +60,9 @@ Entry format:
     - Subject: feat: keep a feature's records in the hub worktree
     - Started: 2026-10-16
 """
-import argparse, datetime, os, re, sys, tempfile
+import argparse, datetime, os, re, sys
 from typing import NamedTuple
-from records import exclude, git, git_failure, git_run, load_script, record_id
+from records import exclude, git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
 import ids
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -156,9 +156,7 @@ def write(p, entries):
             if k in REPEATABLE: out += [f"  - {k}: {v}\n" for v in e["multi"][k]]
             elif e["f"].get(k): out.append(f"  - {k}: {e['f'][k]}\n")
         out.append("\n")
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=".build.")
-    with os.fdopen(fd, "w", encoding="utf-8") as fh: fh.write("".join(out).rstrip("\n") + "\n")
-    os.replace(tmp, p)
+    write_atomic(p, "".join(out).rstrip("\n") + "\n")
 
 def reqs_of(e):
     """[(number, state or None, note)] from a Requirements field such as
@@ -605,7 +603,7 @@ def catalogue():
 def branch_base(wt):
     """The merge base with the remote main branch, or "" when there is none."""
     git(wt, "rev-parse", "--git-dir", check=True)
-    main = git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
+    main = remote_main(wt)
     if not main or not git(wt, "rev-parse", "--verify", "-q", "HEAD"): return ""
     args = ("merge-base", "HEAD", main)
     r = git_run(wt, *args)

@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from helpers import SCRIPTS, TempCase, write_record
+from helpers import SCRIPTS, FeatureRepoCase, TempCase, git, init_repo, write_record
 
 sys.path.insert(0, SCRIPTS)
 import build
@@ -164,3 +164,84 @@ class LensModeTests(TempCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+TABLE = "| Repo | Worktree | Main |\n| --- | --- | --- |\n| api | /w/api | origin/main |\n| web | /w/web | |\n"
+
+
+class TableRowsTests(unittest.TestCase):
+    def test_rows_are_keyed_by_the_header_cells(self):
+        self.assertEqual(records.table_rows(TABLE)[0], {"Repo": "api", "Worktree": "/w/api", "Main": "origin/main"})
+
+    def test_an_empty_cell_is_an_empty_string(self):
+        self.assertEqual(records.table_rows(TABLE)[1]["Main"], "")
+
+    def test_the_separator_is_not_a_row(self):
+        self.assertEqual(len(records.table_rows(TABLE)), 2)
+
+    def test_text_between_tables_starts_a_new_header(self):
+        rows = records.table_rows(TABLE + "\nmore\n\n| Name | Size |\n| - | - |\n| a | 1 |\n")
+        self.assertEqual(rows[2], {"Name": "a", "Size": "1"})
+
+    def test_text_without_a_table_has_no_rows(self):
+        self.assertEqual(records.table_rows("Hub: api\n"), [])
+
+
+class RenderTests(unittest.TestCase):
+    META = {"id": "DEC-1", "title": "T", "kind": "idea", "path": "/x"}
+
+    def test_writes_the_record_fields_in_order_and_skips_the_rest(self):
+        self.assertEqual(records.render(self.META, "body"), "---\nid: DEC-1\ntitle: T\n---\nbody")
+
+    def test_writes_the_given_fields_in_their_order(self):
+        self.assertEqual(records.render(self.META, "body", ("kind", "id")), "---\nkind: idea\nid: DEC-1\n---\nbody")
+
+
+class WriteAtomicTests(TempCase):
+    def test_writes_the_text_and_leaves_no_temporary_file(self):
+        p = self.path("out.md")
+        records.write_atomic(p, "hello\n")
+        self.assertEqual(open(p).read(), "hello\n")
+        self.assertEqual(os.listdir(self.tmp), ["out.md"])
+
+
+class RepoHelpersTests(FeatureRepoCase):
+    def test_remote_main_is_origin_head(self):
+        self.assertEqual(records.remote_main(self.repo.path), "origin/main")
+
+    def test_remote_main_falls_back_to_origin_main_without_origin_head(self):
+        self.repo.git("remote", "set-head", "origin", "-d")
+        self.assertEqual(records.remote_main(self.repo.path), "origin/main")
+
+    def test_last_fetch_reads_fetch_head(self):
+        stamp, ago = records.last_fetch(records.common_dir(self.repo.path))
+        self.assertRegex(stamp, r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
+        self.assertEqual(ago, "0 minutes ago")
+
+    def test_this_repo_is_the_origin_name(self):
+        self.assertEqual(records.this_repo(self.repo.path, {}), "origin")
+
+    def test_this_repo_is_the_workspace_row_name_first(self):
+        self.assertEqual(records.this_repo(self.repo.path, {"api": self.repo.path}), "api")
+
+
+class NoOriginRepoTests(TempCase):
+    def setUp(self):
+        super().setUp()
+        self.repo = init_repo(self.path("checkout"), with_origin=False)
+
+    def test_remote_main_is_empty(self):
+        self.assertEqual(records.remote_main(self.repo.path), "")
+
+    def test_last_fetch_is_none(self):
+        self.assertIsNone(records.last_fetch(records.common_dir(self.repo.path)))
+
+    def test_this_repo_is_the_main_checkouts_directory_from_a_worktree(self):
+        wt = self.path("feat")
+        git(self.repo.path, "worktree", "add", "-q", wt, "-b", "feat")
+        self.assertEqual(records.this_repo(wt, {}), "checkout")
+
+    def test_age_words(self):
+        self.assertEqual(records.age(120), "2 minutes ago")
+        self.assertEqual(records.age(7200), "2 hours ago")
+        self.assertEqual(records.age(3 * 86400), "3 days ago")

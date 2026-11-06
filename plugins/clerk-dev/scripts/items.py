@@ -18,9 +18,10 @@ Other scripts import read(), write(), and the constants. WorktreeList is the
 worktree-list layer `followups.py` and `deferred.py` are thin over: add, list,
 close, reopen, and set on `<worktree>/.clerk-dev/<file>`.
 """
-import argparse, datetime, os, re, sys, tempfile
+import argparse, datetime, os, re, sys
 from records import load_script
 import ids
+from records import write_atomic
 
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")
@@ -86,9 +87,7 @@ def write(path, items, header, order=()):
         for k in keys:
             out.append(f"  - {k}:{' ' + it['fields'][k] if it['fields'][k] else ''}\n")
         out.append("\n")
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".items.")
-    with os.fdopen(fd, "w", encoding="utf-8") as fh: fh.write("".join(out).rstrip("\n") + "\n")
-    os.replace(tmp, path)
+    write_atomic(path, "".join(out).rstrip("\n") + "\n")
 
 def header_of(path):
     """Everything before the first item, kept as it is on rewrite."""

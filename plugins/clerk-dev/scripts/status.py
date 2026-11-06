@@ -69,7 +69,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows
 import ids
 import run_files as rf
 
@@ -107,13 +107,7 @@ def repo_name(wt, rows):
     """The repository's name in follow-up `From:` lines: its row in the review
     workspace, else the last segment of its origin URL, else the directory of
     its main checkout."""
-    real = os.path.realpath(wt)
-    for name, path in rows:
-        if path == real: return name
-    url = git(wt, "remote", "get-url", "origin")
-    if url: return re.sub(r"\.git$", "", url.rstrip("/")).rsplit("/", 1)[-1].rsplit(":", 1)[-1]
-    common = git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    return os.path.basename(os.path.dirname(common)) if common else os.path.basename(real)
+    return load_script("records.py").this_repo(wt, dict(rows))
 
 def has_feature(p):
     return os.path.exists(os.path.join(p, ".clerk-dev", "feature", "feature.md"))
@@ -506,13 +500,7 @@ def overview_parts(d):
     parts = {"plan": [], "gaps": [], "disagreements": [], "areas": {}}
     if not os.path.exists(p): return parts
     text = open(p, encoding="utf-8").read()
-    plan = section(text, "Plan")
-    rows = [l for l in plan.splitlines() if l.strip().startswith("|")]
-    if len(rows) > 2:
-        head = [c.strip().lower() for c in rows[0].strip().strip("|").split("|")]
-        for l in rows[2:]:
-            cells = [c.strip() for c in l.strip().strip("|").split("|")]
-            parts["plan"].append(dict(zip(head, cells)))
+    parts["plan"] = [{k.lower(): v for k, v in row.items()} for row in table_rows(section(text, "Plan"))]
     op = section(text, "Open")
     if "### Disagreements" in op:
         parts["disagreements"] = [b for b in bullets(section(op, "Disagreements", 3)) if b.lower() != "none."]

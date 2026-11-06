@@ -38,9 +38,10 @@ Entry format:
     - Check: pass-p3-1016; ran edge-cases, error-handling; edge-cases 2, error-handling 0
     - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
-import argparse, datetime, json, os, re, subprocess, sys, tempfile
+import argparse, datetime, json, os, re, subprocess, sys
 from records import load_script
 import ids
+from records import write_atomic
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -101,9 +102,7 @@ def write(p, passes):
                 out.append("  - Items:\n")
                 out += [f"    - [{i['mark']}] {i['n']}. {i['text']}\n" for i in e["items"]]
         out.append("\n")
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=".passes.")
-    with os.fdopen(fd, "w", encoding="utf-8") as fh: fh.write("".join(out).rstrip("\n") + "\n")
-    os.replace(tmp, p)
+    write_atomic(p, "".join(out).rstrip("\n") + "\n")
 
 def find(passes, pid):
     pid = ids.complete(pid, ids.PASS)

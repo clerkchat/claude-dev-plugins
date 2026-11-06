@@ -29,7 +29,7 @@ class FormatTests(unittest.TestCase):
 
     def test_items(self):
         expected = {ids.IDEA: "IDEA-29", ids.PASS: "PASS-29", ids.BUILD: "BUILD-29", ids.MILESTONE: "MILE-29",
-                    ids.DEFERRED: "DEFER-29", ids.QUESTION: "Q-29", ids.FOLLOWUP: "F29"}
+                    ids.DEFERRED: "DEFER-29", ids.QUESTION: "Q-29", ids.FOLLOWUP: "F29", ids.BACKLOG: "BL-29"}
         self.assertEqual({kind: ids.item(kind, 29) for kind in ids.ITEMS}, expected)
 
     def test_parts_of_a_record(self):
@@ -72,12 +72,14 @@ class ParseTests(unittest.TestCase):
 
     def test_not_ids(self):
         for text in ("", None, "R", "X3", "r7", "R7.", "R7-", "R7-1.Q", "R7-1.P2", "B", "3", " R7", "R7.3.4",
-                     "dec-39", "DEC39", "DEC-", "BRIEF-34.7.1", "IDEAS29", "MILE1", "Q-", "F-3", "REC-3"):
+                     "dec-39", "DEC39", "DEC-", "BRIEF-34.7.1", "IDEAS29", "MILE1", "Q-", "F-3", "REC-3", "BL4", "BL-", "B-4"):
             with self.subTest(text=text):
                 self.assertIsNone(ids.parse(text))
 
     def test_kind_and_number(self):
         self.assertEqual(ids.kind_of("MILE-1"), ids.MILESTONE)
+        self.assertEqual(ids.kind_of("BL-4"), ids.BACKLOG)
+        self.assertEqual(ids.kind_of("B4"), ids.BUILD)
         self.assertEqual(ids.kind_of("PLAN-8.2"), ids.REF)
         self.assertEqual(ids.kind_of("IDEAS-1"), ids.RECORD)
         self.assertEqual(ids.kind_of("IDEA-1"), ids.IDEA)
@@ -113,6 +115,7 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(ids.next_number(["BUILD-1", "MILE-4", "BUILD-2"], ids.BUILD), 3)
         self.assertEqual(ids.next_number(["BUILD-1", "MILE-4", "BUILD-2"], ids.MILESTONE), 5)
         self.assertEqual(ids.next_number(["DEC-3", "BRIEF-10"], ids.RECORD), 11)
+        self.assertEqual(ids.next_number(["BL-1", "BUILD-9", "BL-3"], ids.BACKLOG), 4)
 
 
 class SurveyTests(unittest.TestCase):
@@ -169,7 +172,7 @@ class InputTests(unittest.TestCase):
     def test_normalize_uppercases_and_adds_the_missing_dash(self):
         cases = {"dec39": "DEC-39", "brief-34.7": "BRIEF-34.7", "brief34.7": "BRIEF-34.7", "storm1": "STORM-1", "ideas1": "IDEAS-1",
                  "idea29": "IDEA-29", "mile1": "MILE-1", "q3": "Q-3", " pass2 ": "PASS-2", "r7.2": "R7.2",
-                 "b3": "B3", "f3": "F3", "brief13-1.q6": "BRIEF-13-1.Q6", "c": "C"}
+                 "b3": "B3", "f3": "F3", "bl4": "BL-4", "BL4": "BL-4", "brief13-1.q6": "BRIEF-13-1.Q6", "c": "C"}
         for text, want in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(ids.normalize(text), want)

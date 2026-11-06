@@ -55,7 +55,7 @@ Record frontmatter:
   supersedes: DEC-3
   ---
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys
+import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile, time
 from typing import NamedTuple
 import ids
 
@@ -93,23 +93,53 @@ def workspace(wt):
     p = workspace_path(wt)
     if not os.path.exists(p): return None, {}
     text = open(p, encoding="utf-8").read()
-    repos = {}
-    for line in text.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.lstrip().startswith("|") and len(cells) >= 2 and cells[0] not in ("Repo", "") and not set(cells[0]) <= set("-: "):
-            repos[cells[0]] = cells[1]
+    repos = {r["Repo"]: r.get("Worktree", "") for r in table_rows(text) if r.get("Repo")}
     m = re.search(r"^Hub:\s*(\S+)", text, re.M)
     hub = None
     if m: hub = repos.get(m.group(1), m.group(1))
     return hub, repos
 
+def table_cells(line): return [c.strip() for c in line.strip().strip("|").split("|")]
+
+def table_separator(cells): return all(set(c) <= set("-: ") for c in cells)
+
+def table_rows(text):
+    rows, head = [], None
+    for line in text.splitlines():
+        if not line.lstrip().startswith("|"): head = None; continue
+        cells = table_cells(line)
+        if head is None: head = cells
+        elif not table_separator(cells): rows.append(dict(zip(head, cells)))
+    return rows
+
 def this_repo(wt, repos):
     real = os.path.realpath(wt)
     for name, path in repos.items():
-        if os.path.realpath(path) == real: return name
+        if os.path.realpath(os.path.expanduser(path)) == real: return name
     url = git(wt, "remote", "get-url", "origin")
     if url: return re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1].split(":")[-1])
-    return os.path.basename(real)
+    common = common_dir(wt)
+    return os.path.basename(os.path.dirname(common) if common else real)
+
+def remote_main(wt):
+    return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
+
+def age(seconds):
+    if seconds < 3600: return f"{int(seconds // 60)} minutes ago"
+    if seconds < 2 * 86400: return f"{int(seconds // 3600)} hours ago"
+    return f"{int(seconds // 86400)} days ago"
+
+def last_fetch(common):
+    fh = os.path.join(common, "FETCH_HEAD")
+    if not os.path.exists(fh): return None
+    mtime = os.path.getmtime(fh)
+    return datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"), age(time.time() - mtime)
+
+def write_atomic(path, text):
+    path = os.path.abspath(path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=f".{os.path.basename(path)}.")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh: fh.write(text)
+    os.replace(tmp, path)
 
 def hub(wt):
     h, _ = workspace(wt)
@@ -129,8 +159,8 @@ def parse(p):
     meta["path"] = p
     return meta, text[m.end():] if m else text
 
-def render(meta, body):
-    head = "".join(f"{k}: {meta[k]}\n" for k in FIELDS if meta.get(k))
+def render(meta, body, fields=FIELDS):
+    head = "".join(f"{k}: {meta[k]}\n" for k in fields if meta.get(k))
     return f"---\n{head}---\n{body}"
 
 def records(d):
@@ -395,8 +425,9 @@ def rule_lines(heading, body, rule):
 
 def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
 
-def repo_dir(wt):
-    return os.path.join(git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir"), "clerk-dev")
+def common_dir(wt): return git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
+
+def repo_dir(wt): return os.path.join(common_dir(wt), "clerk-dev")
 
 def repo_context_path(wt): return os.path.join(repo_dir(wt), "repo-context.md")
 
