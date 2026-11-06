@@ -17,9 +17,8 @@ Usage:
 Other scripts import read(), write(), and the constants.
 """
 import argparse, datetime, os, re, sys
-from records import load_script
+from records import load_script, write_atomic
 import ids
-from records import write_atomic
 
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
 STATUSES = ("open", "in-progress", "fixed", "wont-fix", "deferred")

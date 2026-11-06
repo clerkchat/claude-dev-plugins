@@ -164,6 +164,9 @@ class AddRefusalTests(BacklogCase):
     def test_a_follow_up_needs_an_origin(self):
         self.assertIn("--origin", self.refused("add", self.feat, "x", "--kind", "followup"))
 
+    def test_a_title_blank_after_its_dots_is_refused(self):
+        self.assertEqual(self.refused("add", self.feat, "...", "--kind", "idea"), "the title is blank; give the item a title")
+
     def test_repo_without_workspace_or_config_gives_the_setup_line(self):
         out = self.refused("add", self.feat, "x", "--kind", "followup", "--origin", "a b", "--repo", "web")
         self.assertEqual(out, config.MISSING.format(self.path("absent.md")))
@@ -207,8 +210,50 @@ class HubTests(TwoRepositoryCase):
         self.assertEqual(self.ok("set", self.web_feat, "api:BL-1", "adopted", "--ref", "STORM-1"), "api:BL-1 adopted (adopted as STORM-1)")
         self.assertEqual(self.ok("path", self.web_feat, "api:bl1"), os.path.join(self.backlog_dir(self.api), "001.md"))
 
+    def test_a_bare_id_only_in_the_hub_reaches_it_from_the_other_repository(self):
+        self.idea(wt=self.web_feat)
+        self.assertEqual(self.ok("path", self.web_feat, "BL-1"), os.path.join(self.backlog_dir(self.api), "001.md"))
+
     def test_an_id_that_is_not_a_backlog_id_is_refused(self):
         self.assertIn("not a backlog id", self.refused("show", self.feat, "DEC-4"))
+
+
+class SameIdInBothBacklogsTests(TwoRepositoryCase):
+    def setUp(self):
+        super().setUp()
+        self.link_workspace(self.feat, "api", [("api", self.feat), ("web", self.web_feat)])
+        self.idea("Hub feature idea")
+        self.idea("Web's own idea", "--scope", "new", wt=self.web_feat)
+
+    def test_a_bare_id_is_refused_naming_both(self):
+        self.assertEqual(self.refused("set", self.web_feat, "BL-1", "adopted", "--ref", "DEC-1"), "BL-1 is in more than one backlog; name one: web:BL-1 or api:BL-1")
+
+    def test_the_qualified_hub_id_leaves_the_own_item_alone(self):
+        self.ok("set", self.web_feat, "api:BL-1", "adopted", "--ref", "DEC-1")
+        self.assertEqual(self.meta("web:BL-1", wt=self.web_feat)["status"], "open")
+
+    def test_from_the_hub_the_bare_id_is_the_hubs_own(self):
+        self.assertEqual(self.ok("path", self.feat, "BL-1"), os.path.join(self.backlog_dir(self.api), "001.md"))
+
+
+class StaleWorkspaceRowTests(TwoRepositoryCase):
+    def setUp(self):
+        super().setUp()
+        write_file(os.path.join(self.feat, ".clerk-dev", "workspace.md"), workspace_md("api", [("api", self.feat), ("web", self.path("web/removed"))]))
+
+    def test_repo_falls_through_to_the_registry(self):
+        self.registry(("web", self.web.path, "main"))
+        self.followup("Handle exportId", "--repo", "web", "--scope", "new")
+        self.assertTrue(os.path.exists(os.path.join(self.backlog_dir(self.web), "001.md")))
+
+    def test_repo_without_a_registry_is_refused(self):
+        out = self.refused("add", self.feat, "x", "--kind", "followup", "--origin", "a b", "--repo", "web")
+        self.assertEqual(out, config.MISSING.format(self.path("absent.md")))
+
+    def test_nothing_is_filed_outside_a_checkout(self):
+        os.makedirs(self.path("plain"))
+        out = self.refused("add", self.path("plain"), "x", "--kind", "idea", "--scope", "new")
+        self.assertEqual(out, f"{self.path('plain')} is not a git checkout, so plain has no backlog there")
 
 
 class NonHubFollowUpTests(TwoRepositoryCase):
@@ -248,6 +293,10 @@ class ListTests(BacklogCase):
     def test_kind_narrows(self):
         self.assertEqual(self.ids_listed("--kind", "idea"), ["BL-1", "BL-2"])
 
+    def test_an_item_without_a_title_still_lists(self):
+        write_file(os.path.join(self.backlog_dir(self.api), "007.md"), "---\nid: BL-7\nkind: idea\nstatus: open\nscope: new\n---\n")
+        self.assertEqual(self.listed("--kind", "idea")[-1], "BL-7 idea open new: ")
+
     def test_the_line_carries_id_kind_status_scope_and_title(self):
         self.assertEqual(self.listed("--kind", "cleanup"), ["BL-4 cleanup owed new: Remove flag  [from this session]"])
 
@@ -277,6 +326,10 @@ class OrphanTests(BacklogCase):
         git(self.api.path, "worktree", "remove", self.path("api/gone"))
         git(self.api.path, "branch", "-q", "-D", "feat/gone")
         self.assertEqual(self.listed()[0], "BL-1 idea open feat/gone: Will be orphaned  [from this session; from feat/gone, branch gone]")
+
+    def test_a_failed_git_call_exits_rather_than_reading_as_no_branches(self):
+        with self.assertRaisesRegex(SystemExit, "^git worktree list --porcelain failed in "):
+            backlog.branches(self.path("nowhere"))
 
     def test_orphans_show_whatever_the_scope_filter_says(self):
         git(self.api.path, "worktree", "remove", self.path("api/gone"))
@@ -395,6 +448,17 @@ class RegistryTests(TwoRepositoryCase):
 
     def test_an_unregistered_name_is_refused(self):
         self.assertIn("worker", self.refused("list", self.feat, "--repo", "worker"))
+
+
+class HubWithRegistryTests(TwoRepositoryCase):
+    def setUp(self):
+        super().setUp()
+        self.registry(("api", self.api.path, "main"), ("web", self.web.path, "main"))
+        self.link_workspace(self.feat, "api", [("api", self.feat), ("web", self.web_feat)])
+
+    def test_a_hub_idea_naming_this_repository_is_listed_once(self):
+        self.idea("Contact card shows number", "--repos", "web", wt=self.web_feat)
+        self.assertEqual(self.listed("--kind", "idea", wt=self.web_feat), ["api:BL-1 idea open feat/x: Contact card shows number  [from this session]"])
 
 
 class CheckCase(TempCase):

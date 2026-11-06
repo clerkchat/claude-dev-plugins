@@ -39,9 +39,8 @@ Entry format:
     - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
 import argparse, datetime, json, os, re, subprocess, sys
-from records import load_script
+from records import load_script, write_atomic
 import ids
-from records import write_atomic
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")

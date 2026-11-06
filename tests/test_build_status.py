@@ -152,8 +152,8 @@ class NamesTests(StatusCase):
         self.assertIn("R6.7: unknown", names)
 
 
-def ideas_section(repo):
-    lines = repo.digest().splitlines()
+def ideas_section(wt):
+    lines = run_ok("records", "digest", wt).splitlines()
     return lines[lines.index("# Ideas") : lines.index("# Open items in active briefs")]
 
 
@@ -167,8 +167,8 @@ class BacklogIdeasCase(StatusCase):
     def names(self, *wanted, wt=None):
         return run_ok("records", "names", wt or self.repo.path, *wanted).splitlines()
 
-    def feature_md(self):
-        run_ok("records", "index", self.repo.path)
+    def feature_md(self, wt=None):
+        run_ok("records", "index", wt or self.repo.path)
         with open(os.path.join(self.repo.path, ".clerk-dev", "feature", "feature.md")) as f:
             return f.read()
 
@@ -176,23 +176,30 @@ class BacklogIdeasCase(StatusCase):
         table = "| Repo | Worktree |\n| --- | --- |\n" + "".join(f"| {name} | {path} |\n" for name, path in rows)
         write_file(os.path.join(wt, ".clerk-dev", "workspace.md"), (f"Hub: {hub}\n\n" if hub else "") + table)
 
+    def untitled_idea(self):
+        write_file(os.path.join(self.repo.path, ".git", "clerk-dev", "backlog", "001.md"), "---\nid: BL-1\nkind: idea\nstatus: open\nscope: feat\n---\n")
+
 
 class DigestIdeasTests(BacklogIdeasCase):
     def test_none_without_ideas(self):
-        self.assertEqual(ideas_section(self.repo), ["# Ideas", "", "none", ""])
+        self.assertEqual(ideas_section(self.repo.path), ["# Ideas", "", "none", ""])
 
     def test_an_open_idea_reads_parked_with_its_why_and_when(self):
         self.idea("Phone digits", "--area", "delivery", "--why", "faster.", "--when", "after launch")
-        self.assertIn("- BL-1 (delivery): Phone digits. Status: parked. Why: faster. When: after launch.", ideas_section(self.repo))
+        self.assertIn("- BL-1 (delivery): Phone digits. Status: parked. Why: faster. When: after launch.", ideas_section(self.repo.path))
 
     def test_an_adopted_idea_reads_its_outcome(self):
         self.idea()
         self.backlog("set", "BL-1", "adopted", "--ref", "DEC-1")
-        self.assertIn("- BL-1 (feature-wide): Phone digits. Status: adopted as DEC-1.", ideas_section(self.repo))
+        self.assertIn("- BL-1 (feature-wide): Phone digits. Status: adopted as DEC-1.", ideas_section(self.repo.path))
 
     def test_an_idea_for_new_work_is_left_out(self):
         self.idea("Later", "--scope", "new")
-        self.assertEqual(ideas_section(self.repo), ["# Ideas", "", "none", ""])
+        self.assertEqual(ideas_section(self.repo.path), ["# Ideas", "", "none", ""])
+
+    def test_an_idea_without_a_title_still_reads(self):
+        self.untitled_idea()
+        self.assertIn("- BL-1 (feature-wide): . Status: parked. Why: -. When: -.", ideas_section(self.repo.path))
 
 
 class IndexIdeasTests(BacklogIdeasCase):
@@ -206,6 +213,10 @@ class IndexIdeasTests(BacklogIdeasCase):
         self.idea()
         self.backlog("set", "BL-1", "dropped", "--ref", "not needed")
         self.assertNotIn("## Ideas", self.feature_md())
+
+    def test_an_idea_without_a_title_still_lists(self):
+        self.untitled_idea()
+        self.assertIn("- **BL-1**: \n", self.feature_md())
 
 
 class BacklogNamesTests(BacklogIdeasCase):
@@ -231,15 +242,35 @@ class BacklogNamesTests(BacklogIdeasCase):
         self.assertEqual(records.gloss(self.repo.path, "Take BL-1, then BL-1 again."), "Take BL-1 (idea (open): Phone digits), then BL-1 again.")
 
 
-class WhenTheWorktreeIsInAnotherRepositoryTests(BacklogIdeasCase):
+class AnotherRepositoryCase(BacklogIdeasCase):
     def setUp(self):
         super().setUp()
         self.web = init_repo(self.path("web"), with_origin=False)
         self.write_workspace(self.web.path, ("api", self.repo.path), ("web", self.web.path), hub="api")
         self.idea()
 
+
+class WhenTheWorktreeIsInAnotherRepositoryTests(AnotherRepositoryCase):
     def test_names_reads_the_hubs_backlog(self):
         self.assertEqual(self.names("BL-1", wt=self.web.path), ["BL-1: idea (open): Phone digits"])
+
+    def test_the_digest_names_the_hubs_idea_qualified(self):
+        self.assertIn("- api:BL-1 (feature-wide): Phone digits. Status: parked. Why: -. When: -.", ideas_section(self.web.path))
+
+    def test_the_index_names_the_hubs_idea_qualified(self):
+        self.assertIn("- **api:BL-1**: Phone digits", self.feature_md(wt=self.web.path))
+
+
+class WhenBothBacklogsHoldTheSameIdTests(AnotherRepositoryCase):
+    def setUp(self):
+        super().setUp()
+        self.idea("Web's own", "--scope", "new", wt=self.web.path)
+
+    def test_names_leaves_the_bare_id_unknown(self):
+        self.assertEqual(self.names("BL-1", wt=self.web.path), ["BL-1: unknown"])
+
+    def test_names_reads_each_qualified_id(self):
+        self.assertEqual(self.names("api:BL-1", "web:BL-1", wt=self.web.path), ["api:BL-1: idea (open): Phone digits", "web:BL-1: idea (open): Web's own"])
 
 
 class DesignViewTests(StatusCase):

@@ -29,7 +29,7 @@ class Store(NamedTuple):
     wt: str
     dir: str
 
-def backlog_dir(wt): return os.path.join(records.repo_dir(wt), "backlog")
+def backlog_dir(wt): return os.path.join(records.repo_dir(wt), "backlog") if records.common_dir(wt) else ""
 
 def branch_of(wt):
     b = records.git(wt, "rev-parse", "--abbrev-ref", "HEAD")
@@ -48,12 +48,13 @@ def hub_store(wt, own):
     return store_of(h, records.this_repo(h, repos))
 
 def registry_store(repo):
-    if not records.common_dir(repo.checkout): return None
-    return store_of(repo.checkout, repo.name)
+    store = store_of(repo.checkout, repo.name)
+    return store if store.dir else None
 
 def locate(wt, name):
     _, repos = records.workspace(wt)
-    if repos.get(name): return store_of(repos[name], name)
+    row = store_of(repos[name], name) if repos.get(name) else None
+    if row and row.dir: return row
     if not os.path.exists(config.path()): sys.exit(config.MISSING.format(config.path()))
     repo = config.by_name(config.load(), name)
     store = registry_store(repo) if repo else None
@@ -71,6 +72,8 @@ def qualify(store, own, iid): return ids.qualified(None if same_store(store, own
 
 def item_path(store, n): return os.path.join(store.dir, f"{n:03d}.md")
 
+def holds(store, n): return bool(store.dir) and os.path.exists(item_path(store, n))
+
 def numbers(store):
     if not os.path.isdir(store.dir): return []
     return sorted(int(m.group(1)) for m in map(FILE_RE.match, os.listdir(store.dir)) if m)
@@ -85,9 +88,9 @@ def write_item(path, it):
     records.write_atomic(path, records.render(it, it["body"], FIELDS))
 
 def branches(wt):
-    porcelain = records.git(wt, "worktree", "list", "--porcelain")
+    porcelain = records.git(wt, "worktree", "list", "--porcelain", check=True)
     checked_out = re.findall(r"^branch refs/heads/(.+)$", porcelain, re.M)
-    local = records.git(wt, "for-each-ref", "--format=%(refname:short)", "refs/heads/").splitlines()
+    local = records.git(wt, "for-each-ref", "--format=%(refname:short)", "refs/heads/", check=True).splitlines()
     return set(checked_out) | set(local)
 
 class Reader:
@@ -119,6 +122,10 @@ def touching(its, names):
         name = touched(it, names)
         if name: yield {**it, "touches": name}
 
+def not_in(found, its):
+    known = {os.path.realpath(it["path"]) for it in found}
+    return [it for it in its if os.path.realpath(it["path"]) not in known]
+
 def my_names(reader, cfg):
     me = config.by_common_dir(cfg, records.common_dir(reader.wt))
     return {reader.own.name} | ({me.name} if me else set())
@@ -147,26 +154,27 @@ def read(wt, kind=None, scope=None, include_closed=False, repo=None):
             mine = my_names(reader, cfg)
             for other in cfg.repos:
                 store = registry_store(other)
-                if store and not same_store(store, reader.own): found += touching(reader.items(store), mine)
+                if store and not same_store(store, reader.own): found += not_in(found, touching(reader.items(store), mine))
     return [it for it in found
             if (kind is None or it.get("kind") == kind)
             and (scope is None or it["orphaned"] or it.get("scope") == scope)
             and (include_closed or it.get("status") in OPEN)]
 
+def stores_for(wt, repo, own):
+    if repo: return [locate(wt, repo)]
+    hub = hub_store(wt, own)
+    return [own] if same_store(hub, own) else [own, hub]
+
 def find_in(wt, text):
     repo, iid = split_id(text)
     own = own_store(wt)
-    store = locate(wt, repo) if repo else own
-    path = item_path(store, ids.number(iid))
-    if not os.path.exists(path): sys.exit(f"{qualify(store, own, iid)} not found in {store.dir}")
-    return store, own, path
+    stores = stores_for(wt, repo, own)
+    held = [s for s in stores if holds(s, ids.number(iid))]
+    if not held: sys.exit(f"{qualify(stores[0], own, iid)} not found in {' or '.join(s.dir or s.wt for s in stores)}")
+    if len(held) > 1: sys.exit(f"{iid} is in more than one backlog; name one: {' or '.join(ids.qualified(s.name, iid) for s in held)}")
+    return held[0], own, item_path(held[0], ids.number(iid))
 
-def lookup(wt, text):
-    repo, iid = split_id(text)
-    own = own_store(wt)
-    stores = [locate(wt, repo)] if repo else [own, hub_store(wt, own)]
-    path = next((p for p in (item_path(s, ids.number(iid)) for s in stores) if os.path.exists(p)), None)
-    return read_item(path) if path else None
+def lookup(wt, text): return read_item(find_in(wt, text)[2])
 
 def find(wt, text):
     store, _, path = find_in(wt, text)
@@ -185,7 +193,10 @@ def body_text(a):
 def foreign_args(a):
     return [f"--{arg}" for kind, args in OWN_ARGS.items() if kind != a.kind for arg in args if getattr(a, arg)]
 
+def title_of(a): return a.title.strip().rstrip(".")
+
 def check_add(a):
+    if not title_of(a): sys.exit("the title is blank; give the item a title")
     foreign = foreign_args(a)
     if foreign: sys.exit(f"{', '.join(foreign)}: not a field of {WORDS[a.kind]}")
     if a.kind == CLEANUP and not (a.trigger or a.removes): sys.exit("a cleanup needs --trigger or --removes")
@@ -197,6 +208,7 @@ def target_store(wt, a, own, scope):
     return own
 
 def create(store, meta, body):
+    if not store.dir: sys.exit(f"{store.wt} is not a git checkout, so {store.name} has no backlog there")
     os.makedirs(store.dir, exist_ok=True)
     n = (numbers(store) or [0])[-1] + 1
     while True:
@@ -216,7 +228,7 @@ def add(wt, a):
     scope = a.scope or branch_of(records.hub(wt))
     if not scope: sys.exit("the hub's HEAD is detached; give --scope <branch>|new")
     store = target_store(wt, a, own, scope)
-    meta = {"kind": a.kind, "title": a.title.rstrip("."), "status": OPEN_STATUS if a.kind == IDEA else OWED, "scope": scope,
+    meta = {"kind": a.kind, "title": title_of(a), "status": OPEN_STATUS if a.kind == IDEA else OWED, "scope": scope,
             "repos": ", ".join(r.strip() for r in (a.repos or "").split(",") if r.strip()), "area": records.slug(a.area) if a.area else "",
             "repo": own.name, "branch": records.git(wt, "rev-parse", "--abbrev-ref", "HEAD"), "date": datetime.date.today().isoformat(), "from": a.src or DEFAULT_FROM,
             **{k: getattr(a, k) or "" for k in OWN_ARGS[CLEANUP] + OWN_ARGS[FOLLOWUP]}}
@@ -266,12 +278,12 @@ def removed(store, main, it):
 def grep_line(store, main, it):
     state = f"gone from {main}" if removed(store, main, it) else f"still present on {main}"
     progress = f" (in progress: {it['ref']})" if it.get("ref") else ""
-    return f"{it['qualified']} {it['title']}: {it['removes']} {state}{progress}"
+    return f"{it['qualified']} {it.get('title', '')}: {it['removes']} {state}{progress}"
 
 def trigger_line(it):
     age = days_old(it)
     aged = f", {age} day{'' if age == 1 else 's'} old" if age is not None else ""
-    return f"{it['qualified']} {it['title']}: trigger: {it['trigger']}{aged}"
+    return f"{it['qualified']} {it.get('title', '')}: trigger: {it['trigger']}{aged}"
 
 def fetch_line(store):
     fetched = records.last_fetch(records.common_dir(store.wt))
@@ -303,7 +315,7 @@ def line(it):
     if it.get("from"): tail.append(f"from {it['from']}")
     if it["orphaned"]: tail.append(f"from {it['scope']}, branch gone")
     if it.get("touches"): tail.append(f"owned by {it['owner']}, also touches {it['touches']}")
-    return f"{it['qualified']} {it['kind']} {it['status']} {it.get('scope', '')}: {it['title']}" + (f"  [{'; '.join(tail)}]" if tail else "")
+    return f"{it['qualified']} {it['kind']} {it['status']} {it.get('scope', '')}: {it.get('title', '')}" + (f"  [{'; '.join(tail)}]" if tail else "")
 
 def main():
     ap = argparse.ArgumentParser(description="The repository's backlog, <git common dir>/clerk-dev/backlog/: ideas, cleanups, and follow-ups as one file per item, BL-n per repository, <repo>:BL-n from elsewhere.")

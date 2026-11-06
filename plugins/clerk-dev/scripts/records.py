@@ -346,7 +346,7 @@ def overview_line(d):
     since = f"; {', '.join(added)} came after" if added else "; statuses or areas changed since"
     return f"Overview: [overview.md](overview.md), stale (through {through}{since}); say \"refresh the overview\"."
 
-def index(d):
+def index(d, wt):
     p = os.path.join(d, "feature.md")
     if not os.path.exists(p): return
     text = open(p, encoding="utf-8").read()
@@ -368,10 +368,10 @@ def index(d):
             for r in ordered(grp): rows += entry(r, d, repos)
             rows.append("")
         if not live: rows += ["No active records.", ""]
-    parked = backlog_mod().feature_ideas(hub_of(d))
+    parked = backlog_mod().feature_ideas(wt)
     if parked:
         rows += ["## Ideas", "", f"Parked, {len(parked)}, in the backlog; `backlog.py list <worktree> --kind idea` shows them with why and when.", ""]
-        rows += [f"- **{i['id']}**{' (' + i['area'] + ')' if i.get('area') else ''}: {i['title']}" for i in parked] + [""]
+        rows += [f"- **{i['qualified']}**{' (' + i['area'] + ')' if i.get('area') else ''}: {i.get('title', '')}" for i in parked] + [""]
     cs = checks(d)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
@@ -726,7 +726,7 @@ def built_mark(r, built):
 def idea_line(it):
     bl = backlog_mod()
     state = it.get("outcome") or f"parked. Why: {bl.prose(it, 'why').rstrip('.') or '-'}. When: {bl.prose(it, 'when').rstrip('.') or '-'}"
-    return f"- {it['id']} ({it.get('area') or 'feature-wide'}): {it['title']}. Status: {state}."
+    return f"- {it['qualified']} ({it.get('area') or 'feature-wide'}): {it.get('title', '')}. Status: {state}."
 
 def open_item_lines(d, c):
     return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
@@ -735,7 +735,7 @@ def open_item_lines(d, c):
 def brief_open_items(body):
     return re.findall(r"^\s*[-*] \[ \] (.*)$", section(body, "Open items"), re.M)
 
-def digest(d):
+def digest(d, wt):
     rs = records(d)
     out = []
     fp = os.path.join(d, "feature.md")
@@ -753,7 +753,7 @@ def digest(d):
         out += [f"# Open {words}", ""] + [line for c in cs if c["kind"] == kind for line in open_item_lines(d, c)] + [""]
     out += ["# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
-    out += [idea_line(it) for it in backlog_mod().feature_ideas(hub_of(d), include_closed=True)] or ["none"]
+    out += [idea_line(it) for it in backlog_mod().feature_ideas(wt, include_closed=True)] or ["none"]
     out += ["", "# Open items in active briefs", ""]
     for r in live:
         if r["type"] != "brief": continue
@@ -761,7 +761,7 @@ def digest(d):
         out += [f"- {r['id']}: {item}" for item in brief_open_items(body)]
     return "\n".join(out) + "\n"
 
-def stamp_overview(d):
+def stamp_overview(d, wt):
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
     rs = records(d)
@@ -773,7 +773,7 @@ def stamp_overview(d):
              " regenerate it by saying \"refresh the overview\"; a change of substance is a new record.\n\n")
     text = lines[0] + "\n\n" + stamp + (lines[1].lstrip("\n") if len(lines) > 1 else "")
     open(p, "w", encoding="utf-8").write(text)
-    index(d)
+    index(d, wt)
     return last
 
 def items_mod(): return load_script("items.py")
@@ -800,7 +800,7 @@ def start_feature(wt, name, summary=""):
     open(p, "w", encoding="utf-8").write(
         f"# Feature: {name}\n\nStarted {datetime.date.today().isoformat()} in {this_repo(h, repos)} ({h}). Edit freely above Records.\n\n"
         f"## Summary\n\n{summary or 'One paragraph: what the feature is for and who it serves.'}\n")
-    index(d)
+    index(d, wt)
     return p
 
 def new_record(wt, rtype, title, src="", area=None, repo=None, supersedes=None):
@@ -821,7 +821,7 @@ def new_record(wt, rtype, title, src="", area=None, repo=None, supersedes=None):
     p = os.path.join(d, "records", ids.record_file(num, rtype, slug(title)))
     open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
     if old: set_fields(old, status="superseded", superseded_by=meta["id"])
-    index(d)
+    index(d, wt)
     return meta, p
 
 def main():
@@ -878,9 +878,9 @@ def main():
     elif a.cmd == "discard":
         r = find(d, a.rid)
         if r.get("type") == "brainstorm": sys.exit("brainstorms have no status; they stay as history")
-        set_fields(r, status="discarded", note=a.note); index(d); print(f"{r['id']} discarded")
+        set_fields(r, status="discarded", note=a.note); index(d, a.wt); print(f"{r['id']} discarded")
     elif a.cmd == "reactivate":
-        r = find(d, a.rid); set_fields(r, status="active", superseded_by=None, note=None); index(d); print(f"{r['id']} active")
+        r = find(d, a.rid); set_fields(r, status="active", superseded_by=None, note=None); index(d, a.wt); print(f"{r['id']} active")
     elif a.cmd == "areas":
         by = {}
         for r in records(d):
@@ -889,19 +889,19 @@ def main():
             s["n"] += 1; s["active"] += r.get("status") == "active"; s["last"] = max(s["last"], r.get("date", ""))
         for k, s in by.items(): print(f"{k}\t{s['n']} record{'s' if s['n'] != 1 else ''}, {s['active']} active, last {s['last']}")
     elif a.cmd == "tag":
-        r = find(d, a.rid); set_fields(r, area=slug(a.area) if a.area else None); index(d)
+        r = find(d, a.rid); set_fields(r, area=slug(a.area) if a.area else None); index(d, a.wt)
         print(f"{r['id']} " + (f"area {slug(a.area)}" if a.area else "feature-wide"))
     elif a.cmd == "rename-area":
         hit = [r for r in records(d) if r.get("area") == a.old]
         if not hit: sys.exit(f"no record has area {a.old}")
         for r in hit: set_fields(r, area=slug(a.new))
-        index(d); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
+        index(d, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
-        index(d); print(os.path.join(d, "feature.md"))
+        index(d, a.wt); print(os.path.join(d, "feature.md"))
     elif a.cmd == "digest":
-        sys.stdout.write(digest(d))
+        sys.stdout.write(digest(d, a.wt))
     elif a.cmd == "stamp-overview":
-        print(f"overview stamped through {stamp_overview(d)}")
+        print(f"overview stamped through {stamp_overview(d, a.wt)}")
     elif a.cmd == "overview-status":
         print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
     elif a.cmd == "suggest":
