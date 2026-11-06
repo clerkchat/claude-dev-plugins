@@ -111,7 +111,9 @@ Otherwise judge the candidates, which you do not do yourself:
 4. Say what moved, one line per resolved or changed finding ("12 resolved by
    cabf2b2 (F1)", "40 moved to discuss: the settings page no longer renders the
    invite form inline"), and one line with the count that still applies. The user can
-   undo any of these the usual way, by re-ticking the report.
+   undo any of these the usual way, by re-ticking the report. When the render
+   says a posted finding's thread is still open, follow Closing posted threads
+   in the `review` skill.
 
 ## Pass 1: fixes
 
@@ -139,7 +141,8 @@ continue. Never retry a fix in a loop.
 
 When the queue is done, render once and say: how many were fixed, how many
 partly, how many moved to discuss and why in a few words each, and the progress
-line. When Pass 2 follows, go straight on: in the same message, start Pass 2
+line. When that render says a posted finding's thread is still open, follow
+Closing posted threads in the `review` skill before going on. When Pass 2 follows, go straight on: in the same message, start Pass 2
 and present its first discussion, without waiting to be asked. When the queue
 held more than about ten fixes, put one line before that discussion: "The
 discussions continue below; to start them in a fresh context instead, /clear
@@ -363,7 +366,8 @@ correct it.
 - No edits to code in this session; fixes go through the fix skill.
 - No commits except through the fix skill, which follows the user's commit
   rules.
-- Nothing posted to or submitted on GitHub without the user's yes to that step,
+- Nothing posted to, replied to, resolved, or submitted on GitHub without the
+  user's yes to that step,
   and no verdict proposed; edits to a posted text after posting go out only on
   the next `--post`, after its preview.
 - No changes to an instruction the user set, except: the fix skill moves a `fix`

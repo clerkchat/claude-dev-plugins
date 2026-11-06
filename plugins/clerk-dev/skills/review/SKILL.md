@@ -497,7 +497,8 @@ Incremental run:
    run; the copies carried from the earlier run describe that run, not this one.
    Numbers are stable: carried findings keep theirs, new ones continue from the
    highest. This run's target, the wider one when widening, is what the next
-   incremental run compares against.
+   incremental run compares against. When the render says a posted finding's
+   thread is still open, follow Closing posted threads.
 
 Incremental runs do not need Step 6b; carrying replaces matching.
 
@@ -594,7 +595,9 @@ incremental run on that review, with these differences:
    findings already in the review (reopened ones by number), and how many were
    raised below the bar, kept in `final/below.md` and not reported. The final
    message leads with the count that would hold the merge: "Final pass: 2 would
-   hold the merge (tenant isolation, rollout); 9 raised below the bar."
+   hold the merge (tenant isolation, rollout); 9 raised below the bar." When
+   the render says a posted finding's thread is still open, follow Closing
+   posted threads.
 10. Run `final-report.py <run>`, which writes `<run>/final-review-report.md`:
     the verdict on its first line (`PASSED`, or `NOT PASSED` with what holds the
     merge: new findings at the bar, reopened ones, and findings still open in
@@ -991,6 +994,8 @@ is discovered.
 
 Say one line: "Compared with the review of <date>: <n> carried, <n> reopened,
 <n> to recheck." The report's "Since the previous review" block has the rest.
+When the render says a posted finding's thread is still open, follow Closing
+posted threads.
 
 ## Step 7: verify
 
@@ -1071,6 +1076,14 @@ request for this branch; skipping its comments."), and when the reason is
    `lens: pr-review`, the author, the link, the replies, and the GitHub state;
    known comments are refreshed, not duplicated. It writes a shortlist of up to
    five candidate agent findings per new comment to `pr/candidates.tsv`.
+   A thread whose first comment this run posted (a row in `posted.tsv`) is not
+   imported: it is linked to its finding, and its state, the author's replies,
+   and whether the user can resolve it go to `pr/threads.tsv`, which the
+   finding's Posted block shows. Nothing of the user's own pending review is
+   imported: its threads are left out and counted in the summary line, except a
+   posted one, which links with the state `pending`. A linked thread still open
+   on a finding marked fixed is offered for closing, as Closing posted threads
+   describes.
 2. Judge the links with one sonnet subagent (effort `medium`). Give it each new
    comment's text and location, and for each candidate the finding's title,
    claim, and location. For each comment, at most one candidate is `same`: the
@@ -1252,6 +1265,52 @@ Rules:
 - Statuses carry no judgment: a disputed finding that the user rejects is
   `wont-fix` with the reason, not deleted.
 
+### Closing posted threads
+
+A finding posted to the pull request keeps its thread open on GitHub after it is
+fixed. When a finding with a posted line, range, or file comment is marked
+`fixed` and step 7b last saw its thread open, every render prints `posted
+finding N: marked fixed in <ref>; its thread on GitHub is still open`, and the
+card's Posted block says the same. The line stops once the thread is resolved,
+gone from the pull request, or kept open. Closing replies to the author and
+notifies them, so it is outward-facing like posting: the user is asked every
+time, and only the session that asks runs it. No builder, verifier, or other
+subagent closes a thread, and no flow closes one without the question.
+
+When a render prints that line, or the user asks to close posted threads:
+
+1. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py <run> --repo
+   <worktree> --close` (add `--pr N` as for posting). With no numbers it sends
+   nothing: it lists each closable finding with its number, title, the ref it
+   was fixed in, the thread's URL, the author's last reply, whether the user
+   can resolve the thread, and the reply it would send.
+2. Show each one with its last reply and the reply text, and relay any warning
+   under a reply as for a posted text. A last reply that disputes the fix is
+   worth naming: the user may rather answer it by hand. The reply is "Looks
+   fixed in <sha>." by default; to send other words, write them to
+   `<run>/posted/close-<merged id>.md` and list again. When the listing ends
+   with "cannot close", the user has a pending review open on the pull request,
+   and a reply held in it would be invisible to the author: relay it and stop
+   until they submit or delete that review on GitHub.
+3. Ask "Reply 'looks fixed' and resolve these N threads on PR #<n>?", naming
+   the findings, and saying which threads the user cannot resolve: those get
+   the reply and stay open.
+4. On yes, for all or some, run the same command with `--close N,M` for those
+   findings. It replies to each thread and then resolves it, one thread at a
+   time, and updates `pr/threads.tsv`, so the next render shows it without a
+   refetch. A number that is not closable refuses the whole call, and nothing is
+   sent. If GitHub rejects a call, it stops; the threads before it stand, and
+   its message names them. Relay it.
+5. On a no for a finding, run `--keep-open N[:reason]`, so the line stops
+   repeating on every render; its Posted block then says "Thread kept open" with
+   the reason.
+6. Render, and say what happened, one line per finding from the command's
+   output ("4: replied and resolved", "9: replied; left open, you cannot
+   resolve it").
+
+`--dry-run` with `--close N,M` writes the calls to `posted/payload.json`
+instead of making them; use it when the user asks to see what would be sent.
+
 ## Fixing and rechecking
 
 Fixing a finding and `--recheck` are handled by the `review-fix` skill in this
@@ -1286,7 +1345,10 @@ drafted text becomes stale and the render says to redraft it; an edited text
 stands, and the render warns; relay that warning. Once posted, the block adds
 where it went ("Posted on `path:12-14`, [comment](url).", or "in the review
 body"), and "changed since posting" after a later edit, which the next post
-sends as an update of that comment. Post leaves the status alone. The
+sends as an update of that comment; then the thread as step 7b last saw it,
+with the author's replies and its state, worded as on a pull request comment's
+card. A card with a posted comment keeps its Posted block when it is no longer
+marked Post, as after a re-review. Post leaves the status alone. The
 `review-triage` skill's posting pass drafts the texts and posts them with
 `post-review.py`; nothing goes to GitHub without the user's yes.
 
@@ -1443,11 +1505,13 @@ cross-repository check is starting and roughly how long it takes.
 instance list), `progress.md`, `raw/<lens>[-<slice>].md`, `so-far.md` (interim,
 unverified), `merged.md` (and `merged-new.md` in incremental runs),
 `verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
-`reconcile/`, `pr/`, `titles.tsv`, `overrides/`, `summary.md`,
+`reconcile/`, `pr/` (with `threads.tsv`, the posted findings' threads as step
+7b last saw them), `titles.tsv`, `overrides/`, `summary.md`,
 `not-reviewed.md`, `numbers.tsv`, `status.tsv`, `instructions.tsv`,
 `notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `posted/` (`<id>.md` posted
-texts, `draft-<id>.md` drafts, `review.md` the review body, `payload.json` from
-a dry run), `posted.tsv` (per Post-marked finding: drafted, edited, or posted,
+texts, `draft-<id>.md` drafts, `review.md` the review body, `close-<id>.md` a
+closing reply's own words, `keep.tsv` the threads kept open, `payload.json`
+from a dry run), `posted.tsv` (per Post-marked finding: drafted, edited, or posted,
 the note followed, and once posted the comment's ids, URL, and anchor),
 `.render/<generation>/` with the `rendered-*.tsv` snapshots (`rendered-posted.tsv`
 among them), `report.md`, `report.prev.md`, `stale.tsv`

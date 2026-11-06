@@ -220,7 +220,10 @@ finding's lens; give the recheck agent the comment's text as the claim.
    introduced in the normal format.
 4. Write the agent's output to `<run>/recheck/<id>.md`. Resolved: record `fixed`
    in `status.tsv` (with the commit hash if one was named, else the working
-   tree), re-render, and say so in one sentence. Partly resolved or unresolved:
+   tree), re-render, and say so in one sentence. When the render says the
+   finding's posted thread is still open, the session talking to the user
+   follows Closing posted threads in the `review` skill; a subagent never
+   does. Partly resolved or unresolved:
    leave the status as it was, quote the agent's reason, and suggest the next
    step. A new finding goes through merge and verify as a small addendum: write
    it to a file and add it with `reconcile.py --append
