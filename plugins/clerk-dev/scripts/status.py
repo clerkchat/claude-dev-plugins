@@ -29,6 +29,7 @@ Prints a short Markdown summary:
   - open follow-ups in the other worktrees of .clerk-dev/workspace.md;
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
+    the post queue (marked Post, not yet posted or edited since posting),
     in-progress fixes, and open findings whose code moved since the review;
   - implementation progress from the build log (.clerk-dev/build.md): per
     brief, requirements done, partial, in progress, and not started; handoffs
@@ -73,6 +74,7 @@ import ids
 
 sf = load_script("stale-findings.py")
 not_done = load_script("items.py").not_done
+read_posted = load_script("render-report.py").read_posted
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
@@ -709,11 +711,15 @@ def area_view(wt, out, name, logs):
         steps.append(f"Roll its {len(decs)} decisions into a design that cites them.")
     return steps
 
+def is_posted(row):
+    return bool(row.get("kind")) and row.get("state") == "posted"
+
 def finding_groups(run, status, instr, numbers):
     sections = {}
     for r in sf.tsv(os.path.join(run, "numbers.tsv")):
         if len(r) > 2 and r[1].isdigit(): sections[int(r[1])] = r[2]
-    unmarked, queue, discuss, inprog, new, by_section = {}, [], [], [], [], {}
+    unmarked, queue, discuss, post, inprog, new, by_section = {}, [], [], [], [], [], {}
+    posted = read_posted(run)
     ap = os.path.join(run, "reconcile", "appended.tsv")
     appended = {int(x) for x in open(ap).read().split()[1:] if x.isdigit()} if os.path.exists(ap) else set()
     for mid in sf.load_findings(run):
@@ -725,9 +731,10 @@ def finding_groups(run, status, instr, numbers):
         if st == "in-progress": inprog.append(numbers[mid])
         if choice in ("fix", "noted"): queue.append(numbers[mid])
         elif choice == "discuss": discuss.append(numbers[mid])
+        elif choice == "post" and not is_posted(posted.get(mid, {})): post.append(numbers[mid])
         elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
-    return unmarked, queue, discuss, inprog, new, by_section
+    return unmarked, queue, discuss, post, inprog, new, by_section
 
 def blockers_view(wt, out, logs, run, have_run):
     rc = load_script("records.py")
@@ -744,7 +751,7 @@ def blockers_view(wt, out, logs, run, have_run):
     fix = []
     if have_run:
         status, instr, numbers = sf.state(run)
-        fix = sorted(finding_groups(run, status, instr, numbers)[5].get("fix", []), key=int)
+        fix = sorted(finding_groups(run, status, instr, numbers)[6].get("fix", []), key=int)
     steps = []
     if stopped:
         out += ["", "**Handoffs stopped on a question:**"] + stopped
@@ -911,7 +918,7 @@ def main():
     # Findings
     if have_run:
         findings = sf.load_findings(run)
-        unmarked, queue, discuss, inprog, new, _ = finding_groups(run, status, instr, numbers)
+        unmarked, queue, discuss, post, inprog, new, _ = finding_groups(run, status, instr, numbers)
         try:
             _, moved = sf.candidates(run, wt)
         except SystemExit:
@@ -927,6 +934,7 @@ def main():
             out.append(f"- new since the first report, unmarked: {len(new)} ({number_list(new)}); `grep -n '\\[new\\]' report.md` finds them")
         if queue: out.append(f"- marked to fix, not yet fixed: {len(queue)}")
         if discuss: out.append(f"- marked to discuss: {len(discuss)}")
+        if post: out.append(f"- marked to post, not yet posted or edited since posting: {len(post)} ({number_list(sorted(post, key=int))})")
         if inprog: out.append(f"- fix in progress (partly fixed or tests failed): {', '.join(sorted(inprog, key=int))}")
         if moved: out.append(f"- open findings whose code changed since the review and not yet cross-checked: {len(moved)}")
 
@@ -942,10 +950,11 @@ def main():
         if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `.clerk-dev/{os.path.basename(run)}/report.md`.")
         if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
         if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
+        if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")
         if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")
         # Fixes are rechecked one finding at a time, never re-reviewed as a
         # branch; once triage is done, the final pass reads them all together.
-        triage_left = sum(len(v) for v in unmarked.values()) + len(queue) + len(discuss) + len(inprog)
+        triage_left = sum(len(v) for v in unmarked.values()) + len(queue) + len(discuss) + len(post) + len(inprog)
         settled = not triage_left and not unreviewed and not open_items
         if counts_fix and settled:
             steps.append(f"Triage is done and {counts_fix} fix{'es' if counts_fix != 1 else ''} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")

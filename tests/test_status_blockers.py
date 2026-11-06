@@ -105,5 +105,46 @@ class BlockersTests(BlockersCase):
         self.assertIn("Nothing blocking.", self.blockers())
 
 
+POSTED_HEADER = "merged_id\tstate\tnote\tdate\tthread_id\tcomment_id\turl\tpath\tline\tend_line\tside\tkind\treview_id\n"
+
+
+class PostQueueTests(BlockersCase):
+    def setUp(self):
+        super().setUp()
+        self.write_run({1: "look", 2: "look", 3: "look", 4: "look"}, instructions=[(n, "post") for n in (1, 2, 3, 4)])
+
+    def write_posted(self, rows):
+        path = os.path.join(self.repo.path, ".clerk-dev", "latest", "posted.tsv")
+        with open(path, "w") as f:
+            f.write(POSTED_HEADER + "".join(f"{n}\t{state}\t\t\t\t\t\ta.py\t1\t1\tRIGHT\t{kind}\t\n" for n, state, kind in rows))
+
+    def full_status(self):
+        code, out = self.repo.status()
+        self.assertEqual(code, 0, out)
+        return out
+
+    def test_without_posted_tsv_every_post_finding_is_queued(self):
+        out = self.full_status()
+        self.assertIn("marked to post, not yet posted or edited since posting: 4 (1, 2, 3, 4)", out)
+        self.assertIn('"post the review"', out)
+
+    def test_only_drafted_and_edited_findings_are_queued(self):
+        self.write_posted([(1, "drafted", ""), (2, "posted", "inline"), (3, "edited", "inline")])
+        out = self.full_status()
+        self.assertIn("marked to post, not yet posted or edited since posting: 3 (1, 3, 4)", out)
+
+    def test_all_posted_and_unchanged_lists_nothing(self):
+        self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4)])
+        out = self.full_status()
+        self.assertNotIn("marked to post", out)
+        self.assertNotIn("post the review", out)
+
+    def test_a_run_with_no_post_marks_is_unchanged(self):
+        self.write_run({1: "look"}, instructions=[(1, "fix")])
+        out = self.full_status()
+        self.assertNotIn("marked to post", out)
+        self.assertNotIn("post the review", out)
+
+
 if __name__ == "__main__":
     unittest.main()
