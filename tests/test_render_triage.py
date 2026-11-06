@@ -240,6 +240,33 @@ class PullRequestCardTailTest(RenderCase):
         self.assertEqual(order, sorted(order))
 
 
+class ThreadLinesTest(unittest.TestCase):
+    def test_adds_nothing_for_an_open_thread_without_replies(self):
+        self.assertEqual(render.thread_lines("", []), [])
+
+    def test_shows_the_replies(self):
+        self.assertEqual(render.thread_lines("@bob: Fair.", []), ["Replies: @bob: Fair.", ""])
+
+    def test_words_each_known_state(self):
+        self.assertEqual(render.thread_lines("", ["resolved", "outdated"]),
+                         ["State: marked resolved on GitHub; outdated on GitHub: the code it was attached to has changed.", ""])
+
+    def test_keeps_an_unknown_state_as_is(self):
+        self.assertEqual(render.thread_lines("", ["approved"]), ["State: approved.", ""])
+
+
+class PullRequestCommentCardTest(RenderCase):
+    def setUp(self):
+        super().setUp()
+        pr = defect(9, "c.py", lens="pr-review", extra="  author: bob\n  replies: @amy: Agreed.\n  github_state: resolved, outdated\n")
+        self.write_merged(defect(7, "a.py"), defect(8, "b.py"), pr)
+        self.write("verify/9.md", "verdict: confirmed | confidence: 90 | severity: major")
+        self.render()
+
+    def test_shows_the_thread_after_the_comment(self):
+        self.assertIn("Replies: @amy: Agreed.\n\nState: marked resolved on GitHub; outdated on GitHub", self.card(3))
+
+
 class PostCase(RenderCase):
     def setUp(self):
         super().setUp()

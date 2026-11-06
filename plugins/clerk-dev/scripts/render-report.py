@@ -620,12 +620,15 @@ def pr_block(c, heading, with_location=True):
     meta = who + (f" on {loc}" if loc and with_location else "") + (f" ([comment]({c['url']}))" if c.get("url") else "")
     out += [meta + ":", ""]
     out += ["> " + code_spans(c.get("claim", "").strip()), ""]
-    if c.get("replies"):
-        out += [code_spans("Replies: " + c["replies"]), ""]
     st = c.get("github_state", "")
-    if st:
-        words = {"resolved": "marked resolved on GitHub", "outdated": "outdated on GitHub: the code it was attached to has changed"}
-        out += [ "State: " + "; ".join(words.get(x.strip(), x.strip()) for x in st.split(",")) + ".", ""]
+    return out + thread_lines(c.get("replies", ""), [x.strip() for x in st.split(",")] if st else [])
+
+THREAD_STATE_WORDS = {"resolved": "marked resolved on GitHub", "outdated": "outdated on GitHub: the code it was attached to has changed"}
+
+def thread_lines(replies, state_words):
+    out = [code_spans("Replies: " + replies), ""] if replies else []
+    if state_words:
+        out += ["State: " + "; ".join(THREAD_STATE_WORDS.get(w, w) for w in state_words) + ".", ""]
     return out
 
 def history_line(e):

@@ -24,6 +24,7 @@ the "Pull request comments" section. Human comments are never filtered by any
 confidence bar.
 """
 import argparse, json, os, re, sys
+from collections import namedtuple
 from records import load_script
 from gh_api import graphql, pr_number, repo_owner_name
 
@@ -54,14 +55,16 @@ def title_from(text):
     first = re.split(r"(?<=[.?!])\s", t)[0]
     return first if len(first) <= 90 else first[:87].rsplit(" ", 1)[0]
 
+def join_replies(replies):
+    return "; ".join(f"@{a}: {one_line(b, 200)}" for a, b in replies)
+
 def entry(mid, kind, gid, author, body, url, path="", line=None, oline=None, replies=(), resolved=False, outdated=False, state=""):
-    rep = "; ".join(f"@{a}: {one_line(b, 200)}" for a, b in replies)
     gh_state = ", ".join(x for x in ("resolved" if resolved else "", "outdated" if outdated else "", state.lower() if state and state != "COMMENTED" else "") if x)
     f = {
         "lens": "pr-review", "source": "github", "slice": "pull-request", "severity": "major", "confidence": "100",
         "file": path or "(pull request)", "line": str(line or oline or ""),
         "title": title_from(body), "claim": one_line(body, 1200), "author": author, "url": url,
-        "github_id": f"{kind}:{gid}", "replies": rep, "github_state": gh_state,
+        "github_id": f"{kind}:{gid}", "replies": join_replies(replies), "github_state": gh_state,
         "evidence": f"Comment by @{author} on the pull request" + (f", originally at line {oline}" if oline and oline != line else ""),
     }
     return "\n".join([f"- id: {mid}"] + [f"  {k}: {v}" for k, v in f.items() if v not in ("", None)])
@@ -84,40 +87,36 @@ def github_items(p):
             items.append(("comment", c["databaseId"], (c["author"] or {}).get("login", "ghost"), c["body"], c["url"], {}))
     return items
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("run"); ap.add_argument("--pr", type=int); ap.add_argument("--repo", default=".")
-    ap.add_argument("--judged")
-    a = ap.parse_args()
-    pd = os.path.join(a.run, "pr"); os.makedirs(pd, exist_ok=True)
-    mpath = os.path.join(a.run, "merged.md")
-    header, entries = rc.normalize_merged(open(mpath, encoding="utf-8").read())
+Folded = namedtuple("Folded", "new_ids updated")
 
-    if a.judged:
-        links = 0
-        for line in open(a.judged):
-            f = line.rstrip("\n").split("\t")
-            if len(f) >= 3 and f[2].strip() == "same":
-                pid, fid = f[0], f[1]
-                for k, c in enumerate(entries):
-                    if c.startswith(f"- id: {pid}\n") and "duplicate_of:" not in c:
-                        entries[k] = c + f"\n  duplicate_of: {fid}"; links += 1
-        rc.write_merged(mpath, header, entries)
-        print(f"linked {links} pull request comments after judging", file=sys.stderr); return
+def fetch(repo, pr):
+    owner, name = repo_owner_name(repo)
+    return graphql(Q, {"o": owner, "r": name, "n": pr}, repo)["data"]["repository"]["pullRequest"]
 
-    owner, name = repo_owner_name(a.repo)
-    pr = a.pr or pr_number(a.repo)
-    data = graphql(Q, {"o": owner, "r": name, "n": pr}, a.repo)
-    p = data["data"]["repository"]["pullRequest"]
-    open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
-    open(os.path.join(pd, "pr.txt"), "w").write(f"{pr}\t{p['url']}\n")
+def pr_dir(run):
+    pd = os.path.join(run, "pr"); os.makedirs(pd, exist_ok=True)
+    return pd
 
+def read_seen(path):
     seen = {}
-    sp = os.path.join(pd, "seen.tsv")
-    if os.path.exists(sp):
-        for l in open(sp):
+    if os.path.exists(path):
+        for l in open(path):
             f = l.rstrip("\n").split("\t")
             if len(f) == 2 and f[1].isdigit(): seen[f[0]] = int(f[1])
+    return seen
+
+def write_seen(path, seen):
+    with open(path, "w") as fh:
+        for k, v in sorted(seen.items(), key=lambda kv: kv[1]): fh.write(f"{k}\t{v}\n")
+
+def fold_in(run, p):
+    pd = pr_dir(run)
+    open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
+    open(os.path.join(pd, "pr.txt"), "w").write(f"{p['number']}\t{p['url']}\n")
+    mpath = os.path.join(run, "merged.md")
+    header, entries = rc.normalize_merged(open(mpath, encoding="utf-8").read())
+    sp = os.path.join(pd, "seen.tsv")
+    seen = read_seen(sp)
     next_id = max([int(re.match(r"^- id: (\d+)", c).group(1)) for c in entries] or [0]) + 1
     new_ids, updated = [], 0
     for kind, gid, author, body, url, extra in github_items(p):
@@ -133,13 +132,13 @@ def main():
         mid = next_id; next_id += 1; seen[key] = mid; new_ids.append(mid)
         entries.append(entry(mid, kind, gid, author, body, url, **extra))
     rc.write_merged(mpath, header, entries)
-    with open(sp, "w") as fh:
-        for k, v in sorted(seen.items(), key=lambda kv: kv[1]): fh.write(f"{k}\t{v}\n")
+    write_seen(sp, seen)
+    return Folded(new_ids, updated)
 
-    # shortlist candidate findings for each new comment; a judge decides
-    allm = rc.load(a.run)
+def shortlist(run, new_ids):
+    allm = rc.load(run)
     agents = {i: e for i, e in allm.items() if e.get("lens") != "pr-review" and not mf.is_credit(e)}
-    reported = set(rr.read_numbers(a.run))
+    reported = set(rr.read_numbers(run))
     rows = []
     for mid in new_ids:
         c = allm[mid]; cw = words(c); scored = []
@@ -153,10 +152,37 @@ def main():
         if len(keep) < 3: keep = ranked[:3]
         for score, fid in keep:
             rows.append((mid, fid, score))
-    with open(os.path.join(pd, "candidates.tsv"), "w") as fh:
+    with open(os.path.join(pr_dir(run), "candidates.tsv"), "w") as fh:
         fh.write("pr_id\tfinding_id\tscore\n")
         for mid, fid, sc in rows: fh.write(f"{mid}\t{fid}\t{sc:.2f}\n")
-    print(f"PR #{pr}: {len(new_ids)} new comments, {updated} updated, "
+    return rows
+
+def apply_judged(run, judged):
+    mpath = os.path.join(run, "merged.md")
+    header, entries = rc.normalize_merged(open(mpath, encoding="utf-8").read())
+    links = 0
+    for line in open(judged):
+        f = line.rstrip("\n").split("\t")
+        if len(f) >= 3 and f[2].strip() == "same":
+            pid, fid = f[0], f[1]
+            for k, c in enumerate(entries):
+                if c.startswith(f"- id: {pid}\n") and "duplicate_of:" not in c:
+                    entries[k] = c + f"\n  duplicate_of: {fid}"; links += 1
+    rc.write_merged(mpath, header, entries)
+    return links
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("run"); ap.add_argument("--pr", type=int); ap.add_argument("--repo", default=".")
+    ap.add_argument("--judged")
+    a = ap.parse_args()
+    if a.judged:
+        links = apply_judged(a.run, a.judged)
+        print(f"linked {links} pull request comments after judging", file=sys.stderr); return
+    pr = a.pr or pr_number(a.repo)
+    folded = fold_in(a.run, fetch(a.repo, pr))
+    rows = shortlist(a.run, folded.new_ids)
+    print(f"PR #{pr}: {len(folded.new_ids)} new comments, {folded.updated} updated, "
           f"{len(rows)} candidate links for {len({r[0] for r in rows})} comments to judge", file=sys.stderr)
 
 if __name__ == "__main__": main()
