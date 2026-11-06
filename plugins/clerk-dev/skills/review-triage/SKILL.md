@@ -10,9 +10,11 @@ allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The user marks each finding in a review report with an instruction: Fix as
-recommended (optionally with a note), Discuss, Defer, Ignore, or Post. This
-skill works through those instructions. You coordinate; you never edit code,
-and you never hold the details of more than one fix in your context.
+recommended (optionally with a note), Discuss, Defer, Ignore, or Post; a
+credit (section `credit` in `numbers.tsv`: something the change does well) takes
+only Post or Ignore, so it reaches only the posting pass. This skill works
+through those instructions. You coordinate; you never edit code, and you never
+hold the details of more than one fix in your context.
 
 Everything runs in this session: each fix through its own builder and recheck
 agents, which the user can follow in the task panel. The run files are the
@@ -189,8 +191,8 @@ run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill desc
 
 ## Pass 3: posting
 
-The list is every finding whose instruction is `post`, in number order. Posting
-is outward-facing: it notifies a real person, so nothing is sent or submitted
+The list is every finding whose instruction is `post`, credits included, in
+number order. Posting is outward-facing: it notifies a real person, so nothing is sent or submitted
 without the user's explicit yes to that step, and a yes to posting is not a yes
 to submitting.
 
@@ -306,7 +308,8 @@ Choose the instruction by what the fix will follow:
   Notes then hold the design, and they replace the recommendation. If a note
   would start "do not do what the card says", the choice is `noted`.
 - `defer:<ticket or reason>`, `ignore:<reason>`: a reason for Ignore is worth
-  asking for; re-reviews show it next to any finding that comes up again. For
+  asking for; re-reviews show it next to any finding that comes up again. On a
+  credit, `ignore` means only "do not post it": ask no reason. For
   Defer, also follow "Items" in `skills/review/tracking.md`, with the finding
   as the source (`<run> N`); its Path and Open come from the reason and the
   discussion.

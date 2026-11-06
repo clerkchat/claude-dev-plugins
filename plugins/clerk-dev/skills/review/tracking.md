@@ -484,6 +484,11 @@ done as written):
   then set one of the others. Follow-ups and design questions only; a
   finding's author is a lens in this repository, and Discuss covers it.
 
+A credit (a finding from the credit lens: something the change does well,
+worth telling its author) takes only `Post` and `Ignore`, and has no status:
+`Ignore` there means only "do not post it", with no reason, and changes no
+status.
+
 Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
 `deferred`. The box is ticked exactly when the status is one of the last three.
 `Outcome` holds what closed it: a commit (`in 1a2b3c4`), a decision record

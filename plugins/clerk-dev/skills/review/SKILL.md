@@ -471,8 +471,9 @@ Incremental run:
      cover what the new finding describes), `stale` (the same defect, and the
      fix already covers it), or `different` (another issue, even if nearby or
      related). Nearby lines or a shared file are not enough for anything but
-     `different`. It writes `reconcile/append-judged.tsv` (`new_id`,
-     `carried_id`, verdict).
+     `different`. A credit (lens `credit`) matches only a credit: a credit and
+     a finding on the same lines are `different`. It writes
+     `reconcile/append-judged.tsv` (`new_id`, `carried_id`, verdict).
    - `reconcile.py --append <run>/merged-new.md <run> --judged
      <run>/reconcile/append-judged.tsv`
      applies them. A recheck that found the carried finding resolved wins over
@@ -951,7 +952,8 @@ zero findings but visibly contains a `findings` block, the agent broke the
 format; read that file yourself rather than patching the script. Do not write a
 parser of your own. Merging by line range is deliberately mechanical; two
 findings about the same defect in different files stay separate and the verifier
-sees both.
+sees both. A credit (lens `credit`) never merges with a finding of another kind;
+two credits on overlapping lines merge as findings do.
 
 ## Step 6b: reconcile with the previous review
 
@@ -980,7 +982,9 @@ is discovered.
    note). For `reopened`, append the earlier finding to `merged.md` with
    `reconcile.py --append` and add a row to `reconcile/matches.tsv` (`how` =
    `recheck`), so it renders as reopened. Earlier open findings with no match
-   are not rechecked; the report lists them for the user to confirm.
+   are not rechecked; the report lists them for the user to confirm. Credits
+   are matched only with credits, and an earlier credit with no match is not
+   listed: it has nothing to confirm.
 5. Earlier findings that were declined or deferred and were found again go to
    verification in step 7 whatever their confidence, with the earlier reason.
 
@@ -1030,12 +1034,20 @@ Write `<run>/reconcile/prior.tsv` (`cur_id`, outcome, sentence). `holds` keeps
 the finding in "Previously declined"; `answered` puts it back in the normal
 sections with both the reason and the counter-evidence shown.
 
-Drop rejected findings. Everything else stays in `merged.md`; the renderer
-decides the section from severity and final confidence: blockers and majors at
+Every credit (lens `credit`) is verified too, whatever its confidence, by a
+`sonnet` verifier at effort `medium` asked one question: is the claim true of
+the code at HEAD as described? It returns a confidence about that truth and a
+verdict: confirmed, adjusted (true but overstated, with the note), or rejected
+(with why); no severity, origin, or fix_size. A credit with no verdict is not
+shown.
+
+Drop rejected findings and credits. Everything else stays in `merged.md`; the
+renderer decides the section from severity and final confidence: blockers and majors at
 80 or above to "Fix before merging", minors at 60 or above and majors from 60 to
 79 to "Worth a look" (quick mode raises the minor bar to 80, never the major
 one), blockers below 60 to "Needs confirmation", majors from 40 to 59 to the
-"Below the bar" section, and minors below 60 to a count only.
+"Below the bar" section, and minors below 60 to a count only. Credits go to
+"Credits".
 
 ## Step 7b: pull request comments
 
@@ -1140,10 +1152,16 @@ What the document contains, so you can check it:
   `existing`, whatever their severity: they do not hold the merge, and the
   recommendation is a separate pull request), "Cleanup and refactoring"
   (tech-debt findings, labeled cleanup, simplify, or refactor; they do not hold
-  the merge), and "Previously declined", each grouped by area
-  (the part labels), with page breaks; then "Below the bar", full cards for the
+  the merge), "Previously declined", and "Credits" (what the change does well,
+  worth telling its author; the intro counts them and those marked Post), each
+  grouped by area (the part labels), with page breaks; then "Below the bar", full cards for the
   majors the bar left out, each saying why, with unticked checklists that
-  nothing acts on until the user ticks one. Empty sections are omitted.
+  nothing acts on until the user ticks one. Empty sections are omitted. A
+  credit whose lines overlap a finding in Reopened, Fix before merging, Worth a
+  look, Needs confirmation, or Already on main is dropped, unnumbered, and
+  "About this review" counts it; one already posted is kept, and its card says
+  "Overlaps finding N". Credits stay out of the progress line and the Triage
+  line's counts.
 - Each card: numbered title; a hidden anchor comment; the action in bold (as
   the glance table's Action column words it) and the area; a focus line; a
   scope line (fix size, origin, and any follow-up in another
@@ -1154,6 +1172,11 @@ What the document contains, so you can check it:
   (or What would confirm it), Second opinion only when the verifier left a note,
   and Resolution once a fix has been made. A finding appended after a fix may
   say which fix surfaced it.
+- A credit's card: numbered title, anchor comment, **Credit** and the area, the
+  focus line, the location, the claim, Context, the snippet, Second opinion
+  when the verifier left a note, the Instruction block, and the Posted block
+  when marked Post; no status, scope, Why it matters, How it goes wrong,
+  Recommendation, or Resolution.
 - "Not reviewed this run" and "About this review", which states how to refer to
   findings by number and where the detail lives.
 
@@ -1273,6 +1296,12 @@ instructions with `--instruct N=<choice>[:note]` and add notes with
 "Recording a decision" says what goes where. Defer and Ignore also set the
 status (deferred, won't fix, with the note as the reason) when the finding is
 open.
+
+A credit's Instruction block lists only Post and Ignore, and a credit has no
+status: Ignore means only "do not post it", needs no reason, and changes
+nothing in `status.tsv`. `--instruct N=<choice>` with any other choice and
+`--set` on a credit are refused, and a hand tick on another label is dropped
+with a render warning to relay.
 
 The `review-triage` skill works through them: fixes first, each in its own
 session, then discussions with the user, then posting.

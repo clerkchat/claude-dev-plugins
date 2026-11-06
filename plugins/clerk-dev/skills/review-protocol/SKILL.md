@@ -354,8 +354,9 @@ After the block, add at most three short sections:
 - `Coverage`: one or two sentences on what you checked and what you could not
   (files too large, context missing, callers outside the repo).
 
-No preamble, no restating the diff, no praise. If you found nothing, emit an
-empty `findings` block and the `Coverage` section.
+No preamble, no restating the diff, no praise (the credit lens is the one
+exception; its prompt names the fields a credit carries). If you found
+nothing, emit an empty `findings` block and the `Coverage` section.
 
 ## Paths
 
