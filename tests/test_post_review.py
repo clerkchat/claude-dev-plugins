@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import shlex
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -65,6 +66,9 @@ class PostCase(GhRunCase):
         diff = mock.patch.object(post, "pr_patch", return_value=PATCH)
         self.pr_diff = diff.start()
         self.addCleanup(diff.stop)
+        terminal = mock.patch.object(post, "ask_terminal", return_value="7\n")
+        self.terminal = terminal.start()
+        self.addCleanup(terminal.stop)
 
     def mark(self, mid, note="", text=None):
         self.marks[mid] = note
@@ -659,6 +663,102 @@ class SubmitTest(PostCase):
                                                            "fields": {"event": "REQUEST_CHANGES", "body": post.DEFAULT_BODY}}])
 
 
+class ConfirmedSubmitCase(PostCase):
+    VERDICT = "approve"
+
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.pend()
+        self.posted_row(1)
+        self.rest = self.stub("rest", return_value={})
+        self.repo_path = self.path("repo")
+        self.args = ("--submit", self.VERDICT)
+
+    def main(self, *args):
+        return super().main(*args, "--repo", self.repo_path)
+
+    def writes(self):
+        return self.rest.call_count
+
+
+class TerminalConfirmationTests:
+    def test_asks_for_the_pull_request_number(self):
+        self.main(*self.args)
+        self.terminal.assert_called_once_with(self.PROMPT)
+
+    def test_asks_before_any_write(self):
+        seen = []
+        self.terminal.side_effect = lambda prompt: seen.append(self.writes()) or "7\n"
+        self.main(*self.args)
+        self.assertEqual(seen, [0])
+
+    def test_sends_once_the_number_matches(self):
+        self.main(*self.args)
+        self.assertGreater(self.writes(), 0)
+
+    def test_asks_nothing_on_a_dry_run(self):
+        self.main(*self.args, "--dry-run")
+        self.terminal.assert_not_called()
+
+
+class WhenTheTypedNumberDiffersTests:
+    def setUp(self):
+        super().setUp()
+        self.terminal.return_value = "8\n"
+
+    def test_sends_nothing(self):
+        self.refusal(*self.args)
+        self.assertEqual(self.writes(), 0)
+
+    def test_says_so(self):
+        self.assertEqual(self.refusal(*self.args), "nothing sent; you typed '8', not the pull request number 7")
+
+
+class WhenThereIsNoTerminalTests:
+    def setUp(self):
+        super().setUp()
+        self.terminal.side_effect = OSError(6, "Device not configured")
+
+    def test_sends_nothing(self):
+        self.refusal(*self.args)
+        self.assertEqual(self.writes(), 0)
+
+    def test_gives_the_command_to_run_with_a_bang(self):
+        command = shlex.join(["python3", post.__file__, self.run_dir, "--repo", self.repo_path, *self.args])
+        self.assertTrue(self.refusal(*self.args).endswith(f"run this yourself:\n! {command}"))
+
+
+class ApproveConfirmationTest(TerminalConfirmationTests, ConfirmedSubmitCase):
+    PROMPT = "Type the pull request number (7) to approve: "
+
+
+class RequestChangesConfirmationTest(TerminalConfirmationTests, ConfirmedSubmitCase):
+    VERDICT = "request-changes"
+    PROMPT = "Type the pull request number (7) to request changes: "
+
+
+class WhenTheTypedNumberDiffersOnApproveTest(WhenTheTypedNumberDiffersTests, ConfirmedSubmitCase):
+    pass
+
+
+class WhenThereIsNoTerminalOnApproveTest(WhenThereIsNoTerminalTests, ConfirmedSubmitCase):
+    pass
+
+
+class WhenSubmittingAsCommentTest(ConfirmedSubmitCase):
+    VERDICT = "comment"
+
+    def test_asks_nothing(self):
+        self.main(*self.args)
+        self.terminal.assert_not_called()
+
+    def test_sends_without_a_terminal(self):
+        self.terminal.side_effect = OSError(6, "Device not configured")
+        self.main(*self.args)
+        self.assertEqual(self.writes(), 1)
+
+
 class LiveCase(PostCase):
     def setUp(self):
         super().setUp()
@@ -714,6 +814,10 @@ class LivePostTest(LiveCase):
         self.assertEqual({k: row[k] for k in ("state", "thread_id", "comment_id", "url", "kind", "line", "end_line", "side", "review_id")},
                          {"state": "posted", "thread_id": "PRRT_1", "comment_id": "901", "url": "https://gh/c/901", "kind": "range",
                           "line": "11", "end_line": "13", "side": "RIGHT", "review_id": "55"})
+
+    def test_asks_nothing_at_the_terminal(self):
+        self.main("--post")
+        self.terminal.assert_not_called()
 
     def test_rolls_back_the_batch_when_github_rejects_a_comment(self):
         self.graphql.side_effect = [thread_data(1), gh_api.GhError("rejected"), {"data": {}}]
@@ -1464,6 +1568,40 @@ class LiveCloseTest(LiveCloseCase):
 
     def test_says_what_it_closed(self):
         self.assertIn("closed:\n  finding 1: replied and resolved\n  finding 2: replied and resolved", self.err)
+
+
+class ConfirmedCloseCase(LiveCloseCase):
+    def setUp(self):
+        super().setUp()
+        self.repo_path = self.repo.path
+        self.args = ("--close", "1,2")
+
+    def writes(self):
+        return self.graphql.call_count
+
+
+class CloseConfirmationTest(TerminalConfirmationTests, ConfirmedCloseCase):
+    PROMPT = "Type the pull request number (7) to reply and resolve 2 threads: "
+
+    def test_counts_one_thread_in_the_singular(self):
+        self.main("--close", "1")
+        self.terminal.assert_called_once_with("Type the pull request number (7) to reply and resolve 1 thread: ")
+
+    def test_asks_nothing_for_the_listing(self):
+        self.main("--close")
+        self.terminal.assert_not_called()
+
+    def test_asks_nothing_to_keep_a_thread_open(self):
+        self.main("--keep-open", "1")
+        self.terminal.assert_not_called()
+
+
+class WhenTheTypedNumberDiffersOnCloseTest(WhenTheTypedNumberDiffersTests, ConfirmedCloseCase):
+    pass
+
+
+class WhenThereIsNoTerminalOnCloseTest(WhenThereIsNoTerminalTests, ConfirmedCloseCase):
+    pass
 
 
 class WhenTheViewerCannotResolveTest(LiveCloseCase):

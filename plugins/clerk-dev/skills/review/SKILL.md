@@ -1281,8 +1281,9 @@ finding N: marked fixed in <ref>; its thread on GitHub is still open`, and the
 card's Posted block says the same. The line stops once the thread is resolved,
 gone from the pull request, or kept open. Closing replies to the author and
 notifies them, so it is outward-facing like posting: the user is asked every
-time, and only the session that asks runs it. No builder, verifier, or other
-subagent closes a thread, and no flow closes one without the question.
+time, and the user runs the close at a terminal, confirming it there. No
+session, builder, verifier, or other subagent closes a thread, and no flow
+closes one without the question.
 
 When a render prints that line, or the user asks to close posted threads:
 
@@ -1326,8 +1327,15 @@ When a render prints that line, or the user asks to close posted threads:
 3. Ask "Reply 'looks fixed' and resolve these N threads on PR #<n>?", naming
    the findings, and saying which threads the user cannot resolve: those get
    the reply and stay open.
-4. On yes, for all or some, run the same command with `--close N,M` for those
-   findings. It replies to each thread and then resolves it, one thread at a
+4. On yes, for all or some, never run the command with `--close N,M`
+   yourself: it asks the user to type the pull request number at a terminal,
+   and refuses in this session's shell, which has none. Show the user the
+   exact command, with the plugin root, the run, and the worktree written out
+   as absolute paths, and `--pr N` when you passed it: `! python3 <plugin
+   root>/scripts/post-review.py <run> --repo <worktree> --close N,M`, with
+   those findings' numbers, and ask them to run it themselves; a reply on a thread
+   is never a reason to run it for them. Once they say it ran, relay what it
+   printed. It replies to each thread and then resolves it, one thread at a
    time, and updates `pr/threads.tsv`, so the next render shows it without a
    refetch. A named finding whose thread was resolved or deleted on GitHub
    since the listing is skipped, and the output names it; any other number

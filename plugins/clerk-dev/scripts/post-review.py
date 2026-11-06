@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, datetime, json, os, re, subprocess, sys
+import argparse, datetime, json, os, re, shlex, subprocess, sys
 import gh_api, ids
 import run_files as rf
 from records import load_script
@@ -7,6 +7,7 @@ from records import load_script
 pc = load_script("pr-comments.py")
 
 VERDICTS = {"comment": "COMMENT", "request-changes": "REQUEST_CHANGES", "approve": "APPROVE"}
+CONFIRMED_VERDICTS = {"request-changes": "request changes", "approve": "approve"}
 DEFAULT_BODY = "Comments from my review of this pull request."
 BLOCK_START = re.compile(r"^\s{0,3}(#|>|\||[-*+]\s|\d+[.)]\s)")
 SUGGESTION = re.compile(r"^(\s*(?:`{3,}|~{3,}))suggestion\b", re.M)
@@ -598,6 +599,22 @@ def post(a, ctx, items, reviewed):
         raise
     print(posted_summary(items, sending, adopted, results), file=sys.stderr)
 
+def ask_terminal(prompt):
+    with open("/dev/tty", "rb+", buffering=0) as tty:
+        tty.write(prompt.encode())
+        return tty.readline().decode()
+
+def own_command(a, action):
+    pr = ["--pr", str(a.pr)] if a.pr else []
+    return shlex.join(["python3", os.path.abspath(__file__), os.path.abspath(a.run), "--repo", os.path.abspath(a.repo), *pr, *action])
+
+def confirm(a, ctx, what, action):
+    try: typed = ask_terminal(f"Type the pull request number ({ctx['pr']}) to {what}: ").strip()
+    except OSError:
+        sys.exit(f"nothing sent; to {what}, you confirm at a terminal by typing the pull request number, and there is none here; "
+                 f"run this yourself:\n! {own_command(a, action)}")
+    if typed != str(ctx["pr"]): sys.exit(f"nothing sent; you typed {typed!r}, not the pull request number {ctx['pr']}")
+
 def submit(a, ctx, verdict):
     p = ctx["pending"]
     if not p: sys.exit("no pending review on the pull request; run --post first")
@@ -607,6 +624,7 @@ def submit(a, ctx, verdict):
     body = checked_body(a.run, ctx, rows, p["id"])
     calls = [{"method": "POST", "path": f"{pulls_path(ctx)}/reviews/{p['id']}/events", "fields": {"event": VERDICTS[verdict], "body": body}}]
     if a.dry_run: write_payload(a.run, calls); return
+    if verdict in CONFIRMED_VERDICTS: confirm(a, ctx, CONFIRMED_VERDICTS[verdict], ["--submit", verdict])
     execute(calls, a.repo, ctx)
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
@@ -772,6 +790,7 @@ def close(a, ctx):
     for it in sending: print_warnings(f"{named(it)}:", it["warnings"])
     calls = [call for it in sending for call in close_calls(it)]
     if a.dry_run: write_payload(a.run, calls); return
+    confirm(a, ctx, f"reply and resolve {len(sending)} thread" + ("" if len(sending) == 1 else "s"), ["--close", a.close])
     close_threads(a.run, sending, a.repo)
 
 CANNOT_RESOLVE = "replied that it looks fixed; you cannot resolve the thread"
@@ -853,9 +872,11 @@ def main(argv=None):
     ap.add_argument("run"); ap.add_argument("--repo", default="."); ap.add_argument("--pr", type=int)
     action = ap.add_mutually_exclusive_group()
     action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
-    action.add_argument("--submit", choices=list(VERDICTS), help="submit the pending review with this verdict")
+    action.add_argument("--submit", choices=list(VERDICTS),
+                        help="submit the pending review with this verdict; approve and request-changes ask you to type the pull request number at a terminal")
     action.add_argument("--close", nargs="?", const="", metavar="N[,M]",
-                        help="list the posted findings marked fixed whose threads are still open; with numbers, reply and resolve those threads")
+                        help="list the posted findings marked fixed whose threads are still open; "
+                             "with numbers, reply and resolve those threads once you type the pull request number at a terminal")
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
     action.add_argument("--save-drafts", metavar="FILE",
                         help="save the post-drafter's answer in FILE as posted/draft-<merged id>.md, one per Post-marked finding; print N=<path> for each")
