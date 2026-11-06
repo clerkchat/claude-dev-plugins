@@ -76,6 +76,7 @@ At any step:
 | "where are we?"   | What is done, and what to say next                                 |
 | "help me decide"  | The options for one choice, weighed, with a recommendation         |
 | "checkpoint"      | Saves what the conversation settled, so you can `/clear` safely    |
+| "spin up"         | Takes up a backlog item in a new worktree off main, ready to start |
 
 Nothing is pushed and no pull request is opened for you.
 
@@ -136,6 +137,8 @@ with "where are we?".
 - Parked ideas carry why they are worth having and when to look again, until
   they are adopted or dropped. They live in the hub repository's backlog,
   outside any worktree, so they outlive the branch.
+  Spin-up takes a parked idea up in a new worktree off main, with the
+  idea as the new feature's first brainstorm.
 - They live in `.clerk-dev/feature/` in the worktree you started in (the hub),
   where other repositories of the feature find them. Reviews check the code
   against the active briefs.

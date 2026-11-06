@@ -791,6 +791,39 @@ def area_of(d, rids):
     got = {find(d, i).get("area", "") for i in rids}
     return got.pop() if len(got) == 1 else ""
 
+def start_feature(wt, name, summary=""):
+    h, d = hub(wt), fdir(wt)
+    exclude(h); os.makedirs(os.path.join(d, "records"), exist_ok=True)
+    p = os.path.join(d, "feature.md")
+    if os.path.exists(p): sys.exit(f"{p} already exists")
+    _, repos = workspace(wt)
+    open(p, "w", encoding="utf-8").write(
+        f"# Feature: {name}\n\nStarted {datetime.date.today().isoformat()} in {this_repo(h, repos)} ({h}). Edit freely above Records.\n\n"
+        f"## Summary\n\n{summary or 'One paragraph: what the feature is for and who it serves.'}\n")
+    index(d)
+    return p
+
+def new_record(wt, rtype, title, src="", area=None, repo=None, supersedes=None):
+    d = fdir(wt)
+    rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
+    _, repos = workspace(wt)
+    old = find(d, supersedes) if supersedes else None
+    canon = resolver(rs)
+    parts = [x.strip() for x in src.split(",") if x.strip()] if src else []
+    parts = [canon(ids.normalize(x)) if ids.parse(ids.normalize(x)) else x for x in parts]
+    cited = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
+    area = area if area is not None else (old.get("area", "") if old else area_of(d, cited) if cited else "")
+    meta = {"id": ids.record(num, rtype), "type": rtype, "title": title.rstrip("."), "date": datetime.date.today().isoformat(),
+            "repo": repo or this_repo(wt, repos), "area": slug(area) if area else "",
+            "status": "" if rtype == "brainstorm" else "active",
+            "from": ", ".join(parts),
+            "supersedes": old["id"] if old else ""}
+    p = os.path.join(d, "records", ids.record_file(num, rtype, slug(title)))
+    open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
+    if old: set_fields(old, status="superseded", superseded_by=meta["id"])
+    index(d)
+    return meta, p
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -810,7 +843,6 @@ def main():
     nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
     gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--for", dest="ref"); gd.add_argument("--context"); gd.add_argument("--out")
     a = ap.parse_args()
-    today = datetime.date.today().isoformat()
     guard(a.wt)
 
     if a.cmd == "hub":
@@ -826,35 +858,13 @@ def main():
         return
     d = fdir(a.wt)
     if a.cmd == "start":
-        h = hub(a.wt); exclude(h); os.makedirs(os.path.join(d, "records"), exist_ok=True)
-        p = os.path.join(d, "feature.md")
-        if os.path.exists(p): sys.exit(f"{p} already exists")
-        _, repos = workspace(a.wt)
-        open(p, "w", encoding="utf-8").write(
-            f"# Feature: {a.name}\n\nStarted {today} in {this_repo(h, repos)} ({h}). Edit freely above Records.\n\n"
-            f"## Summary\n\n{a.summary or 'One paragraph: what the feature is for and who it serves.'}\n")
-        index(d); print(p); return
+        print(start_feature(a.wt, a.name, a.summary)); return
     if not os.path.exists(os.path.join(d, "feature.md")):
         sys.exit(f"no feature in {d}; start one with: records.py start {a.wt} \"name\"")
 
     if a.cmd == "new":
-        rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
-        _, repos = workspace(a.wt)
-        old = find(d, a.supersedes) if a.supersedes else None
-        canon = resolver(rs)
-        parts = [x.strip() for x in a.src.split(",") if x.strip()] if a.src else []
-        parts = [canon(ids.normalize(x)) if ids.parse(ids.normalize(x)) else x for x in parts]
-        src = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
-        area = a.area if a.area is not None else (old.get("area", "") if old else area_of(d, src) if src else "")
-        meta = {"id": ids.record(num, a.type), "type": a.type, "title": a.title.rstrip("."), "date": today,
-                "repo": a.repo or this_repo(a.wt, repos), "area": slug(area) if area else "",
-                "status": "" if a.type == "brainstorm" else "active",
-                "from": ", ".join(parts),
-                "supersedes": old["id"] if old else ""}
-        p = os.path.join(d, "records", ids.record_file(num, a.type, slug(a.title)))
-        open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
-        if old: set_fields(old, status="superseded", superseded_by=meta["id"])
-        index(d); print(f"{meta['id']} {p}" + (f" (area {meta['area']})" if meta["area"] else "") + (f" (supersedes {old['id']})" if old else ""))
+        meta, p = new_record(a.wt, a.type, a.title, a.src, a.area, a.repo, a.supersedes)
+        print(f"{meta['id']} {p}" + (f" (area {meta['area']})" if meta["area"] else "") + (f" (supersedes {meta['supersedes']})" if meta["supersedes"] else ""))
     elif a.cmd == "list":
         for r in records(d):
             if a.type and r.get("type") != a.type: continue
