@@ -10,9 +10,9 @@ import records
 pr_comments = records.load_script("pr-comments.py")
 
 
-def thread(gid, state, body="Looks off.", replies=()):
+def thread(gid, state, body="Looks off.", replies=(), reply_state=None):
     comments = [{"databaseId": gid, "author": {"login": "me"}, "body": body, "url": f"u{gid}", "state": state}]
-    comments += [{"databaseId": gid * 10 + n, "author": {"login": "you"}, "body": r, "url": "u", "state": state}
+    comments += [{"databaseId": gid * 10 + n, "author": {"login": "you"}, "body": r, "url": "u", "state": reply_state or state}
                  for n, r in enumerate(replies, 1)]
     return {"path": "a.py", "line": 3, "originalLine": 3, "isResolved": False, "isOutdated": False,
             "comments": {"nodes": comments}}
@@ -39,6 +39,10 @@ class GithubItemsTest(unittest.TestCase):
 
     def test_skips_a_thread_of_a_pending_review(self):
         self.assertEqual(self.items([thread(1, "PENDING")]), [])
+
+    def test_leaves_out_a_pending_reply_on_a_submitted_thread(self):
+        submitted = thread(1, "SUBMITTED", replies=["Unsent draft."], reply_state="PENDING")
+        self.assertEqual(pr_comments.github_items(pull_request([submitted]))[0][5]["replies"], [])
 
     def test_skips_a_thread_with_no_comments(self):
         empty = {**thread(1, "SUBMITTED"), "comments": {"nodes": []}}

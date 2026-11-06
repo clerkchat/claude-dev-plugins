@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, datetime, json, os, re, sys
+import argparse, datetime, json, os, re, subprocess, sys
 import gh_api, ids
 from records import load_script
 
@@ -103,14 +103,15 @@ def outgoing(text, plain):
     sent = unwrap(text)
     return (SUGGESTION.sub(r"\1", sent), True) if plain and SUGGESTION.search(sent) else (sent, False)
 
-def patch_lines(run):
-    p = os.path.join(run, "patch", "all.patch")
-    if not os.path.exists(p): return []
-    with open(p, encoding="utf-8", newline="") as fh: return fh.read().split("\n")
+def pr_patch(repo, base, reviewed):
+    r = subprocess.run(["git", "-C", repo, "diff", "--no-color", "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/", base, reviewed],
+                       capture_output=True)
+    if r.returncode: sys.exit(f"nothing sent; git could not diff the pull request at {reviewed[:9]} in {repo}: {r.stderr.decode('utf-8', 'replace').strip()}")
+    return r.stdout.decode("utf-8", "replace")
 
-def read_hunks(run):
+def read_hunks(patch):
     hunks, path, old_left, new_left, line = {}, None, 0, 0, 0
-    for raw in patch_lines(run):
+    for raw in patch.split("\n"):
         if old_left > 0 or new_left > 0:
             if raw.startswith("\\"): continue
             if not raw.startswith("+"): old_left -= 1
@@ -171,9 +172,9 @@ def row_anchor(row):
 def findings(run):
     return {e["id"]: e for e in rr.read_findings(run, rr.load_merge_module())}
 
-def plan_items(run, ctx):
+def plan_items(run, ctx, hunks):
     ins, rows, nums, found = rr.read_instructions(run), rr.read_posted(run), rr.read_numbers(run), findings(run)
-    titles, hunks = rr.read_titles(run), read_hunks(run)
+    titles = rr.report_titles(run, rr.load_merge_module())
     marked = sorted((m for m, i in ins.items() if i.get("choice") == "post"), key=lambda m: nums.get(m, 10 ** 6))
     items = []
     for mid in marked:
@@ -389,11 +390,17 @@ def reviewed_pr(repo, run, asked):
     owner, name = reviewed_repo.split("/") if reviewed_repo else gh_api.repo_owner_name(repo)
     return owner, name, asked or known
 
-def fetch_pr(repo, run, pr):
+def merge_base(ctx, reviewed, repo):
+    path = f"repos/{ctx['owner']}/{ctx['name']}/compare/{ctx['base']}...{reviewed}"
+    return gh_api.gh(["api", path, "--jq", ".merge_base_commit.sha"], repo).strip()
+
+def fetch_pr(repo, run, pr, reviewed):
     owner, name, pr = reviewed_pr(repo, run, pr)
     ctx = {"owner": owner, "name": name, "pr": pr, "pending": None}
     base = pulls_path(ctx)
-    ctx["head"] = json.loads(gh_api.gh(["pr", "view", str(pr), "--repo", f"{owner}/{name}", "--json", "headRefOid"], repo))["headRefOid"]
+    view = json.loads(gh_api.gh(["pr", "view", str(pr), "--repo", f"{owner}/{name}", "--json", "headRefOid,baseRefOid"], repo))
+    ctx["head"], ctx["base"] = view["headRefOid"], view["baseRefOid"]
+    ctx["merge_base"] = merge_base(ctx, reviewed, repo)
     ctx["files"] = [f["filename"] for f in gh_api.rest_list(f"{base}/files", repo)]
     reviews = gh_api.rest_list(f"{base}/reviews", repo)
     ctx["review_ids"] = {str(r["id"]) for r in reviews}
@@ -507,10 +514,10 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.dry_run and not (a.post or a.submit): ap.error("--dry-run goes with --post or --submit")
     reviewed = reviewed_commit(a.run)
-    ctx = {**fetch_pr(a.repo, a.run, a.pr), "local": local_paths(a.run, a.repo)}
+    ctx = {**fetch_pr(a.repo, a.run, a.pr, reviewed), "local": local_paths(a.run, a.repo)}
     ctx["kept"] = kept_body(a.run, ctx)
     if a.submit: return submit(a, ctx, a.submit)
-    items = plan_items(a.run, ctx)
+    items = plan_items(a.run, ctx, read_hunks(pr_patch(a.repo, ctx["merge_base"], reviewed)))
     return post(a, ctx, items, reviewed) if a.post else preview(a.run, ctx, items, reviewed)
 
 if __name__ == "__main__": main()

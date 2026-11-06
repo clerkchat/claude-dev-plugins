@@ -186,6 +186,11 @@ def unquote(t):
         else: break
     return t
 
+def report_titles(run, mf):
+    titles = read_titles(run)
+    titles.update({mid: over["title"] for mid, over in read_overrides(run, mf).items() if "title" in over})
+    return titles
+
 def title_of(e, titles):
     t = titles.get(e["id"]) or e.get("title") or ""
     if not t:
@@ -909,7 +914,7 @@ def main():
     merged = read_findings(a.run, mf)
     verdicts = read_verdicts(a.run); labels = read_labels(a.run); names = read_plain_names(a.routing)
     global NAMES; NAMES = names
-    global TITLES, RUN; TITLES = read_titles(a.run); RUN = a.run
+    global TITLES, RUN; TITLES = report_titles(a.run, mf); RUN = a.run
     global STATUS
     STATUS = import_hand_edits(a.run, read_status(a.run), a.date or "")
     nums = read_numbers(a.run)
@@ -950,8 +955,6 @@ def main():
     import_posted_edits(a.run, a.date or "")
     for mid, text in drafts:
         record_posted(a.run, mid, text, "drafted", a.date or "")
-    for mid, over in read_overrides(a.run, mf).items():
-        if "title" in over: TITLES[mid] = over["title"]
     for e in merged:
         opt = INSTR.get(e["id"], {}).get("option", "") if INSTR.get(e["id"], {}).get("choice") == "fix" else ""
         missing = [o for o in opt.split(",") if o and o not in recommendation_options(e.get("fix", ""))]

@@ -29,7 +29,7 @@ Prints a short Markdown summary:
   - open follow-ups in the other worktrees of .clerk-dev/workspace.md;
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
-    the post queue (marked Post, not yet posted or edited since posting),
+    the post queue (marked Post, not yet posted or changed since posting),
     in-progress fixes, and open findings whose code moved since the review;
   - implementation progress from the build log (.clerk-dev/build.md): per
     brief, requirements done, partial, in progress, and not started; handoffs
@@ -74,7 +74,7 @@ import ids
 
 sf = load_script("stale-findings.py")
 not_done = load_script("items.py").not_done
-read_posted = load_script("render-report.py").read_posted
+rr = load_script("render-report.py")
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
@@ -714,12 +714,15 @@ def area_view(wt, out, name, logs):
 def is_posted(row):
     return bool(row.get("kind")) and row.get("state") == "posted"
 
+def awaits_posting(row, note):
+    return not is_posted(row) or rr.stale_text(row, note)
+
 def finding_groups(run, status, instr, numbers):
     sections = {}
     for r in sf.tsv(os.path.join(run, "numbers.tsv")):
         if len(r) > 2 and r[1].isdigit(): sections[int(r[1])] = r[2]
     unmarked, queue, discuss, post, inprog, new, by_section = {}, [], [], [], [], [], {}
-    posted = read_posted(run)
+    posted, marks = rr.read_posted(run), rr.read_instructions(run)
     ap = os.path.join(run, "reconcile", "appended.tsv")
     appended = {int(x) for x in open(ap).read().split()[1:] if x.isdigit()} if os.path.exists(ap) else set()
     for mid in sf.load_findings(run):
@@ -731,7 +734,7 @@ def finding_groups(run, status, instr, numbers):
         if st == "in-progress": inprog.append(numbers[mid])
         if choice in ("fix", "noted"): queue.append(numbers[mid])
         elif choice == "discuss": discuss.append(numbers[mid])
-        elif choice == "post" and not is_posted(posted.get(mid, {})): post.append(numbers[mid])
+        elif choice == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", "")): post.append(numbers[mid])
         elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
     return unmarked, queue, discuss, post, inprog, new, by_section
@@ -934,7 +937,7 @@ def main():
             out.append(f"- new since the first report, unmarked: {len(new)} ({number_list(new)}); `grep -n '\\[new\\]' report.md` finds them")
         if queue: out.append(f"- marked to fix, not yet fixed: {len(queue)}")
         if discuss: out.append(f"- marked to discuss: {len(discuss)}")
-        if post: out.append(f"- marked to post, not yet posted or edited since posting: {len(post)} ({number_list(sorted(post, key=int))})")
+        if post: out.append(f"- marked to post, not yet posted or changed since posting: {len(post)} ({number_list(sorted(post, key=int))})")
         if inprog: out.append(f"- fix in progress (partly fixed or tests failed): {', '.join(sorted(inprog, key=int))}")
         if moved: out.append(f"- open findings whose code changed since the review and not yet cross-checked: {len(moved)}")
 

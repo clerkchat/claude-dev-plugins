@@ -6,15 +6,17 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from helpers import SCRIPTS, RunCase, TempCase, merged_md, run_ok, write_file
+from helpers import SCRIPTS, RunCase, TempCase, init_repo, merged_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import gh_api
 import records
 
 post = records.load_script("post-review.py")
+REAL_PR_PATCH = post.pr_patch
 
 HEAD = "a" * 40
+MERGE_BASE = "b" * 40
 PATCH = (
     "diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n"
     "@@ -1,3 +10,6 @@\n ctx\n+one\n+two\n+three\n ctx\n ctx\n"
@@ -51,14 +53,16 @@ class PostCase(RunCase):
         super().setUp()
         self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()))
         self.write_numbers(FINDINGS)
-        self.write("patch/all.patch", PATCH)
-        self.write_target("pr 7", "b" * 40, HEAD)
+        self.write_target("pr 7", MERGE_BASE, HEAD)
         self.marks = {}
-        self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "files": ["src/a.py", "src/b.py"], "pending": None,
-                    "review_ids": {"55"}, "comment_ids": {"901"}}
+        self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "merge_base": MERGE_BASE, "files": ["src/a.py", "src/b.py"],
+                    "pending": None, "review_ids": {"55"}, "comment_ids": {"901"}}
         patcher = mock.patch.object(post, "fetch_pr", side_effect=lambda *a: self.ctx)
         patcher.start()
         self.addCleanup(patcher.stop)
+        diff = mock.patch.object(post, "pr_patch", return_value=PATCH)
+        self.pr_diff = diff.start()
+        self.addCleanup(diff.stop)
 
     def stub(self, name, **kw):
         patcher = mock.patch.object(gh_api, name, **kw)
@@ -118,11 +122,39 @@ class UnwrapTest(unittest.TestCase):
         self.assertEqual(post.unwrap("- one\n  more\n- two"), "- one more\n- two")
 
 
-class ReadHunksTest(RunCase):
+class ReadHunksTest(unittest.TestCase):
     def test_counts_a_line_with_a_bare_carriage_return_as_one_line(self):
-        self.write("patch/all.patch", "diff --git a/x b/x\n--- a/x\n+++ b/x\n"
-                   "@@ -1,2 +1,3 @@\n a\rb\n c\n+++ y\n@@ -9 +10 @@\n+d\n")
-        self.assertEqual(post.read_hunks(self.run_dir), {"x": [(1, 3), (10, 10)]})
+        patch = "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1,2 +1,3 @@\n a\rb\n c\n+++ y\n@@ -9 +10 @@\n+d\n"
+        self.assertEqual(post.read_hunks(patch), {"x": [(1, 3), (10, 10)]})
+
+
+class AfterAnIncrementalReviewTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        repo = init_repo(self.path("work"), with_origin=False)
+        self.commit_lines(repo, {"src/a.py": 20, "src/b.py": 20}, "pr base")
+        self.ctx["merge_base"] = repo.git("rev-parse", "HEAD")
+        first = self.commit_lines(repo, {"src/a.py": 20}, "first review", changed=10)
+        self.ctx["head"] = self.commit_lines(repo, {"src/b.py": 20}, "re-review", changed=5)
+        self.write_target("pr 7", first, self.ctx["head"])
+        self.write("patch/all.patch", repo.git("diff", first, self.ctx["head"]) + "\n")
+        self.repo = repo.path
+        self.pr_diff.side_effect = REAL_PR_PATCH
+        self.write_merged(finding(1, "src/a.py", "10"))
+        self.mark(1)
+
+    def commit_lines(self, repo, files, subject, changed=None):
+        for name, count in files.items():
+            write_file(os.path.join(repo.path, name), "".join(f"{subject if i == changed else 'line'} {i}\n" for i in range(1, count + 1)))
+        repo.git("add", "-A")
+        repo.git("commit", "-qm", subject)
+        return repo.git("rev-parse", "HEAD")
+
+    def calls(self, *args):
+        return super().calls("--repo", self.repo, *args)
+
+    def test_anchors_a_carried_finding_on_its_line_in_the_pull_requests_diff(self):
+        self.assertEqual({k: self.thread_vars(1).get(k) for k in ("subjectType", "line")}, {"subjectType": "LINE", "line": 10})
 
 
 class AnchorTest(PostCase):
@@ -156,6 +188,14 @@ class AnchorTest(PostCase):
     def test_flags_the_fallback_in_the_preview(self):
         self.mark(2)
         self.assertIn("fallback: src/a.py:30 is outside the diff; moved to 40", self.main())
+
+
+class PreviewTitleTest(PostCase):
+    def test_shows_the_title_an_override_sets_over_titles_tsv(self):
+        self.write("titles.tsv", "1\tShort title\n")
+        self.write("overrides/1.md", "title: Overridden title\n")
+        self.mark(1)
+        self.assertIn("finding 1: Overridden title", self.main())
 
 
 class NotePlacementTest(PostCase):
@@ -684,12 +724,17 @@ class FetchPrCase(RunCase):
              "repos/o/r/pulls/7/comments": [{"id": 8}],
              "repos/o/r/pulls/7/reviews/2/comments": [{"id": 9, "node_id": "C9"}]}
 
+    VIEW = json.dumps({"headRefOid": HEAD, "baseRefOid": "c" * 40})
+
+    def answer(self, args, cwd):
+        return self.VIEW if args[0] == "pr" else MERGE_BASE + "\n"
+
     def fetch(self, origin):
         with mock.patch.object(gh_api, "repo_owner_name", return_value=origin.split("/")), \
              mock.patch.object(gh_api, "pr_number", return_value=7), \
-             mock.patch.object(gh_api, "gh", return_value=json.dumps({"headRefOid": HEAD})) as self.gh, \
+             mock.patch.object(gh_api, "gh", side_effect=self.answer) as self.gh, \
              mock.patch.object(gh_api, "rest_list", side_effect=lambda path, cwd: self.LISTS[path]):
-            return post.fetch_pr("/w", self.run_dir, 7)
+            return post.fetch_pr("/w", self.run_dir, 7, HEAD)
 
 
 class FetchPrTest(FetchPrCase):
@@ -709,6 +754,10 @@ class FetchPrTest(FetchPrCase):
     def test_knows_which_comments_are_on_github_submitted_or_pending(self):
         self.assertEqual(self.ctx["comment_ids"], {"8", "9"})
 
+    def test_finds_the_merge_base_of_the_reviewed_commit_with_the_base(self):
+        self.assertEqual((self.ctx["merge_base"], self.gh.call_args_list[-1].args[0][1]),
+                         (MERGE_BASE, f"repos/o/r/compare/{'c' * 40}...{HEAD}"))
+
 
 class WhenTheCheckoutIsAForkTest(FetchPrCase):
     def setUp(self):
@@ -720,7 +769,7 @@ class WhenTheCheckoutIsAForkTest(FetchPrCase):
         self.assertEqual((self.ctx["owner"], self.ctx["name"], self.ctx["pr"]), ("o", "r", 7))
 
     def test_reads_the_head_from_that_repository(self):
-        args = self.gh.call_args.args[0]
+        args = next(c.args[0] for c in self.gh.call_args_list if c.args[0][0] == "pr")
         self.assertEqual(args[args.index("--repo") + 1], "o/r")
 
 

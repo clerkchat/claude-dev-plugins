@@ -69,8 +69,8 @@ def entry(mid, kind, gid, author, body, url, path="", line=None, oline=None, rep
 def github_items(p):
     items = []
     for t in p["reviewThreads"]["nodes"]:
-        cs = t["comments"]["nodes"]
-        if not cs or cs[0].get("state") == "PENDING": continue
+        cs = [c for c in t["comments"]["nodes"] if c.get("state") != "PENDING"]
+        if not cs: continue
         root = cs[0]
         items.append(("thread", root["databaseId"], (root["author"] or {}).get("login", "ghost"), root["body"], root["url"],
                       dict(path=t["path"], line=t["line"], oline=t["originalLine"],

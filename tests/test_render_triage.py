@@ -420,6 +420,11 @@ class CarryPostedTest(PostCase):
         self.edit_report("Say it plainly.", "Say it gently.")
         self.assertIn("edited", self.carried(self.carry(), "posted.tsv"))
 
+    def test_carries_the_note_of_a_text_edited_but_not_yet_rendered(self):
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.assertEqual(render.read_posted(self.carry())[7]["note"], "keep it short")
+
     def test_leaves_the_previous_run_with_the_imported_edit(self):
         self.render("--posted", f"1={self.draft}")
         self.edit_report("Say it plainly.", "Say it gently.")

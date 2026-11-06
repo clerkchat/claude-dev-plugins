@@ -21,7 +21,7 @@ def import_pending(prev):
     st = rr.import_hand_edits(prev, rr.read_status(prev), today); rr.write_status(prev, st)
     ins = rr.read_instructions(prev); changed = rr.import_instruction_edits(prev, ins, today)
     rr.write_instructions(prev, ins)
-    rr.POSTED = rr.read_posted(prev); rr.import_posted_edits(prev, today)
+    rr.INSTR, rr.POSTED = ins, rr.read_posted(prev); rr.import_posted_edits(prev, today)
     if rr.POSTED: rr.write_posted(prev, rr.POSTED)
     return len(changed)
 
