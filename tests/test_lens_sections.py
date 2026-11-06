@@ -50,7 +50,21 @@ class EveryLensTest(unittest.TestCase):
     def test_has_concerns(self):
         missing = [lens for lens in lens_mode.lenses() if not records.has_section(lens_text(lens), "Concerns")]
         self.assertEqual(missing, [])
-        self.assertEqual(len(lens_mode.lenses()), 24)
+        self.assertEqual(len(lens_mode.lenses()), 25)
+
+
+class CreditLensTest(unittest.TestCase):
+    def setUp(self):
+        self.found = lens_mode.concerns("credit")
+
+    def test_carries_review_design_and_pass_lines(self):
+        self.assertEqual({tuple(labels(c)) for c in self.found}, {("Review", "Design", "Pass")})
+
+    def test_design_lines_are_na(self):
+        self.assertTrue(all(lens_mode.na(lens_mode.line(c, "Design")) for c in self.found))
+
+    def test_pass_lines_are_na(self):
+        self.assertTrue(all(lens_mode.na(lens_mode.line(c, "Pass")) for c in self.found))
 
 
 class LensConcernsTest(unittest.TestCase):
@@ -204,6 +218,23 @@ class RoutingSurveysTest(unittest.TestCase):
         for lens in SURVEY_LENSES:
             with self.subTest(lens=lens):
                 self.assertIn(f"`{lens}`", body)
+
+
+class RoutingCreditTest(unittest.TestCase):
+    def setUp(self):
+        self.text = read(ROUTING)
+
+    def test_plain_name_is_credits(self):
+        self.assertEqual(records.read_plain_names(ROUTING)["credit"], "credits")
+
+    def test_triggers_on_any_category_in_every_mode(self):
+        self.assertRegex(records.section(self.text, "Lens triggers"), r"\| `credit` +\| any +\| yes in every mode +\|")
+
+    def test_quick_mode_runs_it_outside_the_cap(self):
+        self.assertIn("`credit` still runs, outside the cap", records.section(self.text, "Quick mode"))
+
+    def test_triage_never_drops_it(self):
+        self.assertIn("credit,", records.section(self.text, "Triage questions").split("Lenses never dropped by triage:")[1])
 
 
 if __name__ == "__main__":

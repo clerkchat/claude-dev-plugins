@@ -54,6 +54,7 @@ What the user reads in place of a lens identifier. `Say it as` is the phrase;
 | `frontend`           | frontend                 | cache correctness, rendering, accessibility                        |
 | `cross-repo`         | cross-repository fit     | contracts and deploy order across repositories                     |
 | `tech-debt`          | tech debt                | cleanups, simplifications, and refactors around the changed code   |
+| `credit`             | credits                  | what the change does well, worth telling the author                |
 
 ## Lens triggers
 
@@ -83,6 +84,11 @@ What the user reads in place of a lens identifier. `Say it as` is the phrase;
 | `completeness`       | any                                                             | yes in standard and deep           |
 | `cross-repo`         | any                                                             | only in feature mode               |
 | `tech-debt`          | any non-test, non-config                                        | yes in standard and deep           |
+| `credit`             | any                                                             | yes in every mode                  |
+
+`credit` runs on every review but a final pass, always walks (one instance per
+run), and is never picked for a final pass, a pass review (`--pass`), a design
+check, or a survey.
 
 Lenses not yet implemented are skipped silently; the report header lists which
 lenses ran.
@@ -91,21 +97,24 @@ lenses ran.
 
 When a cap leaves room for fewer lenses than were triggered, keep them in this
 order: security, tenancy, side-effects, rollout, edge-cases, concurrency, sql,
-contracts, then the rest in table order.
+contracts, then the rest in table order. `credit` is never cut by this order;
+it runs outside any cap.
 
 ## Quick mode
 
 Quick mode keeps only the lenses triggered by categories, drops the "always"
 rule, caps the set at four by the lens priority order, and runs them all on
 sonnet with effort medium regardless of the agent's own frontmatter.
+`credit` still runs, outside the cap of four, on sonnet with effort medium.
 
 ## Explicit selection
 
 `--lenses a,b,c` replaces the table entirely. Unknown names are reported and
 skipped. `--lenses +a` adds to the routed set instead of replacing it, and
 `--lenses -a` removes a lens from it: `--lenses -tech-debt` reviews without
-the tech debt focus, and `--lenses tech-debt` runs it on its own. A final pass
-never runs the tech debt focus.
+the tech debt focus, and `--lenses tech-debt` runs it on its own.
+`--lenses -credit` reviews without credits. A final pass never runs the tech
+debt focus or credits.
 
 ## Design checks
 
@@ -128,7 +137,8 @@ risks.
    column, and keep the ones whose questions the records most plausibly leave
    open: a record about a tenant-facing endpoint keeps `tenancy`, one about
    plugin prompts keeps `llm-agent` and does not keep `security` just because
-   `llm` triggers it. Break ties by the lens priority order.
+   `llm` triggers it. Break ties by the lens priority order. Never keep
+   `credit`: a record has no code to credit.
 
 The skill announces each risk lens with the category behind it, so a missing
 lens is visible and `--lenses +x` adds it. With `--lenses`, the explicit rules
@@ -184,4 +194,4 @@ dropped for a slice when the answer is no, unless a path category or an explicit
     returns, commented-out code, "not yet", "later"? (completeness)
 
 Lenses never dropped by triage: security, edge-cases, naming-concepts, design,
-tech-debt, completeness, spec-conformance (when documents exist).
+tech-debt, completeness, credit, spec-conformance (when documents exist).

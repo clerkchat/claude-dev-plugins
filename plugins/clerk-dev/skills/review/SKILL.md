@@ -560,8 +560,8 @@ incremental run on that review, with these differences:
    security, tenancy, data-privacy, side-effects, rollout, sql, scaling,
    capacity, concurrency, contracts, error-handling, llm-agent, and
    completeness. Security and rollout always run. Design, naming-concepts,
-   user-facing-text, tests, performance, observability-cost, and
-   spec-conformance do not. Standard mode otherwise.
+   user-facing-text, tests, performance, observability-cost,
+   spec-conformance, and credit do not. Standard mode otherwise.
 3. Every lens and verifier prompt carries the extra line `BAR: final`.
 4. Skip incremental step 5; the fresh reviewers find regressions, and the
    judging below reopens them.
@@ -799,10 +799,11 @@ slice is dropped, and the report header says so. Only lenses that exist as a
 Decide walk versus split per the flags, else by size: if total estimated tokens
 exceed 60,000 or the slice map has more than five slices, every lens runs one
 instance per slice that triage marked relevant, regardless of model, except
-`contracts`, `rollout`, `completeness`, `spec-conformance`, and `tech-debt`,
-which always walk: the first four because their findings live between slices or
-against a whole document, and tech-debt because its proposals cross files and a
-copy per slice mostly repeats the same reading.
+`contracts`, `rollout`, `completeness`, `spec-conformance`, `tech-debt`, and
+`credit`, which always walk: the first four because their findings live between
+slices or against a whole document, tech-debt because its proposals cross files
+and a copy per slice mostly repeats the same reading, and credit because it
+picks at most two credits from the whole change.
 Below the threshold every lens walks. In walk mode an agent receives the whole
 patch but its prompt lists the slices in order with their token counts, so it
 can skip slices irrelevant to its lens. The unit of cost is tokens read, not
