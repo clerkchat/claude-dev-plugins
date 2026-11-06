@@ -98,6 +98,35 @@ class SeedPostedTest(SeedCase):
         self.assertIn("; 1 posted findings not found again (finding 8); their threads come in as pull request comments", self.out)
 
 
+class SeedPendingReviewTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.post({7: {**posted_row(5), "review_id": "55"}})
+        self.write("posted/pending-55.md", "My summary.\n")
+        self.write("posted/review.md", "Nice work.\n")
+
+    def test_copies_the_text_kept_from_the_pending_review(self):
+        self.seed()
+        self.assertEqual(self.cur_text("posted/pending-55.md"), "My summary.\n")
+
+    def test_copies_the_review_body(self):
+        self.seed()
+        self.assertEqual(self.cur_text("posted/review.md"), "Nice work.\n")
+
+    def test_keeps_a_review_body_the_current_run_already_has(self):
+        write_file(os.path.join(self.cur, "posted", "review.md"), "Current body.\n")
+        self.seed()
+        self.assertEqual(self.cur_text("posted/review.md"), "Current body.\n")
+
+
+class SeedWithoutAReviewTest(SeedCase):
+    def test_copies_no_review_body(self):
+        self.post({7: posted_row(5)})
+        self.write("posted/review.md", "Nice work.\n")
+        self.seed()
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted", "review.md")))
+
+
 class SeedUnnumberedPostingTest(SeedCase):
     def test_names_a_lost_posting_without_a_number_by_its_merged_id(self):
         self.post({9: posted_row(6)})

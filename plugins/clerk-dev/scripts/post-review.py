@@ -22,6 +22,12 @@ INTERNAL = [("a .clerk-dev path", re.compile(r"\.clerk-dev\b")),
             ("a lens", re.compile(r"\blens(?:es)?\b", re.I)),
             ("a finding number", re.compile(r"\bfindings?\s+#?\d+|\bmerged id\b", re.I)),
             ("a run label", re.compile(r"\b\d{8}-\d{4}\b"))]
+SECRETS = [("a private key", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")),
+           ("a GitHub token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,})")),
+           ("an API key", re.compile(r"\b(?:sk-[A-Za-z0-9_-]{20,}|xox[abposr]-[A-Za-z0-9-]{10,})")),
+           ("an AWS access key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+           ("a long hex run", re.compile(r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{41,}(?![0-9A-Fa-f])")),
+           ("a long base64 run", re.compile(r"(?<![\w+/=-])(?=[\w+/-]*[A-Z])(?=[\w+/-]*[a-z])(?=[\w+/-]*\d)[\w+/-]{40,}={0,2}"))]
 MENTION = re.compile(r"(?<![\w/@])@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:/[\w-]+)?)")
 ISSUE_REFERENCE = re.compile(r"(?<![\w&/])#(\d+)\b")
 LINKED = [(MENTION, "@", "mentions {}; GitHub notifies them"),
@@ -100,6 +106,7 @@ def screen(text, local):
     problem = (f"its text names a local path of this machine ({path})" if path else
                f"its text holds a cross-reference token of the review ({token.group(0)})" if token else None)
     warnings = [f"the text names {what}: {m.group(0)}" for what, rx in INTERNAL for m in [rx.search(text)] if m]
+    warnings += [f"the text holds what looks like {what}: {m.group(0)[:12]}..." for what, rx in SECRETS for m in [rx.search(text)] if m]
     plain = prose(text)
     for rx, lead, says in LINKED:
         found = sorted(set(rx.findall(plain)))
@@ -141,22 +148,13 @@ def nearest_lines(hunks, line, end):
     if lo > hi: lo = hi = s if s > end else e
     return (lo, hi), True
 
-def placement(note):
-    if re.search(r"\bin the review body\b", note, re.I): return {"kind": "body"}
-    for token in re.findall(r"\bon\s+`?([^\s`,;]+)", note):
-        m = re.match(r"^([^:]*[/.][^:]*?)(?::(\d+)(?:-(\d+))?)?$", token.rstrip(".:;)"))
-        if m:
-            line = int(m.group(2)) if m.group(2) else None
-            return {"path": m.group(1), "line": line, "end_line": int(m.group(3) or line or 0) or None}
-    return None
-
 def anchor(kind, path="", line=None, end_line=None):
     return {"kind": kind, "path": path, "line": line, "end_line": end_line}
 
 def resolve(e, note, files, hunks):
-    p = placement(note)
-    if p and p.get("kind") == "body": return anchor("body", e.get("file", "")), None, None
-    path, line, end = (p["path"], p["line"], p["end_line"]) if p else (e.get("file"), e.get("line"), e.get("end_line"))
+    where = rf.located(e, note)
+    if where is None: return anchor("body", e.get("file", "")), None, None
+    path, line, end = where
     if not path: return anchor("body"), "fallback: no file; sent in the review body", None
     if path not in files: return None, None, f"its file {path} is not in the pull request"
     if line is None: return anchor("file", path), None, None
@@ -201,7 +199,10 @@ def refuse_blocked(items):
 def print_warnings(label, warnings):
     if warnings: print("\n".join([label, *warning_lines(warnings)]), file=sys.stderr)
 
-def plan_items(run, ctx, hunks):
+def drafted_elsewhere(it, e, reviewed):
+    return it["action"] == "new" and e is not None and rf.code_moved(it["row"], rf.drafted_for(e, it["note"], reviewed))
+
+def plan_items(run, ctx, hunks, reviewed):
     ins, rows, nums, found = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run), findings(run)
     sections = rf.read_sections(run)
     titles = rf.report_titles(run)
@@ -224,24 +225,22 @@ def plan_items(run, ctx, hunks):
         if not raw: it["problem"] = it["problem"] or "it has no posted text"
         if it["action"] != "skip" and rf.stale_text(row, note):
             it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
-        plain = bool(it["fallback"]) or (it["anchor"] or {}).get("kind") not in LINE_KINDS
+        it["moved"] = drafted_elsewhere(it, e, reviewed)
+        plain = bool(it["fallback"]) or it["moved"] or (it["anchor"] or {}).get("kind") not in LINE_KINDS
         it["text"], it["downgraded"] = outgoing(raw, plain)
         problem, it["warnings"] = screen(it["text"], ctx["local"])
         it["problem"] = it["problem"] or problem
         items.append(it)
     return items
 
-def kept_path(run, review_id):
-    return os.path.join(run, "posted", f"pending-{review_id}.md")
-
 def kept_body(run, ctx):
     p = ctx["pending"]
     if not p: return ""
-    if os.path.exists(kept_path(run, p["id"])): return rf.read_text(kept_path(run, p["id"]))
+    if os.path.exists(rf.kept_body_path(run, p["id"])): return rf.read_text(rf.kept_body_path(run, p["id"]))
     return "" if str(p["id"]) in rf.review_ids(rf.read_posted(run)) else (p.get("body") or "").strip()
 
 def review_body(run, rows, review_id, kept):
-    head = rf.read_text(os.path.join(run, "posted", "review.md"))
+    head = rf.read_text(rf.review_text_path(run))
     parts = [part for part in (kept, unwrap(head) if head else "") if part] or [DEFAULT_BODY]
     for mid in sorted(rows):
         row = rows[mid]
@@ -348,13 +347,11 @@ def found_by(call, results, repo, ctx):
 def without_threads(entries):
     return [(c, w) for c, w in entries if not is_thread(c)]
 
-def rollback(done, results, repo, items, ctx, inflight=None):
+def rollback(done, results, repo, items, ctx, inflight):
     maybe = []
-    if inflight is not None:
-        found = found_by(inflight, results, repo, ctx)
-        if found: results[inflight["as"]] = found; done = [*done, inflight]
-        else: maybe.append((inflight, unknown_of(inflight, results, items, ctx)))
-    if not (done or maybe): return "nothing changed on GitHub"
+    found = found_by(inflight, results, repo, ctx)
+    if found: results[inflight["as"]] = found; done = [*done, inflight]
+    else: maybe.append((inflight, unknown_of(inflight, results, items, ctx)))
     left = []
     for call in reversed(done):
         undo, what = undo_of(call, results, items)
@@ -370,18 +367,18 @@ def rollback(done, results, repo, items, ctx, inflight=None):
 
 def execute(calls, repo, ctx, items=()):
     results, done = {}, []
-    stop = lambda inflight=None: rollback(done, results, repo, {it["id"]: it for it in items}, ctx, inflight)
+    stop = lambda: rollback(done, results, repo, {it["id"]: it for it in items}, ctx, calls[len(done)])
     try:
         for call in calls:
             r = send(call, results, repo)
             if "as" in call: results[call["as"]] = r
             done.append(call)
     except gh_api.GhError as err:
-        sys.exit(f"{err}\nGitHub rejected the request; {stop()}")
+        sys.exit(f"{err}\nGitHub answered with an error; {stop()}")
     except UnexpectedReply as err:
-        sys.exit(f"{err}\nthe batch stopped; {stop(calls[len(done)])}")
+        sys.exit(f"{err}\nthe batch stopped; {stop()}")
     except BaseException:
-        print(f"the batch stopped; {stop(calls[len(done)])}", file=sys.stderr)
+        print(f"the batch stopped; {stop()}", file=sys.stderr)
         raise
     return results
 
@@ -391,13 +388,8 @@ def write_payload(run, calls):
     with open(p, "w", encoding="utf-8") as fh: json.dump({"calls": calls}, fh, indent=1)
     print(f"dry run: wrote {len(calls)} calls to {p}", file=sys.stderr)
 
-def same_commit(a, b):
-    return bool(a and b) and (a.startswith(b) or b.startswith(a))
-
 def reviewed_commit(run):
-    target = rf.read_text(os.path.join(run, "target.txt")).splitlines()
-    if len(target) < 3: sys.exit("target.txt has no HEAD line")
-    return target[2].strip()
+    return rf.reviewed_head(run) or sys.exit("target.txt has no HEAD line")
 
 def recorded_pr(run):
     number, url = (rf.read_text(os.path.join(run, "pr", "pr.txt")).split("\t") + [""])[:2]
@@ -450,7 +442,7 @@ def current_review(ctx):
 def pending_line(ctx, reviewed, verb):
     p = ctx["pending"]
     if not p: return f"pending review: none; {verb} creates one on {reviewed[:9]}"
-    if same_commit(p["commit_id"], reviewed): return f"pending review: {p['id']} on {reviewed[:9]} exists; {verb} adds to it"
+    if rf.same_commit(p["commit_id"], reviewed): return f"pending review: {p['id']} on {reviewed[:9]} exists; {verb} adds to it"
     return (f"pending review: {p['id']} exists on {p['commit_id'][:9]}, another commit than the reviewed {reviewed[:9]}; "
             f"{verb} adds to it anyway")
 
@@ -475,6 +467,7 @@ def preview(run, ctx, items, reviewed):
         if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{rf.line_span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
         if it["gone"]: out.append(f"  {it['gone']}")
         if it["fallback"]: out.append(f"  {it['fallback']}")
+        if it["moved"]: out.append("  the code moved since its text was drafted")
         if it["downgraded"]: out.append("  suggestion sent as a plain code block")
         if it["action"] == "skip": out.append(f"  already posted: {it['row'].get('url', '')}"); continue
         if it["action"] == "update": out.append("  changed since posting: --post updates the comment")
@@ -486,7 +479,7 @@ def preview(run, ctx, items, reviewed):
     problem, warnings = screen(body, ctx["local"])
     out += ["review body:", indent(body)] + ([f"  cannot post: {problem}"] if problem else []) + warning_lines(warnings)
     if ctx["kept"]: out.append(f"  keeps the text already in pending review {ctx['pending']['id']} on GitHub, with this run's text below it")
-    if not same_commit(ctx["head"], reviewed):
+    if not rf.same_commit(ctx["head"], reviewed):
         out.append(f"head moved: the pull request head is {ctx['head'][:9]}, the review judged {reviewed[:9]}; comments anchor on the reviewed commit")
     out.append(pending_line(ctx, reviewed, "--post"))
     print("\n".join(out))
@@ -513,7 +506,7 @@ def post(a, ctx, items, reviewed):
     if ctx["pending"]: results["review"] = ctx["pending"]
     try:
         if ctx["kept"]:
-            with open(kept_path(a.run, ctx["pending"]["id"]), "w", encoding="utf-8") as fh: fh.write(ctx["kept"] + "\n")
+            with open(rf.kept_body_path(a.run, ctx["pending"]["id"]), "w", encoding="utf-8") as fh: fh.write(ctx["kept"] + "\n")
         rf.write_posted(a.run, {mid: {k: str(resolve_refs(v, results)) for k, v in row.items()} for mid, row in rows.items()})
     except BaseException:
         print("\n".join(["posted.tsv was not updated; this batch is on GitHub:", *posted_lines(sending, results)]), file=sys.stderr)
@@ -716,6 +709,62 @@ def keep_open(run, spec):
     record_kept(run, mid, m.group(2) or "")
     print(f"{numbered(mid, nums)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
 
+DRAFT_HEAD = re.compile(r"^## (#?\d+): (.+?)\s*$")
+DRAFT_FORM = re.compile(r"^(?:comment|question|suggestion)(?:, one general comment|, one per place)?$")
+NOT_DRAFTED = re.compile(r"^not drafted: (.+)$")
+DRAFT_FENCE = re.compile(r"^(`{4,}|~{4,})\s*$")
+
+def refuse_answer(at, expected):
+    sys.exit(f"nothing saved; line {at + 1} of the answer: {expected}")
+
+def skip_blank(lines, at):
+    while at < len(lines) and not lines[at].strip(): at += 1
+    return at
+
+def fenced_draft(lines, at):
+    fence = DRAFT_FENCE.match(lines[at]) if at < len(lines) else None
+    if not fence: refuse_answer(at, "a fence of four or more backticks or tildes was expected")
+    end = next((i for i in range(at + 1, len(lines)) if rf.closes_fence(lines[i], fence.group(1))), None)
+    if end is None: refuse_answer(at, "its fence is never closed")
+    return end + 1, "\n".join(lines[at + 1:end])
+
+def answer_parts(text):
+    lines, parts, at = text.split("\n"), [], 0
+    while (at := skip_blank(lines, at)) < len(lines):
+        head = DRAFT_HEAD.match(lines[at])
+        if not head: refuse_answer(at, "a heading `## <number>: <form>` was expected")
+        number, said = head.groups()
+        missing = NOT_DRAFTED.match(said)
+        if missing: parts.append((number, None, missing.group(1))); at += 1; continue
+        if not DRAFT_FORM.match(said): refuse_answer(at, f"{said!r} is not comment, question, or suggestion")
+        start = at
+        at, draft = fenced_draft(lines, skip_blank(lines, at + 1))
+        if not draft.strip(): refuse_answer(start, f"the draft of finding {number} is empty")
+        parts.append((number, said, draft))
+    return parts
+
+def checked_drafts(run, parts):
+    nums, ins, seen = rf.read_numbers(run), rf.read_instructions(run), set()
+    out = []
+    for number, form, text in parts:
+        mid = rf.finding_id(number, nums)
+        if ins.get(mid, {}).get("choice") != "post": sys.exit(f"nothing saved; finding {number} is not marked Post")
+        if mid in seen: sys.exit(f"nothing saved; finding {number} is answered twice")
+        seen.add(mid)
+        out.append((number, mid, form, text))
+    return out
+
+def save_drafts(run, answer):
+    text = rf.read_text(answer)
+    if not text: sys.exit(f"nothing saved; no answer in {answer}")
+    drafts = checked_drafts(run, answer_parts(text))
+    for number, mid, form, said in drafts:
+        if form is None: print(f"finding {number}: not drafted: {said}", file=sys.stderr); continue
+        os.makedirs(os.path.dirname(rf.draft_path(run, mid)), exist_ok=True)
+        with open(rf.draft_path(run, mid), "w", encoding="utf-8") as fh: fh.write(said.strip("\n") + "\n")
+        print(f"{number}={rf.draft_path(run, mid)}")
+        print(f"finding {number}: {form}", file=sys.stderr)
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Preview, post, and submit a run's Post-marked findings as a pending GitHub review.")
     ap.add_argument("run"); ap.add_argument("--repo", default="."); ap.add_argument("--pr", type=int)
@@ -725,16 +774,19 @@ def main(argv=None):
     action.add_argument("--close", nargs="?", const="", metavar="N[,M]",
                         help="list the posted findings marked fixed whose threads are still open; with numbers, reply and resolve those threads")
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
+    action.add_argument("--save-drafts", metavar="FILE",
+                        help="save the post-drafter's answer in FILE as posted/draft-<merged id>.md, one per Post-marked finding; print N=<path> for each")
     ap.add_argument("--dry-run", action="store_true", help="write the calls to <run>/posted/payload.json instead of making them")
     a = ap.parse_args(argv)
     if a.dry_run and not (a.post or a.submit or a.close): ap.error("--dry-run goes with --post, --submit, or --close N")
     if a.keep_open is not None: return keep_open(a.run, a.keep_open)
+    if a.save_drafts: return save_drafts(a.run, a.save_drafts)
     reviewed = reviewed_commit(a.run)
     ctx = {**fetch_pr(a.repo, a.run, a.pr, reviewed), "local": local_paths(a.run, a.repo)}
     ctx["kept"] = kept_body(a.run, ctx)
     if a.submit: return submit(a, ctx, a.submit)
     if a.close is not None: return close(a, ctx)
-    items = plan_items(a.run, ctx, read_hunks(pr_patch(a.repo, ctx["merge_base"], reviewed)))
+    items = plan_items(a.run, ctx, read_hunks(pr_patch(a.repo, ctx["merge_base"], reviewed)), reviewed)
     return post(a, ctx, items, reviewed) if a.post else preview(a.run, ctx, items, reviewed)
 
 if __name__ == "__main__": main()

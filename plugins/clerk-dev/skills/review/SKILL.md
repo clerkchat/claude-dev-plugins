@@ -1543,10 +1543,13 @@ unverified), `merged.md` (and `merged-new.md` in incremental runs),
 7b last saw them), `titles.tsv`, `overrides/`, `summary.md`,
 `not-reviewed.md`, `numbers.tsv`, `status.tsv`, `instructions.tsv`,
 `notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `posted/` (`<id>.md` posted
-texts, `draft-<id>.md` drafts, `review.md` the review body, `close-<id>.md` a
-closing reply's own words, `keep.tsv` the threads kept open, `payload.json`
-from a dry run), `posted.tsv` (per Post-marked finding: drafted, edited, or posted,
-the note followed, and once posted the comment's ids, URL, and anchor),
+texts, `draft-<id>.md` drafts saved by `--save-drafts`, `answer-<n>.md` the
+drafter's answers, `review.md` the review body, `pending-<review id>.md` the
+text the user had in a pending review, `close-<id>.md` a closing reply's own
+words, `keep.tsv` the threads kept open, `payload.json` from a dry run),
+`posted.tsv` (per Post-marked finding: drafted, edited, or posted, the note
+followed, the anchor and commit the draft was written for, and once posted the
+comment's ids, URL, and anchor),
 `.render/<generation>/` with the `rendered-*.tsv` snapshots (`rendered-posted.tsv`
 among them), `report.md`, `report.prev.md`, `stale.tsv`
 (cross-check judgments), `commits.tsv` (every commit a status named, kept when a

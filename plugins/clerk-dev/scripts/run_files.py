@@ -199,7 +199,9 @@ def write_instructions(run, ins):
         elif os.path.exists(f):
             os.remove(f)
 
-POSTED_FIELDS = ("state", "note", "date", "thread_id", "comment_id", "url", "path", "line", "end_line", "side", "kind", "review_id")
+DRAFT_ANCHOR = ("draft_path", "draft_line", "draft_end_line")
+DRAFT_FIELDS = (*DRAFT_ANCHOR, "draft_commit")
+POSTED_FIELDS = ("state", "note", "date", "thread_id", "comment_id", "url", "path", "line", "end_line", "side", "kind", "review_id", *DRAFT_FIELDS)
 
 def read_posted(run):
     return read_keyed(os.path.join(run, "posted.tsv"), POSTED_FIELDS)
@@ -222,8 +224,47 @@ def stale_text(row, note):
 def review_ids(rows):
     return {row["review_id"] for row in rows.values() if row.get("review_id")}
 
+def placement(note):
+    if re.search(r"\bin the review body\b", note, re.I): return {"kind": "body"}
+    for token in re.findall(r"\bon\s+`?([^\s`,;]+)", note):
+        m = re.match(r"^([^:]*[/.][^:]*?)(?::(\d+)(?:-(\d+))?)?$", token.rstrip(".:;)"))
+        if m:
+            line = int(m.group(2)) if m.group(2) else None
+            return {"path": m.group(1), "line": line, "end_line": int(m.group(3) or line or 0) or None}
+    return None
+
+def located(e, note):
+    p = placement(note)
+    if p and p.get("kind") == "body": return None
+    return (p["path"], p["line"], p["end_line"]) if p else (e.get("file"), e.get("line"), e.get("end_line"))
+
+def same_commit(a, b):
+    return bool(a and b) and (a.startswith(b) or b.startswith(a))
+
+def reviewed_head(run):
+    target = read_text(os.path.join(run, "target.txt")).splitlines()
+    return target[2].strip() if len(target) >= 3 else ""
+
+def drafted_for(e, note, commit):
+    path, line, end = located(e, note) or ("", None, None)
+    lo, hi = sorted((line, end or line)) if line else (None, None)
+    return {"draft_path": path or "", "draft_line": str(lo or ""), "draft_end_line": str(hi or ""), "draft_commit": commit}
+
+def code_moved(row, now):
+    if not row.get("draft_commit"): return False
+    return not same_commit(row["draft_commit"], now["draft_commit"]) or any(row.get(k, "") != now[k] for k in DRAFT_ANCHOR)
+
 def posted_path(run, mid):
     return os.path.join(run, "posted", f"{mid}.md")
+
+def review_text_path(run):
+    return os.path.join(run, "posted", "review.md")
+
+def kept_body_path(run, review_id):
+    return os.path.join(run, "posted", f"pending-{review_id}.md")
+
+def draft_path(run, mid):
+    return os.path.join(run, "posted", f"draft-{mid}.md")
 
 def posted_text(run, mid):
     return read_text(posted_path(run, mid))

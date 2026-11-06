@@ -69,10 +69,10 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, read_plain_names
-from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, credit_ids, fenced_lines, finding_id, has_comment,
-                       joined_replies, log_commits, read_appended, read_findings, read_instructions, read_kept_open, read_numbers, read_posted,
-                       read_reconcile, read_status, read_text, report_titles, posted_path, posted_text, posted_threads, stale_text, status_of,
-                       status_row, title_of, write_instructions, write_number_rows, write_posted, write_status, line_span)
+from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
+                       finding_id, has_comment, joined_replies, log_commits, read_appended, read_findings, read_instructions, read_kept_open,
+                       read_numbers, read_posted, read_reconcile, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
+                       posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status, line_span)
 mf = load_script("merge-findings.py")
 
 SEV = {"blocker": 3, "major": 2, "minor": 1}
@@ -90,6 +90,8 @@ RUN = "."
 IDNUM = {}
 TITLE_BY_ID = {}
 CREDITS = set()
+FOUND = {}
+REVIEWED = ""
 
 def read_verdicts(run):
     v = {}
@@ -587,16 +589,28 @@ def recommendation_options(fix):
 def still_open(st):
     return "marked fixed" + (f" in {st['ref']}" if st.get("ref") else "") + "; its thread on GitHub is still open"
 
+def drafted_here(mid):
+    return drafted_for(FOUND.get(mid, {}), INSTR.get(mid, {}).get("note", ""), REVIEWED)
+
 def record_posted(run, mid, text, state, today):
     os.makedirs(os.path.dirname(posted_path(run, mid)), exist_ok=True)
     open(posted_path(run, mid), "w", encoding="utf-8").write(text.strip() + "\n")
-    POSTED[mid] = {**POSTED.get(mid, {}), "state": state, "note": INSTR.get(mid, {}).get("note", ""), "date": today}
+    POSTED[mid] = {**POSTED.get(mid, {}), "state": state, "note": INSTR.get(mid, {}).get("note", ""), "date": today, **drafted_here(mid)}
 
 def note_changed(mid):
     return mid in POSTED and POSTED[mid]["note"] != INSTR.get(mid, {}).get("note", "")
 
 def is_stale(mid):
     return choice_of(mid) == "post" and stale_text(POSTED.get(mid), INSTR.get(mid, {}).get("note", ""))
+
+def is_moved(mid):
+    row = POSTED.get(mid, {})
+    return choice_of(mid) == "post" and not has_comment(row) and row.get("state") != "edited" and code_moved(row, drafted_here(mid))
+
+def check_posted_anchors():
+    for mid in sorted(POSTED):
+        if is_moved(mid) and not is_stale(mid):
+            print(f"finding {IDNUM.get(mid, f'#{mid}')}: code moved since drafting; redraft the posted text", file=sys.stderr)
 
 def check_posted_notes():
     for mid in sorted(POSTED):
@@ -625,6 +639,7 @@ def posted_block(mid):
     text = posted_text(RUN, mid)
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
+    elif is_moved(mid): body = ["Posted text: to be redrafted; the code moved."]
     else: body = [posted_fence(text), text, posted_fence(text)]
     return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {})) + posted_thread_lines(THREADS.get(mid)) + close_lines(mid)
 
@@ -839,8 +854,9 @@ def parse_args():
     return ap.parse_args()
 
 def load_triage(run, entries, today):
-    global CREDITS, STATUS, INSTR, POSTED
+    global CREDITS, STATUS, INSTR, POSTED, FOUND, REVIEWED
     CREDITS = credit_ids(entries)
+    FOUND, REVIEWED = {e["id"]: e for e in entries}, reviewed_head(run)
     STATUS = {mid: st for mid, st in import_hand_edits(run, read_status(run), today).items() if mid not in CREDITS}
     INSTR = read_instructions(run)
     changed = import_instruction_edits(run, INSTR, today)
@@ -1163,6 +1179,7 @@ def main():
     IDNUM = {e["id"]: e["_n"] for e in numbered}
     TITLE_BY_ID = {e["id"]: title_of(e, TITLES) for e in merged}
     check_posted_notes()
+    check_posted_anchors()
     write_triage(a.run)
     report_closable(a.run)
     text = render_report(a, merged, verdicts, routed, ordered_areas, numbered, labels, unverified, rejected, hidden_minor, overlapping)

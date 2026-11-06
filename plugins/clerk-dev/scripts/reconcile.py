@@ -221,11 +221,18 @@ def seed_posted(prev, cur, pid, cid, prev_posting, cur_posting):
     for path in (rf.posted_path, rf.close_text_path): copy_new(path(prev, pid), path(cur, cid))
     return True
 
+def seed_reviews(prev, cur, rows):
+    review_ids = rf.review_ids(rows)
+    for rid in review_ids: copy_new(rf.kept_body_path(prev, rid), rf.kept_body_path(cur, rid))
+    if review_ids: copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
+
 def seed_postings(prev, cur, pairs):
     prev_posting, cur_posting = read_posting(prev), read_posting(cur)
-    seeded = sum(seed_posted(prev, cur, pid, cid, prev_posting, cur_posting) for pid, cid in pairs)
-    if seeded: write_posting(cur, cur_posting)
-    return seeded
+    seeded = [cid for pid, cid in pairs if seed_posted(prev, cur, pid, cid, prev_posting, cur_posting)]
+    if seeded:
+        write_posting(cur, cur_posting)
+        seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
+    return len(seeded)
 
 def lost_line(lost, pnum):
     names = ", ".join(f"finding {pnum[pid]}" if pid in pnum else f"#{pid}" for pid in lost)

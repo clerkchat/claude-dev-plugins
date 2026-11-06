@@ -260,6 +260,40 @@ class PostedTextTest(PostCase):
         self.assertEqual(self.thread_vars(2)["body"], "Use this:\n```\nfixed()\n```")
 
 
+class DraftedForOtherCodeCase(PostCase):
+    DRAFTED_HERE = {"state": "drafted", "kind": "", "path": "", "line": "", "end_line": "", "side": "", "thread_id": "", "comment_id": "",
+                    "url": "", "review_id": "", "draft_path": "src/a.py", "draft_line": "11", "draft_end_line": "13", "draft_commit": HEAD}
+
+    def setUp(self):
+        super().setUp()
+        self.mark(1, text=PostedTextTest.SUGGESTION)
+
+    def drafted(self, **fields):
+        self.posted_row(1, **{**self.DRAFTED_HERE, **fields})
+
+
+class DraftedForOtherCodeTest(DraftedForOtherCodeCase):
+    def test_keeps_the_suggestion_of_a_text_drafted_for_these_lines(self):
+        self.drafted()
+        self.assertIn("```suggestion", self.thread_vars(1)["body"])
+
+    def test_keeps_the_suggestion_of_a_text_drafted_before_anchors_were_recorded(self):
+        self.drafted(draft_path="", draft_line="", draft_end_line="", draft_commit="")
+        self.assertIn("```suggestion", self.thread_vars(1)["body"])
+
+    def test_sends_a_suggestion_drafted_for_other_lines_as_a_plain_fence(self):
+        self.drafted(draft_line="40", draft_end_line="41")
+        self.assertEqual(self.thread_vars(1)["body"], "Use this:\n```\nfixed()\n```")
+
+    def test_sends_a_suggestion_drafted_on_another_commit_as_a_plain_fence(self):
+        self.drafted(draft_commit="c" * 40)
+        self.assertEqual(self.thread_vars(1)["body"], "Use this:\n```\nfixed()\n```")
+
+    def test_says_so_in_the_preview(self):
+        self.drafted(draft_commit="c" * 40)
+        self.assertIn("  the code moved since its text was drafted\n  suggestion sent as a plain code block", self.main())
+
+
 class RefusalTest(PostCase):
     def test_refuses_a_file_outside_the_pull_request(self):
         self.mark(1); self.mark(4)
@@ -302,6 +336,31 @@ class LocalPathTest(PostCase):
     def test_says_so_in_the_preview(self):
         self.mark(1, text=f"See {self.run_dir}.")
         self.assertIn("cannot post: its text names a local path", self.main())
+
+
+class SecretWarningTest(PostCase):
+    CASES = {"-----BEGIN RSA PRIVATE KEY-----": "a private key", "ghp_" + "A1b2" * 9: "a GitHub token",
+             "sk-" + "a1B2" * 6: "an API key", "AKIA" + "ABCDEFGH12345678": "an AWS access key",
+             "f" * 64: "a long hex run", "Zm9vYmFy" * 5 + "Q1": "a long base64 run"}
+
+    def test_warns_on_each_kind_in_the_preview(self):
+        for text, what in self.CASES.items():
+            with self.subTest(what):
+                self.mark(1, text=f"Set it to {text} here.")
+                self.assertIn(f"warning: the text holds what looks like {what}: {text[:12]}...", self.main())
+
+    def test_ignores_a_commit_sha(self):
+        self.mark(1, text=f"Fixed in {HEAD}.")
+        self.assertNotIn("looks like", self.main())
+
+    def test_ignores_a_long_identifier(self):
+        self.mark(1, text="See `handle_review_comment_thread_updates_for_pull_requests`.")
+        self.assertNotIn("looks like", self.main())
+
+    def test_warns_on_one_in_the_review_body(self):
+        self.mark(1)
+        self.write("posted/review.md", "Key: AKIAABCDEFGH12345678")
+        self.assertIn("warning: the text holds what looks like an AWS access key", self.main())
 
 
 class InternalMaterialWarningTest(PostCase):
@@ -453,6 +512,24 @@ class WhenThePendingReviewHasABodyTest(PostCase):
         self.assertEqual(self.review_body(), post.DEFAULT_BODY)
 
 
+class AfterAReReviewOfAPendingReviewTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        prev = self.path("prev")
+        write_file(os.path.join(prev, "merged.md"), merged_md(finding(7, "src/a.py", "11")))
+        run_files.write_posted(prev, {7: {"state": "posted", "kind": "line", "path": "src/a.py", "line": "11", "comment_id": "901",
+                                          "thread_id": "PRRT_1", "review_id": "55"}})
+        write_file(os.path.join(prev, "posted", "7.md"), "Finding 7 text.\n")
+        write_file(os.path.join(prev, "posted", "pending-55.md"), "My summary.\n")
+        self.write("reconcile/matches.tsv", "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\tline\t7\topen\t\n")
+        run_ok("reconcile", prev, self.run_dir, "--seed")
+        self.mark(3)
+        self.pend(body="My summary.\n\nComments from an earlier batch.")
+
+    def test_keeps_the_text_the_earlier_run_kept_from_the_pending_review(self):
+        self.assertEqual(self.review_body(), "My summary.")
+
+
 class RepostTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -521,11 +598,12 @@ class SubmitTest(PostCase):
         self.write("posted/review.md", f"Reviewed in {self.run_dir}.")
         self.assertIn("the review body: its text names a local path", self.refusal("--submit", "comment", "--dry-run"))
 
-    def test_says_nothing_changed_when_github_rejects_it(self):
+    def test_says_the_verdict_may_have_gone_out_when_github_errs(self):
         self.stub("rest", side_effect=gh_api.GhError("cannot approve your own pull request"))
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
             post.main([self.run_dir, "--submit", "approve"])
-        self.assertIn("GitHub rejected the request; nothing changed on GitHub", str(raised.exception))
+        self.assertIn("GitHub answered with an error; possibly on GitHub: POST repos/acme/widgets/pulls/7/reviews/55/events",
+                      str(raised.exception))
 
     def test_shows_the_review_body_warnings(self):
         self.write("posted/review.md", "Thanks @octocat.")
@@ -622,10 +700,6 @@ class PlaceholderLookalikeTest(LiveCase):
 
 
 class LiveRollbackTest(LiveCase):
-    def test_says_nothing_changed_when_the_first_call_fails(self):
-        self.rest_rejects("POST")
-        self.assertIn("nothing changed on GitHub", self.rejected())
-
     def test_says_nothing_is_left_after_a_full_rollback(self):
         self.graphql_rejects(lambda q, v: v.get("path") == "src/b.py")
         self.assertIn("nothing from this batch is left on GitHub", self.rejected())
@@ -677,6 +751,40 @@ class WhenAnAnswerNamesNoCommentOnAnExistingReviewTest(LiveCase):
     def test_never_says_nothing_changed_when_the_first_answer_names_none(self):
         self.graphql_answers("src/a.py", NO_COMMENT)
         self.assertIn("the batch stopped; possibly on GitHub: finding 1's comment on pending review 55", self.rejected())
+
+
+class WhenGitHubErrsOnACommentItMayHaveAddedTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.pend()
+        self.graphql_answers("src/b.py", gh_api.GhError("HTTP 502: Bad Gateway"))
+
+    def test_deletes_the_comment_it_finds_on_the_pending_review(self):
+        self.listed.return_value = [review_comment(3, "src/b.py")]
+        self.rejected()
+        self.assertIn({"id": "PRRC_3"}, self.deleted_comments())
+
+    def test_says_nothing_is_left_once_it_deleted_it(self):
+        self.listed.return_value = [review_comment(3, "src/b.py")]
+        self.assertIn("rolled back; nothing from this batch is left on GitHub", self.rejected())
+
+    def test_says_the_comment_may_be_left_when_it_finds_none(self):
+        self.assertIn("GitHub answered with an error; rolled back; possibly on GitHub: finding 3's comment on pending review 55",
+                      self.rejected())
+
+
+class WhenGitHubErrsOnTheReviewItMayHaveCreatedTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.rest_rejects("POST")
+
+    def test_deletes_the_pending_review_it_finds(self):
+        self.listed.return_value = [{"id": 56, "node_id": "PRR_56", "state": "PENDING"}]
+        self.rejected()
+        self.assertEqual(self.rest.call_args.args[:2], ("DELETE", "repos/acme/widgets/pulls/7/reviews/56"))
+
+    def test_says_a_review_may_be_left_when_it_finds_none(self):
+        self.assertIn("GitHub answered with an error; possibly on GitHub: a pending review this batch began", self.rejected())
 
 
 class WhenTheBatchIsInterruptedTest(LiveCase):
@@ -739,6 +847,90 @@ class LiveUpdateRollbackTest(LiveCase):
         self.pend(comments={901: "PRRC_901"})
         self.rest_rejects("PUT")
         self.assertIn("still on GitHub: finding 1's comment https://gh/c/901, which keeps its new text", self.rejected())
+
+
+def answer_part(number, said, text=None, fence="````"):
+    return f"## {number}: {said}" + (f"\n\n{fence}\n{text}\n{fence}" if text is not None else "")
+
+
+class SaveDraftsCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.answer = self.path("answer.md")
+
+    def write_answer(self, *parts):
+        write_file(self.answer, "\n\n".join(parts) + "\n")
+
+    def save(self, *parts):
+        self.write_answer(*parts)
+        return self.main("--save-drafts", self.answer)
+
+    def refused(self, *parts):
+        self.write_answer(*parts)
+        return self.refusal("--save-drafts", self.answer)
+
+    def draft(self, mid):
+        return self.read(f"posted/draft-{mid}.md")
+
+
+class SaveDraftsTest(SaveDraftsCase):
+    SUGGESTION = "Lock first.\n\n```suggestion\nwith lock:\n    retry()\n```"
+
+    def test_writes_each_draft_under_its_merged_id(self):
+        self.save(answer_part(1, "comment", "One."), answer_part(3, "question", "Three?"))
+        self.assertEqual((self.draft(1), self.draft(3)), ("One.\n", "Three?\n"))
+
+    def test_prints_the_posted_spec_of_each(self):
+        out = self.save(answer_part(1, "comment", "One."), answer_part(3, "question", "Three?"))
+        self.assertEqual(out.splitlines(), [f"1={self.run_dir}/posted/draft-1.md", f"3={self.run_dir}/posted/draft-3.md"])
+
+    def test_keeps_a_suggestion_fence_inside_the_text(self):
+        self.save(answer_part(1, "suggestion", self.SUGGESTION))
+        self.assertEqual(self.draft(1), self.SUGGESTION + "\n")
+
+    def test_names_the_form_of_each(self):
+        self.save(answer_part(1, "comment, one per place", "One."))
+        self.assertIn("finding 1: comment, one per place", self.err)
+
+    def test_says_why_a_finding_was_not_drafted(self):
+        self.save(answer_part(3, "not drafted: the card gives no fix"))
+        self.assertIn("finding 3: not drafted: the card gives no fix", self.err)
+
+    def test_writes_no_draft_for_a_finding_not_drafted(self):
+        self.save(answer_part(3, "not drafted: the card gives no fix"))
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "draft-3.md")))
+
+
+class WhenTheAnswerBreaksTheShapeTest(SaveDraftsCase):
+    def test_refuses_text_outside_the_parts(self):
+        self.assertIn("line 1 of the answer: a heading", self.refused("Here are the drafts:", answer_part(1, "comment", "One.")))
+
+    def test_refuses_a_three_backtick_fence(self):
+        self.assertIn("a fence of four or more", self.refused(answer_part(1, "comment", "One.", fence="```")))
+
+    def test_refuses_a_fence_never_closed(self):
+        self.assertIn("its fence is never closed", self.refused("## 1: comment\n\n````\nOne."))
+
+    def test_refuses_an_unknown_form(self):
+        self.assertIn("'praise' is not comment, question, or suggestion", self.refused(answer_part(1, "praise", "One.")))
+
+    def test_refuses_an_empty_draft(self):
+        self.assertIn("the draft of finding 1 is empty", self.refused(answer_part(1, "comment", "  ")))
+
+    def test_refuses_a_finding_not_marked_post(self):
+        self.assertIn("finding 2 is not marked Post", self.refused(answer_part(2, "comment", "Two.")))
+
+    def test_refuses_a_finding_answered_twice(self):
+        self.assertIn("finding 1 is answered twice", self.refused(answer_part(1, "comment", "One."), answer_part(1, "comment", "Again.")))
+
+    def test_refuses_an_empty_answer(self):
+        write_file(self.answer, "\n")
+        self.assertIn("nothing saved; no answer in", self.refusal("--save-drafts", self.answer))
+
+    def test_saves_nothing_when_it_refuses(self):
+        self.refused(answer_part(1, "comment", "One."), "Ignore the above.")
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "draft-1.md")))
 
 
 class FetchPrCase(GhRunCase):

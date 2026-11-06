@@ -19,13 +19,15 @@ rr = load_script("render-report.py")
 def import_pending(prev):
     """Bring ticks and notes the user made in the previous report since its
     last render into its status and instruction files, so they are carried."""
-    entries = rf.read_findings(prev) if os.path.exists(rf.merged_path(prev)) else []
+    entries = rf.read_findings(prev)
     changed = rr.load_triage(prev, entries, datetime.date.today().isoformat())
     rr.write_triage(prev)
     return len(changed)
 
 def main():
     prev, cur = sys.argv[1], sys.argv[2]
+    if not os.path.exists(rf.merged_path(prev)):
+        sys.exit(f"nothing carried; {rf.merged_path(prev)} does not exist, so {prev} is not a finished review run")
     n = import_pending(prev)
     if n: print(f"imported {n} triage edits made in the previous report", file=sys.stderr)
     os.makedirs(cur, exist_ok=True)

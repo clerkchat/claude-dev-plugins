@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from helpers import SCRIPTS, RenderRunCase, RunCase, defect, init_repo, run_ok, write_file
+from helpers import SCRIPTS, RenderRunCase, RunCase, defect, init_repo, run_ok, run_script, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -388,6 +388,59 @@ class DraftedNoteChangeTest(PostCase):
         self.assertIn("Say it plainly.", self.posted_section(1))
 
 
+class DraftAnchorCase(PostCase):
+    DRAFTED_ON, REVIEWED_LATER = "a" * 40, "c" * 40
+
+    def setUp(self):
+        super().setUp()
+        self.write_target("t", "b" * 40, self.DRAFTED_ON)
+        self.render("--posted", f"1={self.draft}")
+
+
+class DraftAnchorTest(DraftAnchorCase):
+    def test_records_the_lines_and_commit_it_was_drafted_for(self):
+        self.assertEqual({k: self.posted(7)[k] for k in run_files.DRAFT_FIELDS},
+                         {"draft_path": "a.py", "draft_line": "3", "draft_end_line": "3", "draft_commit": self.DRAFTED_ON})
+
+    def test_shows_the_text_while_the_code_stays(self):
+        self.assertIn("Say it plainly.", self.posted_section(1))
+
+    def test_asks_for_no_redraft_while_the_code_stays(self):
+        self.assertNotIn("code moved", self.render())
+
+
+class WhenTheReviewedCommitMovedSinceDraftingTest(DraftAnchorCase):
+    def setUp(self):
+        super().setUp()
+        self.write_target("t", "b" * 40, self.REVIEWED_LATER)
+        self.out = self.render()
+
+    def test_says_the_text_is_to_be_redrafted(self):
+        self.assertIn("Posted text: to be redrafted; the code moved.", self.posted_section(1))
+
+    def test_asks_for_a_redraft(self):
+        self.assertIn("finding 1: code moved since drafting; redraft the posted text", self.out)
+
+    def test_a_new_draft_clears_it(self):
+        self.render("--posted", f"1={self.draft}")
+        self.assertIn("Say it plainly.", self.posted_section(1))
+
+
+class WhenTheFindingMovedToOtherLinesSinceDraftingTest(DraftAnchorCase):
+    def test_says_the_text_is_to_be_redrafted(self):
+        self.write("overrides/7.md", "line: 9\n")
+        self.render()
+        self.assertIn("Posted text: to be redrafted; the code moved.", self.posted_section(1))
+
+
+class WhenAPostedCommentsCodeMovedTest(DraftAnchorCase):
+    def test_asks_for_no_redraft(self):
+        run_files.write_posted(self.run_dir, {7: {**self.posted(7), "state": "posted", "comment_id": "5", "kind": "line"}})
+        self.write_target("t", "b" * 40, self.REVIEWED_LATER)
+        self.render()
+        self.assertNotIn("to be redrafted", self.posted_section(1))
+
+
 class PostedEditTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -687,14 +740,19 @@ class CarryWithoutMergedTest(RunCase):
         super().setUp()
         self.write_status({7: ("wont-fix", "not ours")})
         self.cur = self.path("cur")
-        run_ok("carry", self.run_dir, self.cur)
+        self.code, self.out = run_script("carry", self.run_dir, self.cur)
 
-    def test_carries_the_status(self):
-        self.assertEqual(run_files.read_status(self.cur)[7]["status"], "wont-fix")
+    def test_fails(self):
+        self.assertEqual(self.code, 1)
 
-    def test_carries_no_findings(self):
-        with open(os.path.join(self.cur, "reconcile", "matches.tsv"), encoding="utf-8") as f:
-            self.assertEqual(f.read().splitlines()[1:], [])
+    def test_says_the_previous_run_has_no_merged_findings(self):
+        self.assertIn(f"nothing carried; {self.run_dir}/merged.md does not exist", self.out)
+
+    def test_creates_no_run(self):
+        self.assertFalse(os.path.exists(self.cur))
+
+    def test_leaves_the_previous_run_as_it_was(self):
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "instructions.tsv")))
 
 
 TWO_CHOICES = [render.Choice("post", "Post", "post"), render.Choice("ignore", "Ignore", "ignore", note="reason")]
