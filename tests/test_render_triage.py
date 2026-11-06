@@ -194,6 +194,38 @@ class NoteTest(RenderCase):
         self.assertIn("finding 9 not in numbers.tsv", self.render_fails("--note", f"9={self.note}"))
 
 
+class FencedNoteTest(RenderCase):
+    NOTE = "Use the helper.\n```\n# not a heading\n---\n```\nafter"
+
+    def setUp(self):
+        super().setUp()
+        note = self.path("note.txt")
+        write_file(note, self.NOTE)
+        self.render("--note", f"1={note}")
+        self.render()
+
+    def test_keeps_heading_and_rule_lines_inside_a_fence_in_the_notes(self):
+        self.assertEqual(self.instruction(7)["text"], self.NOTE)
+
+    def test_imports_a_tick_after_the_fence(self):
+        self.edit_report("- [ ] Discuss", "- [x] Discuss")
+        self.render()
+        self.assertEqual(self.instruction(7)["choice"], "discuss")
+
+
+class SummaryTest(RenderCase):
+    def summary(self, path):
+        self.render("--summary", path)
+        return self.read("report.md").split("## Summary\n\n", 1)[1].split("\n", 1)[0]
+
+    def test_says_pending_without_a_summary_file(self):
+        self.assertEqual(self.summary(self.path("missing.md")), "(summary pending)")
+
+    def test_leaves_an_empty_summary_file_empty(self):
+        write_file(self.path("summary.md"), "\n")
+        self.assertEqual(self.summary(self.path("summary.md")), "## Findings at a glance")
+
+
 class CardTailTest(RenderCase):
     def test_puts_the_resolution_before_the_instruction(self):
         self.write("resolution/7.md", "Fixed it the other way.\n")
@@ -433,7 +465,7 @@ class CarryPostedTest(PostCase):
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
 
 
-TWO_CHOICES = [("post", "Post", "post"), ("ignore", "Ignore", "ignore")]
+TWO_CHOICES = [render.Choice("post", "Post", "post"), render.Choice("ignore", "Ignore", "ignore", note="reason")]
 
 
 class ChoicesTest(unittest.TestCase):

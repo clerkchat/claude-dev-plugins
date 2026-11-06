@@ -52,7 +52,7 @@ class PostCase(RunCase):
     def setUp(self):
         super().setUp()
         self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()))
-        self.write_numbers(FINDINGS)
+        self.write_numbers(dict.fromkeys(FINDINGS, "fix"))
         self.write_target("pr 7", MERGE_BASE, HEAD)
         self.marks = {}
         self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "merge_base": MERGE_BASE, "files": ["src/a.py", "src/b.py"],

@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from helpers import TempCase, init_repo, run_script, write_feature_md, write_record
+from helpers import RunCase, init_repo, run_script, write_feature_md, write_record
 
 CHECK = """# Design check: R5 Spec five
 
@@ -16,11 +16,12 @@ Checked 2026-10-21: R5.
 FINDING = "- id: {n}\n  lens: tests\n  severity: minor\n  file: a.py\n  line: 1\n  title: Finding {n}\n"
 
 
-class BlockersCase(TempCase):
+class BlockersCase(RunCase):
     def setUp(self):
         super().setUp()
         self.repo = init_repo(self.path("work"))
         self.repo.git("checkout", "-q", "-b", "feat")
+        self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
         write_feature_md(self.repo.path)
         write_record(self.repo.path, "R5", "spec", "Spec five", body="## Requirements\n\n1. One.\n\n## Baseline\n\nClean.")
 
@@ -36,19 +37,11 @@ class BlockersCase(TempCase):
             f.write(CHECK)
 
     def write_run(self, sections, instructions=(), statuses=()):
-        run = os.path.join(self.repo.path, ".clerk-dev", "latest")
-        os.makedirs(run, exist_ok=True)
-        head = self.repo.git("rev-parse", "HEAD")
-        files = {
-            "merged.md": "```findings\n" + "".join(FINDING.format(n=n) for n in sections) + "```\n",
-            "target.txt": f"branch\n{self.repo.git('rev-parse', 'main')}\n{head}\n",
-            "numbers.tsv": "number\tmerged_id\tsection\n" + "".join(f"{n}\t{n}\t{s}\n" for n, s in sections.items()),
-            "instructions.tsv": "merged_id\tchoice\n" + "".join(f"{n}\t{c}\n" for n, c in instructions),
-            "status.tsv": "merged_id\tstatus\tref\tdate\n" + "".join(f"{n}\t{s}\tabc\t\n" for n, s in statuses),
-        }
-        for name, text in files.items():
-            with open(os.path.join(run, name), "w") as f:
-                f.write(text)
+        self.write_merged(*(FINDING.format(n=n) for n in sections))
+        self.write_target("branch", self.repo.git("rev-parse", "main"), self.repo.git("rev-parse", "HEAD"))
+        self.write_numbers(sections)
+        self.write_instructions({n: (c, "") for n, c in instructions})
+        self.write_status({n: (s, "abc") for n, s in statuses})
 
 
 class BlockersTests(BlockersCase):
@@ -114,10 +107,8 @@ class PostQueueTests(BlockersCase):
         self.write_run({1: "look", 2: "look", 3: "look", 4: "look"}, instructions=[(n, "post") for n in (1, 2, 3, 4)])
 
     def write_posted(self, rows, notes=None):
-        path = os.path.join(self.repo.path, ".clerk-dev", "latest", "posted.tsv")
-        with open(path, "w") as f:
-            f.write(POSTED_HEADER + "".join(f"{n}\t{state}\t{(notes or {}).get(n, '')}\t\t\t\t\ta.py\t1\t1\tRIGHT\t{kind}\t\n"
-                                            for n, state, kind in rows))
+        self.write("posted.tsv", POSTED_HEADER + "".join(f"{n}\t{state}\t{(notes or {}).get(n, '')}\t\t\t\t\ta.py\t1\t1\tRIGHT\t{kind}\t\n"
+                                                         for n, state, kind in rows))
 
     def full_status(self):
         code, out = self.repo.status()

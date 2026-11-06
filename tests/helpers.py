@@ -293,12 +293,16 @@ class RunCase(TempCase):
     def write_merged(self, *entries):
         self.write("merged.md", merged_md(*entries))
 
-    def write_numbers(self, merged_ids):
-        self.write("numbers.tsv", "number\tmerged_id\tsection\n" + "".join(f"{m}\t{m}\tfix\n" for m in merged_ids))
+    def write_numbers(self, sections):
+        self.write("numbers.tsv", "number\tmerged_id\tsection\n" + "".join(f"{m}\t{m}\t{s}\n" for m, s in sections.items()))
 
     def write_instructions(self, rows):
         self.write("instructions.tsv", "merged_id\tchoice\tnote\tdate\talso\toption\n"
                    + "".join(f"{m}\t{choice}\t{note}\t\t\t\n" for m, (choice, note) in sorted(rows.items())))
+
+    def write_status(self, rows):
+        self.write("status.tsv", "merged_id\tstatus\tref\tdate\n"
+                   + "".join(f"{m}\t{status}\t{ref}\t\n" for m, (status, ref) in sorted(rows.items())))
 
     def write_target(self, *lines):
         self.write("target.txt", "".join(l + "\n" for l in lines))
