@@ -222,13 +222,13 @@ def posted_text(run, mid):
 def close_text_path(run, mid):
     return os.path.join(run, "posted", f"close-{mid}.md")
 
-THREAD_FIELDS = ("comment_id", "thread_id", "state", "outdated", "can_resolve", "line", "replies", "date")
+THREAD_FIELDS = ("comment_id", "thread_id", "state", "outdated", "can_resolve", "line", "replies", "date", "by_viewer")
 
 def threads_path(run):
     return os.path.join(run, "pr", "threads.tsv")
 
 def reply_line(author, text):
-    return f"@{author}: {text}"
+    return f"@{author}: {' '.join(text.split())}"
 
 def joined_replies(replies):
     return "; ".join(reply_line(author, text) for author, text in replies)
@@ -261,13 +261,16 @@ def write_kept_open(run, rows):
 
 Closable = namedtuple("Closable", "posted status thread")
 
+def is_open_and_ours(thread):
+    return thread.get("state") == "open" and thread.get("by_viewer") == "1"
+
 def closable(run):
     posted, status, kept = read_posted(run), read_status(run), read_kept_open(run)
     threads = posted_threads(run, posted)
     credits = credit_ids(read_findings(run))
     return {mid: Closable(row, status[mid], threads[mid]) for mid, row in sorted(posted.items())
             if has_thread(row) and mid not in credits and mid not in kept
-            and status_of(status, mid) == "fixed" and threads.get(mid, {}).get("state") == "open"}
+            and status_of(status, mid) == "fixed" and is_open_and_ours(threads.get(mid, {}))}
 
 NUMBER_FIELDS = ("merged_id", "section")
 

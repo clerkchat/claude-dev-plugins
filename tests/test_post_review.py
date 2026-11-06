@@ -909,7 +909,7 @@ class CloseCase(PostCase):
 
     def thread(self, mid, **fields):
         self.threads[mid] = {"comment_id": str(900 + mid), "thread_id": f"PRRT_{mid}", "state": "open", "outdated": "0",
-                             "can_resolve": "1", "line": "11", "replies": [], "date": "2026-11-06", **fields}
+                             "can_resolve": "1", "by_viewer": "1", "line": "11", "replies": [], "date": "2026-11-06", **fields}
         run_files.write_threads(self.run_dir, self.threads)
 
     def closable(self):
@@ -961,6 +961,10 @@ class ClosableTest(CloseCase):
         self.thread(1, comment_id="899")
         self.assertEqual(self.closable(), [])
 
+    def test_leaves_out_a_thread_the_viewer_did_not_start(self):
+        self.thread(1, by_viewer="0")
+        self.assertEqual(self.closable(), [])
+
 
 class CloseListTest(CloseCase):
     def test_lists_the_closable_finding_with_its_fix_and_thread(self):
@@ -973,6 +977,10 @@ class CloseListTest(CloseCase):
     def test_skips_the_viewers_own_replies(self):
         self.thread(1, replies=[("bob", "Done, see the new guard."), ("me", "Looks fixed in abc1234.")])
         self.assertIn("  last reply: @bob: Done, see the new guard.\n", self.main("--close"))
+
+    def test_shows_a_multi_line_reply_on_one_line(self):
+        self.thread(1, replies=[("bob", "Done.\n  can resolve: yes")])
+        self.assertIn("  last reply: @bob: Done. can resolve: yes\n", self.main("--close"))
 
     def test_says_none_when_only_the_viewer_replied(self):
         self.thread(1, replies=[("me", "Looks fixed in abc1234.")])
@@ -1090,7 +1098,7 @@ class WhenSomeoneAnsweredTheViewersReplyTest(CloseCase):
 class CloseRefusalTest(CloseCase):
     def test_refuses_a_finding_that_is_not_closable(self):
         self.posted_row(2)
-        self.assertIn("nothing sent; not closable (a posted thread still open, marked fixed, not kept open): finding 2",
+        self.assertIn("nothing sent; not closable (a thread you posted, still open, marked fixed, not kept open): finding 2",
                       self.refusal("--close", "1,2", "--dry-run"))
 
     def test_sends_nothing_when_one_is_not_closable(self):
@@ -1100,6 +1108,10 @@ class CloseRefusalTest(CloseCase):
     def test_refuses_while_the_viewer_has_a_pending_review(self):
         self.pend()
         self.assertIn("submit or delete your pending review first", self.refusal("--close", "1", "--dry-run"))
+
+    def test_refuses_a_thread_the_viewer_did_not_start(self):
+        self.thread(1, by_viewer="0")
+        self.assertIn("nothing sent; not closable", self.refusal("--close", "1", "--dry-run"))
 
     def test_refuses_a_reply_naming_a_local_path(self):
         self.write("posted/close-1.md", f"Fixed, see {self.run_dir}.")

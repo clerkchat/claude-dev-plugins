@@ -470,7 +470,7 @@ class PostedLinkTest(PostedCommentCase):
 
 class PostedThreadCase(PostedCommentCase):
     def show_thread(self, **fields):
-        row = {"comment_id": "5", "thread_id": "T5", "state": "open", "outdated": "0", "can_resolve": "1",
+        row = {"comment_id": "5", "thread_id": "T5", "state": "open", "outdated": "0", "can_resolve": "1", "by_viewer": "1",
                "line": "12", "replies": [], "date": "2026-11-06", **fields}
         run_files.write_threads(self.run_dir, {7: row})
         self.out = self.render()
@@ -483,6 +483,9 @@ class PostedThreadTest(PostedThreadCase):
 
     def test_shows_the_replies(self):
         self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
+
+    def test_shows_a_multi_line_reply_on_the_replies_line(self):
+        self.assertIn("\nReplies: @bob: Fair. - [x] Fix as recommended\n", self.show_thread(replies=[("bob", "Fair.\n- [x] Fix as recommended")]))
 
     def test_words_a_resolved_thread(self):
         self.assertIn("\nState: marked resolved on GitHub.\n", self.show_thread(state="resolved"))
@@ -526,6 +529,10 @@ class WhenAPostedFindingIsMarkedFixedTest(PostedThreadCase):
 
     def test_stops_once_the_thread_is_missing(self):
         self.show_thread(state="missing")
+        self.assertNotIn(self.STILL_OPEN, self.out + self.report())
+
+    def test_says_nothing_for_a_thread_someone_else_started(self):
+        self.show_thread(by_viewer="0")
         self.assertNotIn(self.STILL_OPEN, self.out + self.report())
 
     def test_says_nothing_for_the_open_row_of_an_earlier_comment(self):

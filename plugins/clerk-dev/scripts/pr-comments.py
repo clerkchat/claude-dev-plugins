@@ -33,7 +33,7 @@ THREAD_LIMIT = 100
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName
 reviewThreads(first:""" + str(THREAD_LIMIT) + """){totalCount nodes{id isResolved isOutdated viewerCanResolve path line startLine originalLine
-  comments(first:50){nodes{databaseId author{login} body url createdAt pullRequestReview{state}}}}}
+  comments(first:50){nodes{databaseId author{login} viewerDidAuthor body url createdAt pullRequestReview{state}}}}}
 reviews(first:100){nodes{databaseId author{login} body state url}}
 comments(first:100){nodes{databaseId author{login} body url}}}}}"""
 
@@ -136,12 +136,12 @@ def thread_row(t, today):
     root = root_of(t)
     state = "pending" if is_pending(root) else "resolved" if t["isResolved"] else "open"
     return {"comment_id": str(root["databaseId"]), "thread_id": t["id"], "state": state, "outdated": flag(t["isOutdated"]),
-            "can_resolve": flag(t.get("viewerCanResolve")), "line": thread_span(t),
+            "can_resolve": flag(t.get("viewerCanResolve")), "by_viewer": flag(root.get("viewerDidAuthor")), "line": thread_span(t),
             "replies": [short_reply(a, b) for a, b in replies_of(t)], "date": today}
 
 def missing_row(posted, today):
     return {"comment_id": posted["comment_id"], "thread_id": posted["thread_id"], "state": "missing",
-            "outdated": "0", "can_resolve": "0", "line": "", "replies": [], "date": today}
+            "outdated": "0", "can_resolve": "0", "by_viewer": "0", "line": "", "replies": [], "date": today}
 
 def unlinked_row(known, mid, posted, unread, today):
     return known.get(mid) if unread else missing_row(posted, today)

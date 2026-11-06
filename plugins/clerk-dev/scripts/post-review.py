@@ -595,7 +595,7 @@ def chosen(run, spec, items):
     if not picked: sys.exit(f"bad --close {spec!r}; use --close N[,M]")
     settled = settled_threads(run, picked - by_id.keys())
     refused = [numbered(mid, nums) for mid in sorted(picked) if mid not in by_id and mid not in settled]
-    if refused: sys.exit("nothing sent; not closable (a posted thread still open, marked fixed, not kept open): " + ", ".join(refused))
+    if refused: sys.exit("nothing sent; not closable (a thread you posted, still open, marked fixed, not kept open): " + ", ".join(refused))
     refuse_blocked([by_id[mid] for mid in sorted(picked) if mid in by_id])
     for mid in sorted(settled): print(f"{numbered(mid, nums)}: {settled[mid]}; skipped", file=sys.stderr)
     return [it for it in items if it["id"] in picked]

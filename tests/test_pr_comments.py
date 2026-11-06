@@ -15,11 +15,12 @@ DATE = "2026-11-06"
 
 
 def comment(gid, body, review_state, login="me"):
-    return {"databaseId": gid, "author": {"login": login}, "body": body, "url": f"u{gid}", "pullRequestReview": {"state": review_state}}
+    return {"databaseId": gid, "author": {"login": login}, "viewerDidAuthor": login == "me", "body": body, "url": f"u{gid}",
+            "pullRequestReview": {"state": review_state}}
 
 
-def thread(gid, state="COMMENTED", body="Looks off.", replies=(), reply_state=None, **fields):
-    comments = [comment(gid, body, state)]
+def thread(gid, state="COMMENTED", body="Looks off.", replies=(), reply_state=None, login="me", **fields):
+    comments = [comment(gid, body, state, login)]
     comments += [comment(gid * 10 + n, r, reply_state or state, "you") for n, r in enumerate(replies, 1)]
     return {"id": f"T{gid}", "path": "a.py", "line": 3, "originalLine": 3, "isResolved": False, "isOutdated": False,
             "viewerCanResolve": True, "comments": {"nodes": comments}, **fields}
@@ -193,7 +194,7 @@ class PostedThreadTest(PostedThreadCase):
 
     def test_writes_its_row_under_the_finding(self):
         self.assertEqual(self.row(40), {"comment_id": "1", "thread_id": "T1", "state": "open", "outdated": "0", "can_resolve": "1",
-                                        "line": "3", "replies": [("you", "Fair.")], "date": DATE})
+                                        "by_viewer": "1", "line": "3", "replies": [("you", "Fair.")], "date": DATE})
 
     def test_marks_a_posting_the_fetch_did_not_return_missing(self):
         self.assertEqual((self.row(41)["state"], self.row(41)["thread_id"]), ("missing", "T2"))
@@ -240,6 +241,10 @@ class PostedThreadStateTest(PostedThreadCase):
     def test_flags_a_thread_the_viewer_cannot_resolve(self):
         self.fold(thread(1, viewerCanResolve=False))
         self.assertEqual(self.row(40)["can_resolve"], "0")
+
+    def test_flags_a_thread_someone_else_started(self):
+        self.fold(thread(1, login="amy"))
+        self.assertEqual(self.row(40)["by_viewer"], "0")
 
     def test_rewrites_the_row_from_the_live_pull_request(self):
         self.fold(thread(1, isResolved=True))
