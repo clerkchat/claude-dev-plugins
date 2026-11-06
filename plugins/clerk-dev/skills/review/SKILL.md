@@ -19,6 +19,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/carry.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/final-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/followups.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py *)
@@ -343,6 +344,9 @@ see Step 6b):
 
 - `${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...] [--log N]`: the
   state a run starts from, per worktree (see Preflight).
+- `${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py RUN`: points `.clerk-dev/latest`
+  (or `latest-feature` for a `-feature` run) at a run directory of this
+  worktree (Step 0).
 - `${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py PATCH [--exclude GLOB ...]
   --tsv files.tsv --md scope-table.md`:
   per-file bytes, lines, token estimate, and exclusion reasons.
@@ -694,13 +698,17 @@ reviewers left. Resume it, or start over?" Headless runs start over unless
 Create the run directory inside the repository, at `<repo>/.clerk-dev/<label>/`,
 where `<label>` is `<yyyymmdd-hhmm>-<target slug>` (`branch`, a path slug, a PR
 number, or a range slug). If the directory exists, append `-2`, `-3`, and so on.
-Never overwrite or delete an earlier run. After creating it, point the symlink
-`<repo>/.clerk-dev/latest` at it, except for a `--standalone` narrow run (see
-Narrow review), which leaves it where it is, and for the coordinating session
-of feature mode, which points `<repo>/.clerk-dev/latest-feature` at its run
-instead. `latest` always means this branch's own review: fixes, triage, status,
-resuming, and incremental review read it, and in feature mode the review of
-this repository runs in the same worktree at the same time.
+Never overwrite or delete an earlier run. After creating it, run
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py <run>` from the worktree
+root, which points `<repo>/.clerk-dev/latest` at it, except for a
+`--standalone` narrow run (see Narrow review), which leaves it where it is and
+skips the script. For the coordinating session of feature mode, whose label
+ends in `-feature`, the same script points `<repo>/.clerk-dev/latest-feature`
+at its run instead. Do not link with `ln`; it is not pre-approved, and a
+headless child cannot ask. `latest` always means this branch's own review:
+fixes, triage, status, resuming, and incremental review read it, and in
+feature mode the review of this repository runs in the same worktree at the
+same time.
 
 A directory whose label ends in `-feature` is a feature run, not a review of
 this branch. Wherever this skill or another looks for the most recent or newest

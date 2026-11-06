@@ -24,6 +24,17 @@ def import_pending(prev):
     rr.write_triage(prev)
     return len(changed)
 
+CARRIED_FILES = ("merged.md", "titles.tsv", "status.tsv", "instructions.tsv", "numbers.tsv", "slices.md", "summary.md",
+                 "not-reviewed.md", "stale.tsv", "commits.tsv", "posted.tsv",
+                 "verify", "overrides", "resolution", "recheck", "pr", "notes", "posted")
+
+def copy_if_absent(src, dst):
+    if not os.path.exists(dst): shutil.copy2(src, dst)
+
+def copy_missing(src, dst):
+    if os.path.isdir(src): shutil.copytree(src, dst, dirs_exist_ok=True, copy_function=copy_if_absent)
+    elif os.path.exists(src): copy_if_absent(src, dst)
+
 def main():
     prev, cur = sys.argv[1], sys.argv[2]
     if not os.path.exists(rf.merged_path(prev)):
@@ -31,13 +42,7 @@ def main():
     n = import_pending(prev)
     if n: print(f"imported {n} triage edits made in the previous report", file=sys.stderr)
     os.makedirs(cur, exist_ok=True)
-    for name in ("merged.md", "titles.tsv", "status.tsv", "instructions.tsv", "numbers.tsv",
-                 "slices.md", "summary.md", "not-reviewed.md", "stale.tsv", "commits.tsv", "posted.tsv"):
-        src, dst = os.path.join(prev, name), os.path.join(cur, name)
-        if os.path.exists(src) and not os.path.exists(dst): shutil.copy2(src, dst)
-    for d in ("verify", "overrides", "resolution", "recheck", "pr", "notes", "posted"):
-        src, dst = os.path.join(prev, d), os.path.join(cur, d)
-        if os.path.isdir(src) and not os.path.exists(dst): shutil.copytree(src, dst)
+    for name in CARRIED_FILES: copy_missing(os.path.join(prev, name), os.path.join(cur, name))
     status = rf.read_status(prev)
     nums = rf.read_numbers(prev)
     ids = [int(m) for m in re.findall(r"^- id: (\d+)$", rf.read_text(rf.merged_path(prev)), re.M)]

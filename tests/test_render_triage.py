@@ -825,6 +825,48 @@ class CarryWithoutMergedTest(RunCase):
         self.assertFalse(os.path.exists(os.path.join(self.run_dir, "instructions.tsv")))
 
 
+VERDICT = "verdict: confirmed | confidence: 90 | severity: major"
+
+
+class CarryVerdictsCase(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(7, "a.py"))
+        self.write("verify/7.md", VERDICT)
+        self.cur = self.path("cur")
+
+    def write_cur(self, name, text):
+        write_file(os.path.join(self.cur, name), text)
+
+    def carried_verdict(self):
+        run_ok("carry", self.run_dir, self.cur)
+        with open(os.path.join(self.cur, "verify", "7.md"), encoding="utf-8") as f:
+            return f.read()
+
+
+class CarryVerdictsTest(CarryVerdictsCase):
+    def test_carries_the_verdicts(self):
+        self.assertEqual(self.carried_verdict(), VERDICT)
+
+
+class WhenTheRunAlreadyHasAVerifyDirectoryTest(CarryVerdictsCase):
+    def setUp(self):
+        super().setUp()
+        self.write_cur("verify/9.md", "verdict: rejected")
+
+    def test_carries_the_verdicts_into_it(self):
+        self.assertEqual(self.carried_verdict(), VERDICT)
+
+
+class WhenTheRunAlreadyJudgedTheFindingTest(CarryVerdictsCase):
+    def setUp(self):
+        super().setUp()
+        self.write_cur("verify/7.md", "verdict: rejected")
+
+    def test_keeps_its_own_verdict(self):
+        self.assertEqual(self.carried_verdict(), "verdict: rejected")
+
+
 TWO_CHOICES = [render.Choice("post", "Post", "post"), render.Choice("ignore", "Ignore", "ignore", note="reason")]
 
 

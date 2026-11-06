@@ -425,7 +425,7 @@ def read_appended_map(run):
 def write_appended_map(run, amap):
     write_keyed(appended_map_path(run), APPENDED_MAP_FIELDS, {new: {"merged_id": str(mid)} for new, mid in amap.items()}, header="new_id", order=list)
 
-CARRIED = ("carried", "reopened")
+CARRIED = ("carried", "reopened", "recheck")
 
 def previous_run(run):
     label = read_text(reconcile_path(run, "previous.txt"))

@@ -188,9 +188,9 @@ class AfterAnIncrementalReviewTest(IncrementalCase):
         self.assertEqual(self.anchor_of(1), {"subjectType": "LINE", "line": 10})
 
 
-def carried(run, label):
+def carried(run, label, how="carried"):
     run_files.write_previous(run, label)
-    run_files.write_matches(run, {1: {"prev_id": "1", "how": "carried"}})
+    run_files.write_matches(run, {1: {"prev_id": "1", "how": how}})
 
 
 def earlier_run(path, head, carried_from=None):
@@ -228,6 +228,17 @@ class WhenACarriedFindingWasCarriedBeforeTest(CarriedFindingCase):
         self.lines_added_above()
         earlier_run(self.path("between"), self.ctx["head"], carried_from="earlier")
         run_files.write_previous(self.run_dir, "between")
+        self.mark(1)
+
+    def test_maps_its_lines_from_the_run_that_found_it(self):
+        self.assertEqual(self.anchor_of(1), {"subjectType": "LINE", "line": 15})
+
+
+class WhenARecheckReopenedAnEarlierFindingTest(CarriedFindingCase):
+    def setUp(self):
+        super().setUp()
+        carried(self.run_dir, "earlier", how="recheck")
+        self.lines_added_above()
         self.mark(1)
 
     def test_maps_its_lines_from_the_run_that_found_it(self):
