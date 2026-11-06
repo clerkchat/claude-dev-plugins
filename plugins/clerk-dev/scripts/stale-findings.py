@@ -222,7 +222,7 @@ def cmd_record(a, run, repo):
         if not m or m.group(2) not in VERDICTS:
             sys.exit(f"bad --record {spec!r}; use N=still, N=resolved:<note>, N=changed:<note>")
         mid = rf.finding_id(m.group(1), numbers)
-        rows[mid] = dict(through=sha, verdict=m.group(2), note=(m.group(3) or "").replace("\t", " "), date=today)
+        rows[mid] = dict(through=sha, verdict=m.group(2), note=m.group(3) or "", date=today)
     rf.write_keyed(path, STALE_FIELDS, rows)
     print(f"recorded {len(a.record)} in {path}")
 

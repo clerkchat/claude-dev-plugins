@@ -16,10 +16,15 @@ def read_rows(path, key=merged_key):
         rows = [[cell.strip() for cell in line.rstrip("\n").split("\t")] for line in fh]
     return [f for f in rows if key(f[0]) is not None]
 
+LINE_BREAKS = re.compile(r"[\t\r\n]")
+
+def tsv_cell(value):
+    return LINE_BREAKS.sub(" ", value)
+
 def write_rows(path, header, rows):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
-        for row in [*([header] if header else []), *rows]: fh.write("\t".join(row) + "\n")
+        for row in [*([header] if header else []), *rows]: fh.write("\t".join(map(tsv_cell, row)) + "\n")
 
 def read_keyed(path, fields, key=merged_key, defaults=None):
     return {key(f[0]): {name: value or (defaults or {}).get(name, "") for name, value in zip(fields, f[1:] + [""] * len(fields))}
@@ -236,11 +241,20 @@ def joined_replies(replies):
 def replies_cell(replies):
     return json.dumps([list(r) for r in replies], ensure_ascii=False) if replies else ""
 
+def is_reply(r):
+    return isinstance(r, list) and len(r) == 2 and all(isinstance(part, str) for part in r)
+
 def cell_replies(cell):
-    return [tuple(r) for r in json.loads(cell)] if cell else []
+    replies = json.loads(cell) if cell else []
+    if not (isinstance(replies, list) and all(map(is_reply, replies))): raise ValueError("replies are not a list of author and text pairs")
+    return [tuple(r) for r in replies]
 
 def read_threads(run):
-    return {mid: {**row, "replies": cell_replies(row["replies"])} for mid, row in read_keyed(threads_path(run), THREAD_FIELDS).items()}
+    rows = {}
+    for mid, row in read_keyed(threads_path(run), THREAD_FIELDS).items():
+        try: rows[mid] = {**row, "replies": cell_replies(row["replies"])}
+        except ValueError: print(f"warning: skipped the row of merged id {mid} in {threads_path(run)}: its replies are unreadable", file=sys.stderr)
+    return rows
 
 def write_threads(run, rows):
     write_keyed(threads_path(run), THREAD_FIELDS, {mid: {**row, "replies": replies_cell(row.get("replies", []))} for mid, row in rows.items()})

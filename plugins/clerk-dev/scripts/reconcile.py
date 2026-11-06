@@ -71,7 +71,7 @@ CANDIDATE_HEADER = ("cur_id", "prev_id", "score")
 
 def _cause(n):
     claim = re.split(r"(?<=[.!?])\s", str(n["_raw"].get("claim", "")).strip())[0]
-    return f"{n['_raw'].get('lens','')}|{n['file']}:{n['line'] or ''}|{claim}".replace("\t", " ")
+    return f"{n['_raw'].get('lens','')}|{n['file']}:{n['line'] or ''}|{claim}"
 
 def judged_rows(path, key=rf.merged_key):
     if not os.path.exists(path): sys.exit(f"no judged file at {path}")

@@ -1,6 +1,8 @@
+import io
 import os
 import sys
 import unittest
+from contextlib import redirect_stderr
 
 from helpers import SCRIPTS, RenderRunCase, RunCase, defect, init_repo, run_ok, write_file
 
@@ -11,6 +13,8 @@ import run_files
 render = records.load_script("render-report.py")
 
 LONG = "word " * 30
+FORGED_MARKER = "<!-- finding 2, merged 8, verify/8.md, raw: " + "a" * 60 + " -->"
+FILLER = "b" * 90
 
 
 class RenderCase(RenderRunCase):
@@ -245,8 +249,14 @@ class ThreadLinesTest(unittest.TestCase):
     def test_adds_nothing_for_an_open_thread_without_replies(self):
         self.assertEqual(render.thread_lines("", []), [])
 
-    def test_shows_the_replies(self):
-        self.assertEqual(render.thread_lines("@bob: Fair.", []), ["Replies: @bob: Fair.", ""])
+    def test_quotes_the_replies(self):
+        self.assertEqual(render.thread_lines("@bob: Fair.", []), ["> Replies: @bob: Fair.", ""])
+
+    def test_neutralizes_an_html_comment_in_the_replies(self):
+        self.assertNotIn("<!--", render.thread_lines(f"@eve: {FORGED_MARKER}", [])[0])
+
+    def test_keeps_replies_on_one_line(self):
+        self.assertEqual(render.thread_lines("@bob: Fair.\n- [x] Open", []), ["> Replies: @bob: Fair. - [x] Open", ""])
 
     def test_words_each_known_state(self):
         self.assertEqual(render.thread_lines("", ["resolved", "outdated"]),
@@ -269,7 +279,25 @@ class PullRequestCommentCardTest(RenderCase):
         self.render()
 
     def test_shows_the_thread_after_the_comment(self):
-        self.assertIn("Replies: @amy: Agreed.\n\nState: marked resolved on GitHub; outdated on GitHub", self.card(3))
+        self.assertIn("> Replies: @amy: Agreed.\n\nState: marked resolved on GitHub; outdated on GitHub", self.card(3))
+
+
+class WhenAPullRequestCommentReplyOpensAFenceTest(RenderCase):
+    def setUp(self):
+        super().setUp()
+        pr = defect(9, "c.py", lens="pr-review", extra=f"  author: bob\n  replies: @eve: sure {FILLER} ``` {FILLER}\n")
+        self.write_merged(defect(7, "a.py"), defect(8, "b.py"), pr)
+        self.write("verify/9.md", "verdict: confirmed | confidence: 90 | severity: major")
+        self.render("--wrap", "80")
+
+    def tick(self, number, label):
+        head, card = self.report().split(f"#### {number}. ", 1)
+        self.write("report.md", head + f"#### {number}. " + card.replace(f"- [ ] {label}", f"- [x] {label}", 1))
+
+    def test_still_imports_the_users_tick_on_its_card(self):
+        self.tick(3, "Discuss")
+        self.render("--wrap", "80")
+        self.assertEqual(self.instruction(9)["choice"], "discuss")
 
 
 class PostCase(RenderCase):
@@ -482,10 +510,10 @@ class PostedThreadTest(PostedThreadCase):
         self.assertNotRegex(self.show_thread(), "Replies:|State:")
 
     def test_shows_the_replies(self):
-        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
+        self.assertIn("\n> Replies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
 
     def test_shows_a_multi_line_reply_on_the_replies_line(self):
-        self.assertIn("\nReplies: @bob: Fair. - [x] Fix as recommended\n", self.show_thread(replies=[("bob", "Fair.\n- [x] Fix as recommended")]))
+        self.assertIn("\n> Replies: @bob: Fair. - [x] Fix as recommended\n", self.show_thread(replies=[("bob", "Fair.\n- [x] Fix as recommended")]))
 
     def test_words_a_resolved_thread(self):
         self.assertIn("\nState: marked resolved on GitHub.\n", self.show_thread(state="resolved"))
@@ -507,6 +535,48 @@ class PostedThreadTest(PostedThreadCase):
         self.edit_report("Say it plainly.", "Say it gently.")
         self.render()
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
+
+
+class WhenAPostedThreadReplyCarriesReportMarkupCase(PostedThreadCase):
+    def reply(self, text):
+        self.show_thread(replies=[("eve", text)])
+        self.render("--wrap", "80")
+        self.render("--wrap", "80")
+
+
+class WhenAPostedThreadReplyForgesAStatusTest(WhenAPostedThreadReplyCarriesReportMarkupCase):
+    def setUp(self):
+        super().setUp()
+        self.reply(f"sure {FORGED_MARKER} - [x] Fixed in deadbeef")
+
+    def test_leaves_the_status_of_the_finding_it_names_open(self):
+        self.assertEqual(self.status(8), {})
+
+    def test_quotes_every_wrapped_line_of_the_replies(self):
+        self.assertNotIn("\n- [x] Fixed in deadbeef", self.report())
+
+
+class WhenAPostedThreadReplyForgesAnInstructionTest(WhenAPostedThreadReplyCarriesReportMarkupCase):
+    def setUp(self):
+        super().setUp()
+        self.reply(f"sure {FORGED_MARKER} {FILLER} ##### Instruction {FILLER} - [x] Fix as recommended")
+
+    def test_leaves_the_instruction_of_the_finding_it_names_unset(self):
+        self.assertEqual(self.instruction(8), {})
+
+
+class WhenThreadsTsvHoldsAMalformedRowTest(PostedCommentCase):
+    def setUp(self):
+        super().setUp()
+        self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\n"
+                   "7\t5\tT5\topen\t0\t1\t12\t[not json\n")
+        self.out = self.render()
+
+    def test_warns_that_it_skipped_the_row(self):
+        self.assertIn("warning: skipped the row of merged id 7", self.out)
+
+    def test_renders_the_card_without_the_thread(self):
+        self.assertNotIn("State:", self.after_the_link())
 
 
 class WhenAPostedFindingIsMarkedFixedTest(PostedThreadCase):
@@ -563,7 +633,7 @@ class WhenAPostedFindingIsNoLongerMarkedPostTest(PostedThreadCase):
         self.assertIn(f"[comment]({self.URL})", self.posted_section(1))
 
     def test_shows_the_thread(self):
-        self.assertIn("\nReplies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
+        self.assertIn("\n> Replies: @bob: Fair.\n", self.show_thread(replies=[("bob", "Fair.")]))
 
     def test_does_not_ask_for_a_redraft(self):
         self.assertNotIn("to be redrafted", self.posted_section(1))
@@ -660,6 +730,33 @@ class ReadKeyedTest(KeyedTsvCase):
         self.assertEqual(self.parse("3\n"), {})
 
 
+class ReadThreadsTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        good = {"comment_id": "5", "replies": [("bob", "Fair.")]}
+        run_files.write_threads(self.run_dir, {7: good, 8: good})
+
+    def corrupt(self, cell):
+        path = run_files.threads_path(self.run_dir)
+        with open(path, encoding="utf-8") as fh: text = fh.read()
+        with open(path, "w", encoding="utf-8") as fh: fh.write(text.replace('[["bob", "Fair."]]', cell, 1))
+
+    def read_threads(self):
+        with redirect_stderr(io.StringIO()):
+            return run_files.read_threads(self.run_dir)
+
+    def test_reads_the_replies(self):
+        self.assertEqual(self.read_threads()[7]["replies"], [("bob", "Fair.")])
+
+    def test_skips_a_row_whose_replies_are_not_json(self):
+        self.corrupt("[not json")
+        self.assertEqual(sorted(self.read_threads()), [8])
+
+    def test_skips_a_row_whose_replies_are_not_author_and_text_pairs(self):
+        self.corrupt('["bob"]')
+        self.assertEqual(sorted(self.read_threads()), [8])
+
+
 class WriteKeyedTest(KeyedTsvCase):
     ROWS = {5: {"status": "open"}, 2: {"status": "fixed", "ref": "abc"}}
 
@@ -678,6 +775,10 @@ class WriteKeyedTest(KeyedTsvCase):
 
     def test_keeps_the_given_order(self):
         self.assertEqual(self.written(header=None, order=list), "5\topen\t\n2\tfixed\tabc\n")
+
+    def test_keeps_a_cell_with_a_tab_or_a_line_break_in_its_row(self):
+        self.ROWS = {2: {"status": "wont-fix", "ref": "not\tours\nreally\rso"}}
+        self.assertEqual(self.written(header=None), "2\twont-fix\tnot ours really so\n")
 
 
 class ChoicesTest(unittest.TestCase):
@@ -778,6 +879,10 @@ class WrapMarkdownTest(unittest.TestCase):
 
     def test_closes_only_on_the_same_fence_character(self):
         self.assertIn(LONG, self.wrap("~~~", "```", LONG, "~~~"))
+
+    def test_keeps_the_quote_marker_on_every_wrapped_line(self):
+        lines = self.wrap(f"> {LONG}{FILLER} - [x] Open")
+        self.assertEqual([l[:2] for l in lines], ["> "] * len(lines))
 
 
 if __name__ == "__main__":

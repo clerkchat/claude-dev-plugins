@@ -506,8 +506,11 @@ def pr_block(c, heading, with_location=True):
 THREAD_STATE_WORDS = {"resolved": "marked resolved on GitHub", "outdated": "outdated on GitHub: the code it was attached to has changed",
                       "pending": "in your pending review, not yet submitted", "missing": "the comment is no longer on the pull request"}
 
+def quoted_replies(replies):
+    return "> " + code_spans("Replies: " + " ".join(replies.split()).replace("<!--", "&lt;!--"))
+
 def thread_lines(replies, state_words):
-    out = [code_spans("Replies: " + replies), ""] if replies else []
+    out = [quoted_replies(replies), ""] if replies else []
     if state_words:
         out += ["State: " + "; ".join(THREAD_STATE_WORDS.get(w, w) for w in state_words) + ".", ""]
     return out

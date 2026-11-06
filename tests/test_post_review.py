@@ -891,12 +891,18 @@ class CloseCase(PostCase):
         self.statuses, self.threads = {}, {}
         self.closable_finding(1)
         self.viewer = self.stub("viewer_login", return_value="me")
+        self.fix_on_head = "ahead"
+        self.gh = self.stub("gh", side_effect=self.compare)
         refresh = mock.patch.object(post, "refresh_threads")
         self.refresh = refresh.start()
         self.addCleanup(refresh.stop)
 
     def main(self, *args):
         return super().main(*args, "--repo", self.repo.path)
+
+    def compare(self, args, cwd, stdin=None):
+        if not args[1].startswith("repos/acme/widgets/compare/"): raise AssertionError(f"unexpected gh call {args}")
+        return self.fix_on_head + "\n"
 
     def closable_finding(self, mid, ref=None, **thread):
         self.posted_row(mid, thread_id=f"PRRT_{mid}", comment_id=str(900 + mid), url=f"https://gh/c/{900 + mid}")
@@ -1009,6 +1015,63 @@ class CloseListTest(CloseCase):
         writes = [self.stub("rest"), self.stub("graphql")]
         self.main("--close")
         self.assertEqual([w.call_count for w in writes], [0, 0])
+
+
+class FixOnThePullRequestTest(CloseCase):
+    def test_asks_github_how_the_head_compares_with_the_fix(self):
+        self.main("--close")
+        self.assertEqual(self.gh.call_args.args[0][1:], [f"repos/acme/widgets/compare/{self.sha}...{HEAD}", "--jq", ".status"])
+
+    def test_closes_a_finding_whose_fix_is_the_head(self):
+        self.fix_on_head = "identical"
+        self.assertEqual(self.reply_body(), self.looks_fixed)
+
+
+class WhenTheFixIsNotOnThePullRequestTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.fix_on_head = "diverged"
+        self.reason = f"its fix {self.sha[:7]} is not on the pull request's head {HEAD[:7]}"
+
+    def test_refuses_to_close_it(self):
+        self.assertIn(f"nothing sent; finding 1: {self.reason}", self.refusal("--close", "1", "--dry-run"))
+
+    def test_names_the_reason_in_the_listing(self):
+        self.assertIn(f"  cannot send: {self.reason}", self.main("--close"))
+
+    def test_refuses_it_when_the_head_is_behind_the_fix(self):
+        self.fix_on_head = "behind"
+        self.assertIn(self.reason, self.refusal("--close", "1", "--dry-run"))
+
+    def test_refuses_it_after_the_reply_was_sent(self):
+        self.thread(1, replies=[("me", self.looks_fixed)])
+        self.assertIn(self.reason, self.refusal("--close", "1", "--dry-run"))
+
+
+class WhenGitHubDoesNotKnowTheFixTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.gh.side_effect = gh_api.GhError("gh api repos/acme/widgets/compare failed: gh: Not Found (HTTP 404)")
+
+    def test_refuses_to_close_it(self):
+        self.assertIn(f"finding 1: GitHub cannot compare its fix {self.sha[:7]} with the pull request's head {HEAD[:7]}",
+                      self.refusal("--close", "1", "--dry-run"))
+
+
+class WhenTheStatusNamesNoFixCommitTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.set_status(1, "fixed", "the working tree")
+
+    def test_warns_in_the_listing(self):
+        self.assertIn("  warning: no fix commit to check against the pull request", self.main("--close"))
+
+    def test_keeps_it_closable(self):
+        self.assertEqual(self.reply_body(), "Looks fixed.")
+
+    def test_asks_github_nothing(self):
+        self.main("--close")
+        self.assertFalse(self.gh.called)
 
 
 class CloseDryRunTest(CloseCase):

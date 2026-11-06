@@ -1286,7 +1286,14 @@ When a render prints that line, or the user asks to close posted threads:
    and sends from their live state. With no numbers it sends nothing: it lists
    each closable finding with its number, title, the ref it was fixed in, the
    thread's URL, the last reply from someone other than the user, whether the
-   user can resolve the thread, and the reply it would send. When the user's
+   user can resolve the thread, and the reply it would send. It asks GitHub
+   whether each fix commit is on the pull request's head: one that is not (a
+   local commit not pushed, or one on another branch) shows "cannot send" with
+   the reason, and `--close` refuses it, since the reply would tell the author
+   the fix is there; relay it, and list again once the fix is on the pull
+   request. A fix whose status names no commit (a recheck against the working
+   tree) is listed with the warning "no fix commit to check against the pull
+   request" and can still be closed; name it in the question. When the user's
    own "looks fixed" reply is already the latest word on the thread (nobody
    replied after it), the listing says "reply: already sent" instead: `--close`
    then only resolves the thread, or, when the user cannot resolve it, keeps

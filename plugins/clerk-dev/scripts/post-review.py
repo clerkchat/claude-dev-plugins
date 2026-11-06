@@ -419,9 +419,11 @@ def reviewed_pr(repo, run, asked):
     owner, name = reviewed_repo.split("/") if reviewed_repo else gh_api.repo_owner_name(repo)
     return owner, name, asked or known
 
+def compared(ctx, base, head, field, repo):
+    return gh_api.gh(["api", f"repos/{ctx['owner']}/{ctx['name']}/compare/{base}...{head}", "--jq", f".{field}"], repo).strip()
+
 def merge_base(ctx, reviewed, repo):
-    path = f"repos/{ctx['owner']}/{ctx['name']}/compare/{ctx['base']}...{reviewed}"
-    return gh_api.gh(["api", path, "--jq", ".merge_base_commit.sha"], repo).strip()
+    return compared(ctx, ctx["base"], reviewed, "merge_base_commit.sha", repo)
 
 def fetch_pr(repo, run, pr, reviewed):
     owner, name, pr = reviewed_pr(repo, run, pr)
@@ -532,11 +534,23 @@ def submit(a, ctx, verdict):
     execute(calls, a.repo, ctx)
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
-def close_text(run, mid, ref, repo):
+def close_text(run, mid, shas):
     own = rf.read_text(rf.close_text_path(run, mid))
     if own: return own
-    shas = rf.commits_named(repo, ref)
     return f"Looks fixed in {shas[0][:7]}." if shas else "Looks fixed."
+
+NO_FIX_COMMIT = "no fix commit to check against the pull request"
+ON_HEAD = ("ahead", "identical")
+
+def off_head(ctx, sha, repo):
+    where = f"the pull request's head {ctx['head'][:7]}"
+    try: on_head = compared(ctx, sha, ctx["head"], "status", repo) in ON_HEAD
+    except gh_api.GhError as err: return f"GitHub cannot compare its fix {sha[:7]} with {where}, so the fix may not be pushed ({err})"
+    return None if on_head else f"its fix {sha[:7]} is not on {where}; close it once the fix is on the pull request"
+
+def fix_check(ctx, shas, repo):
+    if not shas: return None, [NO_FIX_COMMIT]
+    return next(filter(None, (off_head(ctx, sha, repo) for sha in shas)), None), []
 
 def since_others(replies, viewer):
     start = max((i + 1 for i, (author, _) in enumerate(replies) if author != viewer), default=0)
@@ -549,11 +563,13 @@ def close_items(run, ctx, repo, viewer):
     nums, found, titles, closable, items = rf.read_numbers(run), findings(run), rf.report_titles(run), rf.closable(run), []
     for mid in in_number_order(closable, nums):
         c = closable[mid]
-        text = unwrap(close_text(run, mid, c.status["ref"], repo))
+        shas = rf.commits_named(repo, c.status["ref"])
+        text = unwrap(close_text(run, mid, shas))
         replied = already_replied(c.thread, text, viewer)
+        off, fix_warnings = fix_check(ctx, shas, repo)
         problem, warnings = (None, []) if replied else screen(text, ctx["local"])
         items.append({**item_head(mid, nums, found, titles), "ref": c.status["ref"], "url": c.posted["url"], "thread": c.thread,
-                      "text": text, "replied": replied, "problem": problem, "warnings": warnings})
+                      "text": text, "replied": replied, "problem": off or problem, "warnings": fix_warnings + warnings})
     return items
 
 def can_resolve(it):
@@ -677,7 +693,7 @@ CANNOT_RESOLVE = "replied that it looks fixed; you cannot resolve the thread"
 
 def record_kept(run, mid, reason):
     kept = rf.read_kept_open(run)
-    kept[mid] = {"reason": " ".join(reason.split()), "date": datetime.date.today().isoformat()}
+    kept[mid] = {"reason": reason, "date": datetime.date.today().isoformat()}
     rf.write_kept_open(run, kept)
 
 KEEP_SPEC = re.compile(r"^(#?\d+)(?::(.*))?$", re.S)
