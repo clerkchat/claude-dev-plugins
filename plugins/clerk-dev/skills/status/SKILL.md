@@ -50,9 +50,9 @@ backlog (its follow-ups and items, through `backlog.py`) and the hub
 repository's for the feature's parked ideas, `.clerk-dev/deferred.md`, and `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
 worktrees of
 `.clerk-dev/workspace.md`, the feature records and design checks in the
-hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen`,
-which keeps one `<repo> <n>` line per backlog it read, the highest `BL-n` it
-showed there, so the next status can mark newer items as new. Pass `--run <label>` when the user names a run.
+hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen-backlog`,
+which keeps one `<repo> <n>` line per backlog it read, the highest `BL-n` of the
+follow-ups owed here it showed there, so the next status can mark newer items as new. Pass `--run <label>` when the user names a run.
 
 Show its output as it is. Then add one or two sentences: which step to take
 first and why, when the order is not obvious from the list. The order the script

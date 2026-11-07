@@ -1,6 +1,7 @@
+import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, init_repo, records, run_ok
+from helpers import RunCase, add_backlog_item, init_repo, records, run_ok, write_file
 
 sf = records.load_script("stale-findings.py")
 
@@ -41,6 +42,16 @@ class FollowUpLabelTests(FollowUpCommitCase):
 
     def test_an_outcome_that_also_names_the_brief_still_labels_the_commit(self):
         self.close_with(f"{self.fix} (BRIEF-62)")
+        self.assertEqual(self.labels(), {self.full(self.fix): "BL-1"})
+
+
+class WhenTheWorkspaceNamesAMissingHubTests(FollowUpCommitCase):
+    def setUp(self):
+        super().setUp()
+        self.close_with(self.fix)
+        write_file(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), f"Hub: {self.path('gone')}\n")
+
+    def test_the_commit_a_follow_up_was_done_in_is_still_labelled(self):
         self.assertEqual(self.labels(), {self.full(self.fix): "BL-1"})
 
 

@@ -89,10 +89,9 @@ def write_item(path, it):
     records.write_atomic(path, records.render(it, it["body"], FIELDS))
 
 def branches(wt):
-    porcelain = records.git(wt, "worktree", "list", "--porcelain", check=True)
-    checked_out = re.findall(r"^branch refs/heads/(.+)$", porcelain, re.M)
+    checked_out = {w.branch for w in records.worktrees(wt, check=True) if w.branch}
     local = records.git(wt, "for-each-ref", "--format=%(refname:short)", "refs/heads/", check=True).splitlines()
-    return set(checked_out) | set(local)
+    return checked_out | set(local)
 
 class Reader:
     def __init__(self, wt):

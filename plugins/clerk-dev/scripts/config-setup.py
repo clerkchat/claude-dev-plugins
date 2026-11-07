@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 import argparse, datetime, os, sys
-from typing import NamedTuple
 import config, records
 
 DEPTH = 3
 WORKSPACE_SOURCE = "workspace.md"
-
-class Worktree(NamedTuple):
-    path: str
-    branch: str
 
 def real(p): return os.path.realpath(os.path.expanduser(p))
 
@@ -37,13 +32,6 @@ def walk(root, depth=DEPTH):
     for e in entries:
         if not e.name.startswith(".") and e.is_dir(follow_symlinks=False): yield from walk(e.path, depth - 1)
 
-def worktrees(wt):
-    out = []
-    for block in records.git(wt, "worktree", "list", "--porcelain").split("\n\n"):
-        fields = dict(line.partition(" ")[::2] for line in block.splitlines())
-        if fields.get("worktree"): out.append(Worktree(os.path.realpath(fields["worktree"]), fields.get("branch", "").removeprefix("refs/heads/")))
-    return out
-
 def main_branch(checkout): return records.git(checkout, "rev-parse", "--abbrev-ref", "origin/HEAD").removeprefix("origin/")
 
 def follows_default(checkout, w): return w.path == os.path.join(os.path.dirname(checkout), w.branch)
@@ -59,7 +47,7 @@ class Scan:
         return common
 
     def worktrees_of(self, common):
-        if common not in self.listed: self.listed[common] = worktrees(checkout_of(common))
+        if common not in self.listed: self.listed[common] = records.worktrees(checkout_of(common))
         return self.listed[common]
 
     def walk(self, root):

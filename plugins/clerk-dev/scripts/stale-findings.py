@@ -78,8 +78,8 @@ def fix_commits(repo, status, run=None):
 def followup_labels(repo):
     """Commits that closed a follow-up, by full sha, to its id."""
     bl = load_script("backlog.py")
-    try: its = bl.read(repo, bl.FOLLOWUP, include_closed=True)
-    except SystemExit: return {}
+    reader = bl.Reader(repo)
+    its = [it for it in reader.items(reader.own) if it.get("kind") == bl.FOLLOWUP]
     labels = {}
     for it in its:
         m = re.search(r"\bin ([0-9a-f]{7,40})\b", it.get("outcome", ""))

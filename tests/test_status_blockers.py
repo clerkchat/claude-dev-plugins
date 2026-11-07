@@ -16,6 +16,8 @@ Checked 2026-10-21: R5.
 
 FINDING = "- id: {n}\n  lens: tests\n  severity: minor\n  file: a.py\n  line: 1\n  title: Finding {n}\n"
 
+SEEN = "status-seen-backlog"
+
 
 class BlockersCase(RunCase):
     def setUp(self):
@@ -77,7 +79,7 @@ class BlockersTests(BlockersCase):
         self.assertIn("**Follow-ups owed here:**", out)
         self.assertIn("Send exportId back", out)
         self.assertIn("go through the follow-ups", out)
-        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", "status-seen")))
+        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", SEEN)))
 
     def test_a_fix_section_finding_appears_whatever_its_mark_and_a_closed_one_does_not(self):
         self.write_run(
@@ -130,15 +132,18 @@ class BacklogStatusCase(BlockersCase):
     def marking_status(self):
         return run_ok("status", self.repo.path)
 
-    def seen_path(self):
-        return os.path.join(self.repo.path, ".clerk-dev", "status-seen")
+    def seen_path(self, name=SEEN):
+        return os.path.join(self.repo.path, ".clerk-dev", name)
 
-    def seen(self):
-        with open(self.seen_path()) as f:
+    def seen(self, name=SEEN):
+        with open(self.seen_path(name)) as f:
             return f.read()
 
-    def write_seen(self, text):
-        write_file(self.seen_path(), text)
+    def write_seen(self, text, name=SEEN):
+        write_file(self.seen_path(name), text)
+
+    def detach(self, repo=None):
+        (repo or self.repo).git("checkout", "-q", "--detach")
 
 
 class FollowUpsOwedHereTests(BacklogStatusCase):
@@ -174,13 +179,13 @@ class StatusSeenTests(BacklogStatusCase):
         self.full_status()
         self.assertFalse(os.path.exists(self.seen_path()))
 
-    def test_an_old_single_number_file_is_rewritten(self):
-        self.write_seen("5\n")
+    def test_the_old_status_seen_file_is_left_as_it_was(self):
+        self.write_seen("5\n", "status-seen")
         self.marking_status()
-        self.assertEqual(self.seen(), "api 2\n")
+        self.assertEqual(self.seen("status-seen"), "5\n")
 
-    def test_an_old_single_number_file_tags_nothing_new(self):
-        self.write_seen("1\n")
+    def test_the_old_status_seen_file_tags_nothing_new(self):
+        self.write_seen("1\n", "status-seen")
         self.assertNotIn("(new)", self.full_status())
 
     def test_the_lines_of_other_backlogs_are_kept(self):
@@ -203,7 +208,53 @@ class WhenTheLastStatusSawTheFirstFollowUpTests(BacklogStatusCase):
         self.assertIn("**Follow-ups owed here:** 2 open, 1 new since the last status.", self.full_status())
 
 
-class RelatedWorktreeTests(BacklogStatusCase):
+class WhenTheNewestItemIsNotAFollowUpOwedHereTests(BacklogStatusCase):
+    def setUp(self):
+        super().setUp()
+        self.followup()
+        self.idea()
+
+    def test_a_status_marks_only_the_follow_up_it_showed(self):
+        self.marking_status()
+        self.assertEqual(self.seen(), "api 1\n")
+
+
+class WhenTheLastStatusShowedNoFollowUpTests(BacklogStatusCase):
+    def setUp(self):
+        super().setUp()
+        self.idea()
+        self.marking_status()
+        self.followup()
+
+    def test_the_first_follow_up_is_tagged_new(self):
+        self.assertIn("- BL-2: Send exportId back (web abc1234) (new)", self.full_status())
+
+
+class WhenHeadIsDetachedTests(BacklogStatusCase):
+    def setUp(self):
+        super().setUp()
+        self.followup()
+        self.write_seen("api 0\n")
+        self.detach()
+
+    def test_says_the_follow_ups_owed_here_are_not_shown(self):
+        self.assertIn("\nHEAD is detached; follow-ups owed here not shown.\n", self.full_status())
+
+    def test_does_not_say_none_are_owed(self):
+        self.assertNotIn("**Follow-ups owed here:**", self.full_status())
+
+    def test_a_status_leaves_the_seen_marks_as_they_were(self):
+        self.marking_status()
+        self.assertEqual(self.seen(), "api 0\n")
+
+    def test_blockers_say_the_follow_ups_are_not_shown(self):
+        self.assertIn("HEAD is detached; follow-ups owed here not shown.", self.blockers())
+
+    def test_blockers_do_not_say_nothing_is_blocking(self):
+        self.assertNotIn("Nothing blocking.", self.blockers())
+
+
+class RelatedWorktreeCase(BacklogStatusCase):
     def setUp(self):
         super().setUp()
         self.web = init_repo(self.path("web"), with_origin=False)
@@ -212,8 +263,19 @@ class RelatedWorktreeTests(BacklogStatusCase):
         add_backlog_item(self.web.path, "followup", "Accept exportId", "--origin", "api abc1234")
         add_backlog_item(self.web.path, "followup", "Accept the new header", "--origin", "worker 7c1e2ab")
 
+
+class RelatedWorktreeTests(RelatedWorktreeCase):
     def test_counts_their_open_follow_ups_and_those_this_repository_asked_for(self):
         self.assertIn("**Follow-ups owed by related worktrees:** web 2 open (1 from api).", self.full_status())
+
+
+class WhenTheRelatedWorktreeIsDetachedTests(RelatedWorktreeCase):
+    def setUp(self):
+        super().setUp()
+        self.detach(self.web)
+
+    def test_says_its_follow_ups_are_not_shown(self):
+        self.assertIn("**Follow-ups owed by related worktrees:** web not shown (HEAD is detached).", self.full_status())
 
 
 class SetupTests(BlockersCase):
@@ -316,6 +378,20 @@ class WithAFollowUpForNewWorkTests(BacklogStatusCase):
 
     def test_offers_to_rescope_it_here(self):
         self.assertIn("Take up the follow-up BL-1 on this branch by rescoping it to feat, or leave it for later.", self.full_status())
+
+
+class WithACleanupAndNoRemoteMainTests(BacklogStatusCase):
+    def setUp(self):
+        super().setUp()
+        self.repo.git("remote", "remove", "origin")
+        self.add("cleanup", "Remove the flag", "--scope", "new", "--removes", "EXPORT_V2_FLAG")
+
+    def test_status_still_succeeds(self):
+        self.assertEqual(self.repo.status()[0], 0)
+
+    def test_says_once_that_cleanups_were_not_checked(self):
+        unchecked = [l for l in self.full_status().splitlines() if l.startswith("- cleanups not checked: ")]
+        self.assertEqual(len(unchecked), 1)
 
 
 POSTED_HEADER = "merged_id\tstate\tnote\tdate\tthread_id\tcomment_id\turl\tpath\tline\tend_line\tside\tkind\treview_id\n"

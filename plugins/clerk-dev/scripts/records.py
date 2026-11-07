@@ -424,6 +424,17 @@ def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
 
 def common_dir(wt): return git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
 
+class Worktree(NamedTuple):
+    path: str
+    branch: str
+
+def worktrees(wt, check=False):
+    out = []
+    for block in git(wt, "worktree", "list", "--porcelain", check=check).split("\n\n"):
+        fields = dict(line.partition(" ")[::2] for line in block.splitlines())
+        if fields.get("worktree"): out.append(Worktree(os.path.realpath(fields["worktree"]), fields.get("branch", "").removeprefix("refs/heads/")))
+    return out
+
 def repo_dir(wt): return os.path.join(common_dir(wt), "clerk-dev")
 
 def repo_context_path(wt): return os.path.join(repo_dir(wt), "repo-context.md")

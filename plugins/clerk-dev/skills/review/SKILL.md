@@ -1653,7 +1653,7 @@ later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the
 final pass's verdict) next to `report.md`. Next to the run directories,
 `.clerk-dev/latest`, `.clerk-dev/latest-feature`, `.clerk-dev/branch-notes.md`,
-`.clerk-dev/workspace.md` (or a link to it), and `.clerk-dev/status-seen`
+`.clerk-dev/workspace.md` (or a link to it), and `.clerk-dev/status-seen-backlog`
 belong to the worktree. Raw and verify files are written
 only on completion, which is what makes `--resume` safe. A run stopped after
 `--plan-only` has no `progress.md` items checked and no raw files;
