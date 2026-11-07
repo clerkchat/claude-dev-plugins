@@ -151,6 +151,39 @@ class NestedRepositoryTests(ScanCase):
         self.assertEqual(sorted(self.repos()), ["api", "web"])
 
 
+class BareRepositoryTests(ScanCase):
+    def setUp(self):
+        super().setUp()
+        self.bare = self.path("code/svc/svc.git")
+        git(self.tmp, "clone", "-q", "--bare", self.api.path, self.bare)
+        git(self.bare, "remote", "set-url", "origin", "git@example.com:org/svc.git")
+        self.main = self.path("code/svc/main")
+        git(self.bare, "worktree", "add", "-q", self.main, "main")
+
+    def test_the_bare_repository_is_the_main_checkout(self):
+        self.assertEqual(self.repos("--path", self.main)["svc"].checkout, self.bare)
+
+
+class DuplicateNameTests(ScanCase):
+    def setUp(self):
+        super().setUp()
+        self.old = self.repo("api", self.path("code/old"))
+
+    def test_a_note_names_every_row_that_shares_the_name(self):
+        self.assertIn(f"Name api is on 2 rows ({self.api.path}, {self.old.path}): give each its own name", self.notes())
+
+    def test_write_refuses_the_proposal(self):
+        self.scan()
+        self.assertEqual(self.write(), (1, f"Name api is on more than one row in {self.out}; give each repository its own name"))
+
+
+class NotARepositoryTests(ScanCase):
+    def test_a_worktree_outside_git_is_refused(self):
+        plain = self.path("plain")
+        os.makedirs(plain)
+        self.assertEqual(run_script("config-setup", "scan", plain, "--out", self.out, env=self.env), (1, f"{plain} is not in a git repository"))
+
+
 class HomeRootTests(ScanCase):
     def refusal(self, root):
         return run_script("config-setup", "scan", self.feat, "--out", self.out, "--root", root, env=self.env)
@@ -180,6 +213,12 @@ class WriteTests(ScanCase):
         write_file(self.out, text)
         self.assertEqual(self.write(), (1, f"main checkout {self.path('code/web/moved')} does not exist; fix or remove its row in {self.out}"))
         self.assertFalse(os.path.exists(self.config_path()))
+
+    def test_a_main_checkout_that_is_not_a_git_checkout_is_refused(self):
+        plain = self.path("code/web/plain")
+        os.makedirs(plain)
+        write_file(self.out, read(self.out).replace(self.web.path, plain))
+        self.assertEqual(self.write(), (1, f"main checkout {plain} is not a git checkout; fix or remove its row in {self.out}"))
 
     def test_a_file_without_the_sections_is_refused(self):
         write_file(self.out, "# notes\n")

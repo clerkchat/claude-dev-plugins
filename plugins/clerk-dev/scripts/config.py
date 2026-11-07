@@ -71,6 +71,15 @@ def render(cfg, header):
 
 def by_name(cfg, name): return next((r for r in cfg.repos if r.name == name), None)
 
+def shared_names(repos):
+    checkouts = {}
+    for r in repos: checkouts.setdefault(r.name, []).append(r.checkout)
+    return {name: paths for name, paths in checkouts.items() if len(paths) > 1}
+
+def is_bare(common): return records.git(common, "rev-parse", "--is-bare-repository") == "true"
+
+def checkout_of(common): return common if is_bare(common) else os.path.dirname(common)
+
 def owns(repo, real_common):
     common = records.common_dir(repo.checkout)
     return bool(common) and os.path.realpath(common) == real_common

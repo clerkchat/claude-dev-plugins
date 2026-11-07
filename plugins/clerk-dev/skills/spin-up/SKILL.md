@@ -1,6 +1,6 @@
 ---
 name: spin-up
-description: Walk the repository's backlog, take up one item or file a new one, and spin up a worktree off main for it with git worktree add, run the configured after-create command there, and seed it so the next session can start. Use when the user says "start on a backlog item", "spin up a worktree for BL-4", "take up BL-7", "what's in the backlog", "start new work off main", "spin up", or /clerk-dev:spin-up.
+description: Walk the repository's backlog, take up one item or file a new one, and spin up a worktree off main for it with git worktree add, seed it so the next session can start, and run the configured after-create command there. Use when the user says "start on a backlog item", "spin up a worktree for BL-4", "take up BL-7", "what's in the backlog", "start new work off main", "spin up", or /clerk-dev:spin-up.
 argument-hint: "[BL-4 | <repo>:BL-4 | <new work in a sentence>]"
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit
 ---
@@ -83,9 +83,12 @@ open for later.
 Run
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/spin-up.py create <worktree> <branch> --item BL-n|<repo>:BL-n`.
 It refuses in one line, creating nothing, when the branch exists (here or on
-origin), the path exists, the item is not open, or an item from another
-repository has no config row. Otherwise it creates the worktree off the base,
-runs the after-create command there with its output shown, and seeds it:
+origin), the path exists, the item is neither open nor owed (an item in
+progress elsewhere names where), an item from another repository has no
+config row, or the base `origin/<main>` does not exist (fix the named
+`Main branch` cell with the user). Otherwise it creates the worktree off the
+base, prints `worktree:`, `branch:`, and `base:` at once, seeds it, and then
+runs the after-create command there with its output shown. Seeding:
 
 - every item: `.clerk-dev/` excluded from git, and the branch notes with a
   Purpose drafted from the item and an empty Guidance;
@@ -94,11 +97,14 @@ runs the after-create command there with its output shown, and seeds it:
 - a follow-up or cleanup: no feature and no record; the item is rescoped to
   the new branch and stays owed.
 
-It prints `worktree:`, `branch:`, `base:`, the `after-create:` result, then one
-line per seeded file or backlog change. When the after-create command failed,
-seeding still went on: say so in one line, with the command to rerun in the
-new worktree. Do not draft or rewrite the Purpose here; the user edits it in
-the new worktree.
+It prints `worktree:`, `branch:`, `base:`, one line per seeded file or backlog
+change, then the `after-create:` result. When seeding fails after the worktree
+exists, the item is unchanged and the script prints the exact commands that
+remove the worktree and branch so `create` can run again: relay them, and run
+them only when the user agrees. When the after-create command failed or was
+interrupted, seeding is already done: say so in one line, with the command to
+rerun in the new worktree. Do not draft or rewrite the Purpose here; the user
+edits it in the new worktree.
 
 ## Closing
 

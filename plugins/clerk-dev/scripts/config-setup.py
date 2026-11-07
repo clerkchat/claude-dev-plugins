@@ -20,8 +20,6 @@ def common_of(p):
     common = records.common_dir(d) if os.path.isdir(d) else ""
     return os.path.realpath(common) if common else ""
 
-def checkout_of(common): return os.path.dirname(common)
-
 def walk(root, depth=DEPTH):
     if os.path.exists(os.path.join(root, ".git")):
         yield root
@@ -47,7 +45,7 @@ class Scan:
         return common
 
     def worktrees_of(self, common):
-        if common not in self.listed: self.listed[common] = records.worktrees(checkout_of(common))
+        if common not in self.listed: self.listed[common] = records.worktrees(config.checkout_of(common))
         return self.listed[common]
 
     def walk(self, root):
@@ -74,7 +72,7 @@ class Scan:
         for d in unique(self.seen + listed): self.workspace(d)
 
     def repo(self, common):
-        checkout = checkout_of(common)
+        checkout = config.checkout_of(common)
         from_git = records.this_repo(checkout, {})
         given = unique(self.workspace_names.get(common, []))
         name = given[0] if given else from_git
@@ -85,13 +83,13 @@ class Scan:
         return config.Repo(name, checkout, main)
 
     def pattern(self):
-        wts = [(checkout_of(c), w) for c in self.commons for w in self.worktrees_of(c) if w.path != checkout_of(c) and w.branch]
+        wts = [(config.checkout_of(c), w) for c in self.commons for w in self.worktrees_of(c) if w.path != config.checkout_of(c) and w.branch]
         if not all(follows_default(checkout, w) for checkout, w in wts):
             self.notes.append(f"worktree paths do not all follow {config.DEFAULT_PATTERN}: " + ", ".join(f"{w.path} ({w.branch})" for _, w in wts))
         return config.DEFAULT_PATTERN
 
 def proposed_roots(scan, own, extra):
-    base = os.path.dirname(checkout_of(own))
+    base = os.path.dirname(config.checkout_of(own))
     if holds_home(base):
         scan.notes.append(f"not proposing {base}: it is or contains $HOME")
         return extra
@@ -111,7 +109,7 @@ def merged_roots(scan, existing, proposed, had):
 def merged_repos(scan, existing, had):
     kept = {real(r.checkout) for r in existing.repos}
     scan.notes += [f"missing: {r.name} {r.checkout} no longer exists" for r in existing.repos if not os.path.isdir(real(r.checkout))]
-    new = [scan.repo(c) for c in scan.commons if checkout_of(c) not in kept]
+    new = [scan.repo(c) for c in scan.commons if config.checkout_of(c) not in kept]
     if had: scan.notes += [f"new: {r.name}" for r in new]
     return existing.repos + new
 
@@ -135,17 +133,25 @@ def scan(wt, roots, paths, out):
     s.workspaces()
     cfg = config.Config(merged_roots(s, existing, proposed, had), merged_repos(s, existing, had),
                         existing.pattern or s.pattern(), existing.after_create)
+    s.notes += [f"{config.NAME} {name} is on {len(paths)} rows ({', '.join(paths)}): give each its own name" for name, paths in config.shared_names(cfg.repos).items()]
     header = f"Proposed {datetime.date.today().isoformat()} from {wt}. Edit freely."
     records.write_atomic(out, config.render(cfg, header))
     for line in [os.path.abspath(out), *unique(s.notes)]: print(line)
+
+def checkout_problem(path):
+    if not os.path.isdir(path): return "does not exist"
+    return "" if records.common_dir(path) else "is not a git checkout"
 
 def write(f):
     if not os.path.exists(f): sys.exit(f"{f} does not exist")
     text = open(f, encoding="utf-8").read()
     missing = config.missing_sections(text)
     if missing: sys.exit(f"{f} does not parse: no " + ", ".join(f"## {m}" for m in missing) + " section")
-    gone = [r.checkout for r in config.load(f).repos if not os.path.isdir(r.checkout)]
-    if gone: sys.exit(f"main checkout {', '.join(gone)} does not exist; fix or remove its row in {f}")
+    repos = config.load(f).repos
+    shared = config.shared_names(repos)
+    if shared: sys.exit(f"{config.NAME} {', '.join(shared)} is on more than one row in {f}; give each repository its own name")
+    bad = [f"main checkout {r.checkout} {problem}" for r in repos if (problem := checkout_problem(r.checkout))]
+    if bad: sys.exit("; ".join(bad) + f"; fix or remove its row in {f}")
     dest = config.path()
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     records.write_atomic(dest, text)

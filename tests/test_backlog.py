@@ -516,6 +516,12 @@ class RegistryTests(TwoRepositoryCase):
     def test_an_unregistered_name_is_refused(self):
         self.assertIn("worker", self.refused("list", self.feat, "--repo", "worker"))
 
+    def test_a_registered_checkout_that_is_not_a_git_checkout_is_refused(self):
+        os.makedirs(self.path("plain"))
+        self.registry(("worker", self.path("plain"), "main"))
+        out = self.refused("add", self.feat, "x", "--kind", "followup", "--origin", "a b", "--repo", "worker")
+        self.assertEqual(out, f"repository worker is not in .clerk-dev/workspace.md or {self.path('local.md')}, and {self.path('plain')} is not a git checkout")
+
 
 class HubWithRegistryTests(TwoRepositoryCase):
     def setUp(self):

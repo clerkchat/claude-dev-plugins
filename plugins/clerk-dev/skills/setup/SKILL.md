@@ -36,16 +36,18 @@ config has to be set up in an interactive session first.
    line is the proposal's path; each line after it is a note: a repository with
    no `origin/HEAD`, a name taken from `workspace.md` over another, worktrees
    that do not follow the pattern, a root it also proposed, a repository new
-   since the last scan, a registered checkout that is gone.
+   since the last scan, a registered checkout that is gone, a name more than
+   one row shares.
 4. Read the proposal and show it with its notes. Settle each note with the
    user: fill in an empty `Main branch`, pick the pattern when the worktree
-   paths disagree. The `After create:` line is left empty unless the user
+   paths disagree, give each row of a shared name its own name or remove it. The `After create:` line is left empty unless the user
    gives a command to run in each new worktree.
 5. Apply what the user changes to the proposal with Edit, show it again when
    the changes were more than one line, and confirm.
 6. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/config-setup.py write <proposal>`.
-   It refuses in one line when the file does not parse or a main checkout does
-   not exist; fix that with the user and run it again. On success it prints
+   It refuses in one line when the file does not parse, two rows share a name,
+   or a main checkout does not exist or is not a git checkout; fix that with
+   the user and run it again. On success it prints
    the config's path: say it in one line.
 7. Carry on with the request that needed the config.
 
@@ -83,8 +85,10 @@ After create:
 
 - `Search roots`: directories the scan walks, three levels down, for
   repositories.
-- `Repositories`: one row per repository. `Main checkout` is the directory
-  holding its git common dir; `Main branch` is `origin/HEAD` without `origin/`.
+- `Repositories`: one row per repository, each with its own name.
+  `Main checkout` is the directory holding its git common dir, or the common
+  dir itself for a bare repository; `Main branch` is `origin/HEAD` without
+  `origin/`.
 - `Pattern:` where a new worktree goes, with the placeholders `<repo parent>`
   (the main checkout's parent), `<repo>` (the repository's name), and
   `<branch>`.

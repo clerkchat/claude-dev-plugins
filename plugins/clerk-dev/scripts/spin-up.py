@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import argparse, datetime, os, re, subprocess, sys
+import argparse, datetime, os, re, shlex, subprocess, sys
 from typing import NamedTuple
 import backlog, config, records
 
 BRAINSTORM = "brainstorm"
 NONE = "none"
+TAKES = (backlog.OPEN_STATUS, backlog.OWED)
 
 class Target(NamedTuple):
     name: str
@@ -28,7 +29,7 @@ def registered(cfg, name):
 def own(cfg, wt):
     common = records.common_dir(wt)
     repo = config.by_common_dir(cfg, common)
-    checkout = repo.checkout if repo else os.path.dirname(common)
+    checkout = repo.checkout if repo else config.checkout_of(common)
     return Target(repo.name if repo else backlog.own_store(wt).name, os.path.abspath(wt), os.path.dirname(checkout))
 
 def worktree_path(t, pattern, branch):
@@ -39,10 +40,13 @@ def drift(t, local, remote):
     ahead, behind = records.git(t.wt, "rev-list", "--left-right", "--count", f"{local}...{remote}", check=True).split()
     return f"even with {remote}" if ahead == behind == "0" else f"{ahead} ahead of and {behind} behind {remote}"
 
+def has_ref(t, ref): return bool(records.git(t.wt, "rev-parse", "--verify", "-q", ref))
+
 def base_of(t):
     remote = backlog.main_of(backlog.store_of(t.wt, t.name))
+    if not has_ref(t, f"refs/remotes/{remote}"): sys.exit(f"{remote} does not exist in {t.wt}; fix the {config.MAIN} cell of {t.name} in {config.path()}")
     local = remote.removeprefix("origin/")
-    if not records.git(t.wt, "rev-parse", "--verify", "-q", f"refs/heads/{local}"): return remote, f"{remote} (no local {local})"
+    if not has_ref(t, f"refs/heads/{local}"): return remote, f"{remote} (no local {local})"
     return local, f"{local} (local; {drift(t, local, remote)})"
 
 def plan(wt, branch, repo=None):
@@ -54,8 +58,6 @@ def plan(wt, branch, repo=None):
 def where_lines(p):
     return [f"path: {p.path}", f"base: {p.base_line}", f"after-create: {p.after_create or NONE}", f"repo: {p.target.name} ({p.target.wt})"]
 
-def has_ref(t, ref): return bool(records.git(t.wt, "rev-parse", "--verify", "-q", ref))
-
 def refuse_taken(p):
     t = p.target
     if has_ref(t, f"refs/heads/{p.branch}"): sys.exit(f"branch {p.branch} already exists in {t.name}; give another name")
@@ -65,7 +67,8 @@ def refuse_taken(p):
 def run_after_create(cmd, path):
     if not cmd: return f"after-create: {NONE}"
     sys.stdout.flush()
-    code = subprocess.run(cmd, shell=True, cwd=path).returncode
+    try: code = subprocess.run(cmd, shell=True, cwd=path).returncode
+    except KeyboardInterrupt: return f"after-create: {cmd} interrupted; rerun it in {path}"
     if code == 0: return f"after-create: {cmd} (exit 0)"
     return f"after-create: {cmd} failed with exit {code}; rerun it in {path}"
 
@@ -123,26 +126,47 @@ def seed(wt, text):
 
 def open_item(wt, text):
     _, _, it, qualified = backlog.load(wt, text)
-    if it.get("status") not in backlog.OPEN: sys.exit(f"{qualified} is {it.get('status')}; spin-up takes up open items only")
-    return it
+    status = it.get("status")
+    if status in TAKES: return it
+    on = f" on {it['ref']}" if status == backlog.IN_PROGRESS and it.get("ref") else ""
+    sys.exit(f"{qualified} is {status}{on}; spin-up takes up open and owed items only")
 
 def say(line): print(line, flush=True)
+
+def add_worktree(p):
+    args = ("worktree", "add", "-b", p.branch, p.path, p.base)
+    r = records.git_run(p.target.wt, *args)
+    if r.returncode == 0: return
+    if has_ref(p.target, f"refs/heads/{p.branch}"): records.git(p.target.wt, "branch", "-D", p.branch)
+    sys.exit(records.git_failure(p.target.wt, args, r))
+
+def undo_line(p):
+    remove = shlex.join(["git", "-C", p.target.wt, "worktree", "remove", "--force", p.path])
+    delete = shlex.join(["git", "-C", p.target.wt, "branch", "-D", p.branch])
+    return f"seeding {p.path} failed; to retry, run: {remove} && {delete}, then run spin-up.py create again"
+
+def seed_created(p, iid):
+    try: return seed(p.path, iid)
+    except BaseException:
+        print(undo_line(p), file=sys.stderr, flush=True)
+        raise
 
 def create(wt, branch, text):
     repo, iid = backlog.split_id(text)
     p = plan(wt, branch, repo)
     open_item(wt, text)
     refuse_taken(p)
-    records.git(p.target.wt, "worktree", "add", "-b", branch, p.path, p.base, check=True)
-    for line in (f"worktree: {p.path}", f"branch: {branch}", f"base: {p.base_line}", run_after_create(p.after_create, p.path), *seed(p.path, iid)):
-        say(line)
+    add_worktree(p)
+    for line in (f"worktree: {p.path}", f"branch: {branch}", f"base: {p.base_line}"): say(line)
+    for line in seed_created(p, iid): say(line)
+    say(run_after_create(p.after_create, p.path))
 
 def main():
-    ap = argparse.ArgumentParser(description="Spin up a worktree off main for a backlog item: where it would go, and create it with git worktree add, run the configured after-create command, and seed it.")
+    ap = argparse.ArgumentParser(description="Spin up a worktree off main for a backlog item: where it would go, and create it with git worktree add, seed it, and run the configured after-create command.")
     sp = ap.add_subparsers(dest="cmd", required=True)
     wh = sp.add_parser("where", help="the path, base, after-create command, and repository a new worktree would get")
     wh.add_argument("wt"); wh.add_argument("branch"); wh.add_argument("--repo", help="the repository from the registry that owns the item")
-    cr = sp.add_parser("create", help="create the worktree, run the after-create command, and seed it from the item")
+    cr = sp.add_parser("create", help="create the worktree, seed it from the item, and run the after-create command")
     cr.add_argument("wt"); cr.add_argument("branch"); cr.add_argument("--item", required=True, help="BL-n, or <repo>:BL-n for an item another repository owns")
     a = ap.parse_args()
     records.guard(a.wt)

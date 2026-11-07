@@ -1,6 +1,9 @@
+import contextlib
 import datetime
+import io
 import os
 import re
+import subprocess
 import sys
 import unittest
 from unittest import mock
@@ -43,9 +46,12 @@ class SpinUpCase(TempCase):
         self.env.pop(config.ENV, None)
         self.api = init_repo(self.path("api/api-main"))
 
-    def configure(self, repos=(), pattern=config.DEFAULT_PATTERN, after_create=""):
-        rows = "".join(f"| {name} | {path} | main |\n" for name, path in repos)
-        write_file(os.path.join(self.home, ".claude", "clerk-dev", "local.md"), CONFIG.format(rows=rows, pattern=pattern, after_create=after_create))
+    def config_path(self):
+        return os.path.join(self.home, ".claude", "clerk-dev", "local.md")
+
+    def configure(self, repos=(), pattern=config.DEFAULT_PATTERN, after_create="", main="main"):
+        rows = "".join(f"| {name} | {path} | {main} |\n" for name, path in repos)
+        write_file(self.config_path(), CONFIG.format(rows=rows, pattern=pattern, after_create=after_create))
 
     def file(self, kind, title, *extra, wt=None):
         return add_backlog_item(wt or self.api.path, kind, title, "--scope", "new", *extra, env=self.env)
@@ -65,8 +71,8 @@ class SpinUpCase(TempCase):
     def create(self, branch, item, wt=None):
         return run_ok("spin-up", "create", wt or self.api.path, branch, "--item", item, env=self.env)
 
-    def where(self, branch, *extra):
-        lines = run_ok("spin-up", "where", self.api.path, branch, *extra, env=self.env).splitlines()
+    def where(self, branch, *extra, wt=None):
+        lines = run_ok("spin-up", "where", wt or self.api.path, branch, *extra, env=self.env).splitlines()
         return dict(line.split(": ", 1) for line in lines)
 
     def refused(self, *args):
@@ -86,6 +92,18 @@ class SpinUpCase(TempCase):
 
     def worktrees(self):
         return self.api.git("worktree", "list", "--porcelain").count("worktree ")
+
+    def has_branch(self, branch):
+        return subprocess.run(["git", "-C", self.api.path, "rev-parse", "--verify", "-q", f"refs/heads/{branch}"], capture_output=True).returncode == 0
+
+    def create_here(self, branch, item):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(os.environ, self.env, clear=True), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                spin_up.create(self.api.path, branch, item)
+            except SystemExit:
+                pass
+        return out.getvalue().splitlines(), err.getvalue().splitlines()
 
 
 class WhenAnIdeaIsSpunUp(SpinUpCase):
@@ -225,6 +243,15 @@ class TheAfterCreateCommand(SpinUpCase):
         self.create("feat/x", "BL-1")
         self.assertTrue(self.purpose(self.wt))
 
+    def test_runs_after_the_seeding(self):
+        self.configure(after_create="test -f .clerk-dev/branch-notes.md && touch seeded-first")
+        self.create("feat/x", "BL-1")
+        self.assertTrue(os.path.exists(os.path.join(self.wt, "seeded-first")))
+
+    def test_an_interruption_says_to_rerun_it(self):
+        with mock.patch.object(spin_up.subprocess, "run", side_effect=KeyboardInterrupt):
+            self.assertEqual(spin_up.run_after_create("make setup", self.wt), f"after-create: make setup interrupted; rerun it in {self.wt}")
+
 
 class WhenTheNameIsTaken(SpinUpCase):
     def setUp(self):
@@ -257,7 +284,62 @@ class WhenTheItemIsClosed(SpinUpCase):
     def test_refuses_it(self):
         self.idea()
         run_ok("backlog", "set", self.api.path, "BL-1", "dropped", "--ref", "not needed", env=self.env)
-        self.assertIn("open items only", self.refused("create", self.api.path, "feat/x", "--item", "BL-1"))
+        self.assertIn("open and owed items only", self.refused("create", self.api.path, "feat/x", "--item", "BL-1"))
+
+
+class WhenTheItemIsInProgress(SpinUpCase):
+    def setUp(self):
+        super().setUp()
+        self.followup()
+        run_ok("backlog", "set", self.api.path, "BL-1", "in-progress", "--ref", "feat/y", env=self.env)
+
+    def test_refuses_it_naming_where_it_is_in_progress(self):
+        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1"), "BL-1 is in-progress on feat/y; spin-up takes up open and owed items only")
+
+    def test_leaves_its_scope_alone(self):
+        self.refused("create", self.api.path, "feat/x", "--item", "BL-1")
+        self.assertEqual(self.item("BL-1")["scope"], "new")
+
+
+class WhenGitWorktreeAddFails(SpinUpCase):
+    def setUp(self):
+        super().setUp()
+        self.followup()
+        write_file(self.path("api/feat"), "a file where the worktree's parent would go\n")
+        self.out = self.refused("create", self.api.path, "feat/x", "--item", "BL-1")
+
+    def test_says_what_git_said(self):
+        self.assertIn("git worktree add -b feat/x", self.out)
+
+    def test_leaves_the_items_scope_and_status_unchanged(self):
+        it = self.item("BL-1")
+        self.assertEqual((it["scope"], it["status"]), ("new", "owed"))
+
+    def test_leaves_no_branch_behind(self):
+        self.assertFalse(self.has_branch("feat/x"))
+
+
+class WhenSeedingFails(SpinUpCase):
+    def setUp(self):
+        super().setUp()
+        self.followup()
+        self.wt = self.path("api/feat/x")
+        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
+            self.out, self.err = self.create_here("feat/x", "BL-1")
+
+    def undo(self):
+        return re.search(r"to retry, run: (.*), then run spin-up.py create again$", self.err[-1]).group(1)
+
+    def test_names_the_new_worktree_and_branch_first(self):
+        self.assertEqual(self.out[:2], [f"worktree: {self.wt}", "branch: feat/x"])
+
+    def test_leaves_the_item_unchanged(self):
+        self.assertEqual(self.item("BL-1")["scope"], "new")
+
+    def test_the_printed_step_lets_create_run_again(self):
+        subprocess.run(self.undo(), shell=True, check=True, env=self.env, capture_output=True)
+        self.create("feat/x", "BL-1")
+        self.assertEqual(self.item("BL-1", self.wt)["scope"], "feat/x")
 
 
 class Seeding(SpinUpCase):
@@ -286,6 +368,36 @@ class FromAnotherRepository(SpinUpCase):
 
     def test_refuses_without_the_registry(self):
         self.assertIn("No clerk-dev config", self.refused("create", self.web.path, "feat/x", "--item", "api:BL-1"))
+
+    def test_refuses_a_repository_the_config_does_not_name(self):
+        self.configure(repos=[("web", self.web.path)])
+        self.assertEqual(self.refused("create", self.web.path, "feat/x", "--item", "api:BL-1"), f"repository api is not in {self.config_path()}")
+
+    def test_refuses_a_main_checkout_that_is_not_a_git_checkout(self):
+        os.makedirs(self.path("plain"))
+        self.configure(repos=[("api", self.path("plain"))])
+        self.assertIn(f"{self.path('plain')}, the main checkout of api in {self.config_path()}, is not a git checkout", self.refused("create", self.web.path, "feat/x", "--item", "api:BL-1"))
+
+
+class WhenTheConfiguredMainBranchIsMissing(SpinUpCase):
+    def test_refuses_naming_the_config_cell(self):
+        self.configure(repos=[("api", self.api.path)], main="trunk")
+        self.assertEqual(self.refused("where", self.api.path, "feat/x"), f"origin/trunk does not exist in {self.api.path}; fix the Main branch cell of api in {self.config_path()}")
+
+
+class InABareRepositoryLayout(SpinUpCase):
+    def setUp(self):
+        super().setUp()
+        bare = self.path("svc/svc.git")
+        git(self.tmp, "clone", "-q", "--bare", self.api.origin, bare)
+        git(bare, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+        git(bare, "fetch", "-q", "origin")
+        git(bare, "remote", "set-head", "origin", "main")
+        self.main = self.path("svc/main")
+        git(bare, "worktree", "add", "-q", self.main, "main")
+
+    def test_puts_the_worktree_beside_the_bare_repository(self):
+        self.assertEqual(self.where("feat/x", wt=self.main)["path"], self.path("svc/feat/x"))
 
 
 class FromAFeatureWorktree(SpinUpCase):
