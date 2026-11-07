@@ -11,7 +11,7 @@ allowed-tools:
   - Bash(git status *)
   - Bash(gh pr view *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build.py *)
-  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/followups.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/items.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
@@ -29,7 +29,7 @@ allowed-tools:
 
 # Fixing review findings
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 You coordinate; you do not edit code in this session. Every code change goes
 through the `building` skill's intake. The review run's files are the
@@ -164,7 +164,9 @@ for nothing wider.
      resolved.
    - The follow-ups "After each handoff" in the `building` skill filed for
      this commit, each in a sentence naming the follow-up id and the
-     repository that owes it; omit when none. The renderer shows it as a
+     repository that owes it, and the cleanup filed for this commit from the report's `cleanups:` line, in a
+     sentence naming its id and the code it removes; omit each when none was
+     filed. The renderer shows it as a
      "Resolution" subsection at the end of the card. On a later fix of the
      same finding, append a paragraph rather than rewriting the earlier ones.
 7. If the recheck says partly resolved or unresolved, make one second attempt

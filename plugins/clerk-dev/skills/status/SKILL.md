@@ -1,12 +1,12 @@
 ---
 name: status
-description: Say where a worktree's work stands and what to do next, for its review and for the feature it belongs to. Use when the user asks "where are we at", "where are we", "where are we on the design", "are we ready to build", "where are we on <an area or piece>", "where are we on the implementation", "how far along is the build", "what's built", "what's the status", "what's left", "what's next", "status of the review", "status of the feature", "anything new", "what's blocking us", "what's blocked", "anything blocking", or similar about this branch's review, fixes, follow-ups, passes, or feature records. Reports implementation progress per brief (requirements done, partial, in progress, not started; handoffs stopped on a question), new follow-ups (they arrive from other repositories at any time), passes in progress and their checks, open design questions, open items in briefs, passes in other repositories, commits no review has read, staged changes, unmarked findings, the fix, discussion, and post queues, and findings whose code moved, then the next steps.
+description: Say where a worktree's work stands and what to do next, for its review and for the feature it belongs to. Use when the user asks "where are we at", "where are we", "where are we on the design", "are we ready to build", "where are we on <an area or piece>", "where are we on the implementation", "how far along is the build", "what's built", "what's the status", "what's left", "what's next", "status of the review", "status of the feature", "anything new", "what's blocking us", "what's blocked", "anything blocking", or similar about this branch's review, fixes, follow-ups, passes, or feature records. Reports implementation progress per brief (requirements done, partial, in progress, not started; handoffs stopped on a question), new follow-ups (they arrive from other repositories at any time), passes in progress and their checks, open design questions, open items in briefs, passes in other repositories, the repository's backlog (orphaned items, cleanups whose code is gone, follow-ups this branch could take up), commits no review has read, staged changes, unmarked findings, the fix, discussion, and post queues, and findings whose code moved, then the next steps.
 allowed-tools: Bash(python3 *), Bash(git *), Read
 ---
 
 # Where the work stands
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -45,13 +45,14 @@ follow-ups owed here, and findings to fix before merging. Anything broader
 Its output already glosses each id on its first mention (`records.py gloss`);
 keep those glosses when you show or summarize it, and gloss any id you add.
 
-It reads only files and git: the latest review run, `.clerk-dev/followups.md`,
-`.clerk-dev/deferred.md`, and `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
+It reads only files and git: the latest review run, this repository's
+backlog (its follow-ups and items, through `backlog.py`) and the hub
+repository's for the feature's parked ideas, `.clerk-dev/deferred.md`, and `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
 worktrees of
 `.clerk-dev/workspace.md`, the feature records and design checks in the
-hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen`,
-which remembers the follow-ups already shown so the next status can mark new
-ones. Pass `--run <label>` when the user names a run.
+hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen-backlog`,
+which keeps one `<repo> <n>` line per backlog it read, the highest `BL-n` of the
+follow-ups owed here it showed there, so the next status can mark newer items as new. Pass `--run <label>` when the user names a run.
 
 Show its output as it is. Then add one or two sentences: which step to take
 first and why, when the order is not obvious from the list. The order the script
@@ -65,3 +66,20 @@ and unstaged files at once, or a follow-up whose source no longer exists.
 
 Do not start any of the steps; the user picks one. Do not read the report, the
 findings, or the diffs to embellish the summary.
+
+The one exception is the **Backlog** block at the end of the repository part,
+present when this repository's backlog has open items. It shows the open count
+by kind and the oldest three items, every orphan (a feature-scoped item whose
+branch is gone: "from feat/x, branch gone"), the owed cleanups whose code is
+gone from the remote main with the time of the last fetch, and each follow-up,
+new work or orphaned, that this branch could take up. Its steps are offers:
+after showing the output, ask in one line per offer, each item glossed, and on
+the user's yes act through `${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py`:
+
+- an orphan: `backlog.py rescope <worktree> BL-4 new`, or `backlog.py set
+  <worktree> BL-4 dropped --ref "<why>"`, asking the user why;
+- a gone cleanup: `backlog.py set <worktree> BL-4 done --ref <sha>`, with the
+  remote main's commit the check read (`git rev-parse --short origin/<main>`);
+- a follow-up to take up: `backlog.py rescope <worktree> BL-4 <this branch>`.
+
+Say in one line what changed. What the user declines stays as it is.

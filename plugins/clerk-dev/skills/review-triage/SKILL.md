@@ -1,6 +1,6 @@
 ---
 name: review-triage
-description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", records outcomes in the report, then drafts the posted text of findings marked "Post" through the post-drafter agent and posts them to the user's pending GitHub review. "post the review", "draft the posted text", or "submit the review" runs only that posting pass.
+description: Work through a /clerk-dev:review report's triage, or check its findings against later work. Use when the user says "work the queue", "work through the review", "fix everything marked fix", "go through the discussions", "triage the review", or similar; and also when they ask to cross-check the review findings against the follow-ups or against later commits ("cross check the findings against the followups", "cross check the findings against the backlog follow-ups", "which findings are stale", "did the follow-ups fix any findings", "are the findings still current"), which runs only the check. Fixes every finding marked "Fix as recommended" one at a time, each through the building skill's intake and the review-fix skill, one commit each, then walks the user through the ones marked "Discuss", records outcomes in the report, then drafts the posted text of findings marked "Post" through the post-drafter agent and posts them to the user's pending GitHub review. "post the review", "draft the posted text", or "submit the review" runs only that posting pass.
 argument-hint: "[fixes | discuss | post | check | all] [run label]"
 allowed-tools:
   - Bash(git add *)
@@ -11,7 +11,7 @@ allowed-tools:
   - Bash(git status *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/build.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/deferred.py *)
-  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/followups.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/items.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
@@ -30,7 +30,7 @@ allowed-tools:
 
 # Review triage
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The user marks each finding in a review report with an instruction: Fix as
 recommended (optionally with a note), Discuss, Defer, Ignore, or Post; a
@@ -81,7 +81,8 @@ against code that has changed or is about to.
 
 ### Open follow-ups
 
-Run `followups.py list <worktree> --open`. When items are open, the other
+Run `backlog.py list <worktree> --owed`: the open backlog follow-ups this
+branch owes. When items are open, the other
 repository has already changed a contract on this branch and this one is out of
 step until they are done; a finding fixed first may be fixed against code the
 follow-up rewrites. Ask once: "<n> follow-ups are open (<their
@@ -90,6 +91,14 @@ not offer; say how many are open and that the check sees only the ones already
 done. On yes, follow the `followups` skill to the end, then continue with
 the next check. On no, go on; the check below still sees any follow-up commits
 made earlier.
+
+### Cleanups owed
+
+When `<run>/cleanups.md` exists, offer each of its lines that ends with neither
+` filed: BL-n` nor ` declined`, as "Cleanups" in `skills/review/tracking.md`
+describes, with `--from "<run> rollout"`. On yes, append ` filed: <item id>` to
+the line; on no, append ` declined`. With `check`, do not offer; say how many
+lines are unfiled. Name each item filed with its gloss.
 
 ### Findings whose code moved
 
@@ -132,7 +141,7 @@ Otherwise judge the candidates, which you do not do yourself:
      N=<verdict>[:<note>] ... --through
    <HEAD>`.
 4. Say what moved, one line per resolved or changed finding ("12 resolved by
-   cabf2b2 (F1)", "40 moved to discuss: the settings page no longer renders the
+   cabf2b2 (BL-1)", "40 moved to discuss: the settings page no longer renders the
    invite form inline"), and one line with the count that still applies. The user can
    undo any of these the usual way, by re-ticking the report. When the render
    says a posted finding's thread is still open, follow Closing posted threads
@@ -199,7 +208,13 @@ skipped without deciding counts as left and stays marked.
    an `Explore` agent the question and keep only its answer.
 4. Record the decision as described under Recording a decision, including any
    rule it sets beyond its finding (Rules beyond the finding), then, for a fix, run it right away
-   by following the `review-fix` skill in queue mode.
+   by following the `review-fix` skill in queue mode. A discussion may end
+   with "send it to the backlog, as an idea" or "as a cleanup"; record that as
+   "Items" in `skills/review/tracking.md` describes for a finding sent to the
+   backlog, and close with the item named with its gloss ("12 sent to the
+   backlog as BL-7, a cleanup to remove `EXPORT_V2_FLAG`"). A send alone needs
+   no Notes paragraph; write one when the discussion settled more than the
+   send.
 5. Move to the next. Before the next one, drop the previous one's detail; the
    file is the record.
 
@@ -214,6 +229,9 @@ When the last discussion is decided, look back over the pass as "Lessons
 from a discussion" in `skills/review/tracking.md` describes, from the decisions
 recorded in the report when the conversation was cleared partway. Then
 run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
+
+The same words said outside a discussion ("send finding 12 to the backlog as a
+cleanup") mean the same: record the send as step 4 does.
 
 ## Pass 3: posting
 

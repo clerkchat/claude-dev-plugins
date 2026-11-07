@@ -36,11 +36,6 @@ Usage:
   records.py names WORKTREE PLAN-31 S C BRIEF-52.19 BUILD-15 ...   a short name for each id or code
   records.py guidance WORKTREE [--area A | --for BRIEF-33|BRIEF-33.4|BRIEF-18-1.Q-6] [--context REVIEW-CONTEXT.md] [--out FILE]
                                         branch scope, branch guidance, the feature's active guidance, and the repository's Known noise
-  records.py idea WORKTREE "text" [--area A] [--from DEC-12|"this session"] [--why ...] [--when ...]
-  records.py ideas WORKTREE [--all] [--area A | --area -]
-  records.py adopt WORKTREE IDEA-3 --by DEC-60   the record the idea became
-  records.py drop WORKTREE IDEA-3 --why "..."
-  records.py unpark WORKTREE IDEA-3           back to parked
 
 Record frontmatter:
   ---
@@ -55,7 +50,7 @@ Record frontmatter:
   supersedes: DEC-3
   ---
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys
+import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile, time
 from typing import NamedTuple
 import ids
 
@@ -77,7 +72,7 @@ def git(wt, *args, check=False):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 def exclude(wt):
-    """Create .clerk-dev/ and its .git/info/exclude entry, as followups.py does."""
+    """Create .clerk-dev/ and its .git/info/exclude entry."""
     os.makedirs(os.path.join(wt, ".clerk-dev"), exist_ok=True)
     if subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"]).returncode != 0:
         common = git(wt, "rev-parse", "--git-common-dir")
@@ -93,23 +88,55 @@ def workspace(wt):
     p = workspace_path(wt)
     if not os.path.exists(p): return None, {}
     text = open(p, encoding="utf-8").read()
-    repos = {}
-    for line in text.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if line.lstrip().startswith("|") and len(cells) >= 2 and cells[0] not in ("Repo", "") and not set(cells[0]) <= set("-: "):
-            repos[cells[0]] = cells[1]
+    repos = {r["Repo"]: r.get("Worktree", "") for r in table_rows(text) if r.get("Repo")}
     m = re.search(r"^Hub:\s*(\S+)", text, re.M)
     hub = None
     if m: hub = repos.get(m.group(1), m.group(1))
     return hub, repos
 
+def table_cells(line): return [c.strip() for c in line.strip().strip("|").split("|")]
+
+def table_separator(cells): return all(set(c) <= set("-: ") for c in cells)
+
+def table_rows(text):
+    rows, head = [], None
+    for line in text.splitlines():
+        if not line.lstrip().startswith("|"): head = None; continue
+        cells = table_cells(line)
+        if head is None: head = cells
+        elif not table_separator(cells): rows.append(dict(zip(head, cells)))
+    return rows
+
 def this_repo(wt, repos):
     real = os.path.realpath(wt)
     for name, path in repos.items():
-        if os.path.realpath(path) == real: return name
+        if os.path.realpath(os.path.expanduser(path)) == real: return name
     url = git(wt, "remote", "get-url", "origin")
     if url: return re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1].split(":")[-1])
-    return os.path.basename(real)
+    common = common_dir(wt)
+    return os.path.basename(os.path.dirname(common) if common else real)
+
+def origin_head(wt): return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD").removeprefix("origin/")
+
+def remote_main(wt):
+    return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
+
+def age(seconds):
+    if seconds < 3600: return f"{int(seconds // 60)} minutes ago"
+    if seconds < 2 * 86400: return f"{int(seconds // 3600)} hours ago"
+    return f"{int(seconds // 86400)} days ago"
+
+def last_fetch(common):
+    fh = os.path.join(common, "FETCH_HEAD")
+    if not os.path.exists(fh): return None
+    mtime = os.path.getmtime(fh)
+    return datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"), age(time.time() - mtime)
+
+def write_atomic(path, text):
+    path = os.path.abspath(path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=f".{os.path.basename(path)}.")
+    with os.fdopen(fd, "w", encoding="utf-8") as fh: fh.write(text)
+    os.replace(tmp, path)
 
 def hub(wt):
     h, _ = workspace(wt)
@@ -117,6 +144,8 @@ def hub(wt):
     return os.path.abspath(h or wt)
 
 def fdir(wt): return os.path.join(hub(wt), ".clerk-dev", "feature")
+
+def hub_of(d): return os.path.dirname(os.path.dirname(d))
 
 def parse(p):
     text = open(p, encoding="utf-8").read()
@@ -129,8 +158,8 @@ def parse(p):
     meta["path"] = p
     return meta, text[m.end():] if m else text
 
-def render(meta, body):
-    head = "".join(f"{k}: {meta[k]}\n" for k in FIELDS if meta.get(k))
+def render(meta, body, fields=FIELDS):
+    head = "".join(f"{k}: {meta[k]}\n" for k in fields if meta.get(k))
     return f"---\n{head}---\n{body}"
 
 def records(d):
@@ -319,7 +348,7 @@ def overview_line(d):
     since = f"; {', '.join(added)} came after" if added else "; statuses or areas changed since"
     return f"Overview: [overview.md](overview.md), stale (through {through}{since}); say \"refresh the overview\"."
 
-def index(d):
+def index(d, wt):
     p = os.path.join(d, "feature.md")
     if not os.path.exists(p): return
     text = open(p, encoding="utf-8").read()
@@ -341,10 +370,10 @@ def index(d):
             for r in ordered(grp): rows += entry(r, d, repos)
             rows.append("")
         if not live: rows += ["No active records.", ""]
-    parked = items_mod().not_done(ideas(d))
+    parked = backlog_mod().feature_ideas(wt)
     if parked:
-        rows += ["## Ideas", "", f"Parked, {len(parked)}; all of them, with why and when, in [ideas.md](ideas.md).", ""]
-        rows += [f"- **{i['id']}**{' (' + i['fields']['Area'] + ')' if i['fields'].get('Area') else ''}: {i['text']}" for i in parked] + [""]
+        rows += ["## Ideas", "", f"Parked, {len(parked)}, in the backlog; `backlog.py list <worktree> --parked --full` shows them with why and when.", ""]
+        rows += [f"- **{i['qualified']}**{' (' + i['area'] + ')' if i.get('area') else ''}: {i.get('title', '')}" for i in parked] + [""]
     cs = checks(d)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
@@ -395,8 +424,20 @@ def rule_lines(heading, body, rule):
 
 def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
 
-def repo_dir(wt):
-    return os.path.join(git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir"), "clerk-dev")
+def common_dir(wt): return git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
+
+class Worktree(NamedTuple):
+    path: str
+    branch: str
+
+def worktrees(wt, check=False):
+    out = []
+    for block in git(wt, "worktree", "list", "--porcelain", check=check).split("\n\n"):
+        fields = dict(line.partition(" ")[::2] for line in block.splitlines())
+        if fields.get("worktree"): out.append(Worktree(os.path.realpath(fields["worktree"]), fields.get("branch", "").removeprefix("refs/heads/")))
+    return out
+
+def repo_dir(wt): return os.path.join(common_dir(wt), "clerk-dev")
 
 def repo_context_path(wt): return os.path.join(repo_dir(wt), "repo-context.md")
 
@@ -543,26 +584,25 @@ def names(wt, wanted):
             elif kind == ids.SURVEY:
                 survey_of = lambda cp: f"survey of {survey_target(open(cp, encoding='utf-8').read())}"
                 name = check_gloss(d, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
-            elif kind == ids.IDEA:
-                it = next((i for i in ideas(d) if ids.same(i["id"], X)), None)
-                if it: name = f"idea ({idea_word(it)}): {it['text']}"
+            elif kind == ids.BACKLOG:
+                bl = backlog_mod(); it = bl.lookup(here, X)
+                if it: name = f"{bl.kind_name(it)} ({it.get('status')})" + (f": {it['title']}" if it.get("title") else "")
             elif kind in (ids.BUILD, ids.MILESTONE):
                 e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
                 if e: name = ("milestone: " if kind == ids.MILESTONE else f"handoff for {e['f']['Record']}: " if e["f"].get("Record") else "handoff: ") + e["title"]
             elif kind == ids.PASS:
                 e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if ids.same(e["id"], X)), None)
                 if e: name = f"pass: {e['title']}"
-            elif kind in (ids.FOLLOWUP, ids.DEFERRED):
-                what, file = ("follow-up", "followups") if kind == ids.FOLLOWUP else ("deferred item", "deferred")
-                e = next((i for i in load(f"{file}.py").read(os.path.join(here, ".clerk-dev", f"{file}.md")) if ids.same(i["id"], X)), None)
-                if e: name = f"{what}: {e['text']}"
+            elif kind == ids.DEFERRED:
+                e = next((i for i in load("deferred.py").read(os.path.join(here, ".clerk-dev", "deferred.md")) if ids.same(i["id"], X)), None)
+                if e: name = f"deferred item: {e['text']}"
             if name is None and x in pieces: name = f"plan piece: {pieces[x]}"
         except SystemExit:
             pass
         out.append(f"{x}: {name or 'unknown'}")
     return out
 
-ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.SURVEY, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.FOLLOWUP, ids.IDEA, ids.DEFERRED)})(?![\w.]?\d)('s)?")
+ID_RE = re.compile(rf"(?<!\w)({ids.pattern(ids.CHECK, ids.SURVEY, ids.REF, ids.RECORD, ids.BUILD, ids.MILESTONE, ids.PASS, ids.BACKLOG, ids.DEFERRED)})(?![\w.]?\d)('s)?")
 
 def gloss(wt, text, n=50):
     """The text with each id's first plain mention followed by its short name,
@@ -637,7 +677,7 @@ def cited(refs):
 
 def build_log(d):
     bm = load_script("build.py")
-    hub_wt = os.path.dirname(os.path.dirname(d))
+    hub_wt = hub_of(d)
     _, repos = workspace(hub_wt)
     lines, direct, built = [], [], Built(set(), {}, [])
     canon = resolver(records(d))
@@ -696,11 +736,10 @@ def built_mark(r, built):
     if built.unread and len(done) < total: return f"; built: unknown (at least {count}" + (f": {which})" if done else ")")
     return f"; built: {count}" + (f" ({which})" if done else "")
 
-def idea_status(i):
-    outcome = re.sub(r"^\d{4}-\d{2}-\d{2} ", "", i["fields"].get("Outcome", ""))
-    if i["done"] and outcome: return f"Status: {outcome}."
-    f = i["fields"]
-    return f"Status: {idea_word(i)}. Why: {f.get('Why', '-')}. When: {f.get('When', '-')}."
+def idea_line(it):
+    bl = backlog_mod()
+    state = it.get("outcome") or f"parked. Why: {bl.prose(it, 'why') or '-'}. When: {bl.prose(it, 'when') or '-'}"
+    return f"- {it['qualified']} ({it.get('area') or 'feature-wide'}): {it.get('title', '')}. Status: {state}."
 
 def open_item_lines(d, c):
     return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
@@ -709,7 +748,7 @@ def open_item_lines(d, c):
 def brief_open_items(body):
     return re.findall(r"^\s*[-*] \[ \] (.*)$", section(body, "Open items"), re.M)
 
-def digest(d):
+def digest(d, wt):
     rs = records(d)
     out = []
     fp = os.path.join(d, "feature.md")
@@ -727,7 +766,7 @@ def digest(d):
         out += [f"# Open {words}", ""] + [line for c in cs if c["kind"] == kind for line in open_item_lines(d, c)] + [""]
     out += ["# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
-    out += [f"- {i['id']} ({i['fields'].get('Area') or 'feature-wide'}): {i['text']} {idea_status(i)}" for i in ideas(d)] or ["none"]
+    out += [idea_line(it) for it in backlog_mod().feature_ideas(wt, include_closed=True)] or ["none"]
     out += ["", "# Open items in active briefs", ""]
     for r in live:
         if r["type"] != "brief": continue
@@ -735,7 +774,7 @@ def digest(d):
         out += [f"- {r['id']}: {item}" for item in brief_open_items(body)]
     return "\n".join(out) + "\n"
 
-def stamp_overview(d):
+def stamp_overview(d, wt):
     p = os.path.join(d, "overview.md")
     if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
     rs = records(d)
@@ -747,31 +786,12 @@ def stamp_overview(d):
              " regenerate it by saying \"refresh the overview\"; a change of substance is a new record.\n\n")
     text = lines[0] + "\n\n" + stamp + (lines[1].lstrip("\n") if len(lines) > 1 else "")
     open(p, "w", encoding="utf-8").write(text)
-    index(d)
+    index(d, wt)
     return last
-
-IDEA_FIELDS = ("Area", "From", "Why", "When", "Added", "Instruction", "Status", "Outcome")
-IDEAS_HEADER = """# Ideas
-
-Ideas set aside for later: each says what it is, where it came from, why it is
-worth having, and when to look at it again. Kept by records.py; an idea is
-parked while open, adopted when it becomes a record (Outcome names it), and
-dropped when it will not be done (Outcome says why).
-
-"""
 
 def items_mod(): return load_script("items.py")
 
-def ideas(d):
-    p = os.path.join(d, "ideas.md")
-    return items_mod().read(p, list(IDEA_FIELDS)) if os.path.exists(p) else []
-
-def idea_word(i):
-    st = i["fields"].get("Status", "open")
-    return {"open": "parked", "in-progress": "being explored", "fixed": "adopted", "wont-fix": "dropped", "deferred": "parked"}.get(st, st)
-
-def write_ideas(d, its):
-    items_mod().write(os.path.join(d, "ideas.md"), its, IDEAS_HEADER, order=IDEA_FIELDS)
+def backlog_mod(): return load_script("backlog.py")
 
 def area_for(wt, ref):
     x = ids.normalize(ref)
@@ -783,6 +803,39 @@ def area_of(d, rids):
     """The area records share, or "" when they have none or differ."""
     got = {find(d, i).get("area", "") for i in rids}
     return got.pop() if len(got) == 1 else ""
+
+def start_feature(wt, name, summary=""):
+    h, d = hub(wt), fdir(wt)
+    exclude(h); os.makedirs(os.path.join(d, "records"), exist_ok=True)
+    p = os.path.join(d, "feature.md")
+    if os.path.exists(p): sys.exit(f"{p} already exists")
+    _, repos = workspace(wt)
+    open(p, "w", encoding="utf-8").write(
+        f"# Feature: {name}\n\nStarted {datetime.date.today().isoformat()} in {this_repo(h, repos)} ({h}). Edit freely above Records.\n\n"
+        f"## Summary\n\n{summary or 'One paragraph: what the feature is for and who it serves.'}\n")
+    index(d, wt)
+    return p
+
+def new_record(wt, rtype, title, src="", area=None, repo=None, supersedes=None):
+    d = fdir(wt)
+    rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
+    _, repos = workspace(wt)
+    old = find(d, supersedes) if supersedes else None
+    canon = resolver(rs)
+    parts = [x.strip() for x in src.split(",") if x.strip()] if src else []
+    parts = [canon(ids.normalize(x)) if ids.parse(ids.normalize(x)) else x for x in parts]
+    cited = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
+    area = area if area is not None else (old.get("area", "") if old else area_of(d, cited) if cited else "")
+    meta = {"id": ids.record(num, rtype), "type": rtype, "title": title.rstrip("."), "date": datetime.date.today().isoformat(),
+            "repo": repo or this_repo(wt, repos), "area": slug(area) if area else "",
+            "status": "" if rtype == "brainstorm" else "active",
+            "from": ", ".join(parts),
+            "supersedes": old["id"] if old else ""}
+    p = os.path.join(d, "records", ids.record_file(num, rtype, slug(title)))
+    open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
+    if old: set_fields(old, status="superseded", superseded_by=meta["id"])
+    index(d, wt)
+    return meta, p
 
 def main():
     ap = argparse.ArgumentParser()
@@ -800,16 +853,9 @@ def main():
     re_ = sp.add_parser("reactivate"); re_.add_argument("wt"); re_.add_argument("rid")
     sp.add_parser("index").add_argument("wt")
     for c in ("digest", "stamp-overview", "overview-status", "suggest"): sp.add_parser(c).add_argument("wt")
-    ia = sp.add_parser("idea"); ia.add_argument("wt"); ia.add_argument("text"); ia.add_argument("--area"); ia.add_argument("--from", dest="src")
-    ia.add_argument("--why"); ia.add_argument("--when")
-    il = sp.add_parser("ideas"); il.add_argument("wt"); il.add_argument("--all", action="store_true"); il.add_argument("--area")
-    iad = sp.add_parser("adopt"); iad.add_argument("wt"); iad.add_argument("iid"); iad.add_argument("--by", required=True)
-    idr = sp.add_parser("drop"); idr.add_argument("wt"); idr.add_argument("iid"); idr.add_argument("--why", required=True)
-    ire = sp.add_parser("unpark"); ire.add_argument("wt"); ire.add_argument("iid")
     nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
     gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--for", dest="ref"); gd.add_argument("--context"); gd.add_argument("--out")
     a = ap.parse_args()
-    today = datetime.date.today().isoformat()
     guard(a.wt)
 
     if a.cmd == "hub":
@@ -825,35 +871,13 @@ def main():
         return
     d = fdir(a.wt)
     if a.cmd == "start":
-        h = hub(a.wt); exclude(h); os.makedirs(os.path.join(d, "records"), exist_ok=True)
-        p = os.path.join(d, "feature.md")
-        if os.path.exists(p): sys.exit(f"{p} already exists")
-        _, repos = workspace(a.wt)
-        open(p, "w", encoding="utf-8").write(
-            f"# Feature: {a.name}\n\nStarted {today} in {this_repo(h, repos)} ({h}). Edit freely above Records.\n\n"
-            f"## Summary\n\n{a.summary or 'One paragraph: what the feature is for and who it serves.'}\n")
-        index(d); print(p); return
+        print(start_feature(a.wt, a.name, a.summary)); return
     if not os.path.exists(os.path.join(d, "feature.md")):
         sys.exit(f"no feature in {d}; start one with: records.py start {a.wt} \"name\"")
 
     if a.cmd == "new":
-        rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
-        _, repos = workspace(a.wt)
-        old = find(d, a.supersedes) if a.supersedes else None
-        canon = resolver(rs)
-        parts = [x.strip() for x in a.src.split(",") if x.strip()] if a.src else []
-        parts = [canon(ids.normalize(x)) if ids.parse(ids.normalize(x)) else x for x in parts]
-        src = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
-        area = a.area if a.area is not None else (old.get("area", "") if old else area_of(d, src) if src else "")
-        meta = {"id": ids.record(num, a.type), "type": a.type, "title": a.title.rstrip("."), "date": today,
-                "repo": a.repo or this_repo(a.wt, repos), "area": slug(area) if area else "",
-                "status": "" if a.type == "brainstorm" else "active",
-                "from": ", ".join(parts),
-                "supersedes": old["id"] if old else ""}
-        p = os.path.join(d, "records", ids.record_file(num, a.type, slug(a.title)))
-        open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
-        if old: set_fields(old, status="superseded", superseded_by=meta["id"])
-        index(d); print(f"{meta['id']} {p}" + (f" (area {meta['area']})" if meta["area"] else "") + (f" (supersedes {old['id']})" if old else ""))
+        meta, p = new_record(a.wt, a.type, a.title, a.src, a.area, a.repo, a.supersedes)
+        print(f"{meta['id']} {p}" + (f" (area {meta['area']})" if meta["area"] else "") + (f" (supersedes {meta['supersedes']})" if meta["supersedes"] else ""))
     elif a.cmd == "list":
         for r in records(d):
             if a.type and r.get("type") != a.type: continue
@@ -867,9 +891,9 @@ def main():
     elif a.cmd == "discard":
         r = find(d, a.rid)
         if r.get("type") == "brainstorm": sys.exit("brainstorms have no status; they stay as history")
-        set_fields(r, status="discarded", note=a.note); index(d); print(f"{r['id']} discarded")
+        set_fields(r, status="discarded", note=a.note); index(d, a.wt); print(f"{r['id']} discarded")
     elif a.cmd == "reactivate":
-        r = find(d, a.rid); set_fields(r, status="active", superseded_by=None, note=None); index(d); print(f"{r['id']} active")
+        r = find(d, a.rid); set_fields(r, status="active", superseded_by=None, note=None); index(d, a.wt); print(f"{r['id']} active")
     elif a.cmd == "areas":
         by = {}
         for r in records(d):
@@ -878,47 +902,24 @@ def main():
             s["n"] += 1; s["active"] += r.get("status") == "active"; s["last"] = max(s["last"], r.get("date", ""))
         for k, s in by.items(): print(f"{k}\t{s['n']} record{'s' if s['n'] != 1 else ''}, {s['active']} active, last {s['last']}")
     elif a.cmd == "tag":
-        r = find(d, a.rid); set_fields(r, area=slug(a.area) if a.area else None); index(d)
+        r = find(d, a.rid); set_fields(r, area=slug(a.area) if a.area else None); index(d, a.wt)
         print(f"{r['id']} " + (f"area {slug(a.area)}" if a.area else "feature-wide"))
     elif a.cmd == "rename-area":
         hit = [r for r in records(d) if r.get("area") == a.old]
         if not hit: sys.exit(f"no record has area {a.old}")
         for r in hit: set_fields(r, area=slug(a.new))
-        index(d); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
+        index(d, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
-        index(d); print(os.path.join(d, "feature.md"))
+        index(d, a.wt); print(os.path.join(d, "feature.md"))
     elif a.cmd == "digest":
-        sys.stdout.write(digest(d))
+        sys.stdout.write(digest(d, a.wt))
     elif a.cmd == "stamp-overview":
-        print(f"overview stamped through {stamp_overview(d)}")
+        print(f"overview stamped through {stamp_overview(d, a.wt)}")
     elif a.cmd == "overview-status":
         print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
     elif a.cmd == "suggest":
         print("\n".join(suggestions(d)) or "nothing to suggest")
     elif a.cmd == "names":
         print("\n".join(names(a.wt, a.ids)))
-    elif a.cmd == "idea":
-        its = ideas(d); iid = ids.item(ids.IDEA, ids.next_number([i["id"] for i in its], ids.IDEA))
-        src = ids.rewrite(a.src or "", types_of(records(d)))
-        cited = ids.records_in(src)
-        area = a.area if a.area is not None else (area_of(d, cited) if cited else "")
-        f = {"Area": slug(area) if area else "", "From": src, "Why": (a.why or "").rstrip("."), "When": (a.when or "").rstrip("."),
-             "Added": today, "Status": "open"}
-        its.append({"done": False, "id": iid, "text": a.text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
-        write_ideas(d, its); index(d); print(f"{iid} parked" + (f" (area {f['Area']})" if f.get("Area") else ""))
-    elif a.cmd == "ideas":
-        for i in ideas(d):
-            if not a.all and i["done"]: continue
-            if a.area is not None and i["fields"].get("Area", "") != ("" if a.area == "-" else a.area): continue
-            f = i["fields"]
-            print(f"{i['id']} {idea_word(i)}{' (' + f['Area'] + ')' if f.get('Area') else ''}: {i['text']}"
-                  + "".join(f"  {k}: {f[k]}." for k in ("Why", "When", "From", "Outcome") if f.get(k)))
-    elif a.cmd in ("adopt", "drop", "unpark"):
-        im = items_mod(); its = ideas(d); i = im.find(its, a.iid)
-        if a.cmd == "adopt":
-            im.set_status(i, "fixed", f"adopted as {find(d, a.by)['id']}")
-        elif a.cmd == "drop": im.set_status(i, "wont-fix", f"dropped: {a.why}")
-        else: im.set_status(i, "open")
-        write_ideas(d, its); index(d); print(f"{i['id']} {idea_word(i)}")
 
 if __name__ == "__main__": main()

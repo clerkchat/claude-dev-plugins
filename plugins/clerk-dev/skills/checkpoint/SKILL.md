@@ -1,19 +1,19 @@
 ---
 name: checkpoint
-description: Write down everything this conversation settled that is not yet in a file (decisions, guidance, parked ideas, answers to design questions, built handoffs, follow-ups owed elsewhere, scope changes), then say whether it is safe to clear the conversation. Use when the user says "checkpoint", "wrap up", "save where we are", "before I clear", "is it safe to clear", "I'm going to clear", or similar.
+description: Write down everything this conversation settled that is not yet in a file (decisions, guidance, ideas parked in the backlog, answers to design questions, built handoffs, follow-ups owed elsewhere filed in their repository's backlog, scope changes), then say whether it is safe to clear the conversation. Use when the user says "checkpoint", "wrap up", "save where we are", "before I clear", "is it safe to clear", "I'm going to clear", or similar.
 allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
 ---
 
 # Checkpoint
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The plugin keeps its state in files, so a cleared conversation loses only what
 was settled in it and never written down. A checkpoint finds that and writes
 it, in the places the other skills would have, then says whether clearing is
 safe. It records what was settled; it decides nothing new.
 
-`records.py`, `build.py`, `passes.py`, and `followups.py` below are in
+`records.py`, `build.py`, `passes.py`, and `backlog.py` below are in
 `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 
 ## 1. Find what is not written down
@@ -27,8 +27,9 @@ list each thing that was settled but has no file yet:
 - **Guidance**: a rule the user gave beyond one case, or anything they wrote
   as `guidance: ...`. Recorded as "Guidance from answers" in
   `skills/review/tracking.md` describes, at its scope.
-- **Ideas set aside**: "later", "not now", "skip that". Parked with `records.py
-  idea`, with why and when.
+- **Ideas set aside**: "later", "not now", "skip that". Parked with `backlog.py
+  add <worktree> "<the idea>" --kind idea`, with why and when, as Parked ideas
+  in the `feature` skill describes.
 - **Answers to design questions** that are not yet in their check file:
   `items.py set` and `items.py status`, as the `design-check` skill's walk does.
 - **Handoffs** built or committed but not in the build log, and
@@ -36,8 +37,8 @@ list each thing that was settled but has no file yet:
   `building` skill describes. A handoff sent and still running is not
   pending; see step 3.
 - **Follow-ups** another repository now owes because of a change here:
-  `followups.py add` in its worktree, with its contract and need as Follow-ups
-  in `skills/review/tracking.md` describes.
+  `backlog.py add --kind followup` in that repository's backlog, with its
+  contract and need as Follow-ups in `skills/review/tracking.md` describes.
 - **Scope**: the branch's purpose widened or narrowed in conversation: a
   dated line in `.clerk-dev/branch-notes.md` Purpose.
 - **Brief open items** settled or raised: tick or add them in the brief.

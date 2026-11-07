@@ -2,12 +2,14 @@ import re
 from typing import NamedTuple
 
 RECORD, REF, CHECK, SURVEY = "record", "ref", "check", "survey"
-IDEA, PASS, BUILD, MILESTONE, DEFERRED, QUESTION, FOLLOWUP = "idea", "pass", "build", "milestone", "deferred", "question", "followup"
+PASS, BUILD, MILESTONE, DEFERRED, QUESTION, BACKLOG = "pass", "build", "milestone", "deferred", "question", "backlog"
 
 RECORD_LEADS = {"brainstorm": "STORM-", "design": "DESIGN-", "decision": "DEC-", "guidance": "GUIDE-",
                 "pieces": "PIECES-", "plan": "PLAN-", "brief": "BRIEF-"}
-ITEM_LEADS = {IDEA: "IDEA-", PASS: "PASS-", BUILD: "BUILD-", MILESTONE: "MILE-", DEFERRED: "DEFER-", QUESTION: "Q-", FOLLOWUP: "F"}
-ALIASES = {"IDEAS-": RECORD, "R": RECORD, "I": IDEA, "P": PASS, "B": BUILD, "M": MILESTONE, "D": DEFERRED, "Q": QUESTION}
+ITEM_LEADS = {PASS: "PASS-", BUILD: "BUILD-", MILESTONE: "MILE-", DEFERRED: "DEFER-", QUESTION: "Q-", BACKLOG: "BL-"}
+ALIASES = {"IDEAS-": RECORD, "R": RECORD, "P": PASS, "B": BUILD, "M": MILESTONE, "D": DEFERRED, "Q": QUESTION}
+QUALIFIED = (BACKLOG,)
+REPO_NAME = r"[A-Za-z0-9_.-]+"
 TYPE_ALIASES = {"spec": "brief", "capabilities": "pieces"}
 SURVEY_LEAD = "SURVEY-"
 
@@ -22,6 +24,7 @@ class Id(NamedTuple):
     sub: int | None = None
     q: int | None = None
     record: str | None = None
+    repo: str | None = None
 
 def record_type(name): return TYPE_ALIASES.get(name, name)
 
@@ -30,6 +33,7 @@ def record(n, rtype):
     return f"{RECORD_LEADS[rtype]}{n}"
 
 def item(kind, n): return f"{ITEM_LEADS[kind]}{n}"
+def qualified(repo, iid): return f"{repo}:{iid}" if repo else iid
 def ref(record_id, n): return f"{record_id}.{n}"
 def check(record_id, n): return f"{record_id}-{n}"
 def in_check(check_name, question_id): return f"{check_name}.{question_id}"
@@ -54,7 +58,7 @@ def _shape(kind, named):
     number = group("n", r"\d+")
     question = r"(?:\." + _alternatives(_leads(QUESTION)) + group("q", r"\d+") + ")?"
     if kind == SURVEY: return _alternatives(_leads(kind)) + number + question
-    if kind in ITEM_LEADS: return _alternatives(_leads(kind)) + number
+    if kind in ITEM_LEADS: return (f"(?:{group('repo', REPO_NAME)}:)?" if kind in QUALIFIED else "") + _alternatives(_leads(kind)) + number
     rec = group("record", _alternatives(_leads(RECORD)) + number)
     if kind == RECORD: return rec
     if kind == REF: return rec + r"\." + group("sub", r"\d+")
@@ -69,6 +73,7 @@ def _dashless():
 
 DASHLESS = _dashless()
 BARE = re.compile(r"(\d+)(?:\.(\d+))?")
+QUALIFIER = re.compile(rf"({REPO_NAME}:)?(.*)", re.S)
 
 def _int(text): return int(text) if text is not None else None
 
@@ -78,7 +83,7 @@ def parse(text):
         m = rx.fullmatch(text)
         if m:
             got = m.groupdict()
-            return Id(kind, int(got["n"]), _int(got.get("sub")), _int(got.get("q")), got.get("record"))
+            return Id(kind, int(got["n"]), _int(got.get("sub")), _int(got.get("q")), got.get("record"), got.get("repo"))
     return None
 
 def _parsed(text):
@@ -94,7 +99,7 @@ def number(text): return _parsed(text).n
 
 def key(text):
     p = parse(text)
-    return tuple(p[:4]) if p else None
+    return (*p[:4], p.repo) if p else None
 
 def same(a, b):
     k = key(a)
@@ -108,7 +113,8 @@ def next_number(texts, kind):
     return max([p.n for p in map(parse, texts) if p and p.kind == kind] or [0]) + 1
 
 def normalize(text):
-    return DASHLESS.sub(r"\1-", text.strip().upper(), count=1)
+    repo, rest = QUALIFIER.fullmatch(text.strip()).groups()
+    return (repo or "") + DASHLESS.sub(r"\1-", rest.upper(), count=1)
 
 def read(text, *kinds):
     up = normalize(text)
@@ -123,7 +129,7 @@ def _with_question(name, q): return name if q is None else in_check(name, item(Q
 
 def render(p, rtype=None):
     if p.kind == SURVEY: return _with_question(survey(p.n), p.q)
-    if p.kind in ITEM_LEADS: return item(p.kind, p.n)
+    if p.kind in ITEM_LEADS: return qualified(p.repo, item(p.kind, p.n))
     rec = record(p.n, rtype)
     if p.kind == RECORD: return rec
     if p.kind == REF: return ref(rec, p.sub)

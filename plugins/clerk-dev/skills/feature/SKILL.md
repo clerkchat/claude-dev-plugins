@@ -7,7 +7,7 @@ allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
 
 # Feature records
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -109,7 +109,7 @@ Areas are not declared up front.
   read both. When the piece changes the behavior of a brief that is already
   built, Approach names that brief and what changes ("When a record changes
   another" below). Any other list in a brief uses plain numbers, cited as
-  BRIEF-33.4, never with an id prefix (IDEA, F, DEFER, BUILD, MILE, PASS, Q, a
+  BRIEF-33.4, never with an id prefix (BL, DEFER, BUILD, MILE, PASS, Q, a
   record type's prefix such as DEC, or the older letters I, D, B, M, P, R),
   which clash with the plugin's ids. Every builder works from the brief, so draft it with a
   `general-purpose` subagent on `model: fable`, effort `high` (falling back to Opus at the same effort as Model fallback in the `review` skill describes):
@@ -139,9 +139,9 @@ another repository must provide and does not today (an endpoint, a field, an
 event, a schema), file it there as a `wanted:` follow-up, as "Follow-ups" in
 `skills/review/tracking.md` describes: the contract is the shape and how it
 differs from today's, the need is what this repository builds against, and the
-item goes to the providing repository's worktree from `.clerk-dev/workspace.md`.
+item goes to the providing repository's backlog.
 File it once the record that relies on the shape is written, cite that record
-in `--from`, and say in one line what was filed and where ("filed F4 in api:
+in `--from`, and say in one line what was filed and where ("filed api:BL-4:
 wanted GET /contacts?q= to match phoneNumber"). A shape the user is still
 undecided about stays an open question in the record, not a follow-up.
 
@@ -208,17 +208,22 @@ describes, before the next step starts.
 
 When an idea comes up that is not for now ("cool, but later", "let's skip that
 for now", "park that"), or when you set one aside yourself while scoping, park
-it: `records.py idea <worktree> "<the idea>" --from <record id, check question, or
-"this session"> --why "<what it would buy>" --when "<what would make it worth
-doing>"`, with `--area` when it belongs to one. One line to the user ("parked
-as IDEA-7"). Offer to park ideas the conversation drops without deciding, at most
-once per pause, listing them in a line each.
+it: `${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py add <worktree> "<the idea>" --kind
+idea --from <record id, check question, or "this session"> --why "<what it
+would buy>" --when "<what would make it worth doing>"`, with `--area` when it
+belongs to one. The scope defaults to the hub's branch, so it is a feature
+idea, filed in the hub repository's backlog whichever worktree of the feature
+it is said in. One line to the user ("parked as BL-7"). Offer to park ideas
+the conversation drops without deciding, at most once per pause, listing them
+in a line each.
 
-"What ideas did we park", "anything parked for the harness": `records.py ideas
-<worktree> [--area <area>]`. When the work reaches an idea's trigger, mention
-it in a line. When an idea is taken up, write the record it becomes and
-`records.py adopt <worktree> IDEA-7 --by <record id>`; when it is ruled out, `records.py
-drop <worktree> IDEA-7 --why "<why>"`.
+"What ideas did we park", "anything parked for the harness": `backlog.py list
+<worktree> --parked --full`, the feature's open ideas as status counts them,
+each line naming its area, with its why and when under it. When the work reaches an
+idea's trigger, mention it in a line. When an idea is taken up, write the
+record it becomes and `backlog.py set <worktree> BL-7 adopted --ref <record
+id>`; when it is ruled out, `backlog.py set <worktree> BL-7 dropped --ref
+"<why>"`.
 
 ## The overview
 

@@ -33,7 +33,7 @@ Hub: api
 | worker | /Users/me/src/worker-exports |             |
 ```
 
-- `Repo`: the short name used in reports, follow-up `From:` lines, and finding
+- `Repo`: the short name used in reports, follow-up `origin` fields, and finding
   references ("api 8").
 - `Worktree`: absolute path of the worktree that holds this job's branch.
 - `Main`: optional, the remote main branch to compare against. Empty means
@@ -55,14 +55,17 @@ set it up with the user before anything else. A headless session never asks: it
 stops and prints, as its last line, that the review workspace has to be set up
 in an interactive session first.
 
-1. Name this repository. Propose the last path segment of
+1. Name this repository. Take its name from its row in the per-user config
+   when it has one; otherwise propose the last path segment of
    `git remote get-url origin` without `.git`, or else the directory name of
    the main checkout (the parent of
    `git rev-parse --path-format=absolute --git-common-dir`).
-2. Ask which other repositories take part. Offer as choices the git
-   repositories next to this repository's main checkout, and let the user give
-   any other path. A path anywhere in a repository will do; the worktree comes
-   next.
+2. Ask which other repositories take part. Offer as choices the repositories
+   registered in the per-user config (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/config.py show`
+   lists each one's name and main checkout), and take each one's `Repo` name
+   from its row there. When there is no config, set it up first with the
+   `clerk-dev:setup` skill, then offer. Let the user also give any other path;
+   a path anywhere in a repository will do. The worktree comes next.
 3. For each one, list its worktrees with
    `git -C <path> worktree list --porcelain` and ask which holds this job,
    listing worktrees on the same branch name as this one first. The user can

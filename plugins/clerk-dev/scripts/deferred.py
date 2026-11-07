@@ -15,10 +15,17 @@ Usage:
 SRC is a finding "<run> N", a question "BRIEF-18-1.Q-6", a pass item "PASS-3.4",
 a handoff "BUILD-9", or "this session".
 """
+import argparse, datetime, os
 from records import load_script
 import ids
 
 items = load_script("items.py")
+
+FILENAME = "deferred.md"
+EXTRAS = ("Path", "Open", "Revisit")
+REQUIRED = ("Path", "Open")
+CLOSING_STATUSES = ("fixed", "wont-fix")
+FIELDS = ("From", *EXTRAS, "Added", "Instruction", "Status", "Outcome")
 
 HEADER = """# Deferred
 
@@ -29,7 +36,58 @@ commit, or wont-fix with a reason.
 
 """
 
-LIST = items.WorktreeList("deferred.md", ids.DEFERRED, HEADER, extras=("Path", "Open", "Revisit"), required=("Path", "Open"), closes=("fixed", "wont-fix"))
-read = LIST.read
+def path(wt):
+    load_script("records.py").exclude(wt)
+    return os.path.join(wt, ".clerk-dev", FILENAME)
 
-if __name__ == "__main__": LIST.main("deferred.py", USAGE)
+def read(p):
+    its = items.read(p, list(FIELDS))
+    for it in its:
+        f = it["fields"]
+        it["meta"] = [f"{k}: {f[k]}" for k in FIELDS if f.get(k)]
+    return its
+
+def write(p, its): items.write(p, its, HEADER, order=FIELDS)
+
+def add(its, text, source, instruction_value=None, **extra):
+    iid = ids.item(ids.DEFERRED, ids.next_number([i["id"] for i in its], ids.DEFERRED))
+    f = {"From": source, **{k: extra.get(k) or "" for k in EXTRAS}, "Added": datetime.date.today().isoformat(),
+         "Instruction": items.instruction(instruction_value) if instruction_value else "", "Status": "open"}
+    its.append({"done": False, "id": iid, "text": text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
+    return iid
+
+def main():
+    ap = argparse.ArgumentParser(prog="deferred.py", description=USAGE, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sp = ap.add_subparsers(dest="cmd", required=True)
+    a = sp.add_parser("add"); a.add_argument("wt"); a.add_argument("text"); a.add_argument("--from", dest="src", required=True)
+    for k in EXTRAS: a.add_argument(f"--{k.lower()}", dest=k, required=k in REQUIRED)
+    a.add_argument("--instruction")
+    l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
+    c = sp.add_parser("close"); c.add_argument("wt"); c.add_argument("iid"); c.add_argument("--ref")
+    c.add_argument("--status", choices=CLOSING_STATUSES, default="fixed")
+    r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("iid")
+    s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("iid"); s.add_argument("instruction"); s.add_argument("--note")
+    args = ap.parse_args()
+    if args.cmd == "add":
+        for k in REQUIRED:
+            if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
+    load_script("records.py").guard(args.wt)
+    p = path(args.wt); its = read(p)
+    if args.cmd == "add":
+        iid = add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in EXTRAS})
+        write(p, its); print(f"{iid} added to {p}")
+    elif args.cmd == "list":
+        for i in its:
+            if args.open and i["done"]: continue
+            print(f"{'x' if i['done'] else ' '} {i['id']}. {i['text']}  [{'; '.join(i['meta'])}]")
+    else:
+        it = items.find(its, args.iid)
+        if args.cmd == "set":
+            items.set_instruction(it, args.instruction, args.note)
+            write(p, its); print(f"{it['id']}: {it['fields']['Instruction']}")
+        else:
+            if args.cmd == "close": items.close(it, args.status, args.ref)
+            else: items.reopen(it)
+            write(p, its); print(f"{args.iid} {'closed (' + args.status + ')' if args.cmd == 'close' else 'reopened'}")
+
+if __name__ == "__main__": main()

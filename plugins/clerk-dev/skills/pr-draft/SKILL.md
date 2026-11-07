@@ -7,7 +7,7 @@ allowed-tools: Bash(git *), Bash(gh pr view *), Bash(gh pr create *), Bash(gh pr
 
 # Pull request descriptions
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, F3, Q-3, PASS-3, IDEA-7, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -87,7 +87,9 @@ For each repository, read:
   records (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py list <worktree>
   --active`, then the briefs, decisions, and designs that bear on this
   repository), the open items in briefs (`records.py digest <worktree>`), and
-  the open items in `.clerk-dev/deferred.md` and `.clerk-dev/followups.md`;
+  the open items in `.clerk-dev/deferred.md`, and the worktree's open backlog
+  follow-ups this branch owes (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py
+  list <worktree> --owed`);
   these become Left out on purpose items. Keep what a reviewer would weigh
   before merging: wrong behavior and undecided design. Gaps (what the change
   does not cover yet) stay out of the draft; they go in the report, for the

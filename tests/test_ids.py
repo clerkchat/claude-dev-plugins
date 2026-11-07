@@ -28,8 +28,8 @@ class FormatTests(unittest.TestCase):
             ids.record(3, None)
 
     def test_items(self):
-        expected = {ids.IDEA: "IDEA-29", ids.PASS: "PASS-29", ids.BUILD: "BUILD-29", ids.MILESTONE: "MILE-29",
-                    ids.DEFERRED: "DEFER-29", ids.QUESTION: "Q-29", ids.FOLLOWUP: "F29"}
+        expected = {ids.PASS: "PASS-29", ids.BUILD: "BUILD-29", ids.MILESTONE: "MILE-29",
+                    ids.DEFERRED: "DEFER-29", ids.QUESTION: "Q-29", ids.BACKLOG: "BL-29"}
         self.assertEqual({kind: ids.item(kind, 29) for kind in ids.ITEMS}, expected)
 
     def test_parts_of_a_record(self):
@@ -72,15 +72,16 @@ class ParseTests(unittest.TestCase):
 
     def test_not_ids(self):
         for text in ("", None, "R", "X3", "r7", "R7.", "R7-", "R7-1.Q", "R7-1.P2", "B", "3", " R7", "R7.3.4",
-                     "dec-39", "DEC39", "DEC-", "BRIEF-34.7.1", "IDEAS29", "MILE1", "Q-", "F-3", "REC-3"):
+                     "dec-39", "DEC39", "DEC-", "BRIEF-34.7.1", "IDEAS29", "MILE1", "Q-", "F-3", "REC-3", "BL4", "BL-", "B-4"):
             with self.subTest(text=text):
                 self.assertIsNone(ids.parse(text))
 
     def test_kind_and_number(self):
         self.assertEqual(ids.kind_of("MILE-1"), ids.MILESTONE)
+        self.assertEqual(ids.kind_of("BL-4"), ids.BACKLOG)
+        self.assertEqual(ids.kind_of("B4"), ids.BUILD)
         self.assertEqual(ids.kind_of("PLAN-8.2"), ids.REF)
         self.assertEqual(ids.kind_of("IDEAS-1"), ids.RECORD)
-        self.assertEqual(ids.kind_of("IDEA-1"), ids.IDEA)
         self.assertIsNone(ids.kind_of("C"))
         self.assertEqual(ids.number("BUILD-30"), 30)
         self.assertEqual(ids.number("BRIEF-34.7"), 34)
@@ -93,8 +94,7 @@ class ParseTests(unittest.TestCase):
         self.assertTrue(ids.same("DEC-7", "DEC-07"))
         self.assertTrue(ids.same("PLAN-37.8", "DESIGN-37.8"))
         self.assertFalse(ids.same("DEC-7", "DEC-7.1"))
-        self.assertFalse(ids.same("F3", "DEFER-3"))
-        self.assertFalse(ids.same("IDEA-1", "IDEAS-1"))
+        self.assertFalse(ids.same("BL-3", "DEFER-3"))
         self.assertFalse(ids.same("X3", "X3"))
         self.assertFalse(ids.same(None, None))
 
@@ -113,6 +113,7 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(ids.next_number(["BUILD-1", "MILE-4", "BUILD-2"], ids.BUILD), 3)
         self.assertEqual(ids.next_number(["BUILD-1", "MILE-4", "BUILD-2"], ids.MILESTONE), 5)
         self.assertEqual(ids.next_number(["DEC-3", "BRIEF-10"], ids.RECORD), 11)
+        self.assertEqual(ids.next_number(["BL-1", "BUILD-9", "BL-3"], ids.BACKLOG), 4)
 
 
 class SurveyTests(unittest.TestCase):
@@ -136,7 +137,7 @@ class SurveyTests(unittest.TestCase):
 class AliasTests(unittest.TestCase):
     OLD_AND_NEW = [
         ("R36", "DEC-36"), ("R34.7", "BRIEF-34.7"), ("R13-1", "BRIEF-13-1"), ("R13-1.Q6", "BRIEF-13-1.Q-6"),
-        ("I29", "IDEA-29"), ("P2", "PASS-2"), ("B30", "BUILD-30"), ("M1", "MILE-1"), ("D6", "DEFER-6"), ("Q3", "Q-3"),
+        ("P2", "PASS-2"), ("B30", "BUILD-30"), ("M1", "MILE-1"), ("D6", "DEFER-6"), ("Q3", "Q-3"),
     ]
 
     def test_every_old_form_reads_as_its_new_form(self):
@@ -156,9 +157,10 @@ class AliasTests(unittest.TestCase):
         written = [*ids.RECORD_LEADS.values(), *ids.ITEM_LEADS.values()]
         self.assertFalse(set(ids.ALIASES) & set(written))
 
-    def test_follow_ups_keep_their_form(self):
-        self.assertEqual(ids.item(ids.FOLLOWUP, 3), "F3")
-        self.assertEqual(ids.kind_of("F3"), ids.FOLLOWUP)
+    def test_the_old_idea_and_follow_up_forms_are_not_ids(self):
+        for text in ("IDEA-29", "I29", "F3"):
+            with self.subTest(text=text):
+                self.assertIsNone(ids.parse(text))
 
     def test_next_number_counts_both_forms(self):
         self.assertEqual(ids.next_number(["B1", "BUILD-2", "B7"], ids.BUILD), 8)
@@ -168,8 +170,8 @@ class AliasTests(unittest.TestCase):
 class InputTests(unittest.TestCase):
     def test_normalize_uppercases_and_adds_the_missing_dash(self):
         cases = {"dec39": "DEC-39", "brief-34.7": "BRIEF-34.7", "brief34.7": "BRIEF-34.7", "storm1": "STORM-1", "ideas1": "IDEAS-1",
-                 "idea29": "IDEA-29", "mile1": "MILE-1", "q3": "Q-3", " pass2 ": "PASS-2", "r7.2": "R7.2",
-                 "b3": "B3", "f3": "F3", "brief13-1.q6": "BRIEF-13-1.Q6", "c": "C"}
+                 "mile1": "MILE-1", "q3": "Q-3", " pass2 ": "PASS-2", "r7.2": "R7.2",
+                 "b3": "B3", "bl4": "BL-4", "BL4": "BL-4", "brief13-1.q6": "BRIEF-13-1.Q6", "c": "C"}
         for text, want in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(ids.normalize(text), want)
@@ -217,15 +219,35 @@ class CanonicalTests(unittest.TestCase):
 
     def test_a_brainstorm_written_before_storm_takes_the_storm_prefix(self):
         self.assertEqual(ids.canonical("IDEAS-1", {1: "brainstorm"}), "STORM-1")
-        self.assertEqual(ids.rewrite("From: IDEAS-1, IDEA-2", {1: "brainstorm"}), "From: STORM-1, IDEA-2")
+        self.assertEqual(ids.rewrite("From: IDEAS-1, P2", {1: "brainstorm"}), "From: STORM-1, PASS-2")
 
     def test_items_take_their_new_form(self):
-        self.assertEqual(ids.canonical("I30", {}), "IDEA-30")
-        self.assertEqual(ids.canonical("F3", {}), "F3")
+        self.assertEqual(ids.canonical("P30", {}), "PASS-30")
 
     def test_rewrite_canonicalizes_every_id_in_a_text(self):
-        text = "R39, R34.7 and I30, from this session; not R99 or XR7"
-        self.assertEqual(ids.rewrite(text, self.TYPES), "DEC-39, BRIEF-34.7 and IDEA-30, from this session; not R99 or XR7")
+        text = "R39, R34.7 and P30, from this session; not R99 or XR7"
+        self.assertEqual(ids.rewrite(text, self.TYPES), "DEC-39, BRIEF-34.7 and PASS-30, from this session; not R99 or XR7")
+
+
+class QualifiedBacklogIdTests(unittest.TestCase):
+    def test_a_repository_and_a_backlog_id_parse_as_one_id(self):
+        self.assertEqual(ids.parse("web-app:BL-4"), ids.Id(ids.BACKLOG, 4, repo="web-app"))
+
+    def test_it_renders_with_its_repository(self):
+        self.assertEqual(ids.render(ids.parse("web-app:BL-4")), "web-app:BL-4")
+
+    def test_normalize_keeps_the_repositorys_case(self):
+        self.assertEqual(ids.normalize("Api:bl4"), "Api:BL-4")
+
+    def test_it_is_not_the_same_as_the_unqualified_id(self):
+        self.assertFalse(ids.same("api:BL-4", "BL-4"))
+        self.assertTrue(ids.same("api:BL-4", "api:BL-4"))
+
+    def test_only_a_backlog_id_takes_a_repository(self):
+        self.assertIsNone(ids.parse("api:DEC-4"))
+
+    def test_mentions_find_it_whole(self):
+        self.assertEqual(ids.mentions("see api:BL-4 and BL-5", ids.BACKLOG), ["api:BL-4", "BL-5"])
 
 
 class PatternTests(unittest.TestCase):

@@ -25,7 +25,7 @@ Prints a short Markdown summary:
     resolution note names it), not covered by a narrow review, not
     formatting only, not a merge; plus staged and unstaged changes;
   - this worktree's open follow-ups, marking the ones added since the last
-    status (remembered in .clerk-dev/status-seen);
+    status (remembered in .clerk-dev/status-seen-backlog);
   - open follow-ups in the other worktrees of .clerk-dev/workspace.md;
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
@@ -63,17 +63,18 @@ gone or whose plan was superseded or discarded. It changes nothing.
 --focus blockers prints the short list of what blocks the work: handoffs stopped
 on a question, settle-first design questions, open follow-ups here, and open
 findings in the review's "Fix before merging" section, whatever their mark,
-then the next steps for each. It leaves .clerk-dev/status-seen untouched.
+then the next steps for each. It leaves .clerk-dev/status-seen-backlog untouched.
 
---no-mark leaves .clerk-dev/status-seen untouched.
+--no-mark leaves .clerk-dev/status-seen-backlog untouched.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
 import ids
 import run_files as rf
 
 sf = load_script("stale-findings.py")
+bl = load_script("backlog.py")
 not_done = load_script("items.py").not_done
 
 SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
@@ -92,28 +93,10 @@ def short(text, n=90):
     text = re.sub(r"\s+", " ", text).strip()
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
-def parse_followups(wt):
-    fu = load_script("followups.py")
-    return [{"id": ids.number(it["id"]), "done": it["done"], "text": it["text"],
-             "from": it["fields"].get("From", ""), "added": it["fields"].get("Added", "")}
-            for it in fu.read(os.path.join(wt, ".clerk-dev", "followups.md"))]
+def origin_repo(it): return re.split(r"[ @]", it.get("origin", ""))[0]
 
 def workspace_rows(wt):
-    """(repo name, real worktree path) for each row of the workspace table in
-    .clerk-dev/workspace.md; empty when there is no such file."""
-    return [(n, os.path.realpath(os.path.expanduser(p))) for n, p in load_script("records.py").workspace(wt)[1].items()]
-
-def repo_name(wt, rows):
-    """The repository's name in follow-up `From:` lines: its row in the review
-    workspace, else the last segment of its origin URL, else the directory of
-    its main checkout."""
-    real = os.path.realpath(wt)
-    for name, path in rows:
-        if path == real: return name
-    url = git(wt, "remote", "get-url", "origin")
-    if url: return re.sub(r"\.git$", "", url.rstrip("/")).rsplit("/", 1)[-1].rsplit(":", 1)[-1]
-    common = git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    return os.path.basename(os.path.dirname(common)) if common else os.path.basename(real)
+    return {n: os.path.realpath(os.path.expanduser(p)) for n, p in load_script("records.py").workspace(wt)[1].items()}
 
 def has_feature(p):
     return os.path.exists(os.path.join(p, ".clerk-dev", "feature", "feature.md"))
@@ -122,17 +105,17 @@ def hub_feature_elsewhere(wt, rows):
     """A worktree holding feature records that names this one in its review
     workspace, or that this one's workspace names: the hub it should point at."""
     real = os.path.realpath(wt)
-    near = [os.path.realpath(l[9:]) for l in git(wt, "worktree", "list", "--porcelain").splitlines() if l.startswith("worktree ")]
-    mine = {p for _, p in rows}
-    for p in dict.fromkeys([p for _, p in rows] + near):
-        if p != real and os.path.isdir(p) and has_feature(p) and (p in mine or real in {q for _, q in workspace_rows(p)}): return p
+    near = [w.path for w in worktrees(wt)]
+    mine = set(rows.values())
+    for p in dict.fromkeys([*rows.values(), *near]):
+        if p != real and os.path.isdir(p) and has_feature(p) and (p in mine or real in workspace_rows(p).values()): return p
 
 def other_repos(wt, rows, d):
     """Repositories other than this one that its active records and open
     follow-ups name."""
-    rc = load_script("records.py"); me = repo_name(wt, rows)
+    rc = load_script("records.py"); me = this_repo(wt, rows)
     named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
-    named |= {re.split(r"[ @]", i["from"])[0] for i in not_done(parse_followups(wt)) if i["from"]}
+    named |= {origin_repo(i) for i in bl.owed_followups(wt)}
     return sorted(n for n in named if n and n != me)
 
 def plan_gaps(d):
@@ -169,10 +152,10 @@ def setup_gaps(wt, rows, built):
     rc = load_script("records.py"); gaps = []
     purpose, _ = rc.branch_notes(wt)
     if not purpose: gaps.append("Purpose: " + ("the branch notes have no Purpose" if purpose is not None else "no .clerk-dev/branch-notes.md") + "; draft it as tracking.md's Branch notes describes and show it to the user")
-    missing = [(n, p) for n, p in rows if not os.path.isdir(p)]
+    missing = [(n, p) for n, p in rows.items() if not os.path.isdir(p)]
     gaps += [f"workspace row {n}: {p} does not exist; fix the row in .clerk-dev/workspace.md or create the worktree" for n, p in missing]
     declared, _ = rc.workspace(wt)
-    if declared and os.path.realpath(os.path.expanduser(declared)) not in {p for _, p in rows} and not os.path.isdir(os.path.expanduser(declared)):
+    if declared and os.path.realpath(os.path.expanduser(declared)) not in rows.values() and not os.path.isdir(os.path.expanduser(declared)):
         gaps.append(f"hub {declared} (the Hub line of .clerk-dev/workspace.md) does not exist; fix the line")
     try: d = rc.fdir(wt)
     except SystemExit: d = None
@@ -184,7 +167,7 @@ def setup_gaps(wt, rows, built):
         elif built or passes: gaps.append("this worktree has a " + ("build log" if built else "pass log") + " but no feature; start one: records.py start <worktree> \"<name>\" (the feature skill)")
     named = other_repos(wt, rows, d)
     if named:
-        have = {n for n, _ in rows}
+        have = set(rows)
         if not rows: gaps.append(f"records or follow-ups name {', '.join(named)} but there is no review workspace; set one up as skills/review/workspace-manifest.md describes")
         elif set(named) - have: gaps.append(f"records or follow-ups name {', '.join(sorted(set(named) - have))} but the review workspace has no row for {'it' if len(set(named) - have) == 1 else 'them'}; add {'one' if len(set(named) - have) == 1 else 'rows'}")
     if featured: gaps += plan_gaps(d) + milestone_drift(wt, d, built)
@@ -252,18 +235,80 @@ def pass_word(e):
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
 
-def seen_path(wt): return os.path.join(wt, ".clerk-dev", "status-seen")
+def seen_path(wt): return os.path.join(wt, ".clerk-dev", "status-seen-backlog")
 
-def seen_followups(wt):
-    return int(open(seen_path(wt)).read().strip() or 0) if os.path.exists(seen_path(wt)) else 0
+def read_seen(wt):
+    p = seen_path(wt)
+    pairs = [line.split() for line in open(p, encoding="utf-8").read().splitlines()] if os.path.exists(p) else []
+    return {pair[0]: int(pair[1]) for pair in pairs if len(pair) == 2 and pair[1].isdigit()}
+
+def write_seen(wt, seen):
+    try: open(seen_path(wt), "w", encoding="utf-8").write("".join(f"{repo} {n}\n" for repo, n in sorted(seen.items())))
+    except OSError: pass
+
+def highest(its):
+    out = {}
+    for it in its: out[it["owner"]] = max(out.get(it["owner"], 0), ids.number(it["id"]))
+    return out
+
+def is_new(it, seen): return it["owner"] in seen and ids.number(it["id"]) > seen[it["owner"]]
+
+DETACHED_NOTE = "HEAD is detached; follow-ups owed here not shown."
+
+def detached(wt): return not bl.branch_of(wt)
+
+def followups_step(open_items): return f"Work the open follow-up{plural(open_items)} ({len(open_items)}): \"go through the follow-ups\"."
 
 def followup_lines(open_items, seen):
-    new = [i for i in open_items if i["id"] > seen]
-    lines = [f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if seen and new else "") + "."]
+    new = [i for i in open_items if is_new(i, seen)]
+    lines = [f"**Follow-ups owed here:** {len(open_items)} open" + (f", {len(new)} new since the last status" if new else "") + "."]
     for i in open_items:
-        tag = " (new)" if seen and i["id"] > seen else ""
-        lines.append(f"- {ids.item(ids.FOLLOWUP, i['id'])}: {short(i['text'])} ({i['from'] or 'source unknown'}){tag}")
+        tag = " (new)" if is_new(i, seen) else ""
+        lines.append(f"- {i['qualified']}: {short(i.get('title', ''))} ({i.get('origin') or 'source unknown'}){tag}")
     return lines
+
+
+def item_line(it, *notes): return f"{it['qualified']}: {short(it.get('title', ''), 80)} ({', '.join([bl.kind_name(it), *notes])})"
+
+def them(xs): return "it" if len(xs) == 1 else "them"
+
+def listed(its): return ", ".join(it["qualified"] for it in its)
+
+def kind_counts(its):
+    counts = [(bl.NAMES[k], sum(1 for it in its if it.get("kind") == k)) for k in bl.KINDS]
+    return ", ".join(f"{n} {name}{plural(n)}" for name, n in counts if n)
+
+def gone_line(it, main): return f"- gone: {item_line(it, it['removes'] + ' is gone from ' + main)}"
+
+def cleanup_lines(reader):
+    try: main, gone = bl.gone_cleanups(reader)
+    except SystemExit as e: return [f"- cleanups not checked: {e}"], []
+    if not gone: return [], []
+    main = bl.remote_ref(main)
+    lines = [gone_line(it, main) for it in gone] + [f"- {bl.fetch_line(reader.own)}"]
+    return lines, [f"Mark the cleanup{plural(gone)} {listed(gone)} done: {'its' if len(gone) == 1 else 'their'} code is gone from {main}."]
+
+def oldest(its): return sorted(its, key=lambda it: (it.get("date", ""), ids.number(it["id"])))[:3]
+
+def takeable(its):
+    return [it for it in its if it.get("kind") == bl.FOLLOWUP and (it.get("scope") == bl.NEW or it["orphaned"])]
+
+def backlog_section(wt, reader, own, out):
+    its = list(filter(bl.is_open, own))
+    if not its: return []
+    lines = [f"**Backlog:** {len(its)} open ({kind_counts(its)})."]
+    lines += [f"- oldest: {item_line(it, 'since ' + (it.get('date') or 'an unknown date'))}" for it in oldest(its)]
+    orphans = [it for it in its if it["orphaned"]]
+    lines += [f"- orphaned: {item_line(it, 'from ' + it['scope'] + ', branch gone')}" for it in orphans]
+    steps = [f"Rescope the orphaned item{plural(orphans)} {listed(orphans)} to new work, or drop {them(orphans)} with a reason."] if orphans else []
+    clines, csteps = cleanup_lines(reader)
+    lines += clines; steps += csteps
+    branch = bl.branch_of(wt)
+    up = takeable(its) if branch else []
+    lines += [f"- could take up here: {item_line(it, 'new work' if it.get('scope') == bl.NEW else 'orphaned', it.get('origin') or 'source unknown')}" for it in up]
+    if up: steps.append(f"Take up the follow-up{plural(up)} {listed(up)} on this branch by rescoping {them(up)} to {branch}, or leave {them(up)} for later.")
+    out += [""] + lines
+    return steps
 
 def number_list(nums):
     return f"{', '.join(nums[:12])}{', …' if len(nums) > 12 else ''}"
@@ -412,14 +457,12 @@ def builders(wt, rows):
     except SystemExit: hub = ""
     out = list(related_worktrees(wt, rows))
     seen = {os.path.realpath(p) for _, p in out} | {os.path.realpath(wt)}
-    for line in git(wt, "worktree", "list", "--porcelain").splitlines():
-        if not line.startswith("worktree "): continue
-        p = os.path.realpath(line[9:])
+    for p in (w.path for w in worktrees(wt)):
         if p in seen or not os.path.isdir(p): continue
         try: theirs = os.path.realpath(rc.hub(p))
         except SystemExit: continue
         if hub and theirs == hub and p != hub:
-            out.append((f"{repo_name(p, [])} ({os.path.basename(p)})", p)); seen.add(p)
+            out.append((f"{this_repo(p, {})} ({os.path.basename(p)})", p)); seen.add(p)
     return out
 
 def logged_briefs(canon, entries, passes=()):
@@ -433,7 +476,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     bd = load_script("build.py"); rc = load_script("records.py")
     first, later, elsewhere = build_block(wt, out, unreviewed, mine, theirs, render=bd.checklist_lines)
     entries = mine.entries
-    me = repo_name(wt, rows)
+    me = this_repo(wt, rows)
     try: d = rc.fdir(wt)
     except SystemExit: d = None
     recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
@@ -506,13 +549,7 @@ def overview_parts(d):
     parts = {"plan": [], "gaps": [], "disagreements": [], "areas": {}}
     if not os.path.exists(p): return parts
     text = open(p, encoding="utf-8").read()
-    plan = section(text, "Plan")
-    rows = [l for l in plan.splitlines() if l.strip().startswith("|")]
-    if len(rows) > 2:
-        head = [c.strip().lower() for c in rows[0].strip().strip("|").split("|")]
-        for l in rows[2:]:
-            cells = [c.strip() for c in l.strip().strip("|").split("|")]
-            parts["plan"].append(dict(zip(head, cells)))
+    parts["plan"] = [{k.lower(): v for k, v in row.items()} for row in table_rows(section(text, "Plan"))]
     op = section(text, "Open")
     if "### Disagreements" in op:
         parts["disagreements"] = [b for b in bullets(section(op, "Disagreements", 3)) if b.lower() != "none."]
@@ -629,10 +666,10 @@ def design_view(wt, out, logs):
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(d))]
     gl = rc.rules(d)
     if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural(gl)}; say \"what guidance have I given\" to list them."]
-    parked = not_done(rc.ideas(d))
+    parked = bl.feature_ideas(wt)
     if parked:
         by = {}
-        for i in parked: by.setdefault(i["fields"].get("Area") or "feature-wide", []).append(i["id"])
+        for i in parked: by.setdefault(i.get("area") or "feature-wide", []).append(i["id"])
         out += ["", f"**Parked ideas:** {len(parked)} ({'; '.join(f'{a}: {len(v)}' for a, v in by.items())}); say \"what ideas did we park\" to list them with why and when."]
     settle_all = list(dict.fromkeys(settle_all))
     first = [f"Settle the settle-first design questions: {', '.join(settle_all)} (\"walk the design questions\")."] if settle_all else []
@@ -684,8 +721,8 @@ def area_view(wt, out, name, logs):
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
     gl = [(r, rule) for r, rule in rc.rules(d, area or None) if (r.get("area") or "") == area]
     if gl: out += ["", f"**Guidance:** {len(gl)}"] + [f"- {r['id']}: {short(rule, 110)}" for r, rule in gl]
-    parked = [i for i in not_done(rc.ideas(d)) if (i["fields"].get("Area") or "") == area]
-    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['id']}: {short(i['text'], 90)}" + (f" When: {i['fields']['When']}." if i["fields"].get("When") else "") for i in parked]
+    parked = [i for i in bl.feature_ideas(wt) if (i.get("area") or "") == area]
+    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['qualified']}: {short(i.get('title', ''), 90)}" + (f" When: {bl.prose(i, 'when')}." if bl.prose(i, "when") else "") for i in parked]
     specs = [spec] if spec else [r for r in live if r.get("type") == "brief"]
     prog, pas = [], []
     for log in logs:
@@ -748,7 +785,8 @@ def blockers_view(wt, out, logs, run, have_run):
         if not c["open"]: continue
         sfq = open_questions(d, c)[1]
         if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
-    open_items = not_done(parse_followups(wt))
+    open_items = bl.owed_followups(wt)
+    hidden = detached(wt)
     fix = []
     if have_run:
         status, instr, numbers = sf.state(run)
@@ -760,13 +798,14 @@ def blockers_view(wt, out, logs, run, have_run):
     if settle:
         out += ["", "**Settle-first design questions:**"] + [f"- {name}: {', '.join(qs)}" for name, qs in settle]
         steps.append(f"Settle {', '.join(q for _, qs in settle for q in qs)} (\"walk the design questions\").")
-    if open_items:
-        out += [""] + followup_lines(open_items, seen_followups(wt))
-        steps.append(f"Work the open follow-up{plural(open_items)} ({len(open_items)}): \"go through the follow-ups\".")
+    if hidden: out += ["", DETACHED_NOTE]
+    elif open_items:
+        out += [""] + followup_lines(open_items, read_seen(wt))
+        steps.append(followups_step(open_items))
     if fix:
         out += ["", f"**Findings to fix before merging:** {len(fix)} ({number_list(fix)})"]
         steps.append(f"Mark the finding{plural(fix)} in {SECTION_NAMES['fix']} in `.clerk-dev/{os.path.basename(run)}/report.md`, then fix {'it' if len(fix) == 1 else 'them'}: \"work the queue\".")
-    if not steps: out += ["", "Nothing blocking."]
+    if not steps and not hidden: out += ["", "Nothing blocking."]
     return steps
 
 def final_pass_stands(run):
@@ -777,62 +816,17 @@ def final_pass_stands(run):
 
 def related_worktrees(wt, rows):
     real = os.path.realpath(wt)
-    return [(name, path) for name, path in rows if path != real and os.path.isdir(path)]
+    return [(name, path) for name, path in rows.items() if path != real and os.path.isdir(path)]
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("worktree", nargs="?", default=".")
-    ap.add_argument("--run"); ap.add_argument("--no-mark", action="store_true")
-    ap.add_argument("--focus", choices=("all", "design", "implementation", "review", "blockers"), default="all",
-                    help="design: readiness to build; implementation: building progress and its next steps only; review: the review only; blockers: what blocks the work")
-    ap.add_argument("--area", help="one area, or a brief id for one piece and its area")
-    ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
-    a = ap.parse_args()
-    wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
-    load_script("records.py").guard(wt)
-    run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
-    have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
-    branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
-    head = git(wt, "rev-parse", "HEAD")
-    out, steps = [], []
-    rows = workspace_rows(wt)
-    mine = read_build(wt)
-    gaps = setup_gaps(wt, rows, mine.entries)
-    if a.setup:
-        emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
-    theirs = builder_logs(wt, rows)
-    lead = {"implementation": "the implementation in ", "design": "the design of "}.get(a.focus, "")
-    out.append(f"## What blocks {repo_name(wt, rows)} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{repo_name(wt, rows)} stands ({branch})\n")
-    out += setup_lines(gaps)
-    if a.focus == "blockers":
-        steps = blockers_view(wt, out, [mine] + theirs, run, have_run)
-        out += [""] + ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else []
-        emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
-    if a.focus == "design" or a.area:
-        logs = [mine] + theirs
-        steps = area_view(wt, out, a.area, logs) if a.area else design_view(wt, out, logs)
-        out.append("")
-        out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(dict.fromkeys(steps), 1)] if steps else ["**Next:** nothing pending."]
-        emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
+class Review(NamedTuple):
+    status: dict
+    instr: dict
+    numbers: dict
+    unreviewed: list
+    fixes: int
+    staged: list
 
-    # Review run and commits since it
-    status = instr = numbers = {}
-    reviewed = ""
-    if have_run:
-        target = open(os.path.join(run, "target.txt")).read().splitlines()
-        reviewed = target[2].strip() if len(target) > 2 else ""
-        status, instr, numbers = sf.state(run)
-        label = os.path.basename(run)
-        when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(run, "report.md"))).strftime("%Y-%m-%d %H:%M") \
-            if os.path.exists(os.path.join(run, "report.md")) else "not finished"
-        out.append(f"**Review:** `.clerk-dev/{label}` of {target[0] if target else '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
-    else:
-        out.append("**Review:** none yet in this worktree.")
-        steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
-    feature = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest-feature"))
-    if os.path.exists(os.path.join(feature, "report.md")):
-        out.append(f"**Feature review:** `.clerk-dev/{os.path.basename(feature)}/report.md` (the cross-repository check; `.clerk-dev/latest-feature`).")
-
+def since_review(wt, run, reviewed, head, out, steps):
     unreviewed, counts_fix = [], 0
     if reviewed and subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", reviewed, head]).returncode == 0:
         counts = {"fix": 0, "follow-up": 0, "narrow": 0, "format": 0, "merge": 0}
@@ -851,127 +845,196 @@ def main():
     elif reviewed:
         out.append(f"**Since the review:** the reviewed commit `{reviewed[:9]}` is not an ancestor of HEAD (rebased?); a full review is needed.")
         steps.append("The branch was rebased since the review: run `/clerk-dev:review --full`.")
+    return unreviewed, counts_fix
 
+def review_section(wt, run, have_run, head, out):
+    steps = []
+    status = instr = numbers = {}
+    reviewed = ""
+    if have_run:
+        target = open(os.path.join(run, "target.txt")).read().splitlines()
+        reviewed = target[2].strip() if len(target) > 2 else ""
+        status, instr, numbers = sf.state(run)
+        label = os.path.basename(run)
+        when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(run, "report.md"))).strftime("%Y-%m-%d %H:%M") \
+            if os.path.exists(os.path.join(run, "report.md")) else "not finished"
+        out.append(f"**Review:** `.clerk-dev/{label}` of {target[0] if target else '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
+    else:
+        out.append("**Review:** none yet in this worktree.")
+        steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
+    feature = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest-feature"))
+    if os.path.exists(os.path.join(feature, "report.md")):
+        out.append(f"**Feature review:** `.clerk-dev/{os.path.basename(feature)}/report.md` (the cross-repository check; `.clerk-dev/latest-feature`).")
+    unreviewed, counts_fix = since_review(wt, run, reviewed, head, out, steps)
     staged = git(wt, "diff", "--cached", "--name-only").splitlines()
     unstaged = git(wt, "diff", "--name-only").splitlines()
     if staged or unstaged:
         out.append(f"**Working tree:** {len(staged)} files staged, {len(unstaged)} with unstaged changes.")
+    return Review(status, instr, numbers, unreviewed, counts_fix, staged), steps
 
-    # Follow-ups here
-    items = parse_followups(wt)
-    seen = seen_followups(wt)
-    open_items = not_done(items)
-    out.append("")
+def followups_here(wt, reader, own, mark, out):
+    if detached(wt):
+        out.append(DETACHED_NOTE); return []
+    items = bl.owed_followups(wt, include_closed=True)
+    open_items = list(filter(bl.is_open, items))
     if open_items:
-        out += followup_lines(open_items, seen)
+        out += followup_lines(open_items, read_seen(wt))
     else:
         out.append(f"**Follow-ups owed here:** none open ({len(items)} done)." if items else "**Follow-ups owed here:** none.")
-    if items and not a.no_mark:
-        try: open(seen_path(wt), "w").write(str(max(i["id"] for i in items)) + "\n")
-        except OSError: pass
-    out += deferred_lines(wt)
+    if own and mark: write_seen(wt, {reader.own.name: 0, **read_seen(wt), **highest(open_items)})
+    return open_items
 
-    # Follow-ups elsewhere
-    me = repo_name(wt, rows)
+def related_followups(wt, rows):
+    me = this_repo(wt, rows)
     rel = []
     for name, other in related_worktrees(wt, rows):
-        its = not_done(parse_followups(other))
-        from_me = [i for i in its if re.split(r"[ @]", i["from"])[0] == me]
+        if detached(other):
+            rel.append(f"{name} not shown (HEAD is detached)"); continue
+        its = bl.owed_followups(other)
+        from_me = [i for i in its if origin_repo(i) == me]
         rel.append(f"{name} {len(its)} open" + (f" ({len(from_me)} from {me})" if its else ""))
-    if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")
+    return rel
 
-    # Passes here
+def followups_section(wt, rows, reader, own, mark, out):
+    out.append("")
+    open_items = followups_here(wt, reader, own, mark, out)
+    out += deferred_lines(wt)
+    rel = related_followups(wt, rows)
+    if rel: out.append(f"**Follow-ups owed by related worktrees:** {'; '.join(rel)}.")
+    return open_items
+
+def pass_step(wt, e):
+    st = e["f"].get("Status")
+    if st == "open": return f"Finish pass {e['id']} ({e['title']}), then \"end the pass\"."
+    if st == "ended" and e["f"].get("Note") != "no commits": return f"Check pass {e['id']}: \"check the pass\"."
+    if st != "checked": return None
+    label = (e["f"].get("Check") or "").split(";")[0].strip()
+    prun = os.path.join(wt, ".clerk-dev", label)
+    if not label or not os.path.exists(os.path.join(prun, "merged.md")): return None
+    pst, pin, pnum = sf.state(prun)
+    left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
+    return f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
+
+def passes_section(wt, out):
     passes, perr = read_passes(wt)
-    pass_steps = []
     if perr:
         out.append(f"**Passes:** the log could not be read: {perr}")
     elif passes:
-        recent = passes[-5:]
         more = "; earlier ones in `.clerk-dev/passes.md`" if len(passes) > 5 else ""
         out.append(f"**Passes:** {len(passes)} ({'; '.join(pass_line(e) for e in passes[-5:])}{more}).")
-        for e in passes:
-            st = e["f"].get("Status")
-            if st == "open": pass_steps.append(f"Finish pass {e['id']} ({e['title']}), then \"end the pass\".")
-            elif st == "ended" and e["f"].get("Note") != "no commits": pass_steps.append(f"Check pass {e['id']}: \"check the pass\".")
-            elif st == "checked":
-                label = (e["f"].get("Check") or "").split(";")[0].strip()
-                prun = os.path.join(wt, ".clerk-dev", label)
-                if label and os.path.exists(os.path.join(prun, "merged.md")):
-                    pst, pin, pnum = sf.state(prun)
-                    left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
-                    if left: pass_steps.append(f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`.")
+    return passes, [s for s in (pass_step(wt, e) for e in passes) if s]
+
+def findings_section(wt, run, review, open_items, head, out):
+    status, instr, numbers, unreviewed = review.status, review.instr, review.numbers, review.unreviewed
+    findings = sf.load_findings(run)
+    unmarked, queue, discuss, post, inprog, new, _ = finding_groups(run, status, instr, numbers)
+    try:
+        _, moved = sf.candidates(run, wt)
+    except SystemExit:
+        moved = []
+    closed = sum(1 for m in findings if m in numbers and not sf.is_open(m, status, instr))
+    out.append("")
+    out.append(f"**Findings:** {sum(1 for m in findings if m in numbers)} in the report, {closed} closed (fixed, won't fix, deferred, ignored).")
+    for sec, nums in unmarked.items():
+        nums.sort(key=int)
+        out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({number_list(nums)})")
+    if new:
+        new.sort(key=int)
+        out.append(f"- new since the first report, unmarked: {len(new)} ({number_list(new)}); `grep -n '\\[new\\]' report.md` finds them")
+    if queue: out.append(f"- marked to fix, not yet fixed: {len(queue)}")
+    if discuss: out.append(f"- marked to discuss: {len(discuss)}")
+    if post: out.append(f"- marked to post, not yet posted or changed since posting: {len(post)} ({number_list(sorted(post, key=int))})")
+    if inprog: out.append(f"- fix in progress (partly fixed or tests failed): {', '.join(sorted(inprog, key=int))}")
+    if moved: out.append(f"- open findings whose code changed since the review and not yet cross-checked: {len(moved)}")
+
+    first = [followups_step(open_items)] if open_items else []
+    steps = []
+    if review.staged: steps.append("Review the staged changes before committing: \"review the staged changes\".")
+    if unreviewed and len(unreviewed) <= 3:
+        cmds = ", ".join(f"`/clerk-dev:review {'HEAD' if sha == head else sha[:9]}`" for sha, _ in unreviewed)
+        steps.append(f"Review the unreviewed commit{plural(unreviewed)}, each added to this review: {cmds}.")
+    elif unreviewed:
+        steps.append(f"Review the {len(unreviewed)} unreviewed commits with an incremental review of the branch: \"re-review the branch\".")
+    if moved: steps.append(f"Cross-check the finding{plural(moved)} whose code moved ({len(moved)}): \"cross-check the findings\".")
+    n_unmarked = sum(len(v) for v in unmarked.values())
+    if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `.clerk-dev/{os.path.basename(run)}/report.md`.")
+    if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
+    if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
+    if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")
+    closable = sorted((numbers[m] for m in rf.closable(run) if m in numbers), key=int)
+    if closable: steps.append(f"Close the posted thread{plural(closable)} of finding{plural(closable)} {number_list(closable)}; see Closing posted threads in the `review` skill.")
+    if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")
+    # Fixes are rechecked one finding at a time, never re-reviewed as a
+    # branch; once triage is done, the final pass reads them all together.
+    triage_left = sum(len(v) for v in unmarked.values()) + len(queue) + len(discuss) + len(post) + len(inprog)
+    settled = not triage_left and not unreviewed and not open_items and not detached(wt)
+    if review.fixes and settled:
+        steps.append(f"Triage is done and {review.fixes} fix{'es' if review.fixes != 1 else ''} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")
+    elif settled and final_pass_stands(run):
+        steps.append(DRAFT_PR_STEP)
+    return first, steps
+
+def next_lines(steps, empty=None):
+    if steps: return ["", "**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)]
+    return ["", f"**Next:** {empty}"] if empty else []
+
+def emit_view(wt, out): emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out)))
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("worktree", nargs="?", default=".")
+    ap.add_argument("--run"); ap.add_argument("--no-mark", action="store_true")
+    ap.add_argument("--focus", choices=("all", "design", "implementation", "review", "blockers"), default="all",
+                    help="design: readiness to build; implementation: building progress and its next steps only; review: the review only; blockers: what blocks the work")
+    ap.add_argument("--area", help="one area, or a brief id for one piece and its area")
+    ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
+    a = ap.parse_args()
+    wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
+    load_script("records.py").guard(wt)
+    run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
+    have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
+    branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+    head = git(wt, "rev-parse", "HEAD")
+    out = []
+    rows = workspace_rows(wt)
+    mine = read_build(wt)
+    gaps = setup_gaps(wt, rows, mine.entries)
+    if a.setup:
+        emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
+    theirs = builder_logs(wt, rows)
+    lead = {"implementation": "the implementation in ", "design": "the design of "}.get(a.focus, "")
+    out.append(f"## What blocks {this_repo(wt, rows)} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{this_repo(wt, rows)} stands ({branch})\n")
+    out += setup_lines(gaps)
+    if a.focus == "blockers":
+        out += next_lines(blockers_view(wt, out, [mine] + theirs, run, have_run))
+        emit_view(wt, out); return
+    if a.focus == "design" or a.area:
+        logs = [mine] + theirs
+        steps = area_view(wt, out, a.area, logs) if a.area else design_view(wt, out, logs)
+        out += next_lines(list(dict.fromkeys(steps)), "nothing pending.")
+        emit_view(wt, out); return
+
+    review, steps = review_section(wt, run, have_run, head, out)
+    reader = bl.Reader(wt)
+    own = reader.items(reader.own)
+    open_items = followups_section(wt, rows, reader, own, not a.no_mark, out)
+    steps += backlog_section(wt, reader, own, out)
+    passes, pass_steps = passes_section(wt, out)
     notes = next_step_lines(passes, mine.entries)
     if a.focus == "implementation":
         out[:] = [out[0]] + setup_lines(gaps) + [l for l in out[1:] if l.startswith("**Working tree")]
-        steps = implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, theirs)
+        steps = implementation_view(wt, rows, out, review.unreviewed, pass_steps, passes, mine, theirs)
         out += notes
-        out.append("")
-        out += ["**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)] if steps else ["**Next:** nothing pending in the building."]
-        emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out))); return
+        out += next_lines(steps, "nothing pending in the building.")
+        emit_view(wt, out); return
     out += notes
     if a.focus == "all":
-        bfirst, blater, _ = build_block(wt, out, unreviewed, mine, theirs)
+        bfirst, blater, _ = build_block(wt, out, review.unreviewed, mine, theirs)
         first, later = feature_block(wt, rows, out)
         out += rerouted_lines(wt)
-        steps[0:0] = bfirst + pass_steps + first
-        steps.extend(blater + later)
-
-    # Findings
-    if have_run:
-        findings = sf.load_findings(run)
-        unmarked, queue, discuss, post, inprog, new, _ = finding_groups(run, status, instr, numbers)
-        try:
-            _, moved = sf.candidates(run, wt)
-        except SystemExit:
-            moved = []
-        closed = sum(1 for m in findings if m in numbers and not sf.is_open(m, status, instr))
-        out.append("")
-        out.append(f"**Findings:** {sum(1 for m in findings if m in numbers)} in the report, {closed} closed (fixed, won't fix, deferred, ignored).")
-        for sec, nums in unmarked.items():
-            nums.sort(key=int)
-            out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({number_list(nums)})")
-        if new:
-            new.sort(key=int)
-            out.append(f"- new since the first report, unmarked: {len(new)} ({number_list(new)}); `grep -n '\\[new\\]' report.md` finds them")
-        if queue: out.append(f"- marked to fix, not yet fixed: {len(queue)}")
-        if discuss: out.append(f"- marked to discuss: {len(discuss)}")
-        if post: out.append(f"- marked to post, not yet posted or changed since posting: {len(post)} ({number_list(sorted(post, key=int))})")
-        if inprog: out.append(f"- fix in progress (partly fixed or tests failed): {', '.join(sorted(inprog, key=int))}")
-        if moved: out.append(f"- open findings whose code changed since the review and not yet cross-checked: {len(moved)}")
-
-        if open_items: steps.insert(0, f"Work the open follow-up{plural(open_items)} ({len(open_items)}): \"go through the follow-ups\".")
-        if staged: steps.append("Review the staged changes before committing: \"review the staged changes\".")
-        if unreviewed and len(unreviewed) <= 3:
-            cmds = ", ".join(f"`/clerk-dev:review {'HEAD' if sha == head else sha[:9]}`" for sha, _ in unreviewed)
-            steps.append(f"Review the unreviewed commit{plural(unreviewed)}, each added to this review: {cmds}.")
-        elif unreviewed:
-            steps.append(f"Review the {len(unreviewed)} unreviewed commits with an incremental review of the branch: \"re-review the branch\".")
-        if moved: steps.append(f"Cross-check the finding{plural(moved)} whose code moved ({len(moved)}): \"cross-check the findings\".")
-        n_unmarked = sum(len(v) for v in unmarked.values())
-        if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `.clerk-dev/{os.path.basename(run)}/report.md`.")
-        if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
-        if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
-        if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")
-        closable = sorted((numbers[m] for m in rf.closable(run) if m in numbers), key=int)
-        if closable: steps.append(f"Close the posted thread{plural(closable)} of finding{plural(closable)} {number_list(closable)}; see Closing posted threads in the `review` skill.")
-        if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")
-        # Fixes are rechecked one finding at a time, never re-reviewed as a
-        # branch; once triage is done, the final pass reads them all together.
-        triage_left = sum(len(v) for v in unmarked.values()) + len(queue) + len(discuss) + len(post) + len(inprog)
-        settled = not triage_left and not unreviewed and not open_items
-        if counts_fix and settled:
-            steps.append(f"Triage is done and {counts_fix} fix{'es' if counts_fix != 1 else ''} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")
-        elif settled and final_pass_stands(run):
-            steps.append(DRAFT_PR_STEP)
-    else:
-        steps.append(DRAFT_PR_STEP)
-
-    out.append("")
-    if steps:
-        out.append("**Next:**")
-        out.extend(f"{n}. {s}" for n, s in enumerate(steps, 1))
-    else:
-        out.append("**Next:** nothing pending.")
+        steps = bfirst + pass_steps + first + steps + blater + later
+    first, later = findings_section(wt, run, review, open_items, head, out) if have_run else ([], [DRAFT_PR_STEP])
+    out += next_lines(first + steps + later, "nothing pending.")
     emit(wt, "\n".join(out))
 
 if __name__ == "__main__":

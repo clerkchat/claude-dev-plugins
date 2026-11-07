@@ -54,6 +54,12 @@ class DraftStepTests(DraftStepCase):
         os.utime(os.path.join(self.run_dir, "target.txt"), (later, later))
         self.assertNotIn(DRAFT_STEP, self.next_steps())
 
+    def test_a_detached_head_withholds_the_draft(self):
+        self.write_run()
+        self.write_final("PASSED")
+        self.repo.git("checkout", "-q", "--detach")
+        self.assertNotIn(DRAFT_STEP, self.next_steps())
+
     def test_commits_after_the_passed_final_pass_withhold_the_draft(self):
         self.write_run()
         self.write_final("PASSED")

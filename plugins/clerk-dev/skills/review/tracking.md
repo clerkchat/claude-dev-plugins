@@ -2,7 +2,10 @@
 
 What the plugin keeps between runs, beyond each run's own directory. All of it
 lives under `.clerk-dev/` in a worktree, which is excluded from git through
-`.git/info/exclude` and never committed.
+`.git/info/exclude` and never committed. The repository's backlog of ideas,
+cleanups, and follow-ups is the exception: it lives in
+`<git common dir>/clerk-dev/backlog/`, shared by every worktree of the
+repository and kept by `scripts/backlog.py` (Follow-ups below).
 
 | File                      | Scope                                                                                                                                                     | Written by                                                                                                                                                                                                                                    | Read by                                                                                                                                                               |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -10,8 +13,7 @@ lives under `.clerk-dev/` in a worktree, which is excluded from git through
 | `.clerk-dev/latest`          | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
 | `.clerk-dev/latest-feature`  | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `status.py`                                                                                                                                          |
 | `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the rules the user set for this branch only (Guidance); may be written before the first review | the review orchestrator, the `building` skill's setup check (drafts Purpose when missing), any skill recording an answer's guidance for this branch ("Guidance from answers" below), the user | `records.py guidance`, whose file every lens, verifier, and builder handoff gets; the `building` skill's intake and the builder (Branch scope below) |
-| `.clerk-dev/status-seen`     | the highest follow-up id already shown                                                                                                                    | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
-| `.clerk-dev/followups.md`    | work this repository owes because of changes elsewhere                                                                                                    | `followups.py`, from the `building` skill (After each handoff and its Clients of a changed contract) and `checkpoint` | the review orchestrator (as a document for completeness and cross-repo lenses), the `followups` skill (works and closes items, one commit each), the user |
+| `.clerk-dev/status-seen-backlog` | one `<repo> <n>` line per backlog: the highest `BL-n` of the follow-ups owed here that status showed from it; never written on a detached HEAD | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
 | `.clerk-dev/deferred.md` | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
 | `.clerk-dev/workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `building` skill (clients of a changed contract), the `followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
 | `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, pieces, plans, briefs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
@@ -112,8 +114,8 @@ decides how to change code by it. Code is on one of three sides:
   Edit migrations the branch added in place rather than adding follow-up
   migrations; there is no deployed data. Clients of the new code (frontends,
   other services, agents) are not deployed either and will be updated to match:
-  when a change breaks one, make it anyway and add a follow-up to the client's
-  worktree (see Follow-ups).
+  when a change breaks one, make it anyway and file a follow-up in the client's
+  backlog (see Follow-ups).
 - Deployed code Purpose lists as changed on purpose: change it carefully and
   minimally, and state its rollout considerations: old and new code running side
   by side, in-flight jobs, existing data, and clients not redeployed with this
@@ -150,48 +152,64 @@ The need is never the receiver's action: "show the number on the contact card"
 is the receiving repository's call. The receiving session sizes the item and
 routes it through intake (the `building` skill).
 
-When a fix in the api changes a contract the frontend consumes, the item goes
-into the frontend worktree's `.clerk-dev/followups.md`, with the need as the
-text and the contract as `--contract`:
+A follow-up is an item of kind `followup` in the backlog of the repository
+that owes the work, whatever its scope (`scripts/backlog.py`, one store per
+repository in `<git common dir>/clerk-dev/backlog/`). When a fix in the api
+changes a contract the frontend consumes, the item goes into the frontend
+repository's backlog, with the need as the title, the source commit as
+`--origin`, and the contract as `--contract`:
 
 ```
-followups.py add <owing worktree> "A download poll without exportId is now refused with 400" \
-  --from "api 7c1e2ab" \
+backlog.py add <this worktree> "A download poll without exportId is now refused with 400" \
+  --kind followup --repo web --scope <the web worktree's branch> \
+  --origin "api 7c1e2ab" \
   --contract "changed: GET /reports/:id/download: took no parameters, now requires the exportId that POST /reports/:id/exports returns" \
   --finding "api 8"
 ```
 
+It prints the item's id, `web:BL-4`, qualified with the owing repository's
+name.
+
 A builder's `follow-ups:` line and a finding's `follow_up` field carry one
 follow-up per line as `<repo>: changed|wanted: <contract>; needs: <behavior>`:
-the item goes to `<repo>`'s worktree, the part after `; needs:` is its text,
+the item goes to `<repo>`'s backlog, the part after `; needs:` is its text,
 and the part between `<repo>: ` and `; needs:` is its `--contract`.
 A line not in that form (no `changed:` or `wanted:`, or no `; needs:`) is
 not filed as written: restate it in the form from the rest of the report or
 finding, or ask the builder for it, as a malformed report is sent back.
 
-Find the owing worktree in `.clerk-dev/workspace.md` (see
-`workspace-manifest.md`). When the file is missing or does not list the
-owing repository, add the item to the current worktree's file with the text
-starting `[<repo>]`, and say so.
+Find the owing repository's worktree in `.clerk-dev/workspace.md` (see
+`workspace-manifest.md`) and scope the item to that worktree's branch (`git -C
+<its worktree> branch --show-current`). When the file is missing or does not
+list the owing repository, file it by name through the registry with `--repo
+<name> --scope new`, for whoever takes it up next. When the registry does not
+name the repository either, `backlog.py add` refuses in one line; say so, and
+file nothing. Nothing moves when a worktree for the owing repository appears
+later: taking the item up is a rescope to that branch.
 
-The item's id (`F3`) is the handle in conversation. Each item has an
-Instruction and a Status (see Items below). For a follow-up, "done as written"
-and `Fix as recommended` mean meeting the need as intake sizes it. Refine
-(investigate, then set one of the others) is the instruction for an item whose
-need is unclear against the local code. The user sets one by saying so
-("refine F3", "ignore F2, the web app dropped that screen"), which is recorded
-with `followups.py set <worktree> F3 "Refine" [--note "..."]`. The `followups` skill works the open items by their
+The item's id (`BL-4`, or `web:BL-4` from another repository) is the handle in
+conversation. Each item has an instruction and a status (see Items below). For
+a follow-up, "done as written" and `Fix as recommended` mean meeting the need
+as intake sizes it. Refine (investigate, then set one of the others) is the
+instruction for an item whose need is unclear against the local code. The user
+sets one by saying so ("refine BL-4", "ignore BL-2, the web app dropped that
+screen"), which is recorded with `backlog.py instruct <worktree> BL-4 "Refine"
+[--note "..."]`. The `followups` skill works the open items by their
 instructions, one handoff and one commit each, and closes each with
-`followups.py close <worktree> F3 --ref <sha>` (or `--status
-wont-fix|deferred --ref "<reason>"`). Close one by hand the same way when the
-user says it is done. Hand-ticked boxes are honored as fixed.
+`backlog.py set <worktree> BL-4 done --ref <sha>`, or `set <worktree> BL-4
+dropped --ref "<reason>"`; deferring one is `backlog.py rescope <worktree> BL-4
+new`, which leaves it owed as new work. Close one by hand the same way when
+the user says it is done.
 
 Readers:
 
-- Every review run adds its worktree's `.clerk-dev/followups.md` to `DOCS` when it
-  has open items. The completeness lens reports open items the diff should have
+- Every review run writes the follow-ups its branch owes, each with its
+  origin, contract, finding, and instruction (`backlog.py list <worktree>
+  --owed --full`, as printed) to
+  `<run>/followups.md` (`<run>/followups-<repo>.md` per repository in feature
+  mode) and adds that file to `DOCS` when it has items. The completeness lens reports open items the diff should have
   addressed and items the diff addressed without closing.
-- Feature mode passes every repository's file to the cross-repo lens, which
+- Feature mode passes every repository's run file to the cross-repo lens, which
   checks that each open item's contract change is matched by the consuming diff.
 - The report's "Not reviewed this run" section, and the feature report's
   per-repository blocks, give the open count.
@@ -203,6 +221,32 @@ Readers:
 - The `followups` skill gives each handoff the open findings in the files
   it will change, as context, and notes on a finding when the follow-up's
   contract overrides its recommendation.
+
+## Cleanups
+
+A cleanup is an item of kind `cleanup` in the backlog: code a change added that
+is meant to go away, such as a feature gate, a compatibility branch, or a
+deprecated shim. `removes` names the code the way it appears in the source (a
+flag key, an enum member, a function or module name), which `backlog.py check`
+searches for with `git grep -F`; `trigger` is the condition for removing it
+that the plugin cannot check ("once every client sends exportId").
+
+When a review's rollout lens or a builder's report says a change adds one, offer
+in one line: "file a cleanup to remove `<key>` when <condition>?" On yes, file
+it in this worktree's repository's backlog, the repository whose code it
+removes:
+
+```
+backlog.py add <worktree> "Remove <key>" --kind cleanup --scope new \
+  --removes <key> --trigger "<condition>" --from <source>
+```
+
+with `--body <file>` holding what the removal involves when the source says.
+The source is `<run> rollout` for a review's line, `BUILD-n` for a logged
+handoff, else the handoff's source item (`<run> N` for a finding, the
+follow-up's `BL-n`, "this session" for a request). On no, nothing is filed.
+The `review-triage` skill makes the offers for a review, the `building` skill
+for a handoff.
 
 ## Guidance from answers
 
@@ -397,8 +441,9 @@ ahead of the core chunk (C)"), or follow the id with a gloss of two to six
 words ("PLAN-31 (the chunk plan)"). Later mentions in the same message may be
 bare. This covers record ids (PLAN-31, DEC-19), requirements (BRIEF-52.19),
 checks and their questions (BRIEF-30-1.Q-12), plan pieces (S, C), handoffs
-and milestones of the build log (BUILD-15, MILE-1), passes (PASS-3), follow-ups (F3), ideas
-(IDEA-7), deferred items (DEFER-6), and finding numbers ("finding 12 (the
+and milestones of the build log (BUILD-15, MILE-1), passes (PASS-3), backlog
+items such as ideas and follow-ups (BL-4, or web:BL-4 from another
+repository's backlog), deferred items (DEFER-6), and finding numbers ("finding 12 (the
 unbounded export query)"). A record's prefix names its type (IDEAS brainstorm,
 DESIGN, DEC decision, GUIDE guidance, PIECES, PLAN, BRIEF)
 but is not a gloss: it still needs one. Older ids (R31, B15, M1, P3, I7, D6,
@@ -447,9 +492,11 @@ say:
 
 Review findings, follow-ups, and design-check questions are all items, and use
 one vocabulary in two layers. Findings keep their cards and `status.tsv`;
-follow-ups (`F3`), deferred items (`DEFER-3`), and design questions (`Q-3`) are
-checkbox lists read and written by `scripts/items.py` (`followups.py` and
-`deferred.py` build on it).
+follow-ups (`BL-4`) are backlog items kept by `scripts/backlog.py`, which
+records their instruction in this vocabulary and gives them the statuses of
+their kind (owed, in-progress, done, dropped; Follow-ups above); deferred items
+(`DEFER-3`) and design questions (`Q-3`) are checkbox lists read and written by
+`scripts/items.py` (`deferred.py` builds on it).
 
 Instruction, what to do; blank means not decided yet (a follow-up with none is
 done as written):
@@ -458,21 +505,42 @@ done as written):
 - `Fix as noted`: do it as the note after the colon says ("Fix as noted: use
   the banner, not a toast").
 - `Discuss`: talk it through with the user before anything else happens.
-- `Defer`: not now. Add a deferred item with `deferred.py add <worktree>
-  "<what>" --from <source> --path "<what was done for now>" --open "<what is
-  left>" [--revisit "<when to look again>"]`, where the source is the finding
-  (`<run> N`), question (`BRIEF-18-1.Q-6`), follow-up (`F3`), pass item (`PASS-3.4`),
-  handoff (`BUILD-9`), or "this session". Then set the source's status to `deferred`
-  with its Outcome naming the new DEFER id: `render-report.py --set N=deferred:DEFER-3`
-  for a finding, `items.py status <file> Q-3 deferred --ref DEFER-3` for a design
-  question, `followups.py close <worktree> F3 --status deferred --ref DEFER-3` for a
-  follow-up, `passes.py done <worktree> PASS-3 4 --na "deferred, DEFER-3"` for a pass
-  item. "Deferred items" below says what they are. A survey item
-  (`SURVEY-2.Q-3`) parks an idea instead, since nothing was done for now:
-  `records.py idea <worktree> "<what>" --from SURVEY-2.Q-3 --why "..." --when
-  "..."`, then `items.py status <survey file> Q-3 deferred --ref IDEA-7`, and no
-  deferred item.
-- `Ignore`: not at all; the status becomes `wont-fix`, with why.
+- `Defer`: not now. What it does depends on the source. A finding, design
+  question, pass item, or handoff gets a deferred item, added with
+  `deferred.py add <worktree> "<what>" --from <source> --path "<what was done
+  for now>" --open "<what is left>" [--revisit "<when to look again>"]`, where
+  the source is the finding (`<run> N`), question (`BRIEF-18-1.Q-6`), pass item
+  (`PASS-3.4`), handoff (`BUILD-9`), or "this session" ("Deferred items" below
+  says what they are), and its status becomes `deferred` with its Outcome
+  naming the new DEFER id:
+  - Finding: `render-report.py --set N=deferred:DEFER-3`.
+  - Design question: `items.py status <file> Q-3 deferred --ref DEFER-3`.
+  - Pass item: `passes.py done <worktree> PASS-3 4 --na "deferred, DEFER-3"`.
+  - Finding sent to the backlog, on the user's spoken request ("send it to
+    the backlog, as a cleanup"; a ticked Defer with a note naming the backlog
+    does not count): nothing was done for now, so no deferred item. Write
+    the finding's context, steps, impact, and recommendation from `merged.md`,
+    with `overrides/<merged id>.md` laid over it, to
+    `<run>/backlog-<merged id>.md`, then `backlog.py add <worktree> "<the
+    finding's title>" --kind idea|cleanup --scope new --from "<run> N" --body
+    <that file>`. For a cleanup add `--removes <the code the finding names>`
+    (asked for in one line when it names none) and `--trigger "<condition>"`
+    when the discussion named one. Then one render with `--instruct
+    N=defer:<item id>`, which also sets the status to `deferred` with the item
+    id as the outcome; never `--set` it too. Leave `--scope` out when the user
+    names the feature, so it defaults to the hub's branch. Pass `--repo NAME`
+    only when the user names another repository: the item id is then
+    `<repo>:BL-n`, and when the registry does not name the repository
+    `backlog.py add` refuses in one line; relay it and leave the finding as it
+    was.
+  - Follow-up (`BL-4`): hand it to new work instead, `backlog.py rescope
+    <worktree> BL-4 new`; it stays owed in the backlog, with no deferred item.
+  - Survey item (`SURVEY-2.Q-3`): park an idea, since nothing was done for
+    now: `backlog.py add <worktree> "<what>" --kind idea --from SURVEY-2.Q-3
+    --why "..." --when "..."`, then `items.py status <survey file> Q-3
+    deferred --ref BL-7`, and no deferred item.
+- `Ignore`: not at all; the status becomes `wont-fix` (`dropped` for a backlog
+  item), with why.
 - `Post`: send it to the pull request's author as a comment on the user's
   pending GitHub review; the note steers the text or names where it goes ("Post:
   as a question, on `src/a.ts`"). Findings only. The card gets a Posted block

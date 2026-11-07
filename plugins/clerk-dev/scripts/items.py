@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and write item files: follow-ups (F3), deferred items (DEFER-3), and design-check questions (Q-3).
+"""Read and write item files: deferred items (DEFER-3) and design-check questions (Q-3).
 
 An item file is a Markdown checkbox list, one item per top-level checkbox with
 its fields as a nested bullet list, so a Markdown formatter keeps the layout.
@@ -14,12 +14,10 @@ Usage:
   items.py status FILE ID STATUS [--ref "commit, record, or reason"]
   items.py validate FILE
 
-Other scripts import read(), write(), and the constants. WorktreeList is the
-worktree-list layer `followups.py` and `deferred.py` are thin over: add, list,
-close, reopen, and set on `<worktree>/.clerk-dev/<file>`.
+Other scripts import read(), write(), and the constants.
 """
-import argparse, datetime, os, re, sys, tempfile
-from records import load_script
+import argparse, datetime, os, re, sys
+from records import load_script, write_atomic
 import ids
 
 INSTRUCTIONS = ("Fix as recommended", "Fix as noted", "Discuss", "Defer", "Ignore", "Refine")
@@ -86,9 +84,7 @@ def write(path, items, header, order=()):
         for k in keys:
             out.append(f"  - {k}:{' ' + it['fields'][k] if it['fields'][k] else ''}\n")
         out.append("\n")
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".items.")
-    with os.fdopen(fd, "w", encoding="utf-8") as fh: fh.write("".join(out).rstrip("\n") + "\n")
-    os.replace(tmp, path)
+    write_atomic(path, "".join(out).rstrip("\n") + "\n")
 
 def header_of(path):
     """Everything before the first item, kept as it is on rewrite."""
@@ -140,68 +136,6 @@ def reopen(it): set_status(it, "open")
 
 def set_instruction(it, value, note=None):
     it["fields"]["Instruction"] = instruction(value) + (f": {note}" if note else "")
-
-class WorktreeList:
-    def __init__(self, filename, kind, header, extras=(), required=(), closes=DONE, legacy_outcome=None):
-        self.filename, self.kind, self.header, self.required, self.closes, self.legacy_outcome = filename, kind, header, tuple(required), closes, legacy_outcome
-        self.extras = tuple(extras)
-        self.fields = ("From", *self.extras, "Added", "Instruction", "Status", "Outcome")
-
-    def path(self, wt):
-        load_script("records.py").exclude(wt)
-        return os.path.join(wt, ".clerk-dev", self.filename)
-
-    def read(self, p):
-        its = read(p, list(self.fields) + ([self.legacy_outcome] if self.legacy_outcome else []))
-        for it in its:
-            f = it["fields"]
-            if self.legacy_outcome in f:
-                f.setdefault("Outcome", f.pop(self.legacy_outcome)); f["Status"] = "fixed"; it["done"] = True
-            it["meta"] = [f"{k}: {f[k]}" for k in self.fields if f.get(k)]
-        return its
-
-    def write(self, p, its): write(p, its, self.header, order=self.fields)
-
-    def add(self, its, text, source, instruction_value=None, **extra):
-        iid = ids.item(self.kind, ids.next_number([i["id"] for i in its], self.kind))
-        f = {"From": source, **{k: extra.get(k) or "" for k in self.extras}, "Added": datetime.date.today().isoformat(),
-             "Instruction": instruction(instruction_value) if instruction_value else "", "Status": "open"}
-        its.append({"done": False, "id": iid, "text": text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
-        return iid
-
-    def main(self, prog, usage=None):
-        ap = argparse.ArgumentParser(prog=prog, description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
-        sp = ap.add_subparsers(dest="cmd", required=True)
-        a = sp.add_parser("add"); a.add_argument("wt"); a.add_argument("text"); a.add_argument("--from", dest="src", required=True)
-        for k in self.extras: a.add_argument(f"--{k.lower()}", dest=k, required=k in self.required)
-        a.add_argument("--instruction")
-        l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
-        c = sp.add_parser("close"); c.add_argument("wt"); c.add_argument("iid"); c.add_argument("--ref")
-        c.add_argument("--status", choices=self.closes, default="fixed")
-        r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("iid")
-        s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("iid"); s.add_argument("instruction"); s.add_argument("--note")
-        args = ap.parse_args()
-        if args.cmd == "add":
-            for k in self.required:
-                if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
-        load_script("records.py").guard(args.wt)
-        p = self.path(args.wt); its = self.read(p)
-        if args.cmd == "add":
-            iid = self.add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in self.extras})
-            self.write(p, its); print(f"{iid} added to {p}")
-        elif args.cmd == "list":
-            for i in its:
-                if args.open and i["done"]: continue
-                print(f"{'x' if i['done'] else ' '} {i['id']}. {i['text']}  [{'; '.join(i['meta'])}]")
-        else:
-            it = find(its, args.iid)
-            if args.cmd == "set":
-                set_instruction(it, args.instruction, args.note)
-                self.write(p, its); print(f"{it['id']}: {it['fields']['Instruction']}")
-            else:
-                if args.cmd == "close": close(it, args.status, args.ref)
-                else: reopen(it)
-                self.write(p, its); print(f"{args.iid} {'closed (' + args.status + ')' if args.cmd == 'close' else 'reopened'}")
 
 def main():
     ap = argparse.ArgumentParser()
