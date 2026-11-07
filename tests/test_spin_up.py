@@ -8,7 +8,7 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import GIT_ENV, SCRIPTS, TempCase, add_backlog_item, git, init_repo, plugin_text_files, run_ok, run_script, write_file
+from helpers import GIT_ENV, SCRIPTS, TempCase, add_cleanup, add_followup, add_idea, git, init_repo, plugin_text_files, run_ok, run_script, write_config, write_file
 
 sys.path.insert(0, SCRIPTS)
 import backlog
@@ -18,21 +18,6 @@ import records
 spin_up = records.load_script("spin-up.py")
 
 TODAY = datetime.date.today().isoformat()
-
-CONFIG = """# clerk-dev config
-
-## Search roots
-
-## Repositories
-
-| Name | Main checkout | Main branch |
-| ---- | ------------- | ----------- |
-{rows}
-## Worktrees
-
-Pattern: {pattern}
-After create: {after_create}
-"""
 
 USER_WORKTREE_TOOLING = re.compile(r"\bgit[ -]work\b|(?<!\w)\.work\b")
 
@@ -49,21 +34,17 @@ class SpinUpCase(TempCase):
     def config_path(self):
         return os.path.join(self.home, ".claude", "clerk-dev", "local.md")
 
-    def configure(self, repos=(), pattern=config.DEFAULT_PATTERN, after_create="", main="main"):
-        rows = "".join(f"| {name} | {path} | {main} |\n" for name, path in repos)
-        write_file(self.config_path(), CONFIG.format(rows=rows, pattern=pattern, after_create=after_create))
-
-    def file(self, kind, title, *extra, wt=None):
-        return add_backlog_item(wt or self.api.path, kind, title, "--scope", "new", *extra, env=self.env)
+    def configure(self, repos=(), pattern="", after_create="", main="main"):
+        write_config(self.config_path(), [(name, path, main) for name, path in repos], pattern, after_create)
 
     def idea(self, title="Phone digits"):
-        return self.file("idea", title, "--why", "faster lookups", "--when", "after launch")
+        return add_idea(self.api.path, title, "--scope", "new", "--why", "faster lookups", "--when", "after launch", env=self.env)
 
     def followup(self, title="Handle exportId"):
-        return self.file("followup", title, "--origin", "web 7c1e2ab", "--contract", "changed: GET /x: now requires exportId")
+        return add_followup(self.api.path, title, "--scope", "new", "--contract", "changed: GET /x: now requires exportId", env=self.env)
 
     def cleanup(self, title="Remove the export flag"):
-        return self.file("cleanup", title, "--removes", "EXPORT_V2_FLAG")
+        return add_cleanup(self.api.path, title, "--scope", "new", env=self.env)
 
     def attempt(self, *args):
         return run_script("spin-up", *args, env=self.env)

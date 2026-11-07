@@ -66,7 +66,7 @@ def block(path, log_n):
     head = git(wt, "rev-parse", "HEAD")
     rec = load_script("records.py")
     common = rec.common_dir(wt)
-    out += [f"## {rs.repo_name(wt, rows)} ({branch})", "",
+    out += [f"## {rec.this_repo(wt, dict(rows))} ({branch})", "",
             f"- Worktree: `{wt}`", f"- HEAD: `{head[:9]}`", f"- Common dir: `{common}`"]
 
     setup = rec.setup_path(wt)

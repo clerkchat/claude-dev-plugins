@@ -4,21 +4,11 @@ import sys
 import unittest
 from unittest import mock
 
-from helpers import SCRIPTS, TempCase, add_backlog_item, git, init_repo, run_ok, run_script, write_file
+from helpers import SCRIPTS, TempCase, add_backlog_item, add_cleanup, add_followup, add_idea, git, init_repo, run_ok, run_script, write_config, write_file
 
 sys.path.insert(0, SCRIPTS)
 import backlog
 import config
-
-REGISTRY = """# clerk-dev
-
-## Repositories
-
-| Name | Main checkout | Main branch |
-| ---- | ------------- | ----------- |
-{rows}
-"""
-
 
 def workspace_md(hub, rows):
     table = "".join(f"| {name} | {path} | |\n" for name, path in rows)
@@ -38,8 +28,7 @@ class BacklogCase(TempCase):
         return wt
 
     def registry(self, *repos):
-        rows = "".join(f"| {name} | {path} | {main} |\n" for name, path, main in repos)
-        write_file(self.path("local.md"), REGISTRY.format(rows=rows))
+        write_config(self.path("local.md"), repos)
         self.env[config.ENV] = self.path("local.md")
 
     def link_workspace(self, hub_wt, hub, rows):
@@ -66,13 +55,13 @@ class BacklogCase(TempCase):
         return add_backlog_item(wt or self.feat, kind, title, *extra, env=self.env)
 
     def idea(self, title="An idea", *extra, wt=None):
-        return self.add("idea", title, wt, *extra)
+        return add_idea(wt or self.feat, title, *extra, env=self.env)
 
     def cleanup(self, title="Remove EXPORT_V2_FLAG", *extra, wt=None):
-        return self.add("cleanup", title, wt, "--removes", "EXPORT_V2_FLAG", *extra)
+        return add_cleanup(wt or self.feat, title, *extra, env=self.env)
 
     def followup(self, title="Handle exportId", *extra, wt=None):
-        return self.add("followup", title, wt, "--origin", "web 7c1e2ab", *extra)
+        return add_followup(wt or self.feat, title, *extra, env=self.env)
 
     def meta(self, iid, wt=None):
         return backlog.read_item(self.ok("path", wt or self.feat, iid))
@@ -398,7 +387,7 @@ class IdeaLineTests(BacklogCase):
         self.idea("Phone digits", "--why", "Fewer typos.", "--when", "After the card ships.")
 
     def test_full_puts_why_and_when_under_it(self):
-        self.assertEqual(self.listed("--parked", "--full")[1:], ["  why: Fewer typos.", "  when: After the card ships."])
+        self.assertEqual(self.listed("--parked", "--full")[1:], ["  why: Fewer typos", "  when: After the card ships"])
 
     def test_without_full_it_is_one_line(self):
         self.assertEqual(len(self.listed("--parked")), 1)
@@ -586,7 +575,7 @@ class CheckTests(CheckCase):
         self.assertEqual(len(self.check("BL-1")), 2)
 
     def test_the_registrys_main_branch_wins(self):
-        write_file(self.path("local.md"), REGISTRY.format(rows=f"| api | {self.api.path} | master |\n"))
+        write_config(self.path("local.md"), [("api", self.api.path, "master")])
         self.env[config.ENV] = self.path("local.md")
         code, out = run_script("backlog", "check", self.feat, env=self.env)
         self.assertEqual(code, 1)

@@ -71,12 +71,13 @@ building, a big feature starts by thinking out loud.
 
 At any step:
 
-| You say           | What happens                                                       |
-| ----------------- | ------------------------------------------------------------------ |
-| "where are we?"   | What is done, and what to say next                                 |
-| "help me decide"  | The options for one choice, weighed, with a recommendation         |
-| "checkpoint"      | Saves what the conversation settled, so you can `/clear` safely    |
-| "spin up"         | Takes up a backlog item in a new worktree off main, ready to start |
+| You say             | What happens                                                                                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "where are we?"     | What is done, and what to say next                                                                                                                                            |
+| "help me decide"    | The options for one choice, weighed, with a recommendation                                                                                                                    |
+| "checkpoint"        | Saves what the conversation settled, so you can `/clear` safely                                                                                                               |
+| "spin up"           | Takes up a parked idea or follow-up in a new worktree off main, ready to start                                                                                                |
+| "set up the config" | Writes the optional `~/.claude/clerk-dev/local.md`: your repositories, worktree path pattern, and after-create command, which let spin-up and filing reach other repositories |
 
 Nothing is pushed and no pull request is opened for you.
 
@@ -135,13 +136,13 @@ with "where are we?".
 - On a bigger feature, records carry an area (`auth`, `delivery`), named as the
   thinking splits rather than planned up front.
 - Parked ideas carry why they are worth having and when to look again, until
-  they are adopted or dropped. They live in the hub repository's backlog,
-  outside any worktree, so they outlive the branch.
-  Spin-up takes a parked idea up in a new worktree off main, with the
-  idea as the new feature's first brainstorm.
-- They live in `.clerk-dev/feature/` in the worktree you started in (the hub),
-  where other repositories of the feature find them. Reviews check the code
-  against the active briefs.
+  they are adopted or dropped. They live in the backlog of the hub (the
+  repository you started the feature in), outside any worktree, so they outlive
+  the branch. Spin-up takes a parked idea up in a new worktree off main, with
+  the idea as the new feature's first brainstorm.
+- Records live in `.clerk-dev/feature/` in the worktree you started in (the
+  hub), where other repositories of the feature find them. Reviews check the
+  code against the active briefs.
 
 #### Design checks
 

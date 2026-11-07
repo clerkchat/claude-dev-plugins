@@ -24,6 +24,7 @@ DETAILS = {**OWN_ARGS, FOLLOWUP: ("contract", "finding", "instruction")}
 DEFAULT_FROM = "this session"
 FILE_RE = re.compile(r"^(\d+)\.md$")
 DETACHED = "HEAD"
+REMOTE = "origin/"
 
 class Store(NamedTuple):
     name: str
@@ -83,7 +84,9 @@ def read_item(path):
     meta, body = records.parse(path)
     return {**meta, "body": body}
 
-def prose(it, arg): return re.sub(r"\s+", " ", records.body_section(it.get("body", ""), dict(SECTIONS)[arg]))
+def prose(it, arg): return re.sub(r"\s+", " ", records.body_section(it.get("body", ""), dict(SECTIONS)[arg])).rstrip(".")
+
+def kind_name(it): return NAMES.get(it.get("kind"), it.get("kind", ""))
 
 def write_item(path, it):
     records.write_atomic(path, records.render(it, it["body"], FIELDS))
@@ -184,10 +187,6 @@ def find_in(wt, text):
 
 def lookup(wt, text): return read_item(find_in(wt, text)[2])
 
-def find(wt, text):
-    store, _, path = find_in(wt, text)
-    return store, path
-
 def load(wt, text):
     store, own, path = find_in(wt, text)
     it = read_item(path)
@@ -274,17 +273,20 @@ def days_old(it):
 
 def main_of(store):
     repo = config.by_common_dir(config.load(), records.common_dir(store.wt))
-    main = f"origin/{repo.main}" if repo and repo.main else records.remote_main(store.wt)
+    main = repo.main if repo and repo.main else records.remote_main(store.wt).removeprefix(REMOTE)
     if not main: sys.exit(f"no remote main in {store.wt} (no origin/HEAD, origin/main, or origin/master); run git remote set-head origin --auto there, or register the repository with its main branch in {config.path()}")
     return main
 
+def remote_ref(main): return REMOTE + main
+
 def removed(store, main, it):
-    r = records.git_run(store.wt, "grep", "-F", "-q", "-e", it["removes"], main)
-    if r.returncode > 1: sys.exit(records.git_failure(store.wt, ("grep", "-F", "-q", "-e", it["removes"], main), r))
+    ref = remote_ref(main)
+    r = records.git_run(store.wt, "grep", "-F", "-q", "-e", it["removes"], ref)
+    if r.returncode > 1: sys.exit(records.git_failure(store.wt, ("grep", "-F", "-q", "-e", it["removes"], ref), r))
     return r.returncode == 1
 
 def grep_line(store, main, it):
-    state = f"gone from {main}" if removed(store, main, it) else f"still present on {main}"
+    state = f"gone from {remote_ref(main)}" if removed(store, main, it) else f"still present on {remote_ref(main)}"
     progress = f" (in progress: {it['ref']})" if it.get("ref") else ""
     return f"{it['qualified']} {it.get('title', '')}: {it['removes']} {state}{progress}"
 
@@ -364,8 +366,8 @@ def main():
     elif a.cmd == "list":
         if (a.owed or a.parked) and (a.kind or a.scope or a.repo): sys.exit("--owed and --parked take no --kind, --scope, or --repo")
         for it in listing(a): print("\n".join([line(it)] + (details(it) if a.full else [])))
-    elif a.cmd == "show": sys.stdout.write(open(find(a.wt, a.iid)[1], encoding="utf-8").read())
-    elif a.cmd == "path": print(find(a.wt, a.iid)[1])
+    elif a.cmd == "show": sys.stdout.write(open(find_in(a.wt, a.iid)[2], encoding="utf-8").read())
+    elif a.cmd == "path": print(find_in(a.wt, a.iid)[2])
     elif a.cmd == "set":
         qualified, it = set_status(a.wt, a.iid, a.status, a.ref)
         print(f"{qualified} {it['status']}" + (f" ({it['outcome']})" if it.get("outcome") else f" ({it['ref']})" if it.get("ref") else ""))

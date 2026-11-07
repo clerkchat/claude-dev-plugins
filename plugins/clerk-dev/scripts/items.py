@@ -137,66 +137,6 @@ def reopen(it): set_status(it, "open")
 def set_instruction(it, value, note=None):
     it["fields"]["Instruction"] = instruction(value) + (f": {note}" if note else "")
 
-class WorktreeList:
-    def __init__(self, filename, kind, header, extras=(), required=(), closes=DONE):
-        self.filename, self.kind, self.header, self.required, self.closes = filename, kind, header, tuple(required), closes
-        self.extras = tuple(extras)
-        self.fields = ("From", *self.extras, "Added", "Instruction", "Status", "Outcome")
-
-    def path(self, wt):
-        load_script("records.py").exclude(wt)
-        return os.path.join(wt, ".clerk-dev", self.filename)
-
-    def read(self, p):
-        its = read(p, list(self.fields))
-        for it in its:
-            f = it["fields"]
-            it["meta"] = [f"{k}: {f[k]}" for k in self.fields if f.get(k)]
-        return its
-
-    def write(self, p, its): write(p, its, self.header, order=self.fields)
-
-    def add(self, its, text, source, instruction_value=None, **extra):
-        iid = ids.item(self.kind, ids.next_number([i["id"] for i in its], self.kind))
-        f = {"From": source, **{k: extra.get(k) or "" for k in self.extras}, "Added": datetime.date.today().isoformat(),
-             "Instruction": instruction(instruction_value) if instruction_value else "", "Status": "open"}
-        its.append({"done": False, "id": iid, "text": text.rstrip(".") + ".", "fields": {k: v for k, v in f.items() if v}, "order": []})
-        return iid
-
-    def main(self, prog, usage=None):
-        ap = argparse.ArgumentParser(prog=prog, description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
-        sp = ap.add_subparsers(dest="cmd", required=True)
-        a = sp.add_parser("add"); a.add_argument("wt"); a.add_argument("text"); a.add_argument("--from", dest="src", required=True)
-        for k in self.extras: a.add_argument(f"--{k.lower()}", dest=k, required=k in self.required)
-        a.add_argument("--instruction")
-        l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
-        c = sp.add_parser("close"); c.add_argument("wt"); c.add_argument("iid"); c.add_argument("--ref")
-        c.add_argument("--status", choices=self.closes, default="fixed")
-        r = sp.add_parser("reopen"); r.add_argument("wt"); r.add_argument("iid")
-        s = sp.add_parser("set"); s.add_argument("wt"); s.add_argument("iid"); s.add_argument("instruction"); s.add_argument("--note")
-        args = ap.parse_args()
-        if args.cmd == "add":
-            for k in self.required:
-                if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
-        load_script("records.py").guard(args.wt)
-        p = self.path(args.wt); its = self.read(p)
-        if args.cmd == "add":
-            iid = self.add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in self.extras})
-            self.write(p, its); print(f"{iid} added to {p}")
-        elif args.cmd == "list":
-            for i in its:
-                if args.open and i["done"]: continue
-                print(f"{'x' if i['done'] else ' '} {i['id']}. {i['text']}  [{'; '.join(i['meta'])}]")
-        else:
-            it = find(its, args.iid)
-            if args.cmd == "set":
-                set_instruction(it, args.instruction, args.note)
-                self.write(p, its); print(f"{it['id']}: {it['fields']['Instruction']}")
-            else:
-                if args.cmd == "close": close(it, args.status, args.ref)
-                else: reopen(it)
-                self.write(p, its); print(f"{args.iid} {'closed (' + args.status + ')' if args.cmd == 'close' else 'reopened'}")
-
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)

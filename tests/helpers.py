@@ -13,6 +13,7 @@ PLUGIN = os.path.join(ROOT, "plugins", "clerk-dev")
 SCRIPTS = os.path.join(PLUGIN, "scripts")
 
 sys.path.insert(0, SCRIPTS)
+import config
 import gh_api
 import records
 import run_files
@@ -63,6 +64,23 @@ def run_ok(name, *args, env=None):
 
 def add_backlog_item(wt, kind, title, *extra, env=None):
     return run_ok("backlog", "add", wt, title, "--kind", kind, *extra, env=env)
+
+
+def add_idea(wt, title, *extra, env=None):
+    return add_backlog_item(wt, "idea", title, *extra, env=env)
+
+
+def add_cleanup(wt, title, *extra, env=None):
+    return add_backlog_item(wt, "cleanup", title, "--removes", "EXPORT_V2_FLAG", *extra, env=env)
+
+
+def add_followup(wt, title, *extra, env=None):
+    return add_backlog_item(wt, "followup", title, "--origin", "web 7c1e2ab", *extra, env=env)
+
+
+def write_config(path, repos=(), pattern="", after_create=""):
+    cfg = config.Config([], [config.Repo(*repo) for repo in repos], pattern, after_create)
+    write_file(path, config.render(cfg, ""))
 
 
 def git(path, *args):

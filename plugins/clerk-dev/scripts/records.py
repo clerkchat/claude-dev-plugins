@@ -584,7 +584,7 @@ def names(wt, wanted):
                 name = check_gloss(d, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
             elif kind == ids.BACKLOG:
                 bl = backlog_mod(); it = bl.lookup(here, X)
-                if it: name = f"{bl.NAMES.get(it.get('kind'), it.get('kind'))} ({it.get('status')}): {it.get('title')}"
+                if it: name = f"{bl.kind_name(it)} ({it.get('status')}): {it.get('title')}"
             elif kind in (ids.BUILD, ids.MILESTONE):
                 e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
                 if e: name = ("milestone: " if kind == ids.MILESTONE else f"handoff for {e['f']['Record']}: " if e["f"].get("Record") else "handoff: ") + e["title"]
@@ -736,7 +736,7 @@ def built_mark(r, built):
 
 def idea_line(it):
     bl = backlog_mod()
-    state = it.get("outcome") or f"parked. Why: {bl.prose(it, 'why').rstrip('.') or '-'}. When: {bl.prose(it, 'when').rstrip('.') or '-'}"
+    state = it.get("outcome") or f"parked. Why: {bl.prose(it, 'why') or '-'}. When: {bl.prose(it, 'when') or '-'}"
     return f"- {it['qualified']} ({it.get('area') or 'feature-wide'}): {it.get('title', '')}. Status: {state}."
 
 def open_item_lines(d, c):

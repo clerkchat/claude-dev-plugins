@@ -43,9 +43,9 @@ def drift(t, local, remote):
 def has_ref(t, ref): return bool(records.git(t.wt, "rev-parse", "--verify", "-q", ref))
 
 def base_of(t):
-    remote = backlog.main_of(backlog.store_of(t.wt, t.name))
+    local = backlog.main_of(backlog.store_of(t.wt, t.name))
+    remote = backlog.remote_ref(local)
     if not has_ref(t, f"refs/remotes/{remote}"): sys.exit(f"{remote} does not exist in {t.wt}; fix the {config.MAIN} cell of {t.name} in {config.path()}")
-    local = remote.removeprefix("origin/")
     if not has_ref(t, f"refs/heads/{local}"): return remote, f"{remote} (no local {local})"
     return local, f"{local} (local; {drift(t, local, remote)})"
 
@@ -74,14 +74,16 @@ def run_after_create(cmd, path):
 
 def sentence(text): return text if text[-1:] in ".!?" else text + "."
 
+def untitled(body): return re.sub(r"^# .*$", "", body, count=1, flags=re.M)
+
 def paragraph(body):
-    text = re.sub(r"^# .*$", "", body, count=1, flags=re.M)
+    text = untitled(body)
     lead, *sections = re.split(r"^##+ (.+?)[ \t]*$", text, flags=re.M)
     parts = [lead] + [f"{heading}: {content}" for heading, content in zip(sections[::2], sections[1::2])]
     return " ".join(sentence(" ".join(p.split())) for p in parts if p.strip())
 
 def nested(body):
-    text = re.sub(r"^# .*$", "", body, count=1, flags=re.M)
+    text = untitled(body)
     return re.sub(r"^(#+) ", r"#\1 ", text, flags=re.M).strip()
 
 def purpose(it, iid):

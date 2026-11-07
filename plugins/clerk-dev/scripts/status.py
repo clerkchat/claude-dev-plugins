@@ -69,7 +69,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen-backlog untouched
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows, worktrees
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
 import ids
 import run_files as rf
 
@@ -100,12 +100,6 @@ def workspace_rows(wt):
     .clerk-dev/workspace.md; empty when there is no such file."""
     return [(n, os.path.realpath(os.path.expanduser(p))) for n, p in load_script("records.py").workspace(wt)[1].items()]
 
-def repo_name(wt, rows):
-    """The repository's name in follow-up `From:` lines: its row in the review
-    workspace, else the last segment of its origin URL, else the directory of
-    its main checkout."""
-    return load_script("records.py").this_repo(wt, dict(rows))
-
 def has_feature(p):
     return os.path.exists(os.path.join(p, ".clerk-dev", "feature", "feature.md"))
 
@@ -121,7 +115,7 @@ def hub_feature_elsewhere(wt, rows):
 def other_repos(wt, rows, d):
     """Repositories other than this one that its active records and open
     follow-ups name."""
-    rc = load_script("records.py"); me = repo_name(wt, rows)
+    rc = load_script("records.py"); me = this_repo(wt, dict(rows))
     named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
     named |= {origin_repo(i) for i in bl.owed_followups(wt)}
     return sorted(n for n in named if n and n != me)
@@ -275,9 +269,8 @@ def followup_lines(open_items, seen):
         lines.append(f"- {i['qualified']}: {short(i['title'])} ({i.get('origin') or 'source unknown'}){tag}")
     return lines
 
-def kind_name(it): return bl.NAMES.get(it.get("kind"), it.get("kind", ""))
 
-def item_line(it, *notes): return f"{it['qualified']}: {short(it.get('title', ''), 80)} ({', '.join([kind_name(it), *notes])})"
+def item_line(it, *notes): return f"{it['qualified']}: {short(it.get('title', ''), 80)} ({', '.join([bl.kind_name(it), *notes])})"
 
 def them(xs): return "it" if len(xs) == 1 else "them"
 
@@ -293,6 +286,7 @@ def cleanup_lines(reader):
     try: main, gone = bl.gone_cleanups(reader)
     except SystemExit as e: return [f"- cleanups not checked: {e}"], []
     if not gone: return [], []
+    main = bl.remote_ref(main)
     lines = [gone_line(it, main) for it in gone] + [f"- {bl.fetch_line(reader.own)}"]
     return lines, [f"Mark the cleanup{plural(gone)} {listed(gone)} done: {'its' if len(gone) == 1 else 'their'} code is gone from {main}."]
 
@@ -470,7 +464,7 @@ def builders(wt, rows):
         try: theirs = os.path.realpath(rc.hub(p))
         except SystemExit: continue
         if hub and theirs == hub and p != hub:
-            out.append((f"{repo_name(p, [])} ({os.path.basename(p)})", p)); seen.add(p)
+            out.append((f"{this_repo(p, {})} ({os.path.basename(p)})", p)); seen.add(p)
     return out
 
 def logged_briefs(canon, entries, passes=()):
@@ -484,7 +478,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     bd = load_script("build.py"); rc = load_script("records.py")
     first, later, elsewhere = build_block(wt, out, unreviewed, mine, theirs, render=bd.checklist_lines)
     entries = mine.entries
-    me = repo_name(wt, rows)
+    me = this_repo(wt, dict(rows))
     try: d = rc.fdir(wt)
     except SystemExit: d = None
     recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
@@ -730,7 +724,7 @@ def area_view(wt, out, name, logs):
     gl = [(r, rule) for r, rule in rc.rules(d, area or None) if (r.get("area") or "") == area]
     if gl: out += ["", f"**Guidance:** {len(gl)}"] + [f"- {r['id']}: {short(rule, 110)}" for r, rule in gl]
     parked = [i for i in bl.feature_ideas(wt) if (i.get("area") or "") == area]
-    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['qualified']}: {short(i['title'], 90)}" + (f" When: {bl.prose(i, 'when').rstrip('.')}." if bl.prose(i, "when") else "") for i in parked]
+    if parked: out += ["", f"**Parked ideas:** {len(parked)}"] + [f"- {i['qualified']}: {short(i['title'], 90)}" + (f" When: {bl.prose(i, 'when')}." if bl.prose(i, "when") else "") for i in parked]
     specs = [spec] if spec else [r for r in live if r.get("type") == "brief"]
     prog, pas = [], []
     for log in logs:
@@ -893,7 +887,7 @@ def followups_here(wt, reader, own, mark, out):
     return open_items
 
 def related_followups(wt, rows):
-    me = repo_name(wt, rows)
+    me = this_repo(wt, dict(rows))
     rel = []
     for name, other in related_worktrees(wt, rows):
         if detached(other):
@@ -1011,7 +1005,7 @@ def main():
         emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
     theirs = builder_logs(wt, rows)
     lead = {"implementation": "the implementation in ", "design": "the design of "}.get(a.focus, "")
-    out.append(f"## What blocks {repo_name(wt, rows)} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{repo_name(wt, rows)} stands ({branch})\n")
+    out.append(f"## What blocks {this_repo(wt, dict(rows))} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{this_repo(wt, dict(rows))} stands ({branch})\n")
     out += setup_lines(gaps)
     if a.focus == "blockers":
         out += next_lines(blockers_view(wt, out, [mine] + theirs, run, have_run))
