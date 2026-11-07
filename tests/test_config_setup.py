@@ -97,10 +97,9 @@ class WorktreeElsewhereTests(ScanCase):
     def test_the_pattern_is_the_default(self):
         self.assertEqual(self.proposal().pattern, "<repo parent>/<branch>")
 
-    def test_a_note_lists_each_worktree_with_its_branch(self):
+    def test_a_note_lists_only_the_worktrees_off_the_pattern(self):
         self.assertIn(
-            "worktree paths do not all follow <repo parent>/<branch>: "
-            f"{self.feat} (feat/x), {self.path('code/web/feat/y')} (feat/y), {self.other} (feat/z)",
+            f"worktree paths do not all follow <repo parent>/<branch>: {self.other} (feat/z)",
             self.notes(),
         )
 

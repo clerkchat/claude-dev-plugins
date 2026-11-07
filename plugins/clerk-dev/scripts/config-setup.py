@@ -84,8 +84,9 @@ class Scan:
 
     def pattern(self):
         wts = [(config.checkout_of(c), w) for c in self.commons for w in self.worktrees_of(c) if w.path != config.checkout_of(c) and w.branch]
-        if not all(follows_default(checkout, w) for checkout, w in wts):
-            self.notes.append(f"worktree paths do not all follow {config.DEFAULT_PATTERN}: " + ", ".join(f"{w.path} ({w.branch})" for _, w in wts))
+        off = [w for checkout, w in wts if not follows_default(checkout, w)]
+        if off:
+            self.notes.append(f"worktree paths do not all follow {config.DEFAULT_PATTERN}: " + ", ".join(f"{w.path} ({w.branch})" for w in off))
         return config.DEFAULT_PATTERN
 
 def proposed_roots(scan, own, extra):
