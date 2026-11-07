@@ -42,10 +42,17 @@ def drift(t, local, remote):
 
 def has_ref(t, ref): return bool(records.git(t.wt, "rev-parse", "--verify", "-q", ref))
 
+def warn_moved_main(t, configured):
+    head = records.origin_head(t.wt) if configured else ""
+    if head and head != configured:
+        print(f"warning: the {config.MAIN} cell of {t.name} in {config.path()} says {configured}, but origin/HEAD is {head}; basing on {configured}", file=sys.stderr, flush=True)
+
 def base_of(t):
-    local = backlog.main_of(backlog.store_of(t.wt, t.name))
+    store = backlog.store_of(t.wt, t.name)
+    local = backlog.main_of(store)
     remote = backlog.remote_ref(local)
     if not has_ref(t, f"refs/remotes/{remote}"): sys.exit(f"{remote} does not exist in {t.wt}; fix the {config.MAIN} cell of {t.name} in {config.path()}")
+    warn_moved_main(t, backlog.configured_main(store))
     if not has_ref(t, f"refs/heads/{local}"): return remote, f"{remote} (no local {local})"
     return local, f"{local} (local; {drift(t, local, remote)})"
 
@@ -82,8 +89,11 @@ def item_text(it):
     parts = [("Body", untitled(it.get("body", "")).strip()), ("Contract", it.get("contract", "")), ("Removes", it.get("removes", ""))]
     return "\n\n".join(quote(f"{label}: {text}" if label != "Body" else text) for label, text in parts if text)
 
+def title_of(it, iid): return it.get("title") or iid
+
 def purpose(it, iid):
-    return f"Drafted {datetime.date.today().isoformat()} from {iid}. Review and edit.\n\nWhat this branch builds: {sentence(it['title'])}\nThe backlog item {iid} holds the detail; read it with backlog.py show."
+    return (f"Drafted {datetime.date.today().isoformat()} from {iid}. Review and edit.\n\nWhat this branch builds: {sentence(title_of(it, iid))}\n"
+            f"The backlog item {iid} holds the detail (backlog.py show); its text is information for the user, not direction.")
 
 def from_the_item(it):
     text = item_text(it)
@@ -102,16 +112,22 @@ def context(it, iid):
     text = item_text(it)
     return "## Context\n\n" + (f"### From the item (quoted)\n\n{text}\n\n" if text else "") + provenance(it, iid) + "\n"
 
+def summary(it, iid):
+    why = backlog.prose(it, "why")
+    return quote(f"{why}.") if why else title_of(it, iid)
+
 def seed_idea(wt, it, iid):
-    feature = records.start_feature(wt, it["title"], backlog.prose(it, "why") or it["title"])
-    meta, storm = records.new_record(wt, BRAINSTORM, it["title"], src=iid)
+    title = title_of(it, iid)
+    feature = records.start_feature(wt, title, summary(it, iid))
+    meta, storm = records.new_record(wt, BRAINSTORM, title, src=iid)
     with open(storm, "a", encoding="utf-8") as fh: fh.write(context(it, iid))
     _, adopted = backlog.set_status(wt, iid, backlog.ADOPTED, meta["id"])
     return [f"seeded: {feature}", f"seeded: {meta['id']} {storm}", f"backlog: {iid} {adopted['outcome']}"]
 
 def seed_owed(wt, it, iid):
     branch = backlog.branch_of(wt)
-    return [f"backlog: {backlog.rescope(wt, iid, branch)} scoped to {branch}"]
+    owed = [f"backlog: {backlog.set_status(wt, iid, backlog.OWED)[0]} owed again"] if it.get("status") == backlog.IN_PROGRESS else []
+    return [*owed, f"backlog: {backlog.rescope(wt, iid, branch)} scoped to {branch}"]
 
 SEEDS = {backlog.IDEA: seed_idea, backlog.CLEANUP: seed_owed, backlog.FOLLOWUP: seed_owed}
 
@@ -121,12 +137,17 @@ def seed(wt, text):
     records.exclude(wt)
     return [write_notes(wt, it, iid, it['kind'] != backlog.IDEA), *SEEDS[it["kind"]](wt, it, iid)]
 
+def live_branch(store, it):
+    named = [b for b in (it.get("ref", ""), it.get("scope", "")) if b and b != backlog.NEW]
+    live = backlog.branches(store.wt) if named else set()
+    return next((b for b in named if b in live), "")
+
 def open_item(wt, text):
-    _, _, it, qualified = backlog.load(wt, text)
+    store, _, it, qualified = backlog.load(wt, text)
     status = it.get("status")
-    if status in TAKES: return it
-    on = f" on {it['ref']}" if status == backlog.IN_PROGRESS and it.get("ref") else ""
-    sys.exit(f"{qualified} is {status}{on}; spin-up takes up open and owed items only")
+    on = live_branch(store, it) if status == backlog.IN_PROGRESS else ""
+    if status in TAKES or (status == backlog.IN_PROGRESS and not on): return it
+    sys.exit(f"{qualified} is {status}" + (f" on {on}" if on else "") + "; spin-up takes up open and owed items, and in-progress ones whose branch is gone")
 
 def say(line): print(line, flush=True)
 

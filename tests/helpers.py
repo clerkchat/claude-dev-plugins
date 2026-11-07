@@ -78,6 +78,13 @@ def add_followup(wt, title, *extra, env=None):
     return add_backlog_item(wt, "followup", title, "--origin", "web 7c1e2ab", *extra, env=env)
 
 
+def drop_backlog_title(wt, iid, env=None):
+    path = run_ok("backlog", "path", wt, iid, env=env)
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    write_file(path, re.sub(r"^title: .*\n", "", text, count=1, flags=re.M))
+
+
 def write_config(path, repos=(), pattern="", after_create=""):
     cfg = config.Config([], [config.Repo(*repo) for repo in repos], pattern, after_create)
     write_file(path, config.render(cfg, ""))

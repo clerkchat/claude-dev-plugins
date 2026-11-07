@@ -2,7 +2,7 @@ import datetime
 import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
+from helpers import RunCase, add_backlog_item, drop_backlog_title, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
 
 CHECK = """# Design check: R5 Spec five
 
@@ -164,6 +164,11 @@ class FollowUpsOwedHereTests(BacklogStatusCase):
         self.idea()
         self.assertIn("**Follow-ups owed here:** none.", self.full_status())
 
+    def test_a_follow_up_with_no_title_line_is_still_counted(self):
+        self.followup()
+        drop_backlog_title(self.repo.path, "BL-1")
+        self.assertIn("**Follow-ups owed here:** 1 open.\n- BL-1 (follow-up (owed)):  (web abc1234)", self.full_status())
+
 
 class StatusSeenTests(BacklogStatusCase):
     def setUp(self):
@@ -311,6 +316,10 @@ class ParkedIdeasTests(BacklogStatusCase):
     def test_the_area_view_lists_the_areas_ideas_with_their_when(self):
         out = self.view("--area", "delivery")
         self.assertIn("**Parked ideas:** 1\n- BL-1: Phone digits When: after launch.", out)
+
+    def test_the_area_view_lists_an_idea_with_no_title_line_by_its_id(self):
+        drop_backlog_title(self.repo.path, "BL-1")
+        self.assertIn("**Parked ideas:** 1\n- BL-1 (idea (open)):  When: after launch.", self.view("--area", "delivery"))
 
     def test_an_adopted_idea_is_no_longer_parked(self):
         self.backlog("set", "BL-1", "adopted", "--ref", "DEC-6")

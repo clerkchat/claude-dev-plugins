@@ -148,28 +148,30 @@ def owed_followups(wt, include_closed=False):
     reader = Reader(wt)
     return [it for it in scoped(reader, reader.own, FOLLOWUP, reader.own_branch) if include_closed or is_open(it)]
 
-def read(wt, kind=None, scope=None, include_closed=False, repo=None):
-    reader = Reader(wt)
-    if repo:
-        found = reader.items(locate(wt, repo))
-    else:
-        hub = hub_store(wt, reader.own)
-        branch = branch_of(hub.wt)
-        views = (scope,) if scope else (NEW, branch, reader.own_branch)
-        in_view = lambda it: include_closed or it["orphaned"] or it.get("scope") in views
-        found = [it for it in reader.items(reader.own) if in_view(it)]
-        if kind in (None, IDEA) and not same_store(hub, reader.own):
-            found += scoped(reader, hub, IDEA, branch)
-        if kind != FOLLOWUP:
-            cfg = config.load()
-            mine = my_names(reader, cfg)
-            for other in cfg.repos:
-                store = registry_store(other)
-                if store and not same_store(store, reader.own): found += not_in(found, touching(reader.items(store), mine))
+def matching(found, kind=None, scope=None, include_closed=False):
     return [it for it in found
             if (kind is None or it.get("kind") == kind)
             and (scope is None or it["orphaned"] or it.get("scope") == scope)
             and (include_closed or is_open(it))]
+
+def repo_items(wt, name): return Reader(wt).items(locate(wt, name))
+
+def read(wt, kind=None, scope=None, include_closed=False):
+    reader = Reader(wt)
+    hub = hub_store(wt, reader.own)
+    branch = branch_of(hub.wt)
+    views = (scope,) if scope else (NEW, branch, reader.own_branch)
+    in_view = lambda it: include_closed or it["orphaned"] or it.get("scope") in views
+    found = [it for it in reader.items(reader.own) if in_view(it)]
+    if kind in (None, IDEA) and not same_store(hub, reader.own):
+        found += scoped(reader, hub, IDEA, branch)
+    if kind != FOLLOWUP:
+        cfg = config.load()
+        mine = my_names(reader, cfg)
+        for other in cfg.repos:
+            store = registry_store(other)
+            if store and not same_store(store, reader.own): found += not_in(found, touching(reader.items(store), mine))
+    return matching(found, kind, scope, include_closed)
 
 def stores_for(wt, repo, own):
     if repo: return [locate(wt, repo)]
@@ -271,9 +273,12 @@ def days_old(it):
     try: return (datetime.date.today() - datetime.date.fromisoformat(it.get("date", ""))).days
     except ValueError: return None
 
-def main_of(store):
+def configured_main(store):
     repo = config.by_common_dir(config.load(), records.common_dir(store.wt))
-    main = repo.main if repo and repo.main else records.remote_main(store.wt).removeprefix(REMOTE)
+    return repo.main if repo else ""
+
+def main_of(store):
+    main = configured_main(store) or records.remote_main(store.wt).removeprefix(REMOTE)
     if not main: sys.exit(f"no remote main in {store.wt} (no origin/HEAD, origin/main, or origin/master); run git remote set-head origin --auto there, or register the repository with its main branch in {config.path()}")
     return main
 
@@ -338,7 +343,8 @@ def line(it):
 def listing(a):
     if a.owed: return owed_followups(a.wt, a.all)
     if a.parked: return feature_ideas(a.wt, a.all)
-    return read(a.wt, a.kind, a.scope, a.all, a.repo)
+    if a.repo: return matching(repo_items(a.wt, a.repo), a.kind, a.scope, a.all)
+    return read(a.wt, a.kind, a.scope, a.all)
 
 def main():
     ap = argparse.ArgumentParser(description="The repository's backlog, <git common dir>/clerk-dev/backlog/: ideas, cleanups, and follow-ups as one file per item, BL-n per repository, <repo>:BL-n from elsewhere.")

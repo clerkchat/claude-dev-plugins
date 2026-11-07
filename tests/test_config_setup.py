@@ -244,6 +244,14 @@ class RescanTests(ScanCase):
     def test_the_new_repository_is_noted(self):
         self.assertIn("new: worker", self.notes())
 
+    def test_a_main_branch_that_matches_origin_head_is_not_noted(self):
+        self.assertEqual([n for n in self.notes() if n.startswith("main moved")], [])
+
+    def test_a_main_branch_that_differs_from_origin_head_is_noted(self):
+        self.api.git("update-ref", "refs/remotes/origin/trunk", "HEAD")
+        self.api.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+        self.assertIn(f"main moved: api-server has Main branch main, but origin/HEAD in {self.api.path} is trunk; update the cell", self.notes())
+
     def test_a_registered_checkout_that_is_gone_is_noted(self):
         os.rename(self.web.path, self.path("code/web/moved"))
         self.assertIn(f"missing: web {self.web.path} no longer exists", self.notes())

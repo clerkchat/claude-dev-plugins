@@ -66,7 +66,7 @@ def block(path, log_n):
     head = git(wt, "rev-parse", "HEAD")
     rec = load_script("records.py")
     common = rec.common_dir(wt)
-    out += [f"## {rec.this_repo(wt, dict(rows))} ({branch})", "",
+    out += [f"## {rec.this_repo(wt, rows)} ({branch})", "",
             f"- Worktree: `{wt}`", f"- HEAD: `{head[:9]}`", f"- Common dir: `{common}`"]
 
     setup = rec.setup_path(wt)
@@ -90,7 +90,7 @@ def block(path, log_n):
     review = os.path.join(wt, ".clerk-dev")
     out.append(f"- Branch notes: {purpose_state(os.path.join(review, 'branch-notes.md'))}")
     if rows:
-        out.append("- Workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows))
+        out.append("- Workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows.items()))
     else:
         out.append("- Workspace: none")
     out.append(f"- Open follow-ups: {len(load_script("backlog.py").owed_followups(wt))}")

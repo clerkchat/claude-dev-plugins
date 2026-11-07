@@ -30,8 +30,6 @@ def walk(root, depth=DEPTH):
     for e in entries:
         if not e.name.startswith(".") and e.is_dir(follow_symlinks=False): yield from walk(e.path, depth - 1)
 
-def main_branch(checkout): return records.git(checkout, "rev-parse", "--abbrev-ref", "origin/HEAD").removeprefix("origin/")
-
 def follows_default(checkout, w): return w.path == os.path.join(os.path.dirname(checkout), w.branch)
 
 class Scan:
@@ -78,7 +76,7 @@ class Scan:
         name = given[0] if given else from_git
         others = [n for n in unique(given + [from_git]) if n != name]
         if given and others: self.notes.append(f"name {name} for {checkout} is from {WORKSPACE_SOURCE}; also called {', '.join(others)}")
-        main = main_branch(checkout)
+        main = records.origin_head(checkout)
         if not main: self.notes.append(f"no origin/HEAD in {checkout}: run git remote set-head origin --auto there or fill in its {config.MAIN} cell")
         return config.Repo(name, checkout, main)
 
@@ -107,9 +105,15 @@ def merged_roots(scan, existing, proposed, had):
     if had: scan.notes += [f"new: {r}" for r in new]
     return existing.search_roots + new
 
+def moved_main(r):
+    head = records.origin_head(real(r.checkout)) if r.main else ""
+    return f"main moved: {r.name} has {config.MAIN} {r.main}, but origin/HEAD in {r.checkout} is {head}; update the cell" if head and head != r.main else ""
+
 def merged_repos(scan, existing, had):
     kept = {real(r.checkout) for r in existing.repos}
-    scan.notes += [f"missing: {r.name} {r.checkout} no longer exists" for r in existing.repos if not os.path.isdir(real(r.checkout))]
+    present = [r for r in existing.repos if os.path.isdir(real(r.checkout))]
+    scan.notes += [f"missing: {r.name} {r.checkout} no longer exists" for r in existing.repos if r not in present]
+    scan.notes += [note for note in map(moved_main, present) if note]
     new = [scan.repo(c) for c in scan.commons if config.checkout_of(c) not in kept]
     if had: scan.notes += [f"new: {r.name}" for r in new]
     return existing.repos + new

@@ -37,7 +37,8 @@ config has to be set up in an interactive session first.
    no `origin/HEAD`, a name taken from `workspace.md` over another, worktrees
    that do not follow the pattern, a root it also proposed, a repository new
    since the last scan, a registered checkout that is gone, a name more than
-   one row shares.
+   one row shares, a Main branch cell that differs from the repository's
+   current `origin/HEAD`.
 4. Read the proposal and show it with its notes. Settle each note with the
    user: fill in an empty `Main branch`, pick the pattern when the worktree
    paths disagree, give each row of a shared name its own name or remove it. The `After create:` line is left empty unless the user

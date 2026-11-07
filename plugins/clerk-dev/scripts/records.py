@@ -116,6 +116,8 @@ def this_repo(wt, repos):
     common = common_dir(wt)
     return os.path.basename(os.path.dirname(common) if common else real)
 
+def origin_head(wt): return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD").removeprefix("origin/")
+
 def remote_main(wt):
     return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD") or next((r for r in ("origin/main", "origin/master") if git(wt, "rev-parse", "--verify", "-q", r)), "")
 
@@ -584,7 +586,7 @@ def names(wt, wanted):
                 name = check_gloss(d, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
             elif kind == ids.BACKLOG:
                 bl = backlog_mod(); it = bl.lookup(here, X)
-                if it: name = f"{bl.kind_name(it)} ({it.get('status')}): {it.get('title')}"
+                if it: name = f"{bl.kind_name(it)} ({it.get('status')})" + (f": {it['title']}" if it.get("title") else "")
             elif kind in (ids.BUILD, ids.MILESTONE):
                 e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
                 if e: name = ("milestone: " if kind == ids.MILESTONE else f"handoff for {e['f']['Record']}: " if e["f"].get("Record") else "handoff: ") + e["title"]
