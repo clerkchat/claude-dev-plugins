@@ -68,6 +68,10 @@ class SpinUpCase(TempCase):
     def purpose(self, wt):
         return records.branch_notes(wt)[0]
 
+    def notes(self, wt):
+        with open(records.notes_path(wt), encoding="utf-8") as f:
+            return f.read()
+
     def setup_status(self, wt):
         return run_ok("status", wt, "--setup", "--no-mark", env=self.env)
 
@@ -101,7 +105,10 @@ class WhenAnIdeaIsSpunUp(SpinUpCase):
         self.assertEqual(self.out.splitlines()[0], f"worktree: {self.wt}")
 
     def test_drafts_the_purpose_from_the_item(self):
-        self.assertEqual(self.purpose(self.wt).splitlines()[:3], [f"Drafted {TODAY} from BL-1. Edit freely.", "", "What this branch builds: Phone digits."])
+        self.assertEqual(self.purpose(self.wt).splitlines()[:3], [f"Drafted {TODAY} from BL-1. Review and edit.", "", "What this branch builds: Phone digits."])
+
+    def test_keeps_the_items_body_out_of_the_purpose(self):
+        self.assertNotIn("faster lookups", self.purpose(self.wt))
 
     def test_excludes_the_clerk_dev_directory(self):
         self.assertEqual(git(self.wt, "check-ignore", ".clerk-dev"), ".clerk-dev")
@@ -116,7 +123,7 @@ class WhenAnIdeaIsSpunUp(SpinUpCase):
 
     def test_the_brainstorm_carries_the_item_and_its_provenance_as_context(self):
         _, body = records.parse(os.path.join(self.wt, ".clerk-dev", "feature", "records", "001-brainstorm-phone-digits.md"))
-        self.assertIn("## Context\n\n### Why\n\nfaster lookups\n\n### When\n\nafter launch\n\nFiled", body)
+        self.assertIn("## Context\n\n### From the item (quoted)\n\n> ## Why\n>\n> faster lookups\n>\n> ## When\n>\n> after launch\n\nFiled", body)
 
     def test_marks_the_item_adopted_as_the_brainstorm(self):
         it = self.item("BL-1", self.wt)
@@ -133,8 +140,11 @@ class WhenAFollowUpIsSpunUp(SpinUpCase):
         self.wt = self.path("api/feat/export-id")
         self.create("feat/export-id", "BL-1")
 
-    def test_puts_the_contract_on_the_first_line_of_what_it_builds(self):
-        self.assertIn("What this branch builds: Handle exportId. Contract: changed: GET /x: now requires exportId.", self.purpose(self.wt))
+    def test_keeps_the_contract_out_of_the_purpose(self):
+        self.assertNotIn("requires exportId", self.purpose(self.wt))
+
+    def test_quotes_the_contract_in_a_section_apart_from_purpose_and_guidance(self):
+        self.assertIn("## From the item (quoted, not Purpose or Guidance)\n\n> Contract: changed: GET /x: now requires exportId", self.notes(self.wt))
 
     def test_starts_no_feature(self):
         self.assertFalse(os.path.exists(os.path.join(self.wt, ".clerk-dev", "feature")))
@@ -151,8 +161,12 @@ class WhenACleanupIsSpunUp(SpinUpCase):
         self.wt = self.path("api/chore/remove-the-export-flag")
         self.create("chore/remove-the-export-flag", "BL-1")
 
-    def test_lists_what_it_removes_as_deployed_code_it_changes(self):
-        self.assertIn("Deployed code it changes on purpose (change with care, state rollout):\n- EXPORT_V2_FLAG", self.purpose(self.wt))
+    def test_lists_nothing_it_removes_as_deployed_code_it_changes(self):
+        self.assertNotIn("EXPORT_V2_FLAG", self.purpose(self.wt))
+        self.assertNotIn("Deployed code it changes on purpose", self.notes(self.wt))
+
+    def test_quotes_what_it_removes_apart_from_purpose(self):
+        self.assertIn("> Removes: EXPORT_V2_FLAG", self.notes(self.wt))
 
     def test_leaves_setup_complete(self):
         self.assertEqual(self.setup_status(self.wt), "Setup: complete.")

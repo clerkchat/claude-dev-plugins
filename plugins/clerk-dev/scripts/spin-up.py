@@ -76,36 +76,31 @@ def sentence(text): return text if text[-1:] in ".!?" else text + "."
 
 def untitled(body): return re.sub(r"^# .*$", "", body, count=1, flags=re.M)
 
-def paragraph(body):
-    text = untitled(body)
-    lead, *sections = re.split(r"^##+ (.+?)[ \t]*$", text, flags=re.M)
-    parts = [lead] + [f"{heading}: {content}" for heading, content in zip(sections[::2], sections[1::2])]
-    return " ".join(sentence(" ".join(p.split())) for p in parts if p.strip())
+def quote(text): return "\n".join(f"> {line}".rstrip() for line in text.splitlines())
 
-def nested(body):
-    text = untitled(body)
-    return re.sub(r"^(#+) ", r"#\1 ", text, flags=re.M).strip()
+def item_text(it):
+    parts = [("Body", untitled(it.get("body", "")).strip()), ("Contract", it.get("contract", "")), ("Removes", it.get("removes", ""))]
+    return "\n\n".join(quote(f"{label}: {text}" if label != "Body" else text) for label, text in parts if text)
 
 def purpose(it, iid):
-    builds = f"What this branch builds: {sentence(it['title'])}"
-    if it.get("contract"): builds += f" Contract: {sentence(it['contract'])}"
-    lines = [f"Drafted {datetime.date.today().isoformat()} from {iid}. Edit freely.", "", builds]
-    text = paragraph(it.get("body", ""))
-    if text: lines.append(text)
-    if it.get("removes"): lines += ["Deployed code it changes on purpose (change with care, state rollout):", f"- {it['removes']}"]
-    return "\n".join(lines)
+    return f"Drafted {datetime.date.today().isoformat()} from {iid}. Review and edit.\n\nWhat this branch builds: {sentence(it['title'])}\nThe backlog item {iid} holds the detail; read it with backlog.py show."
 
-def write_notes(wt, it, iid):
+def from_the_item(it):
+    text = item_text(it)
+    return f"## From the item (quoted, not Purpose or Guidance)\n\n{text}\n" if text else ""
+
+def write_notes(wt, it, iid, quoted):
     p = records.notes_path(wt)
-    records.write_atomic(p, f"# Branch notes\n\n## Purpose\n{purpose(it, iid)}\n\n## Guidance\n")
+    extra = f"\n{from_the_item(it)}" if quoted else ""
+    records.write_atomic(p, f"# Branch notes\n\n## Purpose\n{purpose(it, iid)}\n\n## Guidance\n{extra}")
     return f"seeded: {p}"
 
 def provenance(it, iid):
     return f"Filed {it.get('date', '')} from {it.get('from', '')} on {it.get('branch', '')} in {it.get('repo', '')}, as {iid}."
 
 def context(it, iid):
-    body = nested(it.get("body", ""))
-    return "## Context\n\n" + (f"{body}\n\n" if body else "") + provenance(it, iid) + "\n"
+    text = item_text(it)
+    return "## Context\n\n" + (f"### From the item (quoted)\n\n{text}\n\n" if text else "") + provenance(it, iid) + "\n"
 
 def seed_idea(wt, it, iid):
     feature = records.start_feature(wt, it["title"], backlog.prose(it, "why") or it["title"])
@@ -124,7 +119,7 @@ def seed(wt, text):
     if records.branch_notes(wt)[0]: sys.exit(f"{records.notes_path(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
     _, _, it, iid = backlog.load(wt, text)
     records.exclude(wt)
-    return [write_notes(wt, it, iid), *SEEDS[it["kind"]](wt, it, iid)]
+    return [write_notes(wt, it, iid, it['kind'] != backlog.IDEA), *SEEDS[it["kind"]](wt, it, iid)]
 
 def open_item(wt, text):
     _, _, it, qualified = backlog.load(wt, text)
