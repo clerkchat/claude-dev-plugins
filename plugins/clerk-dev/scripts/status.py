@@ -847,6 +847,15 @@ def since_review(wt, run, reviewed, head, out, steps):
         steps.append("The branch was rebased since the review: run `/clerk-dev:review --full`.")
     return unreviewed, counts_fix
 
+def unbuilt(wt):
+    """True when the branch adds nothing to main: no commits past the remote
+    main, or a HEAD the local main already holds, as when origin is unfetched."""
+    try:
+        if not load_script("build.py").branch_commits(wt): return True
+        main = bl.main_of(bl.Reader(wt).own)
+    except SystemExit: return False
+    return subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", "HEAD", main], capture_output=True).returncode == 0
+
 def review_section(wt, run, have_run, head, out):
     steps = []
     status = instr = numbers = {}
@@ -859,7 +868,7 @@ def review_section(wt, run, have_run, head, out):
         when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(run, "report.md"))).strftime("%Y-%m-%d %H:%M") \
             if os.path.exists(os.path.join(run, "report.md")) else "not finished"
         out.append(f"**Review:** `.clerk-dev/{label}` of {target[0] if target else '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
-    else:
+    elif not unbuilt(wt):
         out.append("**Review:** none yet in this worktree.")
         steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
     feature = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest-feature"))
@@ -974,6 +983,13 @@ def findings_section(wt, run, review, open_items, head, out):
         steps.append(DRAFT_PR_STEP)
     return first, steps
 
+def purpose_lead(wt):
+    purpose, _ = load_script("records.py").branch_notes(wt)
+    lines = [l.strip() for l in (purpose or "").splitlines() if l.strip()]
+    builds = [l.split(":", 1)[1].strip() for l in lines if l.startswith("What this branch builds:")]
+    lead = builds[0] if builds else next((l for l in lines if not l.startswith("Drafted ")), "")
+    return [f"**Purpose:** {short(lead, 160)}", ""] if lead else []
+
 def next_lines(steps, empty=None):
     if steps: return ["", "**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)]
     return ["", f"**Next:** {empty}"] if empty else []
@@ -996,6 +1012,7 @@ def main():
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")
     out = []
+    fresh = not have_run and unbuilt(wt)
     rows = workspace_rows(wt)
     mine = read_build(wt)
     gaps = setup_gaps(wt, rows, mine.entries)
@@ -1005,6 +1022,7 @@ def main():
     lead = {"implementation": "the implementation in ", "design": "the design of "}.get(a.focus, "")
     out.append(f"## What blocks {this_repo(wt, rows)} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{this_repo(wt, rows)} stands ({branch})\n")
     out += setup_lines(gaps)
+    if fresh and a.focus == "all": out += purpose_lead(wt)
     if a.focus == "blockers":
         out += next_lines(blockers_view(wt, out, [mine] + theirs, run, have_run))
         emit_view(wt, out); return
@@ -1033,8 +1051,8 @@ def main():
         first, later = feature_block(wt, rows, out)
         out += rerouted_lines(wt)
         steps = bfirst + pass_steps + first + steps + blater + later
-    first, later = findings_section(wt, run, review, open_items, head, out) if have_run else ([], [DRAFT_PR_STEP])
-    out += next_lines(first + steps + later, "nothing pending.")
+    first, later = findings_section(wt, run, review, open_items, head, out) if have_run else ([], [])
+    out += next_lines(first + steps + later, "start the work the Purpose describes; ask for it, and it goes through building." if fresh else "nothing pending.")
     emit(wt, "\n".join(out))
 
 if __name__ == "__main__":
