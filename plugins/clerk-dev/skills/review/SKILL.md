@@ -377,7 +377,10 @@ see Step 6b):
   `numbers.tsv`.
 
 Lens agents are provided by this plugin as `clerk-dev:lens-<lens>`; pass that
-full name as the subagent type.
+full name as the subagent type. The Agent tool takes it as `subagent_type`; an
+`agent()` call in a Workflow script takes it as `agentType` and silently drops
+`subagent_type`, which leaves every instance a generic workflow agent with no
+lens and no protocol.
 
 The protocol every lens agent follows is the `review-protocol` skill; you do not
 need to read it unless debugging agent output.
@@ -1003,8 +1006,11 @@ block, merges entries on the same file with overlapping or adjacent line ranges,
 keeps the highest severity and confidence and the union of lenses, slices, and
 evidence, and reports how many findings it parsed per file. If a raw file shows
 zero findings but visibly contains a `findings` block, the agent broke the
-format; read that file yourself rather than patching the script. Do not write a
-parser of your own. Merging by line range is deliberately mechanical; two
+format; read that file yourself rather than patching the script. Every lens
+emits a `findings` block, empty when it found nothing, so a raw file with no
+`findings` block at all means the instance did not run as its lens: stop, say
+which lenses, and rerun those instances with the right agent type rather than
+writing their findings up by hand. Do not write a parser of your own. Merging by line range is deliberately mechanical; two
 findings about the same defect in different files stay separate and the verifier
 sees both. A credit (lens `credit`) never merges with a finding of another kind;
 two credits on overlapping lines merge as findings do.
