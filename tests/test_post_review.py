@@ -1700,7 +1700,20 @@ class WhenTheRunIsUnsplitTest(RenderBodyCase):
         self.assertIn(f"{post.HOW_REVIEWED[0]}\n\n<details><summary>How the change was reviewed</summary>\n\n", self.rendered())
 
     def test_closes_the_fold_before_the_end_marker(self):
-        self.assertTrue(self.rendered().endswith(f"\n\n</details>\n\n{post.HOW_REVIEWED[1]}\n"))
+        self.assertTrue(self.rendered().endswith(f"\n\n</details>\n\n{post.assisted_by_line()}\n\n{post.HOW_REVIEWED[1]}\n"))
+
+    def test_ends_the_block_with_the_assisted_by_line(self):
+        with mock.patch.object(post, "plugin_version", return_value="9.8.7"):
+            self.assertIn("</details>\n\n<sub>Review assisted by clerk-dev 9.8.7</sub>\n\n" + post.HOW_REVIEWED[1], self.rendered())
+
+    def test_leaves_the_version_out_when_none_is_readable(self):
+        with mock.patch.object(post, "plugin_version", return_value=None):
+            self.assertIn("<sub>Review assisted by clerk-dev</sub>", self.rendered())
+
+    def test_replaces_the_line_on_render_again(self):
+        with mock.patch.object(post, "plugin_version", return_value="1.0.0"): self.render()
+        with mock.patch.object(post, "plugin_version", return_value="2.0.0"): self.render()
+        self.assertEqual((self.body().count("Review assisted by"), "clerk-dev 2.0.0</sub>" in self.body()), (1, True))
 
 
 class WhenTheRunIsSplitTest(RenderBodyCase):

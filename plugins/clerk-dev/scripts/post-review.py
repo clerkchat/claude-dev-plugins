@@ -2,7 +2,7 @@
 import argparse, datetime, json, os, re, shlex, subprocess, sys
 import gh_api, ids
 import run_files as rf
-from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
+from records import ROUTING, load_script, phrase_of, phrases, plugin_version, read_plain_names
 
 pc = load_script("pr-comments.py")
 
@@ -433,12 +433,16 @@ def not_run_line(run, names):
     cut = {n.lens: NOT_RUN_CAUSES[n.cause] for n in rf.read_not_run(run) if n.cause in NOT_RUN_CAUSES}
     return "Not run: " + ", ".join(f"{phrase_of(names, lens)} ({cut[lens]})" for lens in in_name_order(names, cut)) + "." if cut else ""
 
+def assisted_by_line():
+    version = plugin_version()
+    return f"<sub>Review assisted by clerk-dev{f' {version}' if version else ''}</sub>"
+
 def how_reviewed(run, names, slices):
     instances = rf.read_instances(run)
     if instances is None: sys.exit(f"nothing rendered; {run} has no plan.md")
     entries = [*(part_entry(names, slices, instances, name) for name in slices.order), whole_change_entry(names, slices, instances)]
     return "\n\n".join([HOW_REVIEWED[0], SUMMARY_FOLD[0], *entries,
-                        *filter(None, [legend(names, instances), not_run_line(run, names)]), SUMMARY_FOLD[1], HOW_REVIEWED[1]])
+                        *filter(None, [legend(names, instances), not_run_line(run, names)]), SUMMARY_FOLD[1], assisted_by_line(), HOW_REVIEWED[1]])
 
 def without_fold(text):
     _, closed, rest = text.partition(SUMMARY_FOLD[1])
