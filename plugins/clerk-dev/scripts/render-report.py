@@ -68,10 +68,10 @@ present, else shortened from the claim.
 import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from records import ROUTING, load_script, read_plain_names
+from records import ROUTING, load_script, phrases, read_plain_names
 from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
-                       finding_id, has_comment, joined_replies, log_commits, open_fence, read_appended, read_findings, read_instructions, read_kept_open,
-                       read_numbers, read_posted, read_reconcile, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
+                       finding_id, has_comment, joined_replies, log_commits, name_as_label, open_fence, read_appended, read_findings, read_instructions, read_kept_open,
+                       read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
                        posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
                        write_text, line_span)
 mf = load_script("merge-findings.py")
@@ -192,17 +192,6 @@ def scope_line(e):
 def size_cell(e):
     return ", ".join(x for x in (e.get("_size", ""), "cross-repo" if e.get("_follow") else "") if x)
 
-def read_labels(run):
-    labels, cur = {}, None
-    p = os.path.join(run, "slices.md")
-    if not os.path.exists(p): return labels
-    for line in open(p, encoding="utf-8"):
-        m = re.match(r"^- name:\s*(.+)$", line)
-        if m: cur = m.group(1).strip(); labels[cur] = cur.replace("-", " ").capitalize(); continue
-        m = re.match(r"^\s+label:\s*(.+)$", line)
-        if m and cur: labels[cur] = m.group(1).strip()
-    return labels
-
 def unquote(t):
     t = (t or "").strip()
     while len(t) > 1 and t[0] in "\"'“" and t[-1] in "\"'”.":
@@ -229,7 +218,7 @@ def snippet(repo, head, spec):
 
 def area_of(e, labels):
     sl = sorted(s for s in e["slices"] if s not in ("whole", "all"))
-    return labels.get(sl[0], sl[0].replace("-", " ").capitalize()) if sl else "Whole change"
+    return labels.get(sl[0], name_as_label(sl[0])) if sl else "Whole change"
 
 def steps_md(text):
     items = [l.strip() for l in text.split("\n") if l.strip()]
@@ -318,7 +307,7 @@ def card(n, e, v, labels, names, repo, head, section):
     if is_pr(e):
         head_lines = [f"**{action}** · by @{e.get('author', 'someone')}", ""]
     else:
-        focus = ", ".join(names.get(l, l) for l in sorted(e["lenses"]))
+        focus = phrases(names, sorted(e["lenses"]))
         head_lines = [f"**{action}** · {area_of(e, labels)}", "", f"Focus: {focus}", ""]
     status = [] if is_credit(e) else [status_line(status_row(STATUS, e["id"])), ""]
     out = [f"#### {n}. {title_of(e, TITLES)}" + (" [new]" if is_new(e["id"]) else ""), "", f"<!-- finding {n}, merged {e['id']}, verify/{e['id']}.md, raw: {raw} -->", ""] + head_lines + status
@@ -545,7 +534,8 @@ def history_line(e):
         line = f"Reopened: {where} was marked fixed" + (f" in {m['prev_ref']}" if m["prev_ref"] else "")
         if m.get("cause"):
             lens, loc, claim = (m["cause"].split("|", 2) + ["", "", ""])[:3]
-            who = NAMES.get(lens.split(",")[0].strip(), lens) if lens else "a"
+            first = lens.split(",")[0].strip()
+            who = NAMES[first].phrase if first in NAMES else lens or "a"
             return line + f", but this review's {who} reviewer reported: {claim.rstrip('.')} ({loc})."
         return line + ", and this review found it again."
     if m["prev_status"] in ("wont-fix", "deferred"):
@@ -1079,7 +1069,7 @@ def glance_rows(numbered, labels):
     def glance_title(e):
         t = title_of(e, TITLES)
         return t + " (also on the PR)" if e["id"] in PR_LINKS else t
-    return [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), ", ".join(NAMES.get(l, l) for l in sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), CHOICE_WORD.get(choice_of(e["id"]), ""), status_cell(status_row(STATUS, e["id"]))] for e in numbered]
+    return [["#", "Finding", "Area", "Focus", "Size", "Action", "Triage", "Status"]] + [[str(e["_n"]), glance_title(e), "Pull request" if is_pr(e) else area_of(e, labels), phrases(NAMES, sorted(e["lenses"])), size_cell(e), action_of(e, e["_sec"]), CHOICE_WORD.get(choice_of(e["id"]), ""), status_cell(status_row(STATUS, e["id"]))] for e in numbered]
 
 def progress_line(numbered):
     done = {k: sum(1 for e in numbered if e["_sec"] == k and status_of(STATUS, e["id"]) in CLOSED_STATUSES) for k in ("reopen", "pr", "fix", "look", "confirm")}
@@ -1206,7 +1196,7 @@ def main():
     a = parse_args()
     today = a.date or ""
     merged = read_findings(a.run)
-    verdicts, labels = read_verdicts(a.run), read_labels(a.run)
+    verdicts, labels = read_verdicts(a.run), {name: part.label for name, part in read_slices(a.run).by_name.items()}
     global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID
     NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run), a.run
     nums = read_numbers(a.run)

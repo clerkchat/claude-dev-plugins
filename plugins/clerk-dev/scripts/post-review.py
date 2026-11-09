@@ -543,7 +543,7 @@ def full_sha(commit, repo):
 
 def recorded_pr(run):
     number, url = (rf.read_text(os.path.join(run, "pr", "pr.txt")).split("\t") + [""])[:2]
-    target = (rf.read_text(os.path.join(run, "target.txt")).splitlines() or [""])[0].strip()
+    target = rf.read_target(run).target
     m = PULL_URL.search(url.strip()) or PULL_URL.search(target)
     if m: return int(m.group(3)), f"{m.group(1)}/{m.group(2)}"
     m = TARGET_PR.match(number.strip()) or TARGET_PR.match(target)

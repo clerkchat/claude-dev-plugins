@@ -24,7 +24,7 @@ final/verify/<new id>.md (the `bar:` line), final/below.md, raw/, report.md,
 summary.md.
 """
 import argparse, datetime, os, re
-from records import ROUTING, load_script, read_plain_names
+from records import ROUTING, load_script, phrases, read_plain_names
 import run_files as rf
 
 sf = load_script("stale-findings.py")
@@ -130,12 +130,12 @@ def body(run, a, names, heading="##"):
     other = [c for c in found if c not in {n for _, n, _ in CATEGORIES}]
     for c in other: out.append(f"- {c}: findings {', '.join(found[c])}")
     if a["lenses"]:
-        out += ["", "Lenses that ran: " + ", ".join(names.get(l, l) for l in a["lenses"]) + "."]
+        out += ["", "Lenses that ran: " + phrases(names, a["lenses"]) + "."]
         skipped = [l for l in FINAL_LENSES if l not in a["lenses"] and l != "cross-repo"]
         if skipped and "cross-repo" not in a["lenses"]:
-            out.append("Not routed (no matching files): " + ", ".join(names.get(l, l) for l in skipped) + ".")
+            out.append("Not routed (no matching files): " + phrases(names, skipped) + ".")
         if "cross-repo" not in a["lenses"]:
-            out.append("Left out by design, below the final bar: " + ", ".join(names.get(l, l) for l in BELOW_LENSES) + ".")
+            out.append("Left out by design, below the final bar: " + phrases(names, BELOW_LENSES) + ".")
     c = a["counts"]
     if c:
         order = ["fixed", "wont-fix", "deferred", "declined", "in-progress", "open"]

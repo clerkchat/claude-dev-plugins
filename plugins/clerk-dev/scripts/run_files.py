@@ -1,6 +1,6 @@
 import json, os, re, subprocess, sys
 from collections import namedtuple
-from records import load_script
+from records import load_script, section
 
 mf = load_script("merge-findings.py")
 
@@ -254,9 +254,49 @@ def located(e, note):
 def same_commit(a, b):
     return bool(a and b) and (a.startswith(b) or b.startswith(a))
 
+Target = namedtuple("Target", "target base head")
+
+def read_target(run):
+    lines = [line.strip() for line in read_text(os.path.join(run, "target.txt")).splitlines()]
+    return Target(*(lines + ["", "", ""])[:3])
+
 def reviewed_head(run):
-    target = read_text(os.path.join(run, "target.txt")).splitlines()
-    return target[2].strip() if len(target) >= 3 else ""
+    return read_target(run).head
+
+Slice = namedtuple("Slice", "label summary")
+Slices = namedtuple("Slices", "by_name order")
+SLICE_NAME = re.compile(r"^- name:\s*(.+)$")
+SLICE_FIELD = re.compile(r"^(\w+):\s*(.*)$")
+
+def name_as_label(name):
+    return name.replace("-", " ").capitalize()
+
+def indent_of(line):
+    return len(line) - len(line.lstrip())
+
+def slice_fields(lines):
+    fields, cur, key, indent = {}, None, None, None
+    for line in lines:
+        m = SLICE_NAME.match(line)
+        if m: cur, key, indent = fields.setdefault(m.group(1).strip(), {}), None, None; continue
+        if line.startswith("#"): cur = None; continue
+        if cur is None or not line.strip(): continue
+        m = SLICE_FIELD.match(line.strip())
+        if m and (indent is None or indent_of(line) <= indent): key, indent = m.group(1), indent_of(line); cur[key] = m.group(2).strip()
+        elif key: cur[key] = f"{cur[key]} {line.strip()}".strip()
+    return fields
+
+def read_slices(run):
+    text = read_text(os.path.join(run, "slices.md"))
+    by_name = {name: Slice(f.get("label") or name_as_label(name), f.get("summary", "")) for name, f in slice_fields(text.splitlines()).items()}
+    return Slices(by_name, [name for name in dict.fromkeys(re.split(r"[\s,`]+", section(text, "Order"))) if name in by_name])
+
+Instance = namedtuple("Instance", "lens scope raw")
+INSTANCE_ROW = re.compile(r"^\|[^|\n]*\|\s*([^|\n]*?)\s*\|\s*([^|\n]*?)\s*\|.*\|\s*(raw/[^|\s]+\.md)\s*\|", re.M)
+
+def read_instances(run):
+    text = read_text(os.path.join(run, "plan.md"), None)
+    return None if text is None else [Instance(*row) for row in INSTANCE_ROW.findall(text)]
 
 def drafted_for(e, note, commit):
     path, line, end = located(e, note) or ("", None, None)

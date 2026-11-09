@@ -424,5 +424,91 @@ class FencedLinesTest(unittest.TestCase):
         self.assertEqual(self.kinds("```", "a", "##### Instruction"), ["fence", "body", "body"])
 
 
+class ReadTargetTest(RunCase):
+    def test_reads_the_target_base_and_head(self):
+        self.write_target("pr 7", "abc123", "def456")
+        self.assertEqual(run_files.read_target(self.run_dir), ("pr 7", "abc123", "def456"))
+
+    def test_leaves_missing_lines_empty(self):
+        self.write_target("pr 7")
+        self.assertEqual(run_files.read_target(self.run_dir), ("pr 7", "", ""))
+
+    def test_reads_nothing_without_the_file(self):
+        self.assertEqual(run_files.read_target(self.run_dir), ("", "", ""))
+
+    def test_reviewed_head_is_the_third_line(self):
+        self.write_target("pr 7", "abc123", "def456 ")
+        self.assertEqual(run_files.reviewed_head(self.run_dir), "def456")
+
+
+SLICES = """## Slices
+- name: webhook-schema
+  label: Webhook schema
+  summary: new delivery-attempts table
+    and its migration
+  layer: schema
+  files:
+    - db/migrations/1.sql
+- name: delivery
+  summary: webhook intake retried through the queue
+## Seams
+- webhook-schema -> delivery: the delivery-attempts row
+## Order
+delivery, webhook-schema
+"""
+
+
+class ReadSlicesTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write("slices.md", SLICES)
+
+    def slices(self):
+        return run_files.read_slices(self.run_dir)
+
+    def test_reads_the_label_and_the_summary(self):
+        self.assertEqual(self.slices().by_name["webhook-schema"].label, "Webhook schema")
+
+    def test_joins_a_summary_continued_on_the_next_line(self):
+        self.assertEqual(self.slices().by_name["webhook-schema"].summary, "new delivery-attempts table and its migration")
+
+    def test_labels_a_slice_without_a_label_from_its_name(self):
+        self.assertEqual(self.slices().by_name["delivery"], ("Delivery", "webhook intake retried through the queue"))
+
+    def test_reads_the_order(self):
+        self.assertEqual(self.slices().order, ["delivery", "webhook-schema"])
+
+    def test_reads_an_order_written_as_a_list(self):
+        self.write("slices.md", SLICES.replace("delivery, webhook-schema", "- delivery\n- webhook-schema"))
+        self.assertEqual(self.slices().order, ["delivery", "webhook-schema"])
+
+    def test_leaves_out_an_order_name_that_is_no_slice(self):
+        self.write("slices.md", SLICES.replace("delivery, webhook-schema", "delivery whole webhook-schema"))
+        self.assertEqual(self.slices().order, ["delivery", "webhook-schema"])
+
+    def test_reads_nothing_without_the_file(self):
+        self.write("slices.md", "")
+        self.assertEqual(self.slices(), ({}, []))
+
+
+PLAN = """# Plan
+
+## Instances
+| # | lens | scope | patch | model | raw file |
+| --- | --- | --- | --- | --- | --- |
+| 1 | security | entities | patch/entities.patch | opus | raw/security-entities.md |
+| 2 | rollout | all | patch/whole.patch | opus | raw/rollout.md |
+"""
+
+
+class ReadInstancesTest(RunCase):
+    def test_reads_the_lens_scope_and_raw_file_in_table_order(self):
+        self.write("plan.md", PLAN)
+        self.assertEqual(run_files.read_instances(self.run_dir), [("security", "entities", "raw/security-entities.md"), ("rollout", "all", "raw/rollout.md")])
+
+    def test_reads_none_without_a_plan(self):
+        self.assertIsNone(run_files.read_instances(self.run_dir))
+
+
 if __name__ == "__main__":
     unittest.main()
