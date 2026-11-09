@@ -50,7 +50,7 @@ Record frontmatter:
   supersedes: DEC-3
   ---
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile, time
+import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile, time
 from typing import NamedTuple
 import ids
 
@@ -131,6 +131,13 @@ def last_fetch(common):
     if not os.path.exists(fh): return None
     mtime = os.path.getmtime(fh)
     return datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"), age(time.time() - mtime)
+
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+def plugin_version():
+    try:
+        with open(os.path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as fh: return json.load(fh)["version"]
+    except Exception: return None
 
 def write_atomic(path, text):
     path = os.path.abspath(path)

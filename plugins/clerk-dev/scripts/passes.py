@@ -39,7 +39,7 @@ Entry format:
     - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
 import argparse, datetime, json, os, re, subprocess, sys
-from records import load_script, write_atomic
+from records import PLUGIN_ROOT, load_script, plugin_version, write_atomic
 import ids
 
 STATES = ("open", "ended", "checked", "abandoned")
@@ -114,12 +114,10 @@ def dirty(wt, leave_out=()):
     files = [l[3:].split(" -> ")[-1] for l in lines]
     return [f for f in files if f not in leave_out]
 
-def plugin_version():
-    root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    sha = subprocess.run(["git", "-C", root, "log", "-1", "--format=%h", "--", "agents"], capture_output=True, text=True).stdout.strip()
-    if sha: return sha
-    try: return "v" + json.load(open(os.path.join(root, ".claude-plugin", "plugin.json")))["version"]
-    except Exception: return "unknown"
+def plugin_stamp():
+    sha = subprocess.run(["git", "-C", PLUGIN_ROOT, "log", "-1", "--format=%h", "--", "agents"], capture_output=True, text=True).stdout.strip()
+    version = plugin_version()
+    return sha or (f"v{version}" if version else "unknown")
 
 def counts(check):
     """{lens: findings} from a Check field, or None when it holds no counts."""
@@ -160,7 +158,7 @@ def main():
         title = f"{a.focus} on {a.piece}" if a.piece else a.focus
         passes.append({"id": pid, "title": title, "items": [], "f": {
             "Mode": a.mode, "Lenses": lenses, "Piece": a.piece or "", "Status": "open",
-            "Start": git(a.wt, "rev-parse", "--short", "HEAD"), "Plugin": plugin_version(),
+            "Start": git(a.wt, "rev-parse", "--short", "HEAD"), "Plugin": plugin_stamp(),
             "Left out": ", ".join(a.leave_out), "Started": today}})
         write(p, passes); print(f"{pid} started at {passes[-1]['f']['Start']}")
         return

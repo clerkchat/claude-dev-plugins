@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+import importlib.util, os, subprocess, sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+spec = importlib.util.spec_from_file_location("bump_version", os.path.join(ROOT, "scripts", "bump-version.py"))
+bump = importlib.util.module_from_spec(spec); spec.loader.exec_module(bump)
+
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True).stdout.strip()
+
+def version_at(rev):
+    return bump.version_in(git("show", f"{rev}:plugins/clerk-dev/.claude-plugin/plugin.json"))
+
+# MERGE_HEAD does not exist yet when this hook runs; the index holds the merge result
+if git("symbolic-ref", "--short", "HEAD") == "main":
+    current, incoming = version_at("HEAD"), version_at("")
+    if bump.parse(incoming) <= bump.parse(current):
+        sys.exit(f"merge refused: the merged plugin version {incoming} is not greater than main's {current}; run scripts/bump-version.py <patch|minor|major> on the branch (or merge with --no-verify)")
