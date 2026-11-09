@@ -22,6 +22,10 @@ TODAY = datetime.date.today().isoformat()
 USER_WORKTREE_TOOLING = re.compile(r"\bgit[ -]work\b|(?<!\w)\.work\b")
 
 
+def item_args(items):
+    return [arg for item in items for arg in ("--item", item)]
+
+
 class SpinUpCase(TempCase):
     def setUp(self):
         super().setUp()
@@ -49,8 +53,8 @@ class SpinUpCase(TempCase):
     def attempt(self, *args):
         return run_script("spin-up", *args, env=self.env)
 
-    def create(self, branch, item, wt=None):
-        return run_ok("spin-up", "create", wt or self.api.path, branch, "--item", item, env=self.env)
+    def create(self, branch, *items, wt=None):
+        return run_ok("spin-up", "create", wt or self.api.path, branch, *item_args(items), env=self.env)
 
     def where(self, branch, *extra, wt=None):
         lines = run_ok("spin-up", "where", wt or self.api.path, branch, *extra, env=self.env).splitlines()
@@ -81,11 +85,12 @@ class SpinUpCase(TempCase):
     def has_branch(self, branch):
         return subprocess.run(["git", "-C", self.api.path, "rev-parse", "--verify", "-q", f"refs/heads/{branch}"], capture_output=True).returncode == 0
 
-    def create_here(self, branch, item):
+    def create_here(self, branch, *items):
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch.dict(os.environ, self.env, clear=True), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        argv = ["spin-up.py", "create", self.api.path, branch, *item_args(items)]
+        with mock.patch.dict(os.environ, self.env, clear=True), mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             try:
-                spin_up.create(self.api.path, branch, item)
+                spin_up.main()
             except SystemExit:
                 pass
         return out.getvalue().splitlines(), err.getvalue().splitlines()
@@ -313,6 +318,14 @@ class ScopedToABranchThatStillExists(SpinUpCase):
         self.assertIn("BL-1 is in-progress on feat/z;", self.refused("create", self.api.path, "feat/x", "--item", "BL-1"))
 
 
+class AnOwedItemScopedToABranchThatStillExists(SpinUpCase):
+    def test_is_taken_naming_that_branch(self):
+        self.api.git("branch", "feat/z")
+        add_followup(self.api.path, "Handle exportId", "--scope", "feat/z", env=self.env)
+        with mock.patch.dict(os.environ, self.env, clear=True):
+            self.assertEqual(spin_up.open_item(self.api.path, "BL-1").live_branch, "feat/z")
+
+
 class WhenItsBranchIsGone(WhenTheItemIsInProgress):
     def setUp(self):
         super().setUp()
@@ -389,7 +402,7 @@ class Seeding(SpinUpCase):
 
     def test_refuses_a_worktree_that_already_has_a_purpose(self):
         with mock.patch.dict(os.environ, {"HOME": self.home}), self.assertRaises(SystemExit) as refused:
-            spin_up.seed(self.wt, "BL-1")
+            spin_up.seed(self.wt, "BL-1", [])
         self.assertIn("already has a Purpose", str(refused.exception))
 
 

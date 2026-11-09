@@ -20,6 +20,11 @@ class Plan(NamedTuple):
     base_line: str
     after_create: str
 
+class Taken(NamedTuple):
+    item: dict
+    qualified: str
+    live_branch: str
+
 def registered(cfg, name):
     repo = config.by_name(cfg, name)
     if not repo: sys.exit(config.MISSING.format(config.path()) if not os.path.exists(config.path()) else f"repository {name} is not in {config.path()}")
@@ -116,26 +121,38 @@ def summary(it, iid):
     why = backlog.prose(it, "why")
     return quote(f"{why}.") if why else title_of(it, iid)
 
-def seed_idea(wt, it, iid):
+def is_idea(it): return it["kind"] == backlog.IDEA
+
+def idea_files(wt, it, iid):
     title = title_of(it, iid)
     feature = records.start_feature(wt, title, summary(it, iid))
     meta, storm = records.new_record(wt, BRAINSTORM, title, src=iid)
     with open(storm, "a", encoding="utf-8") as fh: fh.write(context(it, iid))
-    _, adopted = backlog.set_status(wt, iid, backlog.ADOPTED, meta["id"])
-    return [f"seeded: {feature}", f"seeded: {meta['id']} {storm}", f"backlog: {iid} {adopted['outcome']}"]
+    return [f"seeded: {feature}", f"seeded: {meta['id']} {storm}"], meta["id"]
 
-def seed_owed(wt, it, iid):
+def seed_files(wt, it, iid):
+    records.exclude(wt)
+    notes = write_notes(wt, it, iid, not is_idea(it))
+    lines, storm = idea_files(wt, it, iid) if is_idea(it) else ([], "")
+    return [notes, *lines], storm
+
+def adopt(wt, iid, storm, undo):
+    _, adopted = backlog.set_status(wt, iid, backlog.ADOPTED, storm)
+    return [f"backlog: {iid} {adopted['outcome']}"]
+
+def seed_owed(wt, it, iid, undo):
     branch = backlog.branch_of(wt)
     owed = [f"backlog: {backlog.set_status(wt, iid, backlog.OWED)[0]} owed again"] if it.get("status") == backlog.IN_PROGRESS else []
     return [*owed, f"backlog: {backlog.rescope(wt, iid, branch)} scoped to {branch}"]
 
-SEEDS = {backlog.IDEA: seed_idea, backlog.CLEANUP: seed_owed, backlog.FOLLOWUP: seed_owed}
+def seed_item(wt, it, iid, storm, undo):
+    return adopt(wt, iid, storm, undo) if is_idea(it) else seed_owed(wt, it, iid, undo)
 
-def seed(wt, text):
+def seed(wt, text, undo):
     if records.branch_notes(wt)[0]: sys.exit(f"{records.notes_path(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
     _, _, it, iid = backlog.load(wt, text)
-    records.exclude(wt)
-    return [write_notes(wt, it, iid, it['kind'] != backlog.IDEA), *SEEDS[it["kind"]](wt, it, iid)]
+    lines, storm = seed_files(wt, it, iid)
+    return [*lines, *seed_item(wt, it, iid, storm, undo)]
 
 def live_branch(store, it):
     named = [b for b in (it.get("ref", ""), it.get("scope", "")) if b and b != backlog.NEW]
@@ -144,10 +161,9 @@ def live_branch(store, it):
 
 def open_item(wt, text):
     store, _, it, qualified = backlog.load(wt, text)
-    status = it.get("status")
-    on = live_branch(store, it) if status == backlog.IN_PROGRESS else ""
-    if status in TAKES or (status == backlog.IN_PROGRESS and not on): return it
-    sys.exit(f"{qualified} is {status}" + (f" on {on}" if on else "") + "; spin-up takes up open and owed items, and in-progress ones whose branch is gone")
+    status, live = it.get("status"), live_branch(store, it)
+    if status in TAKES or (status == backlog.IN_PROGRESS and not live): return Taken(it, qualified, live)
+    sys.exit(f"{qualified} is {status}" + (f" on {live}" if status == backlog.IN_PROGRESS else "") + "; spin-up takes up open and owed items, and in-progress ones whose branch is gone")
 
 def say(line): print(line, flush=True)
 
@@ -158,15 +174,16 @@ def add_worktree(p):
     if has_ref(p.target, f"refs/heads/{p.branch}"): records.git(p.target.wt, "branch", "-D", p.branch)
     sys.exit(records.git_failure(p.target.wt, args, r))
 
-def undo_line(p):
+def undo_line(p, extra):
     remove = shlex.join(["git", "-C", p.target.wt, "worktree", "remove", "--force", p.path])
     delete = shlex.join(["git", "-C", p.target.wt, "branch", "-D", p.branch])
-    return f"seeding {p.path} failed; to retry, run: {remove} && {delete}, then run spin-up.py create again"
+    return f"seeding {p.path} failed; to retry, run: {' && '.join([remove, delete, *extra])}, then run spin-up.py create again"
 
 def seed_created(p, iid):
-    try: return seed(p.path, iid)
+    undo = []
+    try: return seed(p.path, iid, undo)
     except BaseException:
-        print(undo_line(p), file=sys.stderr, flush=True)
+        print(undo_line(p, undo), file=sys.stderr, flush=True)
         raise
 
 def create(wt, branch, text):
