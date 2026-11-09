@@ -1652,7 +1652,10 @@ drafter's answers, `review.md` the review body (the drafted sentence, then the
 range line and the how-reviewed block `--render-body` writes),
 `pending-<review id>.md` the text the user had in a pending review when this
 run first posted to it, empty when none, so it also records that this run
-posted to that review, `close-<id>.md` a closing reply's own
+posted to that review; `--submit` renames it `submitted-<review id>.md`, and
+a later run's seed carries a submitted one (or one it inherited) as
+`earlier-<review id>.md`, still the user's review but not that run's,
+`close-<id>.md` a closing reply's own
 words, `keep.tsv` the threads kept open, `payload.json` from a dry run),
 `posted.tsv` (per Post-marked finding: drafted, edited, or posted, the note
 followed, the anchor and commit the draft was written for, and once posted the

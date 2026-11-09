@@ -40,7 +40,12 @@ copies each matched finding's posted.tsv row, posted/keep.tsv row, posted
 text (posted/<id>.md), and closing reply (posted/close-<id>.md) under its new
 id, unless the current run already has a posted.tsv row for it, and only across
 a judged match, a recheck, or a line match whose wording overlaps by at least
-0.5; it names the posted findings a looser match left behind. When a previous
+0.5; it names the posted findings a looser match left behind. It copies the
+text kept from each review still pending (posted/pending-<review id>.md) as
+it is, and that of a submitted one (posted/submitted-<review id>.md, or
+earlier-<review id>.md from a run before) as earlier-<review id>.md, which
+still marks the review as the user's but not as this run's, so a re-review
+after a submit opens a new review. When a previous
 finding posted as a thread on GitHub matched nothing, it prints "N posted
 findings not found again (...)": those threads come in as pull request
 comments on the next pr-comments.py fetch.
@@ -225,10 +230,12 @@ def seed_posted(prev, cur, pid, cid, prev_posting, cur_posting):
     for path in (rf.posted_path, rf.close_text_path): copy_new(path(prev, pid), path(cur, cid))
     return True
 
+CARRIED_AS = {"pending": "pending", "submitted": "earlier", "earlier": "earlier"}
+
 def seed_reviews(prev, cur, rows):
-    review_ids = rf.own_reviews(prev, rows)
-    for rid in review_ids: copy_new(rf.kept_body_path(prev, rid), rf.kept_body_path(cur, rid))
-    if review_ids: copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
+    for state, into in CARRIED_AS.items():
+        for rid in rf.kept_body_ids(prev, (state,)): copy_new(rf.kept_body_path(prev, rid, state), rf.kept_body_path(cur, rid, into))
+    if rf.kept_body_ids(prev, ("pending",)) | rf.review_ids(rows): copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
 
 def seed_postings(prev, cur, pairs):
     prev_posting, cur_posting = read_posting(prev), read_posting(cur)

@@ -10,6 +10,7 @@ VERDICTS = {"comment": "COMMENT", "request-changes": "REQUEST_CHANGES", "approve
 CONFIRMED_VERDICTS = {"request-changes": "request changes", "approve": "approve"}
 DEFAULT_BODY = "Comments from my review of this pull request."
 HOW_REVIEWED = ("<!-- how reviewed: start -->", "<!-- how reviewed: end -->")
+SUMMARY_FOLD = ("<details><summary>How the change was reviewed</summary>", "</details>")
 RANGE_LINE = re.compile(r"^Reviewed (?:`[^`\n]+`|the \d+ commits? since the last review)")
 WHOLE_CHANGE = "**Whole change**: how the parts fit together, and what's left unfinished"
 NOT_RUN_CAUSES = {"quick": "quick review", "removed": "left out for this review"}
@@ -350,15 +351,12 @@ def before_ours(body, ours):
 def kept_body(run, ctx):
     p = ctx["pending"]
     if not p: return ""
-    if str(p["id"]) in rf.own_reviews(run, rf.read_posted(run)): return saved_body(run, p["id"])
+    if str(p["id"]) in rf.own_reviews(run, rf.read_posted(run)): return rf.kept_body_text(run, p["id"])
     return before_ours(outside_block(p.get("body") or "")[0], our_texts(run))
 
 def holds_our_body(run, ctx, rows):
-    ours = rf.own_reviews(run, rows)
-    return str(ctx["pending"]["id"]) in ours if ctx["pending"] else bool(ours & ctx["review_ids"])
-
-def saved_body(run, review_id):
-    return rf.read_text(rf.kept_body_path(run, review_id))
+    if ctx["pending"]: return str(ctx["pending"]["id"]) in rf.own_reviews(run, rows)
+    return bool(rf.kept_body_ids(run, rf.RUN_STATES) & ctx["review_ids"])
 
 def review_body(run, rows, review_id, kept):
     parts = [part for part in (kept, review_head(run)) if part] or [DEFAULT_BODY]
@@ -439,8 +437,12 @@ def how_reviewed(run, names, slices):
     instances = rf.read_instances(run)
     if instances is None: sys.exit(f"nothing rendered; {run} has no plan.md")
     entries = [*(part_entry(names, slices, instances, name) for name in slices.order), whole_change_entry(names, slices, instances)]
-    return "\n\n".join([HOW_REVIEWED[0], "<details><summary>How the change was reviewed</summary>", *entries,
-                        *filter(None, [legend(names, instances), not_run_line(run, names)]), "</details>", HOW_REVIEWED[1]])
+    return "\n\n".join([HOW_REVIEWED[0], SUMMARY_FOLD[0], *entries,
+                        *filter(None, [legend(names, instances), not_run_line(run, names)]), SUMMARY_FOLD[1], HOW_REVIEWED[1]])
+
+def without_fold(text):
+    _, closed, rest = text.partition(SUMMARY_FOLD[1])
+    return rest.strip() if closed and text.startswith(SUMMARY_FOLD[0]) else text
 
 def outside_block(text):
     start = text.find(HOW_REVIEWED[0])
@@ -449,7 +451,7 @@ def outside_block(text):
     above = (above if RANGE_LINE.match(last) else text[:start]).strip()
     after = text[start + len(HOW_REVIEWED[0]):]
     end = after.find(HOW_REVIEWED[1])
-    if end < 0: return "\n\n".join(filter(None, [above, after.strip()])), ""
+    if end < 0: return "\n\n".join(filter(None, [above, without_fold(after.strip())])), ""
     return above, after[end + len(HOW_REVIEWED[1]):].strip()
 
 def render_body(run, repo):
@@ -512,7 +514,7 @@ def submitted_label(review_id):
     return f"body of submitted review {review_id}"
 
 def submitted_body(run, rows, review_id):
-    return review_body(run, rows, review_id, saved_body(run, review_id))
+    return review_body(run, rows, review_id, rf.kept_body_text(run, review_id))
 
 def comment_updates(ctx, sending):
     return [update_call(ctx, it) for it in sending if it["action"] == "update" and it["anchor"]["kind"] != "body"]
@@ -900,6 +902,7 @@ def submit(a, ctx, verdict):
     what = submit_confirmation(verdict, drafts, warned)
     if what: confirm(a, ctx, what, ["--submit", verdict])
     execute(calls, a.repo, ctx)
+    rf.record_submitted(a.run, p["id"])
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
 def close_text(run, mid, shas):

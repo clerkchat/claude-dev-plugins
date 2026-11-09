@@ -184,6 +184,44 @@ class SeedBodyOnlyPostTest(SeedCase):
         self.assertEqual(self.cur_text("posted/review.md"), "Nice work.\n")
 
 
+class SeedSubmittedBodyOnlyReviewTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/submitted-55.md", "My summary.\n")
+        self.write("posted/review.md", "Nice work.\n")
+        self.seed()
+
+    def test_carries_its_kept_text_as_an_earlier_review(self):
+        self.assertEqual(self.cur_text("posted/earlier-55.md"), "My summary.\n")
+
+    def test_carries_it_as_no_review_of_this_run(self):
+        self.assertEqual(run_files.kept_body_ids(self.cur, run_files.RUN_STATES), set())
+
+    def test_copies_no_review_body(self):
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted", "review.md")))
+
+
+class SeedPostingOnASubmittedReviewTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.post({7: {**posted_row(5), "review_id": "55"}})
+        self.write("posted/submitted-55.md", "My summary.\n")
+        self.seed()
+
+    def test_carries_the_posted_row(self):
+        self.assertEqual(run_files.read_posted(self.cur)[1]["review_id"], "55")
+
+    def test_carries_its_kept_text_as_an_earlier_review(self):
+        self.assertEqual(self.cur_text("posted/earlier-55.md"), "My summary.\n")
+
+
+class SeedEarlierReviewTest(SeedCase):
+    def test_carries_it_on_as_an_earlier_review(self):
+        self.write("posted/earlier-55.md", "My summary.\n")
+        self.seed()
+        self.assertEqual(self.cur_text("posted/earlier-55.md"), "My summary.\n")
+
+
 class SeedWithoutAReviewTest(SeedCase):
     def test_copies_no_review_body(self):
         self.post({7: posted_row(5)})

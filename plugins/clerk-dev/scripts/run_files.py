@@ -332,14 +332,24 @@ def posted_path(run, mid):
 def review_text_path(run):
     return os.path.join(run, "posted", "review.md")
 
-KEPT_BODY = re.compile(r"^pending-(\d+)\.md$")
+RUN_STATES = ("pending", "submitted")
+KEPT_STATES = (*RUN_STATES, "earlier")
+KEPT_BODY = re.compile(rf"^({'|'.join(KEPT_STATES)})-(\d+)\.md$")
 
-def kept_body_path(run, review_id):
-    return os.path.join(run, "posted", f"pending-{review_id}.md")
+def kept_body_path(run, review_id, state="pending"):
+    return os.path.join(run, "posted", f"{state}-{review_id}.md")
 
-def kept_body_ids(run):
+def kept_body_ids(run, states=KEPT_STATES):
     folder = os.path.join(run, "posted")
-    return {m.group(1) for m in map(KEPT_BODY.match, os.listdir(folder) if os.path.isdir(folder) else []) if m}
+    return {m.group(2) for m in map(KEPT_BODY.match, os.listdir(folder) if os.path.isdir(folder) else []) if m and m.group(1) in states}
+
+def kept_body_text(run, review_id):
+    return next((t for t in (read_text(kept_body_path(run, review_id, s), None) for s in KEPT_STATES) if t is not None), "")
+
+def record_submitted(run, review_id):
+    pending, submitted = kept_body_path(run, review_id), kept_body_path(run, review_id, "submitted")
+    if os.path.exists(pending): os.replace(pending, submitted)
+    else: write_text(submitted, "\n")
 
 def own_reviews(run, rows):
     return review_ids(rows) | kept_body_ids(run)

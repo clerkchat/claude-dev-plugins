@@ -5,7 +5,7 @@ import unittest
 from contextlib import redirect_stderr
 from unittest import mock
 
-from helpers import SCRIPTS, GhRunCase, merged_md
+from helpers import SCRIPTS, GhRunCase, merged_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -220,6 +220,25 @@ class WhenAPostingWasDraftedButNeverSentTest(FoldInCase):
 class BodyOnlyReviewTest(FoldInCase):
     def test_does_not_import_a_review_this_run_sent_only_a_body_to(self):
         self.write("posted/pending-2.md", "")
+        self.fold(reviews=[review(2, "APPROVED", "Our summary.")])
+        self.assertNotIn("Our summary.", self.read("merged.md"))
+
+    def test_does_not_import_a_review_this_run_submitted(self):
+        self.write("posted/submitted-2.md", "")
+        self.fold(reviews=[review(2, "APPROVED", "Our summary.")])
+        self.assertNotIn("Our summary.", self.read("merged.md"))
+
+
+class BodyOnlyReviewSubmittedInTheRunBeforeTest(FoldInCase):
+    def setUp(self):
+        super().setUp()
+        prev = self.path("prev")
+        write_file(os.path.join(prev, "merged.md"), merged_md())
+        write_file(os.path.join(prev, "posted", "submitted-2.md"), "\n")
+        self.write("reconcile/matches.tsv", "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n")
+        run_ok("reconcile", prev, self.run_dir, "--seed")
+
+    def test_does_not_import_it(self):
         self.fold(reviews=[review(2, "APPROVED", "Our summary.")])
         self.assertNotIn("Our summary.", self.read("merged.md"))
 

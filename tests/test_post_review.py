@@ -78,9 +78,9 @@ class PostCase(GhRunCase):
         self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
         if text is not False: self.write(f"posted/{mid}.md", text or f"Finding {mid} text.")
 
-    def pend(self, commit=HEAD, comments=None, body=""):
-        self.ctx["pending"] = {"id": 55, "node_id": "PRR_55", "commit_id": commit, "html_url": "https://gh/r/55", "body": body,
-                               "comments": comments or {}}
+    def pend(self, commit=HEAD, comments=None, body="", review_id=55):
+        self.ctx["pending"] = {"id": review_id, "node_id": f"PRR_{review_id}", "commit_id": commit, "html_url": f"https://gh/r/{review_id}",
+                               "body": body, "comments": comments or {}}
 
     def posted_row(self, mid, state="posted", **fields):
         row = {"state": state, "note": self.marks.get(mid, ""), "kind": "line", "path": "src/a.py", "line": "11", "end_line": "11",
@@ -767,6 +767,82 @@ class WhenItPostedOnlyTheBodyTest(PostCase):
                                                                 "fields": {"event": "APPROVE", "body": "Nice work."}}])
 
 
+def answered_review(review_id):
+    return {"id": review_id, "node_id": f"PRR_{review_id}", "html_url": f"https://gh/r/{review_id}"}
+
+
+class SubmittedReviewCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.stub("graphql", side_effect=lambda q, v, cwd: thread_answer(v))
+        self.rest = self.stub("rest", return_value=answered_review(55))
+        self.write("posted/review.md", "Nice work.")
+        self.first_run()
+        self.main("--post")
+        self.pend()
+        self.main("--submit", "approve")
+        self.ctx["pending"] = None
+
+    def first_run(self):
+        pass
+
+    def re_review(self, matches=""):
+        prev, self.run_dir = self.run_dir, self.path("cur")
+        os.makedirs(self.run_dir)
+        for name in ("merged.md", "numbers.tsv", "target.txt"): shutil.copy(os.path.join(prev, name), self.run_dir)
+        write_file(os.path.join(self.run_dir, "reconcile", "matches.tsv"), "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n" + matches)
+        run_ok("reconcile", prev, self.run_dir, "--seed")
+        self.write("posted/review.md", "Reviewed the 2 commits since the last review.")
+        self.rest.return_value = answered_review(56)
+
+    def post_and_approve(self):
+        self.main("--post")
+        self.pend(review_id=56)
+        return self.payload("--submit", "approve")
+
+
+class WhenItSubmittedABodyOnlyReviewTest(SubmittedReviewCase):
+    def test_records_the_review_as_submitted(self):
+        self.assertEqual((run_files.kept_body_ids(self.run_dir, ("submitted",)), run_files.kept_body_ids(self.run_dir, ("pending",))), ({"55"}, set()))
+
+    def test_post_after_it_opens_no_new_review(self):
+        self.main("--post", "--dry-run")
+        self.assertIn("nothing to post", self.err)
+
+
+class AfterAReReviewOfASubmittedBodyOnlyReviewTest(SubmittedReviewCase):
+    def setUp(self):
+        super().setUp()
+        self.re_review()
+
+    def test_carries_the_submitted_review_as_an_earlier_one(self):
+        self.assertEqual(run_files.kept_body_ids(self.run_dir, ("earlier",)), {"55"})
+
+    def test_post_opens_a_new_review_with_the_new_body(self):
+        self.assertEqual(self.calls(), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews",
+                                         "fields": {"commit_id": HEAD, "body": "Reviewed the 2 commits since the last review."}, "as": "review"}])
+
+    def test_submit_approve_accepts_the_new_review(self):
+        self.assertEqual(self.post_and_approve(), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/56/events",
+                                                    "fields": {"event": "APPROVE", "body": "Reviewed the 2 commits since the last review."}}])
+
+
+class AfterAReReviewOfASubmittedReviewWithCommentsTest(SubmittedReviewCase):
+    def first_run(self):
+        self.mark(1)
+
+    def setUp(self):
+        super().setUp()
+        self.re_review("1\t1\tjudge\t1\topen\t\n")
+        self.mark(1)
+
+    def test_carries_the_posted_comment_on_the_submitted_review(self):
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["review_id"], "55")
+
+    def test_submit_approve_accepts_the_new_review(self):
+        self.assertEqual(self.post_and_approve()[0]["path"], "repos/acme/widgets/pulls/7/reviews/56/events")
+
+
 class PublishedCase(PostCase):
     def update_calls(self, ids="1"):
         return self.payload("--update-published", ids)
@@ -829,6 +905,14 @@ class WhenABodyCommentOfASubmittedReviewChangedTest(SubmittedBodyCommentCase):
 
     def test_update_published_keeps_the_text_saved_from_that_review_above_it(self):
         self.write("posted/pending-54.md", "My summary.")
+        self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
+
+    def test_update_published_keeps_the_text_saved_from_that_review_once_submit_recorded_it(self):
+        self.write("posted/submitted-54.md", "My summary.")
+        self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
+
+    def test_update_published_keeps_the_text_saved_from_that_review_in_an_earlier_run(self):
+        self.write("posted/earlier-54.md", "My summary.")
         self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
 
     def test_post_leaves_that_review_as_it_is(self):
@@ -1143,6 +1227,7 @@ class ConfirmedUpdatePublishedCase(PublishedCase):
         super().setUp()
         self.mark(1)
         self.posted_row(1, state="edited")
+        self.write("posted/pending-55.md", "")
         self.rest = self.stub("rest", return_value={})
         self.repo_path = self.path("repo")
         self.args = ("--update-published", "1")
@@ -1754,6 +1839,25 @@ class WhenTheBlockIsNeverClosedTest(RenderBodyCase):
 
     def test_writes_one_block(self):
         self.assertEqual(self.body().count(post.HOW_REVIEWED[0]), 1)
+
+
+class WhenTheBlockIsNeverClosedBelowAnEarlierFoldTest(RenderBodyCase):
+    def fold(self):
+        return f"{post.SUMMARY_FOLD[0]}\n\n**Whole change**: x\n- security\n\n{post.SUMMARY_FOLD[1]}"
+
+    def render_over(self, below_fold):
+        self.write("posted/review.md", "\n\n".join(filter(None, ["Mine.", "Reviewed `ccccccc..ddddddd` (3 files), as one piece.",
+                                                                   post.HOW_REVIEWED[0], self.fold(), below_fold])) + "\n")
+        return self.rendered()
+
+    def test_writes_one_fold(self):
+        self.assertEqual(self.render_over("").count(post.SUMMARY_FOLD[0]), 1)
+
+    def test_keeps_the_text_above_it(self):
+        self.assertTrue(self.render_over("").startswith("Mine.\n\nReviewed `bbbbbbb..aaaaaaa`"))
+
+    def test_keeps_the_text_after_the_fold(self):
+        self.assertTrue(self.render_over("Also mine.").startswith("Mine.\n\nAlso mine.\n\nReviewed "))
 
 
 class WhenTheMarkersAreOutOfOrderTest(unittest.TestCase):
