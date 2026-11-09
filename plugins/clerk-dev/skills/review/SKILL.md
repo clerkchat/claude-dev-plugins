@@ -1648,8 +1648,11 @@ instance list and the `## Not run` table), `progress.md`,
 there are any), `numbers.tsv`, `status.tsv`, `instructions.tsv`,
 `notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `posted/` (`<id>.md` posted
 texts, `draft-<id>.md` drafts saved by `--save-drafts`, `answer-<n>.md` the
-drafter's answers, `review.md` the review body, `pending-<review id>.md` the
-text the user had in a pending review, `close-<id>.md` a closing reply's own
+drafter's answers, `review.md` the review body (the drafted sentence, then the
+range line and the how-reviewed block `--render-body` writes),
+`pending-<review id>.md` the text the user had in a pending review when this
+run first posted to it, empty when none, so it also records that this run
+posted to that review, `close-<id>.md` a closing reply's own
 words, `keep.tsv` the threads kept open, `payload.json` from a dry run),
 `posted.tsv` (per Post-marked finding: drafted, edited, or posted, the note
 followed, the anchor and commit the draft was written for, and once posted the

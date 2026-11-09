@@ -217,6 +217,13 @@ class WhenAPostingWasDraftedButNeverSentTest(FoldInCase):
         self.assertFalse(os.path.exists(run_files.threads_path(self.run_dir)))
 
 
+class BodyOnlyReviewTest(FoldInCase):
+    def test_does_not_import_a_review_this_run_sent_only_a_body_to(self):
+        self.write("posted/pending-2.md", "")
+        self.fold(reviews=[review(2, "APPROVED", "Our summary.")])
+        self.assertNotIn("Our summary.", self.read("merged.md"))
+
+
 class PostedReviewTest(PostedThreadCase):
     def setUp(self):
         super().setUp()

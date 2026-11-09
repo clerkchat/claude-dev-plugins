@@ -94,10 +94,13 @@ class PostCase(GhRunCase):
         self.err = err.getvalue()
         return out.getvalue()
 
-    def calls(self, *args):
-        self.main("--post", "--dry-run", *args)
+    def payload(self, *args):
+        self.main(*args, "--dry-run")
         with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
             return json.load(fh)["calls"]
+
+    def calls(self, *args):
+        return self.payload("--post", *args)
 
     def call_for(self, mid):
         return next(c for c in self.calls() if c.get("finding") == mid)
@@ -637,6 +640,10 @@ class PendingReviewTest(PostCase):
         self.assertIn("exists on ccccccccc, another commit than the reviewed aaaaaaaaa", self.main())
 
 
+def generated(what):
+    return f"Reviewed `ccccccc..ddddddd` (2 files), as one piece.\n\n{post.HOW_REVIEWED[0]}\n\n{what}\n\n{post.HOW_REVIEWED[1]}"
+
+
 class WhenThePendingReviewHasABodyTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -667,6 +674,16 @@ class WhenThePendingReviewHasABodyTest(PostCase):
         self.write("posted/review.md", "Nice work.")
         self.pend(body="My summary.\n\nNice work.")
         self.assertEqual(self.review_body(), "My summary.\n\nNice work.")
+
+    def test_replaces_the_block_an_earlier_round_left_in_it(self):
+        self.write("posted/review.md", "Nice work.\n\n" + generated("new"))
+        self.pend(body="My summary.\n\n" + generated("old") + "\n\nAn earlier body comment.")
+        self.assertEqual(self.review_body(), "My summary.\n\nNice work.\n\n" + generated("new"))
+
+    def test_takes_out_the_sentence_and_block_of_a_batch_this_run_never_recorded(self):
+        self.write("posted/review.md", "Nice work.\n\n" + generated("new"))
+        self.pend(body="My summary.\n\nNice work.\n\n" + generated("new"))
+        self.assertEqual(self.review_body(), "My summary.\n\nNice work.\n\n" + generated("new"))
 
 
 class AfterAReReviewOfAPendingReviewTest(PostCase):
@@ -703,11 +720,55 @@ class RepostTest(PostCase):
 
 
 
+class WhenNothingIsMarkedPostTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Nice work\noverall.")
+
+    def test_creates_the_pending_review_with_the_body(self):
+        self.assertEqual(self.calls(), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews",
+                                         "fields": {"commit_id": HEAD, "body": "Nice work overall."}, "as": "review"}])
+
+    def test_sets_the_body_of_a_pending_review_this_run_has_not_posted_to(self):
+        self.pend()
+        self.assertEqual(self.calls(), [{"method": "PUT", "path": "repos/acme/widgets/pulls/7/reviews/55", "fields": {"body": "Nice work overall."}}])
+
+    def test_posts_nothing_once_the_pending_review_holds_its_body(self):
+        self.pend()
+        self.write("posted/pending-55.md", "")
+        self.main("--post", "--dry-run")
+        self.assertIn("nothing to post: the review body and every Post-marked finding are already posted", self.err)
+
+    def test_posts_nothing_once_a_review_it_posted_is_on_github(self):
+        self.write("posted/pending-55.md", "")
+        self.main("--post", "--dry-run")
+        self.assertIn("nothing to post", self.err)
+
+    def test_creates_the_pending_review_again_when_the_one_it_posted_is_gone(self):
+        self.write("posted/pending-54.md", "")
+        self.assertEqual(self.calls()[0]["path"], "repos/acme/widgets/pulls/7/reviews")
+
+
+class WhenItPostedOnlyTheBodyTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Nice work.")
+        self.stub("rest", return_value={"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"})
+        self.main("--post")
+        self.posted = self.err
+        self.pend()
+
+    def test_says_it_sent_the_body(self):
+        self.assertIn("sent the review body to review 55", self.posted)
+
+    def test_submit_approve_accepts_the_pending_review(self):
+        self.assertEqual(self.payload("--submit", "approve"), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
+                                                                "fields": {"event": "APPROVE", "body": "Nice work."}}])
+
+
 class PublishedCase(PostCase):
     def update_calls(self, ids="1"):
-        self.main("--update-published", ids, "--dry-run")
-        with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
-            return json.load(fh)["calls"]
+        return self.payload("--update-published", ids)
 
 
 class WhenAPublishedCommentChangedTest(PublishedCase):
@@ -824,9 +885,7 @@ class SubmitTest(PostCase):
         self.posted_row(1)
 
     def submit(self, *args):
-        self.main("--submit", *args, "--dry-run")
-        with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
-            return json.load(fh)["calls"]
+        return self.payload("--submit", *args)
 
     def test_requires_a_verdict(self):
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
@@ -1663,6 +1722,35 @@ class WhenTheBodyHoldsTheRenderedBlockTest(RenderBodyCase):
 
     def test_sends_the_file_with_paragraphs_joined_and_the_lists_and_details_lines_intact(self):
         self.assertEqual(self.review_body(), self.body().replace(SENTENCE, " ".join(SENTENCE.split("\n"))).strip())
+
+    def test_draws_no_warning_in_the_preview(self):
+        self.assertNotIn("warning:", self.main().split("review body:")[1])
+
+
+class WhenAPartSummaryNamesInternalMaterialTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.write_plan(plan_md(SPLIT))
+
+    def summarized(self, summary):
+        self.write("slices.md", SLICES.replace("webhook intake retried through the queue", summary))
+        self.render()
+
+    def test_warns_in_the_preview(self):
+        self.summarized("intake as .clerk-dev/latest/plan.md says")
+        self.assertIn("warning: the text names a .clerk-dev path", self.main().split("review body:")[1])
+
+    def test_warns_in_the_submit_dry_run(self):
+        self.summarized("intake as .clerk-dev/latest/plan.md says")
+        self.pend()
+        self.posted_row(1)
+        self.payload("--submit", "comment")
+        self.assertIn("review body:\n  warning: the text names a .clerk-dev path", self.err)
+
+    def test_refuses_a_local_path_of_this_machine(self):
+        self.summarized(f"intake in {self.run_dir}")
+        self.assertIn("the review body: its text names a local path", self.refusal())
 
 
 class FetchPrCase(GhRunCase):

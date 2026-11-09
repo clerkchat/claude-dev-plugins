@@ -211,7 +211,7 @@ def fold_in(run, p, today):
     open(os.path.join(pd, "pr.txt"), "w").write(f"{p['number']}\t{p['url']}\n")
     posted = rf.read_posted(run)
     threads = link_threads(run, posted, p, today)
-    own = rf.review_ids(posted)
+    own = rf.own_reviews(run, posted)
     own_reviews = [r for r in submitted_reviews(p) if str(r["databaseId"]) in own]
     new_ids, updated = import_items(run, github_items(p, threads.imported, own))
     return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread)

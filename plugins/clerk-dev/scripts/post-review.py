@@ -342,7 +342,7 @@ def review_head(run):
 
 def our_texts(run):
     posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post"]
-    return [DEFAULT_BODY, review_head(run), *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
+    return [DEFAULT_BODY, outside_block(review_head(run))[0], *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
 
 def before_ours(body, ours):
     return body[:min((at for at in (body.find(t) for t in ours if t) if at >= 0), default=len(body))].strip()
@@ -350,8 +350,12 @@ def before_ours(body, ours):
 def kept_body(run, ctx):
     p = ctx["pending"]
     if not p: return ""
-    if os.path.exists(rf.kept_body_path(run, p["id"])): return rf.read_text(rf.kept_body_path(run, p["id"]))
-    return "" if str(p["id"]) in rf.review_ids(rf.read_posted(run)) else before_ours(p.get("body") or "", our_texts(run))
+    if str(p["id"]) in rf.own_reviews(run, rf.read_posted(run)): return saved_body(run, p["id"])
+    return before_ours(outside_block(p.get("body") or "")[0], our_texts(run))
+
+def holds_our_body(run, ctx, rows):
+    ours = rf.own_reviews(run, rows)
+    return str(ctx["pending"]["id"]) in ours if ctx["pending"] else bool(ours & ctx["review_ids"])
 
 def saved_body(run, review_id):
     return rf.read_text(rf.kept_body_path(run, review_id))
@@ -772,9 +776,10 @@ def posted_lines(sending, results):
     out = [f"  review {review['id']} {review.get('html_url', '')}"] if review else []
     return out + [f"  {named(it)}: {posted_where(it, results.get(result_key(it['id'])) or it['row'])}" for it in sending]
 
-def posted_summary(items, sending, adopted, held, results):
-    new = sum(it["action"] == "new" for it in sending)
-    parts = [f"posted {new} comments and updated {len(sending) - new} on review {results['review']['id']}"] if sending else []
+def posted_summary(items, sending, adopted, held, results, sent_body):
+    new, review = sum(it["action"] == "new" for it in sending), results["review"]["id"] if sent_body else ""
+    parts = ([f"posted {new} comments and updated {len(sending) - new} on review {review}"] if sending else
+             [f"sent the review body to review {review}"] if sent_body else [])
     parts += [f"recorded {len(adopted)} already on GitHub"] if adopted else []
     return "; ".join(parts + [f"skipped {len(items) - len(sending) - len(adopted) - len(held)} already posted"])
 
@@ -799,17 +804,19 @@ def post(a, ctx, items, reviewed):
     adopted = [it for it in items if it["action"] == "adopt"]
     refuse_blocked(sending)
     if held: print(held_line(held), file=sys.stderr)
-    if not (sending or adopted): print("nothing to post: every Post-marked finding is already posted", file=sys.stderr); return
     review_id = current_review(ctx)
     rows = planned_rows(rf.read_posted(a.run), sending + adopted, review_id, today())
-    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed) if sending else []
-    if sending: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
+    sends_body = bool(sending) or not holds_our_body(a.run, ctx, rows)
+    if not (sends_body or adopted):
+        print("nothing to post: the review body and every Post-marked finding are already posted", file=sys.stderr); return
+    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed) if sends_body else []
+    if sends_body: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
     if a.dry_run: write_payload(a.run, calls); return
     results = execute(calls, a.repo, ctx, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
-    kept = ctx["kept"] and (rf.kept_body_path(a.run, ctx["pending"]["id"]), ctx["kept"] + "\n")
+    kept = sends_body and (rf.kept_body_path(a.run, results["review"]["id"]), ctx["kept"] + "\n")
     record_sent(a.run, rows, results, sending, kept)
-    print(posted_summary(items, sending, adopted, held, results), file=sys.stderr)
+    print(posted_summary(items, sending, adopted, held, results, sends_body), file=sys.stderr)
 
 def unpicked_siblings(held, picked):
     return {rid: [it for it in held if it["submitted"] == rid and it not in picked] for rid in submitted_ids(picked)}
@@ -869,7 +876,7 @@ def submit(a, ctx, verdict):
     p = ctx["pending"]
     if not p: sys.exit("no pending review on the pull request; run --post first")
     rows = rf.read_posted(a.run)
-    if str(p["id"]) not in rf.review_ids(rows):
+    if str(p["id"]) not in rf.own_reviews(a.run, rows):
         sys.exit(f"nothing sent; pending review {p['id']} holds nothing this run posted; run --post first, or submit it on GitHub")
     body = review_body(a.run, rows, p["id"], ctx["kept"])
     warned = pending_warnings(a.run, ctx, rows, body)
@@ -1128,7 +1135,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Preview, post, and submit a run's Post-marked findings as a pending GitHub review.")
     ap.add_argument("run"); ap.add_argument("--repo", default="."); ap.add_argument("--pr", type=int)
     action = ap.add_mutually_exclusive_group()
-    action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
+    action.add_argument("--post", action="store_true", help="send the previewed comments and the review body to the pending review")
     action.add_argument("--submit", choices=list(VERDICTS),
                         help="submit the pending review with this verdict; approve, request-changes, and comment on a pending review "
                              "that holds drafts of your own or text that drew a warning ask you to type the pull request number at a terminal, "

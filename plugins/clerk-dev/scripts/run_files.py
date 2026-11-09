@@ -332,8 +332,17 @@ def posted_path(run, mid):
 def review_text_path(run):
     return os.path.join(run, "posted", "review.md")
 
+KEPT_BODY = re.compile(r"^pending-(\d+)\.md$")
+
 def kept_body_path(run, review_id):
     return os.path.join(run, "posted", f"pending-{review_id}.md")
+
+def kept_body_ids(run):
+    folder = os.path.join(run, "posted")
+    return {m.group(1) for m in map(KEPT_BODY.match, os.listdir(folder) if os.path.isdir(folder) else []) if m}
+
+def own_reviews(run, rows):
+    return review_ids(rows) | kept_body_ids(run)
 
 def draft_path(run, mid):
     return os.path.join(run, "posted", f"draft-{mid}.md")
