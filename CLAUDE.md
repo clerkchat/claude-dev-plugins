@@ -7,7 +7,8 @@ Every merge into `main` bumps the plugin version. Before merging a branch, run
 patch for fixes, minor for new behavior, major for a change that breaks run
 directories, record formats, or what a skill expects from another. The
 checked-in `.githooks/pre-merge-commit` hook refuses a merge on `main` that
-does not raise the version; enable it once per clone with
+does not raise the version, and `.githooks/pre-commit` does the same when a
+conflicted merge is finished with `git commit`; enable them once per clone with
 `git config core.hooksPath .githooks`.
 
 ## The live plugin

@@ -73,7 +73,7 @@ class BumpScriptTest(TempCase):
         self.assertEqual(self.bump("huge")[0], 1)
 
 
-class PreMergeCommitHookTest(TempCase):
+class HookCase(TempCase):
     def setUp(self):
         super().setUp()
         self.repo = init_repo(self.path("repo"), with_origin=False)
@@ -103,6 +103,8 @@ class PreMergeCommitHookTest(TempCase):
         return subprocess.run(["git", "-C", self.repo.path, "merge", "--no-ff", "-m", "merge", "feat"],
                               capture_output=True, text=True, env=GIT_ENV)
 
+
+class PreMergeCommitHookTest(HookCase):
     def test_refuses_an_unbumped_merge_on_main(self):
         done = self.merge("main")
         self.assertNotEqual(done.returncode, 0)
@@ -124,6 +126,33 @@ class PreMergeCommitHookTest(TempCase):
         git(self.repo.path, "checkout", "-q", "-b", "other", "main")
         self.assertEqual(self.merge("other").returncode, 0)
 
+
+
+class ConflictedMergeHookTest(HookCase):
+    def setUp(self):
+        super().setUp()
+        self.write_version("1.0.1")
+        self.commit_all("branch bumps")
+        self.move_main_to("1.1.0")
+        self.assertNotEqual(self.merge("main").returncode, 0)
+
+    def finish(self, version):
+        self.write_version(version)
+        git(self.repo.path, "add", "-A")
+        return subprocess.run(["git", "-C", self.repo.path, "commit", "--no-edit"], capture_output=True, text=True, env=GIT_ENV)
+
+    def test_refuses_finishing_it_with_a_stale_version(self):
+        done = self.finish("1.0.1")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("1.1.0", done.stdout + done.stderr)
+
+    def test_passes_finishing_it_with_a_raised_version(self):
+        self.assertEqual(self.finish("1.1.1").returncode, 0)
+
+    def test_leaves_an_ordinary_commit_on_main_alone(self):
+        git(self.repo.path, "merge", "--abort")
+        self.repo.commit("docs on main", "notes.txt")
+        self.assertEqual(git(self.repo.path, "log", "-1", "--format=%s"), "docs on main")
 
 class PluginVersionTest(unittest.TestCase):
     def test_reads_the_manifest_version(self):

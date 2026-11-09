@@ -371,7 +371,8 @@ git config branch.main.mergeoptions --no-ff
 Every merge into main bumps the plugin version. Before merging, run
 `scripts/bump-version.py <patch|minor|major>` on the branch and commit the
 change to `plugins/clerk-dev/.claude-plugin/plugin.json`; the `pre-merge-commit`
-hook refuses a merge into main whose version is not greater than main's
-(`--no-verify` skips it).
+hook refuses a merge into main whose version is not greater than main's,
+and the `pre-commit` hook does the same when a conflicted merge is finished
+with `git commit` (`--no-verify` skips either).
 
 Run the tests from the repository root with `python3 -m unittest discover tests -v` (Python 3 standard library only).
