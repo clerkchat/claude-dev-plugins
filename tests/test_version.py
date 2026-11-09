@@ -93,6 +93,11 @@ class PreMergeCommitHookTest(TempCase):
         git(self.repo.path, "add", "-A")
         git(self.repo.path, "commit", "-qm", subject)
 
+    def move_main_to(self, version):
+        git(self.repo.path, "checkout", "-q", "main")
+        self.write_version(version)
+        self.commit_all("main bumps")
+
     def merge(self, onto):
         git(self.repo.path, "checkout", "-q", onto)
         return subprocess.run(["git", "-C", self.repo.path, "merge", "--no-ff", "-m", "merge", "feat"],
@@ -109,6 +114,12 @@ class PreMergeCommitHookTest(TempCase):
         self.commit_all("bump")
         self.assertEqual(self.merge("main").returncode, 0)
 
+    def test_refuses_a_merge_whose_result_keeps_the_higher_version_main_moved_to(self):
+        self.move_main_to("1.1.0")
+        done = self.merge("main")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("1.1.0", done.stdout + done.stderr)
+
     def test_passes_off_main(self):
         git(self.repo.path, "checkout", "-q", "-b", "other", "main")
         self.assertEqual(self.merge("other").returncode, 0)
@@ -122,3 +133,18 @@ class PluginVersionTest(unittest.TestCase):
     def test_is_none_when_the_manifest_is_unreadable(self):
         with mock.patch.object(records, "PLUGIN_ROOT", "/nonexistent"):
             self.assertIsNone(records.plugin_version())
+
+
+class PluginVersionIsBumpedTest(unittest.TestCase):
+    def test_is_at_least_the_version_this_branch_bumped_to(self):
+        self.assertGreaterEqual(tuple(map(int, records.plugin_version().split("."))), (1, 2, 0))
+
+
+class PluginStampTest(TempCase):
+    def test_names_the_version_when_the_plugin_is_not_in_a_git_checkout(self):
+        plugin = self.path("plugin")
+        os.makedirs(os.path.join(plugin, ".claude-plugin"))
+        write(os.path.join(plugin, ".claude-plugin", "plugin.json"), '{"version": "4.5.6"}')
+        passes = records.load_script("passes.py")
+        with mock.patch.object(records, "PLUGIN_ROOT", plugin), mock.patch.object(passes, "PLUGIN_ROOT", plugin):
+            self.assertEqual(passes.plugin_stamp(), "v4.5.6")
