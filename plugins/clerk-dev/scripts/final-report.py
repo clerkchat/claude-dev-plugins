@@ -102,7 +102,7 @@ def analyze(run):
     rp = os.path.join(run, "report.md")
     when = datetime.date.fromtimestamp(os.path.getmtime(rp)).isoformat() if os.path.exists(rp) else datetime.date.today().isoformat()
     return dict(when=when, kept=kept, reopened=reopened, open_fix=open_fix, counts=counts, below=below,
-                lenses=lenses, passed=passed, target=read(os.path.join(run, "target.txt")).splitlines())
+                lenses=lenses, passed=passed, target=rf.read_target(run))
 
 def verdict_line(a):
     if a["passed"]: return "PASSED"
@@ -152,8 +152,8 @@ def body(run, a, names, heading="##"):
 
 def scope_line(a):
     t = a["target"]
-    if len(t) >= 3 and t[0] != "feature":
-        return f"Whole branch `{t[1][:9]}...{t[2][:9]}`, read fresh on {a['when']}."
+    if t.target != "feature" and t.head:
+        return f"Whole branch `{t.base[:9]}...{t.head[:9]}`, read fresh on {a['when']}."
     return ""
 
 def write(run, lines):

@@ -139,12 +139,15 @@ def classify_since(repo, run, reviewed, head):
         out.append((sha, kind, subj))
     return out
 
-def cmd_delta(a, run, repo):
-    target = open(os.path.join(run, "target.txt")).read().splitlines()
-    if len(target) < 3: sys.exit("target.txt has no HEAD line")
-    reviewed, head = target[2].strip(), git(repo, "rev-parse", "HEAD")
+def reviewed_since(run, repo, advice=""):
+    reviewed = rf.reviewed_head(run) or sys.exit("target.txt has no HEAD line")
+    head = git(repo, "rev-parse", "HEAD")
     if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", reviewed, head]).returncode != 0:
-        sys.exit(f"the reviewed commit {reviewed[:9]} is not an ancestor of HEAD (rebased?)")
+        sys.exit(f"the reviewed commit {reviewed[:9]} is not an ancestor of HEAD (rebased?){advice}")
+    return reviewed, head
+
+def cmd_delta(a, run, repo):
+    reviewed, head = reviewed_since(run, repo)
     rows = classify_since(repo, run, reviewed, head)
     print("sha\tkind\tfiles\tsubject")
     for sha, kind, subj in rows:
@@ -168,12 +171,7 @@ def candidates(run, repo, queued=False):
     ancestor of HEAD."""
     findings = load_findings(run)
     status, instr, numbers = state(run)
-    target = open(os.path.join(run, "target.txt")).read().splitlines()
-    if len(target) < 3: sys.exit("target.txt has no HEAD line")
-    reviewed = target[2].strip()
-    head = git(repo, "rev-parse", "HEAD")
-    if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", reviewed, head]).returncode != 0:
-        sys.exit(f"the reviewed commit {reviewed[:9]} is not an ancestor of HEAD (rebased?); compare by hand or re-review")
+    reviewed, head = reviewed_since(run, repo, "; compare by hand or re-review")
     skip = fix_commits(repo, status, run)
     labels = followup_labels(repo)
     through = through_map(run)

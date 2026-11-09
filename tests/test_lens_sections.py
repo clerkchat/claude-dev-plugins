@@ -296,7 +296,7 @@ class PlainNamesTest(TempCase):
         self.assertEqual(self.names(self.TABLE)["security"], records.PlainName("security", "unsafe input"))
 
     def test_reads_a_row_without_a_description(self):
-        self.assertEqual(self.names("## Plain names\n\n| `security` | security |\n")["security"], records.PlainName("security", ""))
+        self.assertEqual(self.names("## Plain names\n\n| Lens | Say it as |\n| --- | --- |\n| `security` | security |\n")["security"], records.PlainName("security", ""))
 
     def test_reads_only_the_plain_names_section(self):
         self.assertEqual(self.names("## Lens triggers\n\n| `rollout` | migrations | yes |\n\n" + self.TABLE).keys(), {"security"})

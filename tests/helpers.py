@@ -312,6 +312,16 @@ class FeatureRepoCase(TempCase):
         write_record(root, "R8", "plan", "Old plan", "superseded", "superseded_by: R4\n", "1. Old step. Done when old.")
 
 
+PLAN = """# Plan
+
+## Instances
+| # | lens | scope | patch | model | raw file |
+| --- | --- | --- | --- | --- | --- |
+| 1 | security | entities | patch/entities.patch | opus | raw/security-entities.md |
+| 2 | rollout | all | patch/whole.patch | opus | raw/rollout.md |
+"""
+
+
 def merged_md(*entries):
     return "```findings\n" + "".join(entries) + "```\n"
 
@@ -341,6 +351,9 @@ class RunCase(TempCase):
     def write_status(self, rows):
         self.write("status.tsv", "merged_id\tstatus\tref\tdate\n"
                    + "".join(f"{m}\t{status}\t{ref}\t\n" for m, (status, ref) in sorted(rows.items())))
+
+    def write_plan(self, text=PLAN):
+        self.write("plan.md", text)
 
     def write_target(self, *lines):
         self.write("target.txt", "".join(l + "\n" for l in lines))

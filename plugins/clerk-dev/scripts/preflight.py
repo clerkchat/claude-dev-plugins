@@ -20,6 +20,7 @@ printed as missing rather than failing the call.
 """
 import argparse, os, re, subprocess
 from records import load_script
+import run_files as rf
 
 rs = load_script("status.py")
 git = rs.git
@@ -44,9 +45,8 @@ def latest_run(wt, head):
     if not os.path.isdir(run): return "none"
     label = os.path.basename(run)
     if not os.path.exists(os.path.join(run, "target.txt")): return f"`.clerk-dev/{label}`, stopped before scoping finished"
-    target = open(os.path.join(run, "target.txt")).read().splitlines()
-    what = target[0] if target else "?"
-    at = target[2].strip() if len(target) > 2 else ""
+    target = rf.read_target(run)
+    what, at = target.target or "?", target.head
     progress = os.path.join(run, "progress.md")
     unchecked = len(re.findall(r"^\s*- \[ \]", open(progress, encoding="utf-8").read(), re.M)) if os.path.exists(progress) else 0
     if os.path.exists(os.path.join(run, "report.md")) and not unchecked: state = "finished"

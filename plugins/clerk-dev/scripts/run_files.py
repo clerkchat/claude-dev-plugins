@@ -1,6 +1,6 @@
 import json, os, re, subprocess, sys
 from collections import namedtuple
-from records import load_script, section
+from records import load_script, section, table_rows
 
 mf = load_script("merge-findings.py")
 
@@ -257,7 +257,8 @@ def same_commit(a, b):
 Target = namedtuple("Target", "target base head")
 
 def read_target(run):
-    lines = [line.strip() for line in read_text(os.path.join(run, "target.txt")).splitlines()]
+    path = os.path.join(run, "target.txt")
+    lines = [line.strip() for line in open(path, encoding="utf-8").read().splitlines()] if os.path.exists(path) else []
     return Target(*(lines + ["", "", ""])[:3])
 
 def reviewed_head(run):
@@ -291,12 +292,14 @@ def read_slices(run):
     by_name = {name: Slice(f.get("label") or name_as_label(name), f.get("summary", "")) for name, f in slice_fields(text.splitlines()).items()}
     return Slices(by_name, [name for name in dict.fromkeys(re.split(r"[\s,`]+", section(text, "Order"))) if name in by_name])
 
+def label_of(slices, name):
+    return slices.by_name[name].label if name in slices.by_name else name_as_label(name)
+
 Instance = namedtuple("Instance", "lens scope raw")
-INSTANCE_ROW = re.compile(r"^\|[^|\n]*\|\s*([^|\n]*?)\s*\|\s*([^|\n]*?)\s*\|.*\|\s*(raw/[^|\s]+\.md)\s*\|", re.M)
 
 def read_instances(run):
     text = read_text(os.path.join(run, "plan.md"), None)
-    return None if text is None else [Instance(*row) for row in INSTANCE_ROW.findall(text)]
+    return None if text is None else [Instance(r["lens"], r["scope"], r["raw file"]) for r in table_rows(section(text, "Instances"))]
 
 def drafted_for(e, note, commit):
     path, line, end = located(e, note) or ("", None, None)

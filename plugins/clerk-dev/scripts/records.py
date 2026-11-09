@@ -499,17 +499,10 @@ class PlainName(NamedTuple):
     phrase: str
     description: str
 
-PLAIN_NAME_ROW = re.compile(r"^\|\s*`([a-z-]+)`\s*\|\s*([^|]+)\|(?:([^|]*)\|)?")
-
 def read_plain_names(path):
-    names, inside = {}, False
-    if not path or not os.path.exists(path): return names
-    for line in open(path, encoding="utf-8"):
-        if line.startswith("## "): inside = line.strip() == "## Plain names"; continue
-        if not inside: continue
-        m = PLAIN_NAME_ROW.match(line)
-        if m: names[m.group(1)] = PlainName(m.group(2).strip(), (m.group(3) or "").strip())
-    return names
+    if not path or not os.path.exists(path): return {}
+    rows = table_rows(section(open(path, encoding="utf-8").read(), "Plain names"))
+    return {r["Lens"].strip("`"): PlainName(r.get("Say it as", ""), r.get("Described as", "")) for r in rows if r.get("Lens")}
 
 def phrase_of(names, lens):
     return names[lens].phrase if lens in names else lens
