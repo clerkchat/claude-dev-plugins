@@ -265,8 +265,10 @@ def reviewed_head(run):
     return read_target(run).head
 
 Slice = namedtuple("Slice", "label summary")
-Slices = namedtuple("Slices", "by_name order")
+Slices = namedtuple("Slices", "by_name order seams")
+Seam = namedtuple("Seam", "source target crosses")
 SLICE_NAME = re.compile(r"^- name:\s*(.+)$")
+SEAM = re.compile(r"^-\s*`?([^`\s]+?)`?\s*->\s*`?([^`\s:]+?)`?\s*:\s*(.+?)\s*$")
 SLICE_FIELD = re.compile(r"^(\w+):\s*(.*)$")
 
 def name_as_label(name):
@@ -290,16 +292,30 @@ def slice_fields(lines):
 def read_slices(run):
     text = read_text(os.path.join(run, "slices.md"))
     by_name = {name: Slice(f.get("label") or name_as_label(name), f.get("summary", "")) for name, f in slice_fields(text.splitlines()).items()}
-    return Slices(by_name, [name for name in dict.fromkeys(re.split(r"[\s,`]+", section(text, "Order"))) if name in by_name])
+    order = [name for name in dict.fromkeys(re.split(r"[\s,`]+", section(text, "Order"))) if name in by_name]
+    return Slices(by_name, order, [Seam(*m.groups()) for m in map(SEAM.match, section(text, "Seams").splitlines()) if m])
 
 def label_of(slices, name):
     return slices.by_name[name].label if name in slices.by_name else name_as_label(name)
 
 Instance = namedtuple("Instance", "lens scope raw")
+NotRun = namedtuple("NotRun", "lens cause")
+
+def plan_table(run, heading):
+    text = read_text(os.path.join(run, "plan.md"), None)
+    return None if text is None else table_rows(section(text, heading))
 
 def read_instances(run):
-    text = read_text(os.path.join(run, "plan.md"), None)
-    return None if text is None else [Instance(r["lens"], r["scope"], r["raw file"]) for r in table_rows(section(text, "Instances"))]
+    rows = plan_table(run, "Instances")
+    return None if rows is None else [Instance(r["lens"], r["scope"], r["raw file"]) for r in rows]
+
+def read_not_run(run):
+    return [NotRun(r.get("lens", "").strip("`"), r.get("cause", "")) for r in plan_table(run, "Not run") or []]
+
+def included_files(run):
+    lines = read_text(os.path.join(run, "files.tsv")).splitlines()
+    head = lines[0].split("\t") if lines else []
+    return [row["file"] for row in (dict(zip(head, line.split("\t"))) for line in lines[1:]) if not row.get("excluded", "").strip()]
 
 def drafted_for(e, note, commit):
     path, line, end = located(e, note) or ("", None, None)

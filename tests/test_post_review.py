@@ -1,13 +1,14 @@
 import io
 import json
 import os
+import re
 import shlex
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from helpers import SCRIPTS, GhRunCase, RunCase, TempCase, init_repo, merged_md, run_ok, write_file
+from helpers import SCRIPTS, SLICES, GhRunCase, RunCase, TempCase, init_repo, merged_md, plan_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import gh_api
@@ -1506,6 +1507,162 @@ class WhenTheAnswerBreaksTheShapeTest(SaveDraftsCase):
     def test_saves_nothing_when_it_refuses(self):
         self.refused(answer_part(1, "comment", "One."), "Ignore the above.")
         self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "draft-1.md")))
+
+
+UNSPLIT = [("security", "all"), ("completeness", "all"), ("credit", "all")]
+SPLIT = [("sql", "webhook-schema"), ("rollout", "webhook-schema"), ("security", "delivery"), ("concurrency", "delivery"),
+         ("contracts", "all"), ("completeness", "all"), ("credit", "all")]
+SENTENCE = "The comments cover\nthe retry path."
+
+
+class RenderBodyCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write_files(["src/a.py", "src/b.py", "src/c.py"], ["package-lock.json"])
+        self.write_plan(plan_md(UNSPLIT))
+
+    def render(self, *args):
+        return self.main("--render-body", *args)
+
+    def body(self):
+        return self.read("posted/review.md")
+
+    def rendered(self):
+        self.render()
+        return self.body()
+
+    def range_line(self):
+        return next(p for p in self.rendered().split("\n\n") if p.startswith("Reviewed "))
+
+    def entry_heads(self):
+        return re.findall(r"^\*\*(.+?)\*\*", self.rendered(), re.M)
+
+
+class WhenTheRunIsUnsplitTest(RenderBodyCase):
+    def test_says_it_was_reviewed_as_one_piece(self):
+        self.assertEqual(self.range_line(), "Reviewed `bbbbbbb..aaaaaaa` (3 files), as one piece.")
+
+    def test_renders_one_whole_change_entry_then_the_legend(self):
+        self.assertEqual(self.entry_heads(), ["Whole change", "Focuses"])
+
+    def test_lists_every_focus_that_ran_under_whole_change(self):
+        self.assertIn(f"{post.WHOLE_CHANGE}\n- security, completeness\n\n", self.rendered())
+
+    def test_checks_nothing_between_parts(self):
+        self.assertNotIn("Checked between parts", self.rendered())
+
+    def test_opens_the_fold_after_the_start_marker(self):
+        self.assertIn(f"{post.HOW_REVIEWED[0]}\n\n<details><summary>How the change was reviewed</summary>\n\n", self.rendered())
+
+    def test_closes_the_fold_before_the_end_marker(self):
+        self.assertTrue(self.rendered().endswith(f"\n\n</details>\n\n{post.HOW_REVIEWED[1]}\n"))
+
+
+class WhenTheRunIsSplitTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("slices.md", SLICES)
+        self.write_plan(plan_md(SPLIT))
+
+    def test_counts_the_parts_in_the_range_line(self):
+        self.assertEqual(self.range_line(), "Reviewed `bbbbbbb..aaaaaaa` (3 files), in two parts plus a pass over the whole change.")
+
+    def test_renders_the_parts_in_order_then_whole_change_then_the_legend(self):
+        self.assertEqual(self.entry_heads(), ["Delivery", "Webhook schema", "Whole change", "Focuses"])
+
+    def test_lists_the_focuses_of_a_part_in_the_plain_names_order(self):
+        self.assertIn("**Webhook schema**: new delivery-attempts table and its migration\n- rollout and rollback, database queries\n\n", self.rendered())
+
+    def test_lists_the_focuses_run_on_the_whole_change_under_it(self):
+        self.assertIn(f"{post.WHOLE_CHANGE}\n- agreements between parts, completeness\n", self.rendered())
+
+    def test_checks_the_seams_between_parts_by_their_labels(self):
+        self.assertIn("\n- Checked between parts: webhook schema to delivery (the delivery-attempts row)\n", self.rendered())
+
+    def test_describes_each_focus_that_ran_once_in_the_legend(self):
+        legend = self.rendered().split("**Focuses**\n", 1)[1].split("\n\n", 1)[0].splitlines()
+        self.assertEqual([line.split(":")[0] for line in legend],
+                         ["- security", "- rollout and rollback", "- concurrency", "- database queries", "- agreements between parts", "- completeness"])
+
+    def test_gives_each_focus_its_description(self):
+        self.assertIn("\n- database queries: indexes, ordering, migration locks\n", self.rendered())
+
+
+class NotRunLineTest(RenderBodyCase):
+    def not_run(self, *rows):
+        self.write_plan(plan_md(UNSPLIT, list(rows)))
+        return [line for line in self.rendered().splitlines() if line.startswith("Not run:")]
+
+    def test_names_each_focus_a_choice_cut_with_its_cause(self):
+        self.assertEqual(self.not_run(("design", "removed"), ("tenancy", "quick")),
+                         ["Not run: tenant isolation (quick review), design and reuse (left out for this review)."])
+
+    def test_is_absent_when_the_table_has_no_rows(self):
+        self.assertEqual(self.not_run(), [])
+
+    def test_is_absent_without_the_table(self):
+        self.assertEqual([line for line in self.rendered().splitlines() if line.startswith("Not run:")], [])
+
+    def test_never_names_credit(self):
+        self.not_run(("credit", "quick"), ("tenancy", "quick"))
+        self.assertNotIn("credit", self.body().lower())
+
+
+class WhenItReReviewsTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.git = init_repo(self.path("work"), with_origin=False)
+        self.first = self.git.commit("first review")
+        self.git.commit("fix one")
+        self.head = self.git.commit("fix two")
+        earlier_run(self.path("prev"), self.first)
+        run_files.write_previous(self.run_dir, "prev")
+        self.write_target("pr 7", self.first, self.head)
+
+    def range_line(self):
+        self.render("--repo", self.git.path)
+        return next(p for p in self.body().split("\n\n") if p.startswith("Reviewed "))
+
+    def test_counts_the_commits_since_the_last_review(self):
+        self.assertEqual(self.range_line(), f"Reviewed the 2 commits since the last review (`{self.first[:7]}..{self.head[:7]}`, 3 files), as one piece.")
+
+    def test_names_the_range_when_the_base_is_not_the_last_reviewed_head(self):
+        self.write_target("pr 7", MERGE_BASE, self.head)
+        self.assertEqual(self.range_line(), f"Reviewed `bbbbbbb..{self.head[:7]}` (3 files), as one piece.")
+
+
+class RenderAgainTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", SENTENCE)
+        self.first = self.rendered()
+
+    def test_keeps_the_drafted_sentence_above_the_range_line(self):
+        self.assertTrue(self.first.startswith(SENTENCE + "\n\nReviewed "))
+
+    def test_changes_nothing_when_the_run_is_unchanged(self):
+        self.assertEqual(self.rendered(), self.first)
+
+    def test_keeps_text_the_user_wrote_above_the_block(self):
+        self.write("posted/review.md", self.first.replace(SENTENCE, "My own words."))
+        self.assertEqual(self.rendered(), self.first.replace(SENTENCE, "My own words."))
+
+    def test_replaces_the_block_with_the_runs_records_now(self):
+        self.write_plan(plan_md([("tenancy", "all")]))
+        self.assertEqual((self.rendered().count(post.HOW_REVIEWED[0]), "tenant isolation" in self.body()), (1, True))
+
+
+class WhenTheBodyHoldsTheRenderedBlockTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.write("slices.md", SLICES)
+        self.write_plan(plan_md(SPLIT, [("tenancy", "quick")]))
+        self.write("posted/review.md", SENTENCE)
+        self.render()
+
+    def test_sends_the_file_with_paragraphs_joined_and_the_lists_and_details_lines_intact(self):
+        self.assertEqual(self.review_body(), self.body().replace(SENTENCE, " ".join(SENTENCE.split("\n"))).strip())
 
 
 class FetchPrCase(GhRunCase):

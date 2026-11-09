@@ -2,13 +2,18 @@
 import argparse, datetime, json, os, re, shlex, subprocess, sys
 import gh_api, ids
 import run_files as rf
-from records import load_script
+from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
 
 pc = load_script("pr-comments.py")
 
 VERDICTS = {"comment": "COMMENT", "request-changes": "REQUEST_CHANGES", "approve": "APPROVE"}
 CONFIRMED_VERDICTS = {"request-changes": "request changes", "approve": "approve"}
 DEFAULT_BODY = "Comments from my review of this pull request."
+HOW_REVIEWED = ("<!-- how reviewed: start -->", "<!-- how reviewed: end -->")
+RANGE_LINE = re.compile(r"^Reviewed (?:`[^`\n]+`|the \d+ commits? since the last review)")
+WHOLE_CHANGE = "**Whole change**: how the parts fit together, and what's left unfinished"
+NOT_RUN_CAUSES = {"quick": "quick review", "removed": "left out for this review"}
+NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 BLOCK_START = re.compile(r"^\s{0,3}(#|>|\||[-*+]\s|\d+[.)]\s)")
 SUGGESTION = re.compile(r"^(\s*(?:`{3,}|~{3,}))suggestion\b", re.M)
 LINE_KINDS = ("line", "range")
@@ -359,6 +364,83 @@ def review_body(run, rows, review_id, kept):
             text = outgoing(rf.posted_text(run, mid), True)[0]
             parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
     return "\n\n".join(parts)
+
+def plural(n, word, say=str):
+    return f"{say(n)} {word}" + ("" if n == 1 else "s")
+
+def spelled(n):
+    return NUMBER_WORDS[n] if n < len(NUMBER_WORDS) else str(n)
+
+def commits_between(repo, base, head):
+    r = subprocess.run(["git", "-C", repo, "rev-list", "--count", f"{base}..{head}"], capture_output=True, text=True)
+    return int(r.stdout) if r.returncode == 0 and r.stdout.strip().isdigit() else None
+
+def commits_since_last_review(run, repo, target):
+    prev = rf.previous_run(run)
+    return commits_between(repo, target.base, target.head) if prev and rf.same_commit(target.base, rf.reviewed_head(prev)) else None
+
+def range_line(run, repo, parts):
+    target = rf.read_target(run)
+    if not (target.base and target.head): sys.exit("nothing rendered; target.txt has no BASE and HEAD lines")
+    span, files = f"`{target.base[:7]}..{target.head[:7]}`", plural(len(rf.included_files(run)), "file")
+    since = commits_since_last_review(run, repo, target)
+    reviewed = f"Reviewed the {plural(since, 'commit')} since the last review ({span}, {files})" if since else f"Reviewed {span} ({files})"
+    return f"{reviewed}, " + (f"in {plural(len(parts), 'part', spelled)} plus a pass over the whole change." if parts else "as one piece.")
+
+def in_name_order(names, lenses):
+    rank = {lens: at for at, lens in enumerate(names)}
+    return sorted(dict.fromkeys(lens for lens in lenses if lens != "credit"), key=lambda lens: rank.get(lens, len(rank)))
+
+def entry(head, lines):
+    return "\n".join([head, *(f"- {line}" for line in lines if line)])
+
+def in_sentence(label):
+    return label if label[:2].isupper() else label[:1].lower() + label[1:]
+
+def seams_line(slices):
+    crossings = [f"{in_sentence(rf.label_of(slices, s.source))} to {in_sentence(rf.label_of(slices, s.target))} ({s.crosses})" for s in slices.seams]
+    return "Checked between parts: " + ", ".join(crossings) if crossings else ""
+
+def part_entry(names, slices, instances, name):
+    summary = slices.by_name[name].summary
+    head = f"**{rf.label_of(slices, name)}**" + (f": {summary}" if summary else "")
+    return entry(head, [phrases(names, in_name_order(names, (i.lens for i in instances if i.scope == name)))])
+
+def whole_change_entry(names, slices, instances):
+    whole = in_name_order(names, (i.lens for i in instances if i.scope == "all" or not slices.order))
+    return entry(WHOLE_CHANGE, [phrases(names, whole), seams_line(slices)])
+
+def described(names, lens):
+    return ": ".join(filter(None, (phrase_of(names, lens), names[lens].description if lens in names else "")))
+
+def legend(names, instances):
+    ran = in_name_order(names, (i.lens for i in instances))
+    return entry("**Focuses**", [described(names, lens) for lens in ran]) if ran else ""
+
+def not_run_line(run, names):
+    cut = {n.lens: NOT_RUN_CAUSES[n.cause] for n in rf.read_not_run(run) if n.cause in NOT_RUN_CAUSES}
+    return "Not run: " + ", ".join(f"{phrase_of(names, lens)} ({cut[lens]})" for lens in in_name_order(names, cut)) + "." if cut else ""
+
+def how_reviewed(run, names, slices):
+    instances = rf.read_instances(run)
+    if instances is None: sys.exit(f"nothing rendered; {run} has no plan.md")
+    entries = [*(part_entry(names, slices, instances, name) for name in slices.order), whole_change_entry(names, slices, instances)]
+    return "\n\n".join([HOW_REVIEWED[0], "<details><summary>How the change was reviewed</summary>", *entries,
+                        *filter(None, [legend(names, instances), not_run_line(run, names)]), "</details>", HOW_REVIEWED[1]])
+
+def outside_block(text):
+    start, end = text.find(HOW_REVIEWED[0]), text.find(HOW_REVIEWED[1])
+    if start < 0: return text, ""
+    above, _, last = text[:start].rstrip().rpartition("\n\n")
+    below = text[end + len(HOW_REVIEWED[1]):] if end > start else ""
+    return (above if RANGE_LINE.match(last) else text[:start]).strip(), below.strip()
+
+def render_body(run, repo):
+    path, slices = rf.review_text_path(run), rf.read_slices(run)
+    above, below = outside_block(rf.read_text(path))
+    rendered = [range_line(run, repo, slices.order), how_reviewed(run, read_plain_names(ROUTING), slices)]
+    rf.write_text(path, "\n\n".join(filter(None, [above, *rendered, below])) + "\n")
+    print(f"wrote {path}", file=sys.stderr)
 
 def result_key(mid):
     return f"finding{mid}"
@@ -1058,6 +1140,8 @@ def main(argv=None):
                         help="send the changed text of these findings' comments that GitHub already shows (in a submitted review) "
                              "once you type the pull request number at a terminal; --post never changes them")
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
+    action.add_argument("--render-body", action="store_true",
+                        help="write how the change was reviewed into posted/review.md below the text already there, replacing what an earlier run wrote")
     action.add_argument("--save-drafts", metavar="FILE",
                         help="save the post-drafter's answer in FILE as posted/draft-<merged id>.md, one per Post-marked finding; print N=<path> for each")
     ap.add_argument("--confirm", type=int, metavar="PR",
@@ -1068,6 +1152,7 @@ def main(argv=None):
         ap.error("--dry-run goes with --post, --submit, --close N, or --update-published N")
     if a.keep_open is not None: return keep_open(a.run, a.keep_open)
     if a.save_drafts: return save_drafts(a.run, a.save_drafts)
+    if a.render_body: return render_body(a.run, a.repo)
     reviewed = reviewed_commit(a.run, a.repo)
     ctx = {**fetch_pr(a.repo, a.run, a.pr, reviewed), "local": local_paths(a.run, a.repo)}
     ctx["kept"] = kept_body(a.run, ctx)

@@ -883,8 +883,9 @@ instance count, tokens, and relative weight, the triage decisions per slice,
 and the excluded files. That file is for anyone who wants to know why the run
 was as large as it was.
 
-End `plan.md` with the instance list, one line per reviewer that will run. This
-is the ground truth for resuming, so write it before launching anything:
+End `plan.md` with the instance list, one line per reviewer that will run, then
+the lenses a choice cut. This is the ground truth for resuming, so write it
+before launching anything:
 
 ```
 ## Instances
@@ -892,7 +893,18 @@ is the ground truth for resuming, so write it before launching anything:
 | --- | --- | --- | --- | --- | --- |
 | 1 | security | entities | patch/entities.patch | opus | raw/security-entities.md |
 | 2 | rollout | all | patch/whole.patch | opus | raw/rollout.md |
+
+## Not run
+| lens | cause |
+| --- | --- |
+| tenancy | quick |
 ```
+
+`## Not run` has one row per lens routing triggered that the quick-mode cap
+(cause `quick`) or a `--lenses` removal or replacement (cause `removed`) cut.
+Write it with no rows when none was cut, and always empty with `--pass`, whose
+lenses are the pass's by design. A lens routing never triggered, or one triage
+dropped, gets no row. The summary in the posted review body lists the rows.
 
 What you say to the user is the plan in plain words. Build it from the slice
 labels and summaries and from the "Say it as" and "Described as" columns in
@@ -1624,9 +1636,10 @@ cross-repository check is starting and roughly how long it takes.
 
 `<run>` holds `target.txt`, `scope.md`, `files.tsv`, `slices.md`, `patch/`
 (`all.patch`, `whole.patch`, one per slice), `triage/`, `plan.md` (with the
-instance list), `progress.md`, `raw/<lens>[-<slice>].md`, `so-far.md` (interim,
-unverified), `merged.md` (and `merged-new.md` in incremental runs),
-`verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
+instance list and the `## Not run` table), `progress.md`,
+`raw/<lens>[-<slice>].md`, `so-far.md` (interim, unverified), `merged.md` (and
+`merged-new.md` in incremental runs), `verify/<id>.md`, `guidance.md` (and
+`guidance-<repo>.md` in feature runs),
 `followups.md` (the follow-ups the branch owes, as `backlog.py list --owed
 --full` printed them; `followups-<repo>.md` per repository in feature runs),
 `reconcile/`, `pr/` (with `threads.tsv`, the posted findings' threads as step
