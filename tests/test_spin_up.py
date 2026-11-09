@@ -527,6 +527,14 @@ class WhenTwoFollowUpsAreSpunUp(WithSeveralItems):
         self.assertEqual([l for l in self.out if l.startswith("backlog:")], ["backlog: BL-1 scoped to feat/x", "backlog: BL-2 scoped to feat/x"])
 
 
+class WhenAnOwedItemHasNoBodyContractOrRemoves(WithSeveralItems):
+    def test_its_heading_is_still_quoted(self):
+        self.followup()
+        self.cleanup("Bare item")
+        self.create("feat/x", "BL-1", "BL-2")
+        self.assertRegex(self.notes(self.wt), r"### BL-1\. Handle exportId\n[\s\S]*### BL-2\. Bare item\n")
+
+
 class WhenAnIdeaIsSpunUpWithAFollowUp(WithSeveralItems):
     def setUp(self):
         super().setUp()
