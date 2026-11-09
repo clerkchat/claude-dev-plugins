@@ -226,16 +226,15 @@ def seed_posted(prev, cur, pid, cid, prev_posting, cur_posting):
     return True
 
 def seed_reviews(prev, cur, rows):
-    review_ids = rf.review_ids(rows)
+    review_ids = rf.own_reviews(prev, rows)
     for rid in review_ids: copy_new(rf.kept_body_path(prev, rid), rf.kept_body_path(cur, rid))
     if review_ids: copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
 
 def seed_postings(prev, cur, pairs):
     prev_posting, cur_posting = read_posting(prev), read_posting(cur)
     seeded = [cid for pid, cid in pairs if seed_posted(prev, cur, pid, cid, prev_posting, cur_posting)]
-    if seeded:
-        write_posting(cur, cur_posting)
-        seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
+    if seeded: write_posting(cur, cur_posting)
+    seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
     return len(seeded)
 
 def prev_name(pid, pnum):

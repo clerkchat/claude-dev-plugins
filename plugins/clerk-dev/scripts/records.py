@@ -505,7 +505,7 @@ def read_plain_names(path):
     return {r["Lens"].strip("`"): PlainName(r.get("Say it as", ""), r.get("Described as", "")) for r in rows if r.get("Lens")}
 
 def phrase_of(names, lens):
-    return names[lens].phrase if lens in names else lens
+    return names[lens].phrase if lens in names else lens.replace("-", " ")
 
 def phrases(names, lenses):
     return ", ".join(phrase_of(names, lens) for lens in lenses)

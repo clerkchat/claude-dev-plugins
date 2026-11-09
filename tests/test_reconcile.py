@@ -170,6 +170,20 @@ class SeedPendingReviewTest(SeedCase):
         self.assertEqual(self.cur_text("posted/review.md"), "Current body.\n")
 
 
+class SeedBodyOnlyPostTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/pending-55.md", "My summary.\n")
+        self.write("posted/review.md", "Nice work.\n")
+        self.seed()
+
+    def test_copies_the_text_kept_from_the_pending_review(self):
+        self.assertEqual(self.cur_text("posted/pending-55.md"), "My summary.\n")
+
+    def test_copies_the_review_body(self):
+        self.assertEqual(self.cur_text("posted/review.md"), "Nice work.\n")
+
+
 class SeedWithoutAReviewTest(SeedCase):
     def test_copies_no_review_body(self):
         self.post({7: posted_row(5)})

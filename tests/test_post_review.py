@@ -3,6 +3,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -1688,6 +1689,85 @@ class WhenItReReviewsTest(RenderBodyCase):
     def test_names_the_range_when_the_base_is_not_the_last_reviewed_head(self):
         self.write_target("pr 7", MERGE_BASE, self.head)
         self.assertEqual(self.range_line(), f"Reviewed `bbbbbbb..{self.head[:7]}` (3 files), as one piece.")
+
+
+class WhenTheRunHasOddRecordsTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("slices.md", SLICES)
+
+    def test_lists_a_part_with_no_instances_by_its_heading_alone(self):
+        self.write_plan(plan_md([("security", "delivery")]))
+        self.assertIn("**Webhook schema**: new delivery-attempts table and its migration\n\n", self.rendered())
+
+    def test_counts_no_files_without_a_file_table(self):
+        os.remove(os.path.join(self.run_dir, "files.tsv"))
+        self.assertIn("(0 files)", self.range_line())
+
+    def test_counts_no_files_for_an_empty_file_table(self):
+        self.write("files.tsv", "")
+        self.assertIn("(0 files)", self.range_line())
+
+    def test_lists_nothing_under_whole_change_when_only_credit_ran(self):
+        self.write("slices.md", "")
+        self.write_plan(plan_md([("credit", "all")]))
+        self.assertEqual((f"{post.WHOLE_CHANGE}\n\n" in self.rendered(), "**Focuses**" in self.body()), (True, False))
+
+    def test_names_a_seam_slice_with_no_entry_by_its_name_as_a_label(self):
+        self.write("slices.md", SLICES.replace("webhook-schema -> delivery", "webhook-schema -> billing-queue"))
+        self.assertIn("to billing queue (the delivery-attempts row)", self.rendered())
+
+    def test_puts_a_summary_with_a_newline_and_markdown_on_one_line(self):
+        self.write("slices.md", SLICES.replace("webhook intake retried through the queue", "first\n    # second | third <!-- x -->"))
+        self.assertIn("**Delivery**: first # second | third &lt;!-- x -->\n", self.rendered())
+
+    def test_keeps_a_label_starting_with_a_heading_mark_inside_its_bold_head(self):
+        self.write("slices.md", "## Slices\n- name: a\n  label: # Big part\n  summary: s\n## Order\na\n")
+        self.assertIn("**# Big part**: s\n", self.rendered())
+
+
+class WhenTheLastReviewIsUnusableTest(WhenItReReviewsTest):
+    PLAIN = "Reviewed `{base}..{head}` (3 files), as one piece."
+
+    def plain(self):
+        return self.PLAIN.format(base=self.first[:7], head=self.head[:7])
+
+    def test_gives_the_plain_range_line_when_the_run_directory_is_gone(self):
+        shutil.rmtree(self.path("prev"))
+        self.assertEqual(self.range_line(), self.plain())
+
+    def test_gives_the_plain_range_line_when_the_base_is_not_an_ancestor_of_the_head(self):
+        self.git.git("checkout", "-q", "-b", "side", self.git.base)
+        side = self.git.commit("on the side")
+        self.write_target("pr 7", self.first, side)
+        self.assertEqual(self.range_line(), self.PLAIN.format(base=self.first[:7], head=side[:7]))
+
+
+class WhenTheBlockIsNeverClosedTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", f"Mine.\n\n{post.HOW_REVIEWED[0]}\n\nAlso mine.\n")
+        self.render()
+
+    def test_keeps_the_text_after_the_start_marker_above_the_new_block(self):
+        self.assertTrue(self.body().startswith("Mine.\n\nAlso mine.\n\nReviewed "))
+
+    def test_writes_one_block(self):
+        self.assertEqual(self.body().count(post.HOW_REVIEWED[0]), 1)
+
+
+class WhenTheMarkersAreOutOfOrderTest(unittest.TestCase):
+    def test_keeps_the_text_after_the_start_marker(self):
+        text = f"Mine.\n\n{post.HOW_REVIEWED[1]}\n\nMore.\n\n{post.HOW_REVIEWED[0]}\n\nLast words."
+        above, below = post.outside_block(text)
+        self.assertIn("Last words.", above + below)
+
+
+class WhenAPendingBodyHasAnUnclosedBlockTest(PostCase):
+    def test_keeps_the_text_after_the_start_marker(self):
+        self.mark(1)
+        self.pend(body=f"My summary.\n\n{post.HOW_REVIEWED[0]}\n\nAlso mine.")
+        self.assertEqual(self.review_body(), "My summary.\n\nAlso mine.")
 
 
 class RenderAgainTest(RenderBodyCase):

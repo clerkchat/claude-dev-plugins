@@ -304,6 +304,15 @@ class PlainNamesTest(TempCase):
     def test_says_the_phrase_of_a_named_lens(self):
         self.assertEqual(records.phrases(self.names(self.TABLE), ["security", "unnamed"]), "security, unnamed")
 
+    def test_says_a_lens_without_a_row_with_spaces_for_hyphens(self):
+        self.assertEqual(records.phrases(self.names(self.TABLE), ["error-handling"]), "error handling")
+
+
+class EveryLensHasAPlainNameTest(unittest.TestCase):
+    def test_names_each_lens_agent_but_credit(self):
+        names = records.read_plain_names(ROUTING)
+        self.assertEqual([lens for lens in lens_mode.lenses() if lens != "credit" and lens not in names], [])
+
 
 if __name__ == "__main__":
     unittest.main()

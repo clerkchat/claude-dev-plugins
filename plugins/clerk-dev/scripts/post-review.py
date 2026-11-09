@@ -379,9 +379,13 @@ def commits_between(repo, base, head):
     r = subprocess.run(["git", "-C", repo, "rev-list", "--count", f"{base}..{head}"], capture_output=True, text=True)
     return int(r.stdout) if r.returncode == 0 and r.stdout.strip().isdigit() else None
 
+def is_ancestor(repo, base, head):
+    return subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", base, head], capture_output=True).returncode == 0
+
 def commits_since_last_review(run, repo, target):
     prev = rf.previous_run(run)
-    return commits_between(repo, target.base, target.head) if prev and rf.same_commit(target.base, rf.reviewed_head(prev)) else None
+    if not (prev and os.path.isdir(prev) and rf.same_commit(target.base, rf.reviewed_head(prev)) and is_ancestor(repo, target.base, target.head)): return None
+    return commits_between(repo, target.base, target.head)
 
 def range_line(run, repo, parts):
     target = rf.read_target(run)
@@ -398,16 +402,22 @@ def in_name_order(names, lenses):
 def entry(head, lines):
     return "\n".join([head, *(f"- {line}" for line in lines if line)])
 
+def one_line(text):
+    return " ".join(text.split()).replace("<!--", "&lt;!--")
+
 def in_sentence(label):
     return label if label[:2].isupper() else label[:1].lower() + label[1:]
 
+def part_label(slices, name):
+    return one_line(rf.label_of(slices, name))
+
 def seams_line(slices):
-    crossings = [f"{in_sentence(rf.label_of(slices, s.source))} to {in_sentence(rf.label_of(slices, s.target))} ({s.crosses})" for s in slices.seams]
+    crossings = [f"{in_sentence(part_label(slices, s.source))} to {in_sentence(part_label(slices, s.target))} ({one_line(s.crosses)})" for s in slices.seams]
     return "Checked between parts: " + ", ".join(crossings) if crossings else ""
 
 def part_entry(names, slices, instances, name):
-    summary = slices.by_name[name].summary
-    head = f"**{rf.label_of(slices, name)}**" + (f": {summary}" if summary else "")
+    summary = one_line(slices.by_name[name].summary)
+    head = f"**{part_label(slices, name)}**" + (f": {summary}" if summary else "")
     return entry(head, [phrases(names, in_name_order(names, (i.lens for i in instances if i.scope == name)))])
 
 def whole_change_entry(names, slices, instances):
@@ -433,11 +443,14 @@ def how_reviewed(run, names, slices):
                         *filter(None, [legend(names, instances), not_run_line(run, names)]), "</details>", HOW_REVIEWED[1]])
 
 def outside_block(text):
-    start, end = text.find(HOW_REVIEWED[0]), text.find(HOW_REVIEWED[1])
+    start = text.find(HOW_REVIEWED[0])
     if start < 0: return text, ""
     above, _, last = text[:start].rstrip().rpartition("\n\n")
-    below = text[end + len(HOW_REVIEWED[1]):] if end > start else ""
-    return (above if RANGE_LINE.match(last) else text[:start]).strip(), below.strip()
+    above = (above if RANGE_LINE.match(last) else text[:start]).strip()
+    after = text[start + len(HOW_REVIEWED[0]):]
+    end = after.find(HOW_REVIEWED[1])
+    if end < 0: return "\n\n".join(filter(None, [above, after.strip()])), ""
+    return above, after[end + len(HOW_REVIEWED[1]):].strip()
 
 def render_body(run, repo):
     path, slices = rf.review_text_path(run), rf.read_slices(run)
