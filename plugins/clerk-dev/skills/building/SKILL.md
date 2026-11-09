@@ -1,6 +1,6 @@
 ---
 name: building
-description: The one intake for every item that becomes code: a coding request, a brief's requirements, a pass item, a review finding, or a follow-up. Sizes each against this repository's code in the session that owns the branch, hands the work to clerk-dev:builder at a model and effort, reviews the result, commits, keeps the build log, and works milestones. Use when the user says "build the plan", "build the next step", "build BRIEF-9", "build finding 4", "start building", "send the next handoff", or similar. The builder agent does not load this skill; it preloads writing-code.
+description: The one intake for every item that becomes code: a coding request, a brief's requirements, a pass item, a review finding, or a follow-up. Sizes each against this repository's code in the session that owns the branch, hands the work to clerk-dev:builder at a model and effort, reviews the result, commits, keeps the build log, and works milestones. Use when the user says "build the plan", "build the next step", "build BRIEF-9", "build finding 4", "start building", "send the next handoff", or similar; and, in a worktree with a .clerk-dev/ directory, before any edit for a request to change code however it is phrased: "do a to d", "make that change", "fix it", "go ahead", "implement that", or a yes to changes the session itself proposed. The builder agent does not load this skill; it preloads writing-code.
 allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
 ---
 
@@ -73,7 +73,13 @@ a queue to the next item.
 
 Items reach intake in these ways:
 
-- a request from the user;
+- a request from the user, in any words: a yes to changes the session
+  proposed, or picks from a list it gave ("do a to d"), is a request for each
+  picked item, sized together as a queue;
+- a pull request review comment the user wants addressed: when the branch has
+  a finished review run, bring the comments in with the `review` skill's
+  `--pr-comments-only` and fix them as findings through `review-fix`;
+  without a run, each comment is a request;
 - a brief's requirements, from Milestones;
 - a pass item, from the `pass` skill;
 - a finding, from the `review-fix` skill ("fix finding 4", and the triage
