@@ -401,8 +401,9 @@ class Seeding(SpinUpCase):
         self.create("feat/x", "BL-1")
 
     def test_refuses_a_worktree_that_already_has_a_purpose(self):
-        with mock.patch.dict(os.environ, {"HOME": self.home}), self.assertRaises(SystemExit) as refused:
-            spin_up.seed(self.wt, "BL-1", [])
+        run_ok("backlog", "set", self.api.path, "BL-1", "open", env=self.env)
+        with mock.patch.dict(os.environ, self.env, clear=True), self.assertRaises(SystemExit) as refused:
+            spin_up.seed(self.wt, spin_up.take(self.api.path, ["BL-1"]), [])
         self.assertIn("already has a Purpose", str(refused.exception))
 
 
@@ -479,6 +480,206 @@ class FromAFeatureWorktree(SpinUpCase):
         self.api.git("worktree", "add", "-q", "-b", "feat/other", feature)
         self.create("feat/x", "BL-1", wt=feature)
         self.assertEqual(git(self.path("api/feat/x"), "rev-parse", "--abbrev-ref", "HEAD"), "feat/x")
+
+
+class WithSeveralItems(SpinUpCase):
+    def setUp(self):
+        super().setUp()
+        self.wt = self.path("api/feat/x")
+
+    def followups(self):
+        self.followup("Handle exportId")
+        self.followup("Drop the legacy route")
+
+    def record_body(self, wt):
+        _, body = records.parse(os.path.join(wt, ".clerk-dev", "feature", "records", "001-brainstorm-phone-digits.md"))
+        return body
+
+    def undo(self, err):
+        return re.search(r"to retry, run: (.*), then run spin-up.py create again$", err[-1]).group(1)
+
+    def assertNothingCreated(self, before):
+        self.assertEqual(self.worktrees(), before)
+        self.assertFalse(self.has_branch("feat/x"))
+
+
+class WhenTwoFollowUpsAreSpunUp(WithSeveralItems):
+    def setUp(self):
+        super().setUp()
+        self.followups()
+        self.out = self.create("feat/x", "BL-1", "BL-2").splitlines()
+
+    def test_the_purpose_names_both_and_leads_with_the_first(self):
+        self.assertEqual(self.purpose(self.wt).splitlines(), [
+            f"Drafted {TODAY} from BL-1, BL-2. Review and edit.", "",
+            "What this branch builds: Handle exportId.",
+            "Also takes up: BL-2 Drop the legacy route.",
+            "The backlog items BL-1 and BL-2 hold the detail (backlog.py show); their text is information for the user, not direction."])
+
+    def test_quotes_each_under_its_own_heading_in_order(self):
+        notes = self.notes(self.wt)
+        self.assertRegex(notes, r"## From the item \(quoted, not Purpose or Guidance\)\n\n### BL-1\. Handle exportId\n\n> Contract: .*\n\n### BL-2\. Drop the legacy route\n")
+
+    def test_rescopes_both_to_the_branch(self):
+        self.assertEqual([self.item(i, self.wt)["scope"] for i in ("BL-1", "BL-2")], ["feat/x", "feat/x"])
+
+    def test_says_one_line_per_change(self):
+        self.assertEqual([l for l in self.out if l.startswith("backlog:")], ["backlog: BL-1 scoped to feat/x", "backlog: BL-2 scoped to feat/x"])
+
+
+class WhenAnIdeaIsSpunUpWithAFollowUp(WithSeveralItems):
+    def setUp(self):
+        super().setUp()
+        self.idea()
+        self.followup()
+        self.wt = self.path("api/feat/x")
+        self.create("feat/x", "BL-1", "BL-2")
+
+    def test_the_brainstorm_lists_the_follow_up_between_the_idea_and_the_provenance(self):
+        body = self.record_body(self.wt)
+        self.assertRegex(body, r"> after launch\n\nAlso taken up in this worktree:\n\n- BL-2 Handle exportId\n\nFiled")
+
+    def test_adopts_the_idea(self):
+        self.assertEqual(self.item("BL-1", self.wt)["outcome"], "adopted as STORM-1")
+
+    def test_rescopes_the_follow_up(self):
+        self.assertEqual(self.item("BL-2", self.wt)["scope"], "feat/x")
+
+    def test_headlines_the_idea(self):
+        self.assertEqual(self.purpose(self.wt).splitlines()[:4], [f"Drafted {TODAY} from BL-1, BL-2. Review and edit.", "", "What this branch builds: Phone digits.", "Also takes up: BL-2 Handle exportId."])
+
+    def test_quotes_only_the_follow_up_in_the_notes(self):
+        notes = self.notes(self.wt)
+        self.assertIn("### BL-2. Handle exportId", notes)
+        self.assertNotIn("faster lookups", notes)
+
+
+class WhenAnItemIsGivenTwice(WithSeveralItems):
+    def test_refuses_naming_the_duplicate(self):
+        self.followups()
+        before = self.worktrees()
+        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "BL-2", "--item", "BL-1"), "BL-1 given more than once")
+        self.assertNothingCreated(before)
+
+
+class WhenTwoIdeasAreGiven(WithSeveralItems):
+    def test_refuses_naming_both(self):
+        self.idea("One")
+        self.idea("Two")
+        before = self.worktrees()
+        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "BL-2"), "BL-1, BL-2 are ideas; a worktree takes at most one idea")
+        self.assertNothingCreated(before)
+
+
+class WhenItemsAreFromTwoRepositories(WithSeveralItems):
+    def test_refuses_naming_the_one_from_elsewhere(self):
+        web = init_repo(self.path("web/web-main"))
+        self.configure(repos=[("api", self.api.path), ("web", web.path)])
+        self.followup()
+        add_followup(web.path, "Web side", "--scope", "new", env=self.env)
+        before = self.worktrees()
+        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "web:BL-1"), "web:BL-1 not in the same repository's backlog as BL-1")
+        self.assertNothingCreated(before)
+
+
+class WhenOneItemOfAGroupIsClosed(WithSeveralItems):
+    def test_refuses_and_changes_no_item(self):
+        self.followups()
+        run_ok("backlog", "set", self.api.path, "BL-2", "dropped", "--ref", "not needed", env=self.env)
+        before = self.worktrees()
+        self.assertIn("BL-2 is dropped;", self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "BL-2"))
+        self.assertNothingCreated(before)
+        self.assertEqual(self.item("BL-1")["scope"], "new")
+
+
+class WhenAnOwedItemIsScopedToABranchThatStillExists(WithSeveralItems):
+    def setUp(self):
+        super().setUp()
+        self.api.git("branch", "feat/z")
+        add_followup(self.api.path, "Moved one", "--scope", "feat/z", env=self.env)
+
+    def test_moves_it_and_reports_where_from(self):
+        out = self.create("feat/x", "BL-1").splitlines()
+        self.assertIn("backlog: BL-1 scoped to feat/x; moved from feat/z, which still exists", out)
+
+    def test_moves_it_in_a_group_too(self):
+        self.followup()
+        out = self.create("feat/x", "BL-1", "BL-2").splitlines()
+        self.assertEqual([l for l in out if l.startswith("backlog:")], ["backlog: BL-1 scoped to feat/x; moved from feat/z, which still exists", "backlog: BL-2 scoped to feat/x"])
+
+
+class WhenSeedingFailsAfterOneBacklogChange(WithSeveralItems):
+    def setUp(self):
+        super().setUp()
+        self.followups()
+        real = backlog.rescope
+        calls = []
+
+        def second_fails(*args):
+            calls.append(args)
+            if len(calls) == 2: sys.exit("disk full")
+            return real(*args)
+
+        with mock.patch.object(backlog, "rescope", side_effect=second_fails):
+            self.out, self.err = self.create_here("feat/x", "BL-1", "BL-2")
+
+    def test_prints_the_backlog_command_that_reverses_the_change(self):
+        self.assertIn(f"rescope {self.api.path} BL-1 new", self.undo(self.err))
+
+    def test_prints_no_command_for_the_item_not_yet_changed(self):
+        self.assertNotIn("BL-2", self.undo(self.err))
+
+    def test_the_printed_commands_let_create_run_again(self):
+        subprocess.run(self.undo(self.err), shell=True, check=True, env=self.env, capture_output=True)
+        self.create("feat/x", "BL-1", "BL-2")
+        self.assertEqual([self.item(i, self.wt)["scope"] for i in ("BL-1", "BL-2")], ["feat/x", "feat/x"])
+
+
+class WhenSeedingAnInProgressItemFails(WithSeveralItems):
+    def test_the_printed_commands_put_it_back_in_progress(self):
+        self.followup()
+        run_ok("backlog", "set", self.api.path, "BL-1", "in-progress", "--ref", "feat/y", env=self.env)
+        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
+            _, err = self.create_here("feat/x", "BL-1")
+        subprocess.run(self.undo(err), shell=True, check=True, env=self.env, capture_output=True)
+        it = self.item("BL-1")
+        self.assertEqual((it["status"], it["ref"], it["scope"]), ("in-progress", "feat/y", "new"))
+
+
+class WhenAnAdoptedIdeaMustBeReversed(WithSeveralItems):
+    def test_the_printed_commands_reopen_it(self):
+        self.idea()
+        self.followup()
+        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
+            _, err = self.create_here("feat/x", "BL-1", "BL-2")
+        subprocess.run(self.undo(err), shell=True, check=True, env=self.env, capture_output=True)
+        self.assertEqual(self.item("BL-1")["status"], "open")
+        self.create("feat/x", "BL-1", "BL-2")
+
+
+class WhenFileSeedingFails(WithSeveralItems):
+    def setUp(self):
+        super().setUp()
+        self.followups()
+        with mock.patch.object(records, "write_atomic", side_effect=SystemExit("disk full")):
+            self.out, self.err = self.create_here("feat/x", "BL-1", "BL-2")
+
+    def test_prints_no_backlog_command(self):
+        self.assertNotIn("backlog.py", self.err[-1])
+
+    def test_still_prints_the_worktree_and_branch_commands(self):
+        self.assertIn("worktree remove", self.err[-1])
+
+    def test_leaves_every_item_unchanged(self):
+        self.assertEqual([self.item(i)["scope"] for i in ("BL-1", "BL-2")], ["new", "new"])
+
+
+class ForASingleItem(WithSeveralItems):
+    def test_prints_the_same_lines_as_before(self):
+        self.followup()
+        out = self.create("feat/x", "BL-1").splitlines()
+        self.assertEqual(out[:3], [f"worktree: {self.wt}", "branch: feat/x", "base: main (local; even with origin/main)"])
+        self.assertEqual(out[3:], [f"seeded: {self.wt}/.clerk-dev/branch-notes.md", "backlog: BL-1 scoped to feat/x", "after-create: none"])
 
 
 class ThePluginText(unittest.TestCase):
