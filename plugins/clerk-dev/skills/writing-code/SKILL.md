@@ -117,6 +117,7 @@ thing.
   noise.
 - Put imports at the top of the file; a lazy or dynamic import needs a stated
   reason.
+- Assert the same thing about the same subject once.
 - Keep what matters to a test visible: a reader should see, from the test and
   the nearest setup hook, every input its assertion depends on. Do not hide a
   scenario's deciding input three hooks up.

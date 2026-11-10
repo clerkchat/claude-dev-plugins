@@ -407,11 +407,9 @@ status lives only here; the brief is not edited for it.
    correction.
 6. Read the diff (`git diff --stat`, then the parts that carry the handoff's
    shape), and run the handoff's tests yourself. Read each test file the
-   handoff added or rewrote against Tests in the `writing-code` skill: shared
-   setup in a hook, one scenario per test, the factory's `create()`, helper
-   defaults, imports at the top, no duplicated assertion. Send a miss back
-   once, to the same builder with SendMessage, with the correction, as step 5
-   sends a deviation back. Check the diff for a rename the handoff did not
+   handoff added or rewrote against Tests in the `writing-code` skill. Send a
+   miss back once, to the same builder with SendMessage, with the correction,
+   as step 5 sends a deviation back. Check the diff for a rename the handoff did not
    ask for (an existing name changed with no change in meaning) and send it
    back the same way, with the correction to restore the name.
 7. **Commit.** `git add` only the handoff's files (the report's `files:`),
