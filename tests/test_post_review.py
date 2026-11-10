@@ -1747,13 +1747,13 @@ class WhenTheRunIsUnsplitTest(RenderBodyCase):
         self.assertIn(f"{START}\n\n<details><summary>How the change was reviewed</summary>\n\n", self.rendered())
 
     def test_closes_the_fold_before_the_end_marker(self):
-        self.assertTrue(self.with_version("9.8.7").endswith(f"\n\n</details>\n\n<sub>Review assisted by clerk-dev 9.8.7</sub>\n\n{END}\n"))
+        self.assertTrue(self.with_version("9.8.7").endswith(f"\n\n</details>\n\n<sub>Review assisted by Matthias' clerk-dev 9.8.7</sub>\n\n{END}\n"))
 
     def test_ends_the_block_with_the_assisted_by_line(self):
-        self.assertIn(f"</details>\n\n<sub>Review assisted by clerk-dev 9.8.7</sub>\n\n{END}", self.with_version("9.8.7"))
+        self.assertIn(f"</details>\n\n<sub>Review assisted by Matthias' clerk-dev 9.8.7</sub>\n\n{END}", self.with_version("9.8.7"))
 
     def test_leaves_the_version_out_when_none_is_readable(self):
-        self.assertIn(f"</details>\n\n<sub>Review assisted by clerk-dev</sub>\n\n{END}", self.with_version(None))
+        self.assertIn(f"</details>\n\n<sub>Review assisted by Matthias' clerk-dev</sub>\n\n{END}", self.with_version(None))
 
     def test_replaces_the_line_on_render_again(self):
         self.with_version("1.0.0", self.render)

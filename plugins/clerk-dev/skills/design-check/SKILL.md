@@ -2,7 +2,19 @@
 name: design-check
 description: Check a feature's design, plan, pieces, or brief record against the review lenses before the code exists, or survey existing code for the refactors worth doing first and the traps already in it before a change is defined, and work through what comes back. Use when the user says "check the design", "design-check BRIEF-10", "run the lenses on the brief", "run the lenses on the spec", "what should we settle before building this", "poke holes in this", "review the plan", "go through the design questions", "survey <paths | record>", "survey this module", "what should we refactor first in <paths>", "survey the code for BRIEF-85", or "walk the survey". Not for reviewing a change; that is /clerk-dev:review.
 argument-hint: "[<record id>[,<record id>...] | survey <paths | record id> [--cap <n>]] [--lenses a,b | +a | -a] [walk]"
-allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+  - Agent
 ---
 
 # Design check

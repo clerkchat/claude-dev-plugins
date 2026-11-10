@@ -35,7 +35,7 @@ table, or check that callers rely on is removed or changed.
 ## Attribution trailer
 
 Every commit a skill writes ends with the trailer
-`Assisted-by: clerk-dev <version>`, the `version` in the plugin's
+`Assisted-by: Matthias' clerk-dev <version>`, the `version` in the plugin's
 `.claude-plugin/plugin.json` (`records.py`'s `plugin_version()` reads it).
 `commit.py` adds it, before any attribution lines the session adds, such as
 `Co-Authored-By`, and never twice. The user's own commits get none.

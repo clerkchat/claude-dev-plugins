@@ -1,7 +1,19 @@
 ---
 name: checkpoint
 description: Write down everything this conversation settled that is not yet in a file (decisions, guidance, ideas parked in the backlog, answers to design questions, built handoffs, follow-ups owed elsewhere filed in their repository's backlog, scope changes), then say whether it is safe to clear the conversation. Use when the user says "checkpoint", "wrap up", "save where we are", "before I clear", "is it safe to clear", "I'm going to clear", or similar.
-allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+  - Agent
 ---
 
 # Checkpoint
