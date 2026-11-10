@@ -106,11 +106,12 @@ def thread_item(t):
                         resolved=t["isResolved"], outdated=t["isOutdated"])
 
 def submitted_reviews(p):
-    return [r for r in p["reviews"]["nodes"] if r["body"].strip() and r["state"] != "PENDING"]
+    return [r for r in p["reviews"]["nodes"] if r["state"] != "PENDING"]
 
 def github_items(p, threads, own_review_ids=()):
     return ([thread_item(t) for t in threads]
-            + [comment_item("review", r, state=r["state"]) for r in submitted_reviews(p) if str(r["databaseId"]) not in own_review_ids]
+            + [comment_item("review", r, state=r["state"]) for r in submitted_reviews(p)
+               if r["body"].strip() and str(r["databaseId"]) not in own_review_ids]
             + [comment_item("comment", c) for c in p["comments"]["nodes"] if c["body"].strip()])
 
 Threads = namedtuple("Threads", "linked imported left_out unread")
@@ -212,7 +213,7 @@ def fold_in(run, p, today):
     posted = rf.read_posted(run)
     threads = link_threads(run, posted, p, today)
     own = rf.own_reviews(run, posted)
-    own_reviews = [r for r in submitted_reviews(p) if str(r["databaseId"]) in own]
+    own_reviews = [r for r in submitted_reviews(p) if r["body"].strip() and str(r["databaseId"]) in own]
     new_ids, updated = import_items(run, github_items(p, threads.imported, own))
     return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread)
 

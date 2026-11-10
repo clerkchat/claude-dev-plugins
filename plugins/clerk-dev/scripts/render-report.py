@@ -641,12 +641,15 @@ def posted_link(row):
     link = f", [comment]({row['url']})" if row.get("url") else ""
     return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
 
+def posted_body(text):
+    return [posted_fence(text), text, posted_fence(text)]
+
 def posted_block(mid):
     text = posted_text(RUN, mid)
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
     elif is_moved(mid): body = ["Posted text: to be redrafted; the code moved."]
-    else: body = [posted_fence(text), text, posted_fence(text)]
+    else: body = posted_body(text)
     return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {})) + posted_thread_lines(THREADS.get(mid)) + close_lines(mid)
 
 def close_lines(mid):
