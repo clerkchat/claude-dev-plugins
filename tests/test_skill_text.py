@@ -42,7 +42,7 @@ class BuildingCommitStepTest(unittest.TestCase):
         self.assertIn("scripts/commit.py <worktree> <files>", self.text)
 
     def test_says_the_script_adds_the_assisted_by_trailer(self):
-        self.assertIn("adds the trailer `Assisted-by: clerk-dev <version>`", self.text)
+        self.assertIn("adds the trailer `Assisted-by: Matthias' clerk-dev <version>`", self.text)
 
 
 class CommitsGuideTest(unittest.TestCase):
@@ -50,7 +50,7 @@ class CommitsGuideTest(unittest.TestCase):
         self.text = text_of(PLUGIN, "skills", "review", "commits.md")
 
     def test_asks_for_the_assisted_by_trailer_with_the_plugin_version(self):
-        self.assertIn("Every commit a skill writes ends with the trailer `Assisted-by: clerk-dev <version>`", self.text)
+        self.assertIn("Every commit a skill writes ends with the trailer `Assisted-by: Matthias' clerk-dev <version>`", self.text)
 
     def test_puts_it_before_the_attribution_lines_the_session_adds(self):
         self.assertIn("before any attribution lines the session adds", self.text)
