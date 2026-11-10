@@ -435,7 +435,7 @@ def not_run_line(run, names):
 
 def assisted_by_line():
     version = plugin_version()
-    return f"<sub>Review assisted by clerk-dev{f' {version}' if version else ''}</sub>"
+    return f"<sub>Review assisted by Matthias' clerk-dev{f' {version}' if version else ''}</sub>"
 
 def how_reviewed(run, names, slices):
     instances = rf.read_instances(run)

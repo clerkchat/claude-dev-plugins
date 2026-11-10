@@ -426,7 +426,7 @@ status lives only here; the brief is not edited for it.
    or for a follow-up what changed on the other side (the contract, in plain
    words), and what the change does, with the `rollout:` text when it is not
    "none". The script refuses a subject that is not in that form and
-   adds the trailer `Assisted-by: clerk-dev <version>` before the session's own
+   adds the trailer `Assisted-by: Matthias' clerk-dev <version>` before the session's own
    attribution lines, so write only those, as `skills/review/commits.md` says. No push, no amend. Several items get one commit each, in the
    queue's order. When the route builds a record, mark the handoff done in
    the build log (or log the record it builds with `built`, as "The build
