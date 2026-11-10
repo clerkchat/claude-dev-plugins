@@ -351,7 +351,9 @@ def plan_item(p, mid):
 
 def plan_items(run, ctx, hunks, reviewed, repo):
     ins, rows, nums = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run)
-    p = Planning(run, ctx, hunks, reviewed, repo, ins, rows, nums, findings(run), rf.read_sections(run), rf.report_titles(run), recorded_comments(rows))
+    p = Planning(run=run, ctx=ctx, hunks=hunks, reviewed=reviewed, repo=repo, ins=ins, rows=rows, nums=nums,
+                 found=findings(run), sections=rf.read_sections(run), titles=rf.report_titles(run),
+                 taken=recorded_comments(rows))
     posting = in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums)
     return [plan_item(p, mid) for mid in posting]
 
