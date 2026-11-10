@@ -35,10 +35,6 @@ commit, or wont-fix with a reason.
 
 """
 
-def path(wt):
-    paths.ensure(wt)
-    return paths.deferred(wt)
-
 def read(p):
     its = items.read(p, list(FIELDS))
     for it in its:
@@ -70,7 +66,7 @@ def main():
     if args.cmd == "add":
         for k in REQUIRED:
             if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
-    p = path(args.wt); its = read(p)
+    paths.ensure(args.wt); p = paths.deferred(args.wt); its = read(p)
     if args.cmd == "add":
         iid = add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in EXTRAS})
         write(p, its); print(f"{iid} added to {p}")

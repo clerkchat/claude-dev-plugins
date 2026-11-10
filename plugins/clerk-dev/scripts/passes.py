@@ -60,10 +60,6 @@ def git(wt, *args, check=True):
     if check and r.returncode != 0: sys.exit(f"git {' '.join(args)} failed: {r.stderr.strip()}")
     return r.stdout.strip()
 
-def path(wt):
-    paths.ensure(wt)
-    return paths.passes(wt)
-
 def read(p):
     if not os.path.exists(p): return []
     passes, cur, in_items = [], None, False
@@ -136,7 +132,7 @@ def main():
     l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
     sp.add_parser("stats").add_argument("wt")
     a = ap.parse_args()
-    p = path(a.wt); passes = read(p); today = datetime.date.today().isoformat()
+    paths.ensure(a.wt); p = paths.passes(a.wt); passes = read(p); today = datetime.date.today().isoformat()
 
     if a.cmd == "start":
         op = [e["id"] for e in passes if e["f"].get("Status") == "open"]

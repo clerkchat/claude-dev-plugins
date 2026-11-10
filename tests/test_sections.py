@@ -3,7 +3,6 @@ import sys
 import unittest
 
 from helpers import SCRIPTS, FeatureRepoCase, TempCase, git, init_repo, write_record
-import paths
 
 sys.path.insert(0, SCRIPTS)
 import build
@@ -48,7 +47,7 @@ class HasSectionTests(unittest.TestCase):
 class GistTests(TempCase):
     def gist_of(self, body):
         write_record(self.tmp, "R1", "decision", "One", body=body)
-        return records.gist(records.records(paths.feature_dir(self.tmp))[0])
+        return records.gist(records.records(self.tmp)[0])
 
     def test_reads_the_decision_section(self):
         self.assertEqual(self.gist_of("Context.\n\n## Decision\n\nWe do this.\n"), "We do this.")
@@ -63,7 +62,7 @@ class GistTests(TempCase):
 class SpecRequirementsTests(TempCase):
     def requirements_of(self, body):
         write_record(self.tmp, "R1", "spec", "Spec", body=body)
-        return build.spec_requirements(paths.feature_dir(self.tmp), "R1")[1]
+        return build.spec_requirements(self.tmp, "R1")[1]
 
     def test_reads_the_numbered_items(self):
         self.assertEqual(self.requirements_of("## Requirements\n\n1. One.\n2. Two.\n"), {1: "One.", 2: "Two."})

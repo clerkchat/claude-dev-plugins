@@ -72,22 +72,6 @@ class NamedPathsTest(PathsCase):
         self.assertEqual(paths.review_link(self.wt, feature=True), self.at(".clerk-dev/review-feature.md"))
 
 
-class HubOfTest(PathsCase):
-    def test_inverts_feature_dir(self):
-        self.assertEqual(paths.hub_of(paths.feature_dir(self.wt)), self.wt)
-
-    def test_ignores_a_trailing_separator(self):
-        self.assertEqual(paths.hub_of(paths.feature_dir(self.wt) + os.sep), self.wt)
-
-    def test_refuses_a_directory_that_is_not_a_feature_directory(self):
-        with self.assertRaises(ValueError):
-            paths.hub_of(self.at(".clerk-dev/records"))
-
-    def test_refuses_a_feature_directory_outside_the_ledger(self):
-        with self.assertRaises(ValueError):
-            paths.hub_of(self.at(".clerk-dev/feature"))
-
-
 class RunNameCase(PathsCase):
     def setUp(self):
         super().setUp()

@@ -42,11 +42,6 @@ def checks_dir(hub): return os.path.join(feature_dir(hub), "checks")
 def feature_md(hub): return os.path.join(clerk_dev(hub), "feature.md")
 def overview(hub): return os.path.join(clerk_dev(hub), "overview.md")
 
-def hub_of(d):
-    d = os.path.normpath(d)
-    if not d.endswith(os.sep + FEATURE): raise ValueError(f"{d} is not a feature directory")
-    return d[:-len(os.sep + FEATURE)] or os.sep
-
 def run_name(wt, run, feature=False):
     """A run as named to the user: the top-level review link when it resolves to the run's report, else the report, else the run."""
     report = os.path.realpath(os.path.join(run, "report.md"))

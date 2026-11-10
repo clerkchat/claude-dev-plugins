@@ -54,7 +54,6 @@ Record frontmatter:
 import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile, time
 from typing import NamedTuple
 import ids, paths
-from paths import hub_of
 
 TYPES = ids.RECORD_TYPES
 STATUSES = ("active", "superseded", "discarded")
@@ -141,9 +140,7 @@ def hub(wt):
     if h and not os.path.isdir(h): sys.exit(f"hub worktree {h} (from {paths.workspace(wt)}) does not exist")
     return os.path.abspath(h or wt)
 
-def fdir(wt): return paths.feature_dir(hub(wt))
-
-def started(d): return os.path.exists(paths.feature_meta(hub_of(d)))
+def started(h): return os.path.exists(paths.feature_meta(h))
 
 def feature_name(hub):
     with open(paths.feature_meta(hub), encoding="utf-8") as fh: first = fh.readline()
@@ -167,8 +164,8 @@ def render(meta, body, fields=FIELDS):
     head = "".join(f"{k}: {meta[k]}\n" for k in fields if meta.get(k))
     return f"---\n{head}---\n{body}"
 
-def records(d):
-    rd = paths.records_dir(hub_of(d))
+def records(h):
+    rd = paths.records_dir(h)
     if not os.path.isdir(rd): return []
     out = [parse(os.path.join(rd, f))[0] for f in os.listdir(rd) if f.endswith(".md")]
     rs = sorted((r for r in out if ids.kind_of(r.get("id", "")) == ids.RECORD), key=lambda r: ids.number(r["id"]))
@@ -190,11 +187,11 @@ def record_id(rs, text, rtype=None):
     rtype = types_of(rs).get(p.n, rtype) if p else None
     return ids.render(p, rtype) if rtype else ids.normalize(text)
 
-def find(d, rid):
-    rs = records(d)
+def find(h, rid):
+    rs = records(h)
     rid = record_id(rs, rid)
     r = next((r for r in rs if ids.same(r["id"], rid)), None)
-    if not r: sys.exit(f"{rid} not found in {d}/records")
+    if not r: sys.exit(f"{rid} not found in {paths.records_dir(h)}")
     return r
 
 def set_fields(r, **kw):
@@ -223,8 +220,8 @@ def survey_target(text):
     m = re.search(r"^# Survey:\s*(.+)$", text, re.M)
     return m.group(1).strip() if m else "unnamed target"
 
-def check_gloss(d, check_id, q, whole, item):
-    path = check_path(d, check_id)
+def check_gloss(h, check_id, q, whole, item):
+    path = check_path(h, check_id)
     if not os.path.exists(path): return None
     if q is None: return whole(path)
     it = question_in(path, q)
@@ -235,10 +232,10 @@ def records_cell(c): return ", ".join(c["records"]) or ("paths" if c["kind"] == 
 def question_in(path, q):
     return next((i for i in items_mod().read(path) if ids.same(i["id"], ids.item(ids.QUESTION, q))), None)
 
-def checks(d):
-    cd = paths.checks_dir(hub_of(d))
+def checks(h):
+    cd = paths.checks_dir(h)
     if not os.path.isdir(cd): return []
-    canon = resolver(records(d))
+    canon = resolver(records(h))
     out = []
     for f in sorted(check_files(cd), key=check_order):
         name = ids.check_from_file(f)
@@ -250,7 +247,7 @@ def checks(d):
     return out
 
 
-def open_check_items(d, name): return items_mod().not_done(items_mod().read(check_path(d, name)))
+def open_check_items(h, name): return items_mod().not_done(items_mod().read(check_path(h, name)))
 
 def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
 
@@ -259,8 +256,8 @@ def check_order(f):
     natural = [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", f)]
     return (0, ids.sort_key(name)) if ids.kind_of(name) == ids.CHECK else (1, natural)
 
-def check_path(d, name):
-    cd = paths.checks_dir(hub_of(d))
+def check_path(h, name):
+    cd = paths.checks_dir(h)
     found = next((f for f in check_files(cd) if ids.check_from_file(f) == name or ids.same(ids.check_from_file(f), name)), None)
     return os.path.join(cd, found or ids.check_file(name))
 
@@ -321,11 +318,11 @@ def gist(r, limit=220):
 def ordered(rs):
     return sorted(rs, key=lambda r: (TYPE_ORDER.index(r.get("type")) if r.get("type") in TYPE_ORDER else 9, ids.number(r["id"])))
 
-def overview_state(d):
+def overview_state(h):
     """(through id or None, basis in the file or None, current basis, ids added since)."""
-    rs = records(d)
+    rs = records(h)
     basis = basis_of(rs)
-    p = paths.overview(hub_of(d))
+    p = paths.overview(h)
     if not os.path.exists(p): return None, None, basis, [r["id"] for r in rs]
     head = open(p, encoding="utf-8").read(600)
     m = re.search(rf"through ({ids.pattern(ids.RECORD)}|{NO_RECORDS}) \(basis ([0-9a-f]+)\)", head)
@@ -338,10 +335,10 @@ def basis_of(rs):
     key = "|".join(f"{r['file_id']}:{r.get('status', '')}:{r.get('area', '')}:{r.get('title', '')}" for r in rs)
     return hashlib.sha1(key.encode()).hexdigest()[:10]
 
-def overview_line(d):
-    through, old, basis, added = overview_state(d)
+def overview_line(h):
+    through, old, basis, added = overview_state(h)
     if through is None:
-        missing = not os.path.exists(paths.overview(hub_of(d)))
+        missing = not os.path.exists(paths.overview(h))
         return ("No overview yet" if missing else "The overview has no stamp") + "; say \"refresh the overview\"."
     if old == basis: return f"Overview: [overview.md](overview.md), current (through {through})."
     since = f"; {', '.join(added)} came after" if added else "; statuses or areas changed since"
@@ -369,27 +366,26 @@ def fate(r):
     if r.get("status") == "discarded" and r.get("note"): return f"discarded: {r['note']}"
     return r.get("status", "")
 
-def concatenate(d, wt):
-    if not started(d): return
-    h = hub_of(d)
+def concatenate(h, wt):
+    if not started(h): return
     out_path = paths.feature_md(h)
     here = os.path.dirname(out_path)
-    rs = records(d)
+    rs = records(h)
     groups = [(area, ordered(grp)) for area, grp in by_area([r for r in rs if r.get("status") not in PAST])]
     current = [r for _, grp in groups for r in grp]
     past = [r for r in rs if r.get("status") in PAST]
     rows = [GENERATED, "", f"# Feature: {feature_name(h)}", "", "## Summary", "", feature_summary(h) or "None yet.", "", "## Contents", ""]
-    if len(rs) >= 5: rows += [overview_line(d), ""]
+    if len(rs) >= 5: rows += [overview_line(h), ""]
     rows += [f"- {r['id']}: {r.get('title', '')}" for r in current] or ["No active records." if rs else "None yet."]
     rows.append("")
     parked = backlog_mod().feature_ideas(wt)
     if parked:
         rows += ["## Ideas", "", f"Parked, {len(parked)}, in the backlog; `backlog.py list <worktree> --parked --full` shows them with why and when.", ""]
         rows += [f"- **{i['qualified']}**{' (' + i['area'] + ')' if i.get('area') else ''}: {i.get('title', '')}" for i in parked] + [""]
-    cs = checks(d)
+    cs = checks(h)
     if cs:
         rows += ["## Checks", "", "| Check | Records | Open | Closed |", "| --- | --- | --- | --- |"]
-        rows += [f"| [{c['name']}]({os.path.relpath(check_path(d, c['name']), here)}) | {records_cell(c)} | {c['open']} | {c['closed']} |" for c in cs] + [""]
+        rows += [f"| [{c['name']}]({os.path.relpath(check_path(h, c['name']), here)}) | {records_cell(c)} | {c['open']} | {c['closed']} |" for c in cs] + [""]
     for area, grp in groups:
         rows += [f"## {area}", ""]
         for r in grp: rows += [demoted(parse(r["path"])[1].strip()), ""]
@@ -398,10 +394,10 @@ def concatenate(d, wt):
         rows += [f"- {r['id']}: [{r.get('title', '')}]({os.path.relpath(r['path'], here)}), {fate(r)}" for r in past] + [""]
     write_atomic(out_path, "\n".join(rows).rstrip("\n") + "\n")
 
-def rules(d, area=None):
+def rules(h, area=None):
     """Active guidance as (record, rule) pairs, feature-wide first, filtered
     to an area plus the feature-wide ones when one is given."""
-    rs = [r for r in records(d) if r.get("type") == "guidance" and r.get("status") == "active"]
+    rs = [r for r in records(h) if r.get("type") == "guidance" and r.get("status") == "active"]
     if area is not None: rs = [r for r in rs if not r.get("area") or r.get("area") == area]
     return [(r, gist(r, limit=400)) for r in sorted(rs, key=lambda r: (bool(r.get("area")), r.get("area", ""), ids.number(r["id"])))]
 
@@ -509,10 +505,10 @@ def guidance(wt, area=None, context=None):
         out += [f"### {rule}", "", body, ""]
         warnings += lint("branch", rule)
     if not branch_rules: out += ["None.", ""]
-    d = fdir(wt)
-    if started(d):
+    h = hub(wt)
+    if started(h):
         out += ["## Feature guidance", ""]
-        feature_rules = rules(d, area)
+        feature_rules = rules(h, area)
         for r, rule in feature_rules:
             _, body = parse(r["path"])
             out += rule_lines(f"{r['id']}. {r.get('title', '')}" + (f" ({r['area']})" if r.get("area") else ""), body, rule)
@@ -526,15 +522,15 @@ def plan_steps(r):
     body = parse(r["path"])[1].split("\n## ", 1)[0]
     return {int(re.match(r"\d+", t).group(0)): t.strip() for t in re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]}
 
-def plan_step(d, ref):
+def plan_step(h, ref):
     p = ids.read(ref, ids.REF)
-    r = next((r for r in records(d) if p and ids.number(r["id"]) == p.n and r.get("type") == "plan"), None)
+    r = next((r for r in records(h) if p and ids.number(r["id"]) == p.n and r.get("type") == "plan"), None)
     return r, plan_steps(r).get(p.sub) if r else None
 
-def plan_pieces(d):
+def plan_pieces(h):
     """{code: name} of the plan's pieces, from the overview's Plan table, whose
     first column starts with the piece's code ("C core harness")."""
-    p = paths.overview(hub_of(d))
+    p = paths.overview(h)
     if not os.path.exists(p): return {}
     out = {}
     for line in section(open(p, encoding="utf-8").read(), "Plan").splitlines():
@@ -549,8 +545,8 @@ def load_script(name):
     return m
 
 def names(wt, wanted):
-    d = fdir(wt); recs = {ids.number(r["id"]): r for r in records(d)}
-    pieces = plan_pieces(d)
+    h = hub(wt); recs = {ids.number(r["id"]): r for r in records(h)}
+    pieces = plan_pieces(h)
     here = os.path.abspath(wt)
     load = load_script
     out = []
@@ -566,15 +562,15 @@ def names(wt, wanted):
             elif kind == ids.REF:
                 bm = load("build.py")
                 rid = recs[p.n]["id"] if p.n in recs else p.record
-                _, items = bm.spec_requirements(d, rid)
-                _, step = plan_step(d, X)
+                _, items = bm.spec_requirements(h, rid)
+                _, step = plan_step(h, X)
                 if items and p.sub in items: name = f"requirement of {rid}: {bm.label(items[p.sub])}"
                 elif step is not None: name = f"step {p.sub} of plan {rid}: {bm.step_piece(step)}"
             elif kind == ids.CHECK:
-                name = check_gloss(d, ids.check(p.record, p.sub), p.q, lambda _: f"design check of {recs[p.n]['id'] if p.n in recs else p.record}", lambda _, t: f"design question: {t}")
+                name = check_gloss(h, ids.check(p.record, p.sub), p.q, lambda _: f"design check of {recs[p.n]['id'] if p.n in recs else p.record}", lambda _, t: f"design question: {t}")
             elif kind == ids.SURVEY:
                 survey_of = lambda cp: f"survey of {survey_target(open(cp, encoding='utf-8').read())}"
-                name = check_gloss(d, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
+                name = check_gloss(h, ids.survey(p.n), p.q, survey_of, lambda cp, t: f"item {p.q} of {survey_of(cp)}: {t}")
             elif kind == ids.BACKLOG:
                 bl = backlog_mod(); it = bl.lookup(here, X)
                 if it: name = f"{bl.kind_name(it)} ({it.get('status')})" + (f": {it['title']}" if it.get("title") else "")
@@ -622,9 +618,9 @@ def gloss(wt, text, n=50):
         done.add(x); return f"{m.group(0)} ({known[x]})"
     return ID_RE.sub(sub, text)
 
-def suggestions(d):
+def suggestions(h):
     """Records worth writing: roll-up designs, plans, and a stale overview."""
-    rs = records(d); live = [r for r in rs if r.get("status") == "active"]
+    rs = records(h); live = [r for r in rs if r.get("status") == "active"]
     out = []
     areas = sorted({r.get("area", "") for r in live}, key=lambda a: (a != "", a))
     for a in areas:
@@ -647,7 +643,7 @@ def suggestions(d):
         if not planlike and (len({r.get('area', '') for r in live}) > 2 or len(live) >= 10):
             out.append("No plan or pieces record yet; write one for the order of work.")
     if len(rs) >= 5:
-        through, old, basis, added = overview_state(d)
+        through, old, basis, added = overview_state(h)
         if through is None or old != basis: out.append("The overview is missing or stale; refresh it.")
     return out
 
@@ -666,13 +662,12 @@ def commits_by_record(bm, entries, canon):
 def cited(refs):
     return ", ".join(f"{ref} ({', '.join(cs)})" for ref, cs in refs.items())
 
-def build_log(d):
+def build_log(h):
     bm = load_script("build.py")
-    hub_wt = hub_of(d)
-    _, repos = workspace(hub_wt)
+    _, repos = workspace(h)
     lines, direct, built = [], [], Built(set(), {}, [])
-    canon = resolver(records(d))
-    for w in dict.fromkeys([hub_wt] + list(repos.values())):
+    canon = resolver(records(h))
+    for w in dict.fromkeys([h] + list(repos.values())):
         repo = this_repo(w, repos)
         if not os.path.isdir(w) or not os.access(w, os.R_OK | os.X_OK):
             built.unread.append(repo); lines.append(f"{repo}: (worktree {w} {'cannot be read' if os.path.isdir(w) else 'does not exist'}; its build log is not counted)"); continue
@@ -687,7 +682,7 @@ def build_log(d):
         mine = commits_by_record(bm, entries, canon)
         if mine: direct.append(f"{repo}: records built directly: {cited(mine)}")
         for ref, cs in mine.items(): built.records.setdefault(ref, []).extend(cs)
-    lines += direct + plan_lines(d, built, this_repo(hub_wt, repos))
+    lines += direct + plan_lines(h, built, this_repo(h, repos))
     return lines or ["nothing built yet"], built
 
 def successor(recs, rid):
@@ -701,28 +696,28 @@ def step_built(bm, ref, text, built, recs):
     named = [successor(recs, canon(x)) for x in ids.records_in(bm.step_piece(text), refs=False)]
     return ref in built.records or (bool(named) and all(x in built.specs or x in built.records for x in named))
 
-def steps_built(r, built):
+def steps_built(h, r, built):
     bm = load_script("build.py")
-    recs = {x["id"]: x for x in records(os.path.dirname(os.path.dirname(r["path"])))}
+    recs = {x["id"]: x for x in records(h)}
     steps = plan_steps(r)
     return [n for n, text in steps.items() if step_built(bm, ids.ref(r["id"], n), text, built, recs)], len(steps)
 
-def plan_lines(d, built, repo):
+def plan_lines(h, built, repo):
     out = []
-    for r in records(d):
+    for r in records(h):
         if r.get("type") != "plan" or r.get("status") != "active": continue
-        done, _ = steps_built(r, built)
+        done, _ = steps_built(h, r, built)
         if done: out.append(f"{r.get('repo') or repo}: {r['id']} steps built: {', '.join(map(str, done))}")
     return out
 
-def built_mark(r, built):
+def built_mark(h, r, built):
     if r["type"] not in load_script("build.py").BUILDABLE: return ""
     unproven = "unknown" if built.unread else "no"
     if r["type"] == "brief": return f"; built: {'yes' if r['id'] in built.specs else unproven}"
     if r["type"] == "decision":
         cs = built.records.get(r["id"])
         return f"; built: yes ({', '.join(cs)})" if cs else f"; built: {unproven}"
-    done, total = steps_built(r, built)
+    done, total = steps_built(h, r, built)
     count, which = f"{len(done)} of {total} steps", ", ".join(map(str, done))
     if built.unread and len(done) < total: return f"; built: unknown (at least {count}" + (f": {which})" if done else ")")
     return f"; built: {count}" + (f" ({which})" if done else "")
@@ -732,28 +727,28 @@ def idea_line(it):
     state = it.get("outcome") or f"parked. Why: {bl.prose(it, 'why') or '-'}. When: {bl.prose(it, 'when') or '-'}"
     return f"- {it['qualified']} ({it.get('area') or 'feature-wide'}): {it.get('title', '')}. Status: {state}."
 
-def open_item_lines(d, c):
+def open_item_lines(h, c):
     return [f"- {ids.in_check(c['name'], i['id'])} ({(i['fields'].get('Weight') or '?').split()[0]}): {i['text']}"
-            for i in open_check_items(d, c["name"])]
+            for i in open_check_items(h, c["name"])]
 
 def brief_open_items(body):
     return re.findall(r"^\s*[-*] \[ \] (.*)$", section(body, "Open items"), re.M)
 
-def digest(d, wt):
-    rs = records(d)
+def digest(h, wt):
+    rs = records(h)
     out = []
-    out += ["# Summary", "", feature_summary(hub_of(d)) or "(none)", ""]
+    out += ["# Summary", "", feature_summary(h) or "(none)", ""]
     live = [r for r in rs if r.get("status") == "active" and r.get("type") != "brainstorm"]
-    lines, built = build_log(d)
+    lines, built = build_log(h)
     for r in sorted(live, key=lambda r: (r.get("area", ""), TYPE_ORDER.index(r["type"]) if r["type"] in TYPE_ORDER else 9, ids.number(r["id"]))):
         _, body = parse(r["path"])
-        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'}{built_mark(r, built)})", body.strip(), ""]
+        out += [f"===== {r['id']} {r['type']} (area: {r.get('area') or 'feature-wide'}; from: {r.get('from') or '-'}; supersedes: {r.get('supersedes') or '-'}{built_mark(h, r, built)})", body.strip(), ""]
     out += ["# Brainstorms (history; one line each)", ""]
     out += [f"- {r['id']} ({r.get('area') or 'feature-wide'}): {r.get('title', '')}. {gist(r)}" for r in rs if r.get("type") == "brainstorm"] + [""]
     out += ["# Superseded or discarded (ids only)", "", ", ".join(f"{r['id']} {r.get('status')}" for r in rs if r.get("status") in ("superseded", "discarded")) or "none", ""]
-    cs = checks(d)
+    cs = checks(h)
     for kind, words in OPEN_ITEMS.items():
-        out += [f"# Open {words}", ""] + [line for c in cs if c["kind"] == kind for line in open_item_lines(d, c)] + [""]
+        out += [f"# Open {words}", ""] + [line for c in cs if c["kind"] == kind for line in open_item_lines(h, c)] + [""]
     out += ["# Build progress", ""] + lines
     out += ["", "# Ideas", ""]
     out += [idea_line(it) for it in backlog_mod().feature_ideas(wt, include_closed=True)] or ["none"]
@@ -764,10 +759,10 @@ def digest(d, wt):
         out += [f"- {r['id']}: {item}" for item in brief_open_items(body)]
     return "\n".join(out) + "\n"
 
-def stamp_overview(d, wt):
-    p = paths.overview(hub_of(d))
+def stamp_overview(h, wt):
+    p = paths.overview(h)
     if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
-    rs = records(d)
+    rs = records(h)
     last = rs[-1]["id"] if rs else NO_RECORDS
     text = open(p, encoding="utf-8").read()
     text = re.sub(r"^Generated .* \(basis [0-9a-f]+\)\..*\n+", "", text, flags=re.M)
@@ -776,7 +771,7 @@ def stamp_overview(d, wt):
              " regenerate it by saying \"refresh the overview\"; a change of substance is a new record.\n\n")
     text = lines[0] + "\n\n" + stamp + (lines[1].lstrip("\n") if len(lines) > 1 else "")
     open(p, "w", encoding="utf-8").write(text)
-    concatenate(d, wt)
+    concatenate(h, wt)
     return last
 
 def items_mod(): return load_script("items.py")
@@ -787,15 +782,15 @@ def area_for(wt, ref):
     x = ids.normalize(ref)
     p = ids.parse(x)
     if not p or p.kind not in ids.RECORD_KINDS or names(wt, [x])[0].endswith(": unknown"): sys.exit(f"{ref} is not a record, requirement, or design question in this feature")
-    return find(fdir(wt), p.record).get("area", "")
+    return find(hub(wt), p.record).get("area", "")
 
-def area_of(d, rids):
+def area_of(h, rids):
     """The area records share, or "" when they have none or differ."""
-    got = {find(d, i).get("area", "") for i in rids}
+    got = {find(h, i).get("area", "") for i in rids}
     return got.pop() if len(got) == 1 else ""
 
 def start_feature(wt, name, summary=""):
-    h, d = hub(wt), fdir(wt)
+    h = hub(wt)
     paths.ensure(h); os.makedirs(paths.records_dir(h), exist_ok=True)
     p = paths.feature_meta(h)
     if os.path.exists(p): sys.exit(f"{p} already exists")
@@ -803,28 +798,28 @@ def start_feature(wt, name, summary=""):
     open(p, "w", encoding="utf-8").write(
         f"# Feature: {name}\n\nStarted {datetime.date.today().isoformat()} in {this_repo(h, repos)} ({h}). Edit freely.\n\n"
         f"## Summary\n\n{summary or 'One paragraph: what the feature is for and who it serves.'}\n")
-    concatenate(d, wt)
+    concatenate(h, wt)
     return p
 
 def new_record(wt, rtype, title, src="", area=None, repo=None, supersedes=None):
-    d = fdir(wt)
-    rs = records(d); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
+    h = hub(wt)
+    rs = records(h); num = ids.next_number([r["id"] for r in rs], ids.RECORD)
     _, repos = workspace(wt)
-    old = find(d, supersedes) if supersedes else None
+    old = find(h, supersedes) if supersedes else None
     canon = resolver(rs)
     parts = [x.strip() for x in src.split(",") if x.strip()] if src else []
     parts = [canon(ids.normalize(x)) if ids.parse(ids.normalize(x)) else x for x in parts]
     cited = [x for x in parts if ids.kind_of(x) == ids.RECORD and any(ids.same(r["id"], x) for r in rs)]
-    area = area if area is not None else (old.get("area", "") if old else area_of(d, cited) if cited else "")
+    area = area if area is not None else (old.get("area", "") if old else area_of(h, cited) if cited else "")
     meta = {"id": ids.record(num, rtype), "type": rtype, "title": title.rstrip("."), "date": datetime.date.today().isoformat(),
             "repo": repo or this_repo(wt, repos), "area": slug(area) if area else "",
             "status": "" if rtype == "brainstorm" else "active",
             "from": ", ".join(parts),
             "supersedes": old["id"] if old else ""}
-    p = os.path.join(paths.records_dir(hub_of(d)), ids.record_file(num, rtype, slug(title)))
+    p = os.path.join(paths.records_dir(h), ids.record_file(num, rtype, slug(title)))
     open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
     if old: set_fields(old, status="superseded", superseded_by=meta["id"])
-    concatenate(d, wt)
+    concatenate(h, wt)
     return meta, p
 
 def main():
@@ -858,56 +853,56 @@ def main():
             open(a.out, "w", encoding="utf-8").write(text); print(a.out)
         else: sys.stdout.write(text)
         return
-    d = fdir(a.wt)
+    h = hub(a.wt)
     if a.cmd == "start":
         print(start_feature(a.wt, a.name, a.summary)); return
-    if not started(d):
-        sys.exit(f"no feature in {d}; start one with: records.py start {a.wt} \"name\"")
+    if not started(h):
+        sys.exit(f"no feature in {paths.feature_dir(h)}; start one with: records.py start {a.wt} \"name\"")
 
     if a.cmd == "new":
         meta, p = new_record(a.wt, a.type, a.title, a.src, a.area, a.repo, a.supersedes)
         print(f"{meta['id']} {p}" + (f" (area {meta['area']})" if meta["area"] else "") + (f" (supersedes {meta['supersedes']})" if meta["supersedes"] else ""))
     elif a.cmd == "list":
-        for r in records(d):
+        for r in records(h):
             if a.type and r.get("type") != a.type: continue
             if a.repo and r.get("repo") != a.repo: continue
             if a.area is not None and r.get("area", "") != ("" if a.area == "-" else a.area): continue
             if a.active and (r.get("type") == "brainstorm" or r.get("status") != "active"): continue
             extra = "; ".join(f"{k}: {r[k]}" for k in ("from", "supersedes", "superseded_by", "note") if r.get(k))
-            print(f"{r['id']} {r.get('type','')}: {r.get('title','')}  [{r.get('repo','')}{' ' + r['area'] if r.get('area') else ''} {r.get('date','')} {r.get('status','') or 'record'}{'; ' + extra if extra else ''}]  {os.path.relpath(r['path'], hub(a.wt))}")
+            print(f"{r['id']} {r.get('type','')}: {r.get('title','')}  [{r.get('repo','')}{' ' + r['area'] if r.get('area') else ''} {r.get('date','')} {r.get('status','') or 'record'}{'; ' + extra if extra else ''}]  {os.path.relpath(r['path'], h)}")
     elif a.cmd == "path":
-        print(find(d, a.rid)["path"])
+        print(find(h, a.rid)["path"])
     elif a.cmd == "discard":
-        r = find(d, a.rid)
+        r = find(h, a.rid)
         if r.get("type") == "brainstorm": sys.exit("brainstorms have no status; they stay as history")
-        set_fields(r, status="discarded", note=a.note); concatenate(d, a.wt); print(f"{r['id']} discarded")
+        set_fields(r, status="discarded", note=a.note); concatenate(h, a.wt); print(f"{r['id']} discarded")
     elif a.cmd == "reactivate":
-        r = find(d, a.rid); set_fields(r, status="active", superseded_by=None, note=None); concatenate(d, a.wt); print(f"{r['id']} active")
+        r = find(h, a.rid); set_fields(r, status="active", superseded_by=None, note=None); concatenate(h, a.wt); print(f"{r['id']} active")
     elif a.cmd == "areas":
         by = {}
-        for r in records(d):
+        for r in records(h):
             k = r.get("area") or "(feature-wide)"
             s = by.setdefault(k, {"n": 0, "active": 0, "last": ""})
             s["n"] += 1; s["active"] += r.get("status") == "active"; s["last"] = max(s["last"], r.get("date", ""))
         for k, s in by.items(): print(f"{k}\t{s['n']} record{'s' if s['n'] != 1 else ''}, {s['active']} active, last {s['last']}")
     elif a.cmd == "tag":
-        r = find(d, a.rid); set_fields(r, area=slug(a.area) if a.area else None); concatenate(d, a.wt)
+        r = find(h, a.rid); set_fields(r, area=slug(a.area) if a.area else None); concatenate(h, a.wt)
         print(f"{r['id']} " + (f"area {slug(a.area)}" if a.area else "feature-wide"))
     elif a.cmd == "rename-area":
-        hit = [r for r in records(d) if r.get("area") == a.old]
+        hit = [r for r in records(h) if r.get("area") == a.old]
         if not hit: sys.exit(f"no record has area {a.old}")
         for r in hit: set_fields(r, area=slug(a.new))
-        concatenate(d, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
+        concatenate(h, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
-        concatenate(d, a.wt); print(paths.feature_md(hub_of(d)))
+        concatenate(h, a.wt); print(paths.feature_md(h))
     elif a.cmd == "digest":
-        sys.stdout.write(digest(d, a.wt))
+        sys.stdout.write(digest(h, a.wt))
     elif a.cmd == "stamp-overview":
-        print(f"overview stamped through {stamp_overview(d, a.wt)}")
+        print(f"overview stamped through {stamp_overview(h, a.wt)}")
     elif a.cmd == "overview-status":
-        print(re.sub(r"\[overview.md\]\(overview.md\)", paths.overview(hub_of(d)), overview_line(d)))
+        print(re.sub(r"\[overview.md\]\(overview.md\)", paths.overview(h), overview_line(h)))
     elif a.cmd == "suggest":
-        print("\n".join(suggestions(d)) or "nothing to suggest")
+        print("\n".join(suggestions(h)) or "nothing to suggest")
     elif a.cmd == "names":
         print("\n".join(names(a.wt, a.ids)))
 

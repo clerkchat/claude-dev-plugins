@@ -104,7 +104,7 @@ class Plan:
         if not os.path.exists(meta): return
         if GENERATED.search(open(meta, encoding="utf-8").read()):
             self.steps.append(Step([f"trim the generated sections from {self.rel(paths.feature_meta(self.wt))}"], lambda: trim(paths.feature_meta(self.wt))))
-        self.steps.append(Step([f"make {self.rel(paths.feature_md(self.wt))}"], lambda: records.concatenate(dst, self.wt)))
+        self.steps.append(Step([f"make {self.rel(paths.feature_md(self.wt))}"], lambda: records.concatenate(self.wt, self.wt)))
 
     def pointer(self, dst):
         src = old(self.wt, dst)
