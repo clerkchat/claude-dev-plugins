@@ -75,6 +75,9 @@ On any stop before editing, the report says `files: none` and
 3. Write or port the tests the handoff names, and add one for any behavior
    you added that nothing tests, extending the nearest existing test file,
    shaped as Tests in the writing-code skill says.
+   Keep existing names unless their meaning changed. A rename that is worth
+   making is its own refactor commit, and the report names it under
+   `refactor:`.
 4. Run the handoff's test command, and only that command's scope; tests in
    this repository may share databases and must not run in parallel with
    others. If tests fail because of your change, fix it, in at most two

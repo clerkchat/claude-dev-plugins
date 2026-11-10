@@ -88,6 +88,8 @@ riskier than it is.
 - Abstractions at the right level: no framework for one caller, no wrapper
   around one call, no parameter added to a shared type because one function
   needs it.
+- Before adding a fallback, find where the value is written. When one source
+  already holds the resolved value, read only that source.
 
 ## Tests
 

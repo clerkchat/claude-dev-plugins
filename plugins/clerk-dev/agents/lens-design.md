@@ -63,18 +63,29 @@ guidance.
      must be updated whenever a new case is added elsewhere; a copy of state
      kept in step with its source by hand, such as fields copied from a model
      into a second object the code then updates alongside it. This applies in
-     test files too.
+     test files too. For the same rule in two places, first ask whether either
+     copy needs to exist (one source may already hold the answer, as where a
+     value is written shows); a shared helper is the fallback, not the default
+     fix. Also ask of each new indirection, flag, fallback, or validator "what
+     breaks if this is deleted?" and report one with no reachable answer,
+     recommending its deletion.
    - Design: Does the design keep two lists, enums, schemas, or constants that
      must be updated together by hand, declare a type by hand that mirrors a
      schema, or copy state from a model into a second object it must then keep
-     in step?
+     in step, or add an indirection, flag, fallback, or validator whose
+     deletion breaks nothing reachable? For the same rule in two places, does
+     either copy need to exist?
    - Survey: Which code in these files keeps two lists, enums, schemas, or
      constants in sync by hand, declares a type by hand that mirrors a schema,
-     or keeps a copy of a model's state in step by hand, in test files too?
+     or keeps a copy of a model's state in step by hand, in test files too, or
+     holds an indirection, flag, fallback, or validator that nothing reachable
+     needs?
    - Pass: Derive one list, enum, schema, constant, or type from the other
      instead of keeping both by hand, read state from its source instead of
      copying it into a second object, and fold duplicated code from this piece
-     into one place.
+     into one place, after asking whether either copy needs to exist. Add no
+     indirection, flag, fallback, or validator whose deletion would break
+     nothing.
 4. **Abstraction level.**
    - Review: a generic framework built for one use; a parameter or context
      field added to a shared type because one function needs it; logic in a
