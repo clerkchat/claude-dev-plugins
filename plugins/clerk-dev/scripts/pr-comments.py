@@ -113,6 +113,9 @@ def thread_item(t):
     return comment_item("thread", root_of(t), path=t["path"], line=t["line"], oline=t["originalLine"], replies=replies_of(t),
                         resolved=t["isResolved"], outdated=t["isOutdated"])
 
+def has_body(c):
+    return bool(c["body"].strip())
+
 def submitted_reviews(p):
     return [r for r in p["reviews"]["nodes"] if r["state"] != "PENDING"]
 
@@ -136,8 +139,8 @@ def skip_reason(c):
 def github_items(p, threads, own_review_ids=()):
     return ([thread_item(t) for t in threads]
             + [comment_item("review", r, state=r["state"]) for r in submitted_reviews(p)
-               if r["body"].strip() and str(r["databaseId"]) not in own_review_ids]
-            + [comment_item("comment", c) for c in p["comments"]["nodes"] if c["body"].strip()])
+               if has_body(r) and str(r["databaseId"]) not in own_review_ids]
+            + [comment_item("comment", c) for c in p["comments"]["nodes"] if has_body(c)])
 
 Threads = namedtuple("Threads", "linked imported left_out unread")
 
@@ -250,7 +253,7 @@ def fold_in(run, p, today):
     posted = rf.read_posted(run)
     threads = link_threads(run, posted, p, today)
     own = rf.own_reviews(run, posted)
-    own_reviews = [r for r in submitted_reviews(p) if r["body"].strip() and str(r["databaseId"]) in own]
+    own_reviews = [r for r in submitted_reviews(p) if has_body(r) and str(r["databaseId"]) in own]
     new_ids, updated, skipped = import_items(run, github_items(p, threads.imported, own))
     approvals = approvals_of(p, own, today)
     rf.write_approvals(run, approvals)
