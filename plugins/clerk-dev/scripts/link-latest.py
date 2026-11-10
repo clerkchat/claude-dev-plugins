@@ -18,12 +18,14 @@ def replace_link(link, target):
     os.symlink(os.path.relpath(target, os.path.dirname(link)), staged)
     os.replace(staged, link)
 
+def is_feature(run): return os.path.basename(os.path.realpath(run)).endswith("-feature")
+
 def link_latest(worktree, run):
     runs = os.path.realpath(paths.runs_dir(worktree))
     target = os.path.realpath(run)
     if os.path.dirname(target) != runs or not os.path.isdir(target):
         sys.exit(f"not linked: {run} is not a run directory directly under {runs}")
-    feature = os.path.basename(target).endswith("-feature")
+    feature = is_feature(target)
     latest, review = in_real_dir(paths.latest(worktree, feature)), in_real_dir(paths.review_link(worktree, feature))
     refuse_non_link(latest); refuse_non_link(review)
     replace_link(latest, target)
@@ -31,6 +33,12 @@ def link_latest(worktree, run):
     if os.path.exists(report): replace_link(review, report)
     elif os.path.lexists(review): os.remove(review)
     return [l for l in (latest, review) if os.path.lexists(l)]
+
+def link_if_latest(run):
+    """link_latest for the run latest (latest-feature) points at; any other run, standalone ones included, is left unlinked."""
+    wt = paths.run_worktree(run)
+    if wt is None or os.path.realpath(paths.latest(wt, is_feature(run))) != os.path.realpath(run): return []
+    return link_latest(wt, run)
 
 def main(argv):
     if len(argv) != 1: sys.exit("usage: link-latest.py RUN_DIR")

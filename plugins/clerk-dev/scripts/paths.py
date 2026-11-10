@@ -22,6 +22,10 @@ def clerk_dev(wt): return os.path.join(wt, CLERK_DEV)
 def ledger(wt): return os.path.join(wt, LEDGER)
 def runs_dir(wt): return os.path.join(ledger(wt), "runs")
 def run(wt, label): return os.path.join(runs_dir(wt), label)
+def run_worktree(run):
+    """The worktree whose runs directory holds run, or None."""
+    runs, suffix = os.path.dirname(os.path.abspath(run)), os.sep + runs_dir("")
+    return runs[:-len(suffix)] if runs.endswith(suffix) else None
 def latest(wt, feature=False): return os.path.join(ledger(wt), "latest-feature" if feature else "latest")
 def review_link(wt, feature=False): return os.path.join(clerk_dev(wt), "review-feature.md" if feature else "review.md")
 def notes(wt): return os.path.join(clerk_dev(wt), "branch-notes.md")

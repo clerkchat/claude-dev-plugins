@@ -32,8 +32,8 @@ class FeatureCase(TempCase):
 
 
 class WhenTheFeatureStartsTests(FeatureCase):
-    def test_the_first_line_says_it_is_generated(self):
-        self.assertEqual(self.text().splitlines()[0], records.GENERATED)
+    def test_opens_with_the_name_then_says_it_is_generated(self):
+        self.assertEqual(self.text().splitlines()[:3], ["# Feature: Phone digits", "", records.GENERATED])
 
     def test_names_the_feature(self):
         self.assertEqual(headings(self.text(), 1), ["# Feature: Phone digits"])
@@ -156,12 +156,12 @@ class RegenerationTests(FeatureCase):
 
     def test_after_index(self):
         self.records("index")
-        self.assertEqual(self.text().splitlines()[0], records.GENERATED)
+        self.assertIn(records.GENERATED, self.text().splitlines())
 
     def test_after_stamp_overview(self):
         write_file(paths.overview(self.root), "# Overview\n")
         self.records("stamp-overview")
-        self.assertEqual(self.text().splitlines()[0], records.GENERATED)
+        self.assertIn(records.GENERATED, self.text().splitlines())
 
 
 if __name__ == "__main__":

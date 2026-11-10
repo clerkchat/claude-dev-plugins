@@ -1,7 +1,9 @@
+import glob
 import os
+import re
 import unittest
 
-from helpers import TempCase, init_repo, run_script
+from helpers import ROOT, SCRIPTS, TempCase, init_repo, run_script
 import paths
 
 WORKTREE_PATHS = {
@@ -70,6 +72,12 @@ class NamedPathsTest(PathsCase):
 
     def test_the_feature_runs_review_link_is_review_feature(self):
         self.assertEqual(paths.review_link(self.wt, feature=True), self.at(".clerk-dev/review-feature.md"))
+
+    def test_a_runs_worktree_is_the_one_whose_runs_directory_holds_it(self):
+        self.assertEqual(paths.run_worktree(paths.run(self.wt, "20261110-0900-branch")), self.wt)
+
+    def test_a_directory_outside_a_runs_directory_has_no_worktree(self):
+        self.assertIsNone(paths.run_worktree(self.at(".clerk-dev/20261110-0900-branch")))
 
 
 class RunNameCase(PathsCase):
@@ -159,6 +167,30 @@ class MainTest(PathsCase):
         init_repo(self.wt, with_origin=False)
         run_script("paths", "ensure", self.wt)
         self.assertTrue(os.path.isdir(self.at(".clerk-dev/.ledger/runs")))
+
+
+
+class ScriptsBuildNoClerkDevPathTest(unittest.TestCase):
+    CLERK_DEV_COMPONENT = re.compile(r"""["']\.clerk-dev(?:/[^"']*)?["']|[/}]\.clerk-dev\b""")
+    ALLOWED = {("commit.py", 'def in_clerk_dev(path): return ".clerk-dev" in os.path.normpath(path).split(os.sep)')}
+
+    def offenders(self):
+        hits = []
+        for path in sorted(glob.glob(os.path.join(SCRIPTS, "*.py"))):
+            name = os.path.basename(path)
+            if name == "paths.py":
+                continue
+            with open(path, encoding="utf-8") as f:
+                for number, line in enumerate(f, 1):
+                    if self.CLERK_DEV_COMPONENT.search(line) and (name, line.strip()) not in self.ALLOWED:
+                        hits.append(f"{os.path.relpath(path, ROOT)}:{number}")
+        return hits
+
+    def test_only_the_path_module_names_clerk_dev_as_a_path(self):
+        self.assertEqual(self.offenders(), [])
+
+    def test_the_pattern_catches_a_join(self):
+        self.assertTrue(self.CLERK_DEV_COMPONENT.search('os.path.join(wt, ".clerk-dev", "build.md")'))
 
 
 if __name__ == "__main__":

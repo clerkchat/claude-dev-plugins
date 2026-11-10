@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from helpers import SCRIPTS, TempCase
+from helpers import SCRIPTS, RenderRunCase, TempCase, defect
 import paths
 
 sys.path.insert(0, SCRIPTS)
@@ -158,6 +158,65 @@ class WhenReviewMdIsNotALinkTest(LinkLatestCase):
     def test_leaves_the_file_as_it_was(self):
         with open(paths.review_link(self.worktree)) as f:
             self.assertEqual(f.read(), "my notes\n")
+
+
+
+class RenderLinkCase(RenderRunCase):
+    LABEL = RUN
+
+    def setUp(self):
+        super().setUp()
+        self.worktree = self.path("wt")
+        self.run_dir = paths.run(self.worktree, self.LABEL)
+        self.write_merged(defect(7, "a.py"))
+        self.write("verify/7.md", "verdict: confirmed | confidence: 90 | severity: major")
+
+    def review_link(self, feature=False):
+        return paths.review_link(self.worktree, feature)
+
+    def assertReviewLinkReadsTheReport(self, feature=False):
+        self.assertEqual(os.path.realpath(self.review_link(feature)), os.path.join(self.run_dir, "report.md"))
+
+
+class WhenTheRunLatestPointsAtRendersTest(RenderLinkCase):
+    def setUp(self):
+        super().setUp()
+        link.link_latest(self.worktree, self.run_dir)
+        self.render()
+
+    def test_links_review_md_to_its_report(self):
+        self.assertReviewLinkReadsTheReport()
+
+    def test_keeps_the_link_through_a_later_render(self):
+        self.render("--set", "1=fixed")
+        self.assertReviewLinkReadsTheReport()
+
+
+class WhenTheFeatureRunRendersTest(RenderLinkCase):
+    LABEL = FEATURE_RUN
+
+    def setUp(self):
+        super().setUp()
+        link.link_latest(self.worktree, self.run_dir)
+        self.render()
+
+    def test_links_review_feature_md_to_its_report(self):
+        self.assertReviewLinkReadsTheReport(feature=True)
+
+
+class WhenAStandaloneRunRendersTest(RenderLinkCase):
+    def test_makes_no_review_link(self):
+        self.render()
+        self.assertFalse(os.path.lexists(self.review_link()))
+
+    def test_leaves_review_md_on_the_latest_runs_report(self):
+        earlier = os.path.join(paths.run(self.worktree, EARLIER), "report.md")
+        os.makedirs(os.path.dirname(earlier))
+        with open(earlier, "w") as f:
+            f.write("# Review\n")
+        link.link_latest(self.worktree, os.path.dirname(earlier))
+        self.render()
+        self.assertEqual(os.path.realpath(self.review_link()), earlier)
 
 
 if __name__ == "__main__":

@@ -374,7 +374,7 @@ def concatenate(h, wt):
     groups = [(area, ordered(grp)) for area, grp in by_area([r for r in rs if r.get("status") not in PAST])]
     current = [r for _, grp in groups for r in grp]
     past = [r for r in rs if r.get("status") in PAST]
-    rows = [GENERATED, "", f"# Feature: {feature_name(h)}", "", "## Summary", "", feature_summary(h) or "None yet.", "", "## Contents", ""]
+    rows = [f"# Feature: {feature_name(h)}", "", GENERATED, "", "## Summary", "", feature_summary(h) or "None yet.", "", "## Contents", ""]
     if len(rs) >= 5: rows += [overview_line(h), ""]
     rows += [f"- {r['id']}: {r.get('title', '')}" for r in current] or ["No active records." if rs else "None yet."]
     rows.append("")

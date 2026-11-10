@@ -359,8 +359,8 @@ see Step 6b):
   state a run starts from, per worktree (see Preflight).
 - `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py RUN`: points the worktree's `latest`
   (or `latest-feature` for a `-feature` run) at a run directory of this
-  worktree, and `.clerk-dev/review.md` (`review-feature.md`) at its report
-  (Step 0).
+  worktree (Step 0); `.clerk-dev/review.md` (`review-feature.md`) follows once
+  `render-report.py` writes that run's report.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py PATCH [--exclude GLOB ...]
   --tsv files.tsv --md scope-table.md`:
   per-file bytes, lines, token estimate, and exclusion reasons.
@@ -719,11 +719,12 @@ Create the run directory inside the repository: `<run>` is the output of
 number, or a range slug). If the directory exists, append `-2`, `-3`, and so on.
 Never overwrite or delete an earlier run. After creating it, run
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py <run>` from the worktree
-root, which points `latest` and `.clerk-dev/review.md` at it, except for a
+root, which points `latest` at it, except for a
 `--standalone` narrow run (see Narrow review), which leaves it where it is and
 skips the script. For the coordinating session of feature mode, whose label
-ends in `-feature`, the same script points `latest-feature` and
-`.clerk-dev/review-feature.md` at its run instead. Do not link with `ln`; it is not pre-approved, and a
+ends in `-feature`, the same script points `latest-feature` at its run instead.
+Each `render-report.py` of the run `latest` (`latest-feature`) points at then
+links `.clerk-dev/review.md` (`review-feature.md`) to its `report.md`. Do not link with `ln`; it is not pre-approved, and a
 headless child cannot ask. `latest` always means this branch's own review:
 fixes, triage, status, resuming, and incremental review read it, and in
 feature mode the review of this repository runs in the same worktree at the
