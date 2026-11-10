@@ -78,6 +78,10 @@ riskier than it is.
 - Do things the way the codebase already does them: one way to handle errors,
   wire dependencies, build queries, lay out modules. A second pattern needs a
   reason, even when it is nicer.
+- Before creating a file, name the existing directory and role suffix it
+  belongs to (`queries/`, `guards/`, `*.query.ts`). When none fits, say so in
+  the report as a deviation or question instead of placing it at the module
+  root.
 
 ## One source of truth
 

@@ -172,7 +172,7 @@ closely, naming the changed files you did not reach on its `Not read:` line
 ## Discovery fallback
 
 When `CONTEXT` is `none`, you still need to know the repo's instances. Read the
-repo's `AGENTS.md` or `CLAUDE.md` if present, then grep for the patterns your
+repo's `AGENTS.md` or `CLAUDE.md` and any `.claude/skills/*standards*` if present, then grep for the patterns your
 lens cares about. Spend at most a few searches on this; say in your output that
 no repo context was available.
 
