@@ -303,39 +303,43 @@ def lines_now_for(run, mid, note, repo, reviewed):
     found = reviewed if rf.placement(note) else rf.found_on(run, mid)
     return lambda path, line, end: found_lines(repo, found, reviewed, path, line, end)
 
+def place_item(run, ctx, hunks, reviewed, repo, mid, e, row, note, sections, gone):
+    if row.get("kind") and not gone:
+        return row_anchor(row), None, None, "skip" if row["state"] == "posted" else "update"
+    if e is None:
+        return None, None, "it is not in merged.md", "new"
+    if rf.mf.is_credit(e) and sections.get(mid) != "credit":
+        return None, None, f"it is a credit the report no longer shows; clear its Post with --instruct #{mid}=none", "new"
+    anchor, fallback, problem = resolve(e, note, ctx["files"], hunks, lines_now_for(run, mid, note, repo, reviewed))
+    return anchor, fallback, problem, "new"
+
+def plan_item(mid, run, ctx, hunks, reviewed, repo, ins, rows, nums, found, sections, titles, taken):
+    e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
+    it = {**item_head(mid, nums, found, titles), "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
+    if row.get("kind") and not on_github(row, ctx):
+        it["gone"] = f"its earlier comment is no longer on GitHub (review {row['review_id']}); --post posts it again"
+    it["anchor"], it["fallback"], it["problem"], it["action"] = place_item(run, ctx, hunks, reviewed, repo, mid, e, row, note, sections, it["gone"])
+    raw = rf.posted_text(run, mid)
+    if not raw: it["problem"] = it["problem"] or "it has no posted text"
+    if it["action"] != "skip" and rf.stale_text(row, note):
+        it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
+    it["moved"] = drafted_elsewhere(it, e, reviewed)
+    plain = bool(it["fallback"]) or it["moved"] or (it["anchor"] or {}).get("kind") not in LINE_KINDS
+    it["text"], it["downgraded"] = outgoing(raw, plain)
+    problem, it["warnings"] = screen(it["text"], ctx["local"])
+    it["problem"] = it["problem"] or problem
+    it["published"] = published(it, ctx)
+    it["submitted"], it["existing"] = submitted_review(it), already_on_github(it, ctx, taken)
+    if it["existing"]: it["action"] = "adopt"; taken.add(str(it["existing"]["id"]))
+    return it
+
 def plan_items(run, ctx, hunks, reviewed, repo):
     ins, rows, nums, found = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run), findings(run)
     sections = rf.read_sections(run)
     titles = rf.report_titles(run)
-    items, taken = [], recorded_comments(rows)
-    for mid in in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums):
-        e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
-        it = {**item_head(mid, nums, found, titles), "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
-        if row.get("kind") and not on_github(row, ctx):
-            it["gone"] = f"its earlier comment is no longer on GitHub (review {row['review_id']}); --post posts it again"
-        if row.get("kind") and not it["gone"]:
-            it["anchor"], it["action"] = row_anchor(row), "skip" if row["state"] == "posted" else "update"
-        elif e is None:
-            it["anchor"], it["action"], it["problem"] = None, "new", "it is not in merged.md"
-        elif rf.mf.is_credit(e) and sections.get(mid) != "credit":
-            it["anchor"], it["action"], it["problem"] = None, "new", f"it is a credit the report no longer shows; clear its Post with --instruct #{mid}=none"
-        else:
-            it["anchor"], it["fallback"], it["problem"] = resolve(e, note, ctx["files"], hunks, lines_now_for(run, mid, note, repo, reviewed))
-            it["action"] = "new"
-        raw = rf.posted_text(run, mid)
-        if not raw: it["problem"] = it["problem"] or "it has no posted text"
-        if it["action"] != "skip" and rf.stale_text(row, note):
-            it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
-        it["moved"] = drafted_elsewhere(it, e, reviewed)
-        plain = bool(it["fallback"]) or it["moved"] or (it["anchor"] or {}).get("kind") not in LINE_KINDS
-        it["text"], it["downgraded"] = outgoing(raw, plain)
-        problem, it["warnings"] = screen(it["text"], ctx["local"])
-        it["problem"] = it["problem"] or problem
-        it["published"] = published(it, ctx)
-        it["submitted"], it["existing"] = submitted_review(it), already_on_github(it, ctx, taken)
-        if it["existing"]: it["action"] = "adopt"; taken.add(str(it["existing"]["id"]))
-        items.append(it)
-    return items
+    taken = recorded_comments(rows)
+    posting = in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums)
+    return [plan_item(mid, run, ctx, hunks, reviewed, repo, ins, rows, nums, found, sections, titles, taken) for mid in posting]
 
 def review_head(run):
     head = rf.read_text(rf.review_text_path(run))
