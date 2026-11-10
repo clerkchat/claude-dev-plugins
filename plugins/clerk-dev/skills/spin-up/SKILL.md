@@ -120,8 +120,9 @@ relies on it.
 
 ## Closing
 
-Give the "Where the work sits" header (`skills/review/tracking.md`) for the new
-worktree: the feature's name (for owed work, the item's title), the
+Show the map of where the work sits (`skills/review/tracking.md`) for the new
+worktree. When it prints nothing, as for a feature with no plan yet, give its
+header line alone: the feature's name (for owed work, the item's title), the
 repository, and the branch. Then the worktree's path, and the next step in
 plain words: open a new session in that path, and there brainstorm the idea,
 or build the follow-up or cleanup, which the `building` skill's intake takes

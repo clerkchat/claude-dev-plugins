@@ -25,8 +25,9 @@ lands.
 
 Before handing off or writing the first code on a branch, run
 `${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --setup` and settle each
-gap it prints with the user before building. Two of its gaps are this skill's
-own:
+gap it prints with the user before building. When a session resumes building,
+show the map of where the work sits (`skills/review/tracking.md`) before the
+first handoff. Two of its gaps are this skill's own:
 
 - No Purpose in `.clerk-dev/branch-notes.md`: draft it as
   `skills/review/tracking.md` describes and say in one line where.
@@ -530,7 +531,8 @@ skill:
    (`build.py skip <worktree> MILE-1 <pass> --why "..."`; never a required one)
    and the required passes' findings are triaged. `build.py milestones` and
    status say where each milestone stands and what runs next; a complete
-   milestone leads to the next one. When a milestone completes, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
+   milestone leads to the next one, and the message that starts it shows the
+   map of where the work sits (`skills/review/tracking.md`). When a milestone completes, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 Run the sequence without pausing between passes. Stop and bring to the user:
 a question a builder stopped on, a check that found anything rated major
