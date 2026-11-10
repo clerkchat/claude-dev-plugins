@@ -78,9 +78,10 @@ in it.
 - When the fix is a small edit within the anchored lines, the snippet is a
   ```` ```suggestion ```` block holding exactly those lines as they should
   read: no more and no fewer, and no trailing blank lines. Never for an edit
-  outside them, or for a file or review-body comment.
-- Any other snippet is an ordinary code block introduced with "for example",
-  with "(untested)" added unless the card says it was compiled or run.
+  outside them, or for a file or review-body comment. Because the author can
+  apply it in one click, end the sentence before it with "(untested)" unless
+  the card says the code was compiled or run.
+- Any other snippet is an ordinary code block introduced with "for example".
 - One issue in several places: either one general comment that says it
   is one example of something that applies elsewhere, kept general, or a
   separate self-contained comment at each place. The drafter proposes which,
