@@ -359,6 +359,17 @@ branch's pull request.
    every warning with its text and ask whether to edit it; a mention notifies
    that person when the review is submitted, and internal material is for the
    user only.
+
+   When the user corrected a draft (an edit in a Posted block or in the
+   conversation, a text now marked `edited`), compare the change with the other
+   drafts for the same issue: the same wording, the same mistake, the same
+   missing piece. Offer the same change for each one you find, naming the
+   findings, and apply it only to those the user accepts: edit their Posted
+   blocks and render again. A text already marked `edited` is the user's and is
+   not offered a change. When the correction states a rule beyond that comment,
+   record it as "Guidance from answers" in `skills/review/tracking.md`
+   describes, and say in one line what the rule says and how far it reaches. Do
+   not build a separate store for it.
 7. Ask "Post these N comments to your pending review on pull request #<n>?",
    counting the comments that are new or changed since posting, leaving out
    those under "published; changes on GitHub at once"; with no comment to
