@@ -111,10 +111,8 @@ denial test for a new guarded route is major.
    - Design: Does the plan shape its tests as Tests in the writing-code skill
      describes: shared setup in a hook, a nested group for a shared condition,
      one scenario per test?
-   - Pass: Shape tests as Tests in the writing-code skill describes: shared
-     setup in a hook, a nested group for a condition several tests share, one
-     scenario per test, and the deciding input visible in the test or its
-     nearest hook.
+   - Pass: Shape tests as Tests in the writing-code skill describes. Checklist:
+     setup hook, nested group, one scenario per test, deciding input visible.
 8. **Assertions.**
    - Review: a test that asserts an error is caught and logged pins a swallowed
      error in place (see the error-handling lens); report the swallow rather
@@ -127,11 +125,10 @@ denial test for a new guarded route is major.
      where it matters, and each thing once per subject? A test that asserts an
      error was caught and logged pins a swallowed error in place (see the
      error-handling lens).
-   - Pass: Assert on what the caller sees, never that an error was caught and
-     logged, which pins a swallowed error in place; every assertion must be able
-     to fail, assert content where it matters, assert the same thing about the
-     same subject only once, and update expected error messages with the
-     production code.
+   - Pass: Assert as Tests in the writing-code skill describes, and never that
+     an error was caught and logged, which pins a swallowed error in place; every
+     assertion must be able to fail, and expected error messages change with the
+     production code. Checklist: assert once, content where it matters.
 9. **Factories and fixtures.**
    - Review: hand-built entities where factories exist; `build()` plus a manual
      insert where the factory has a persisting `create()`; a helper called with
@@ -141,11 +138,9 @@ denial test for a new guarded route is major.
    - Design: Which factories and fixtures do the tests need, and does the plan
      account for test setup (fixtures, containers) the repository already has,
      including the factory's persisting method and the helpers' defaults?
-   - Pass: Build entities with the repository's factories where they exist,
-     persist them with the factory's `create()` rather than `build()` and a
-     manual insert, call a helper with its defaults and pass an argument only
-     when it changes the outcome, and keep fixtures in line with the invariants
-     the production code has now.
+   - Pass: Build test data as Tests in the writing-code skill describes, and keep
+     fixtures in line with the invariants the production code has now.
+     Checklist: factory, `create()`, helper defaults.
 10. **Changed tests.**
    - Review: when the diff modifies an existing test, decide whether the test
      was wrong or the behavior changed, and whether the change is acknowledged.
@@ -165,9 +160,9 @@ denial test for a new guarded route is major.
      neighboring test file as evidence.
    - Design: Will the new test files follow the conventions of the neighboring
      ones: import placement, static imports, fixture and table reset?
-   - Pass: Follow the conventions of neighboring test files: imports at the top,
-     a dynamic import only with a stated reason, and fixtures and tables reset
-     as the neighbors do.
+   - Pass: Follow the conventions of neighboring test files, as Tests in the
+     writing-code skill describes, and reset fixtures and tables as the
+     neighbors do. Checklist: top imports, dynamic import only with a reason.
 
 ## Scenario quality
 
