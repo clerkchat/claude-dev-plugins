@@ -37,10 +37,11 @@ def conversation_comment(gid, body, login="alice"):
     return {"databaseId": gid, "author": {"login": login}, "body": body, "url": f"u{gid}"}
 
 
-def pull_request(threads=(), reviews=(), total=None, comments=()):
+def pull_request(threads=(), reviews=(), total=None, comments=(), review_total=None):
     return {"number": 7, "url": "https://gh/pull/7", "headRefName": "feat",
             "reviewThreads": {"totalCount": len(threads) if total is None else total, "nodes": list(threads)},
-            "reviews": {"nodes": list(reviews)}, "comments": {"nodes": list(comments)}}
+            "reviews": {"totalCount": len(reviews) if review_total is None else review_total, "nodes": list(reviews)},
+            "comments": {"nodes": list(comments)}}
 
 
 def posted_row(comment_id, kind="line"):
@@ -143,6 +144,10 @@ class FoldInTest(FoldInCase):
     def test_counts_the_threads_past_the_first_page(self):
         folded = pr_comments.fold_in(self.run_dir, pull_request([thread(1)], total=130), DATE)
         self.assertEqual(folded.unread_threads, 129)
+
+    def test_counts_the_reviews_past_the_first_page(self):
+        folded = pr_comments.fold_in(self.run_dir, pull_request(reviews=[review(2, "APPROVED", "", "bob")], review_total=104), DATE)
+        self.assertEqual(folded.unread_reviews, 103)
 
     def test_writes_no_threads_file_without_posted_findings(self):
         self.fold(thread(1))
@@ -496,8 +501,9 @@ class ShortlistTest(GhRunCase):
 
 
 class SummaryTest(unittest.TestCase):
-    def summary(self, linked=0, left_out=0, unread=0, skipped=None, approvals=0):
-        return pr_comments.summary(12, pr_comments.Folded([5, 6, 7], 1, linked, left_out, unread, Counter(skipped or {}), approvals), [(5, 1, 0.5)])
+    def summary(self, linked=0, left_out=0, unread=0, skipped=None, approvals=0, unread_reviews=0):
+        folded = pr_comments.Folded([5, 6, 7], 1, linked, left_out, unread, Counter(skipped or {}), approvals, unread_reviews)
+        return pr_comments.summary(12, folded, [(5, 1, 0.5)])
 
     def test_counts_the_skipped_comments_by_reason(self):
         self.assertIn("1 updated, 3 skipped (2 from noise bots, 1 courtesy-only), ", self.summary(skipped={"bot": 2, "courtesy": 1}))
@@ -522,6 +528,9 @@ class SummaryTest(unittest.TestCase):
 
     def test_adds_the_pending_threads_left_out(self):
         self.assertIn(", 2 threads of your own pending review left out, ", self.summary(left_out=2))
+
+    def test_adds_the_reviews_past_the_first_page(self):
+        self.assertIn(", 5 reviews past the first 100 not read; the approval line may miss a later verdict", self.summary(unread_reviews=5))
 
     def test_adds_the_threads_past_the_first_page(self):
         self.assertIn(", 30 review threads past the first 100 not read; ", self.summary(unread=30))

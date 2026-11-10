@@ -38,11 +38,12 @@ import run_files as rf
 rc = load_script("reconcile.py"); mf = rc.mf
 
 THREAD_LIMIT = 100
+REVIEW_LIMIT = 100
 Q = """query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
 number url headRefName
 reviewThreads(first:""" + str(THREAD_LIMIT) + """){totalCount nodes{id isResolved isOutdated viewerCanResolve path line startLine originalLine
   comments(first:50){nodes{databaseId author{login} viewerDidAuthor body url createdAt pullRequestReview{state}}}}}
-reviews(first:100){nodes{databaseId author{login} body state url}}
+reviews(first:""" + str(REVIEW_LIMIT) + """){totalCount nodes{databaseId author{login} body state url}}
 comments(first:100){nodes{databaseId author{login} body url}}}}}"""
 
 def words(e):
@@ -190,7 +191,7 @@ def link_threads(run, posted, p, today):
         rf.write_threads(run, {mid: row for mid, row in rows.items() if row})
     return threads
 
-Folded = namedtuple("Folded", "new_ids updated linked left_out unread_threads skipped approvals", defaults=(Counter(), 0))
+Folded = namedtuple("Folded", "new_ids updated linked left_out unread_threads skipped approvals unread_reviews", defaults=(Counter(), 0, 0))
 
 def fetch(owner, name, pr, cwd):
     return graphql(Q, {"o": owner, "r": name, "n": pr}, cwd)["data"]["repository"]["pullRequest"]
@@ -256,6 +257,9 @@ def approvals_of(p, own_review_ids, today):
     return {r["databaseId"]: {"author": login(r), "date": today} for r in latest_verdicts(p).values()
             if r["state"] == "APPROVED" and not is_own(r, own_review_ids)}
 
+def unread_reviews(p):
+    return max(p["reviews"].get("totalCount", 0) - len(p["reviews"]["nodes"]), 0)
+
 def fold_in(run, p, today):
     pd = pr_dir(run)
     open(os.path.join(pd, "comments.json"), "w").write(json.dumps(p, indent=1))
@@ -267,7 +271,8 @@ def fold_in(run, p, today):
     new_ids, updated, skipped = import_items(run, github_items(p, threads.imported, own))
     approvals = approvals_of(p, own, today)
     rf.write_approvals(run, approvals)
-    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread, skipped, len(approvals))
+    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread, skipped, len(approvals),
+                  unread_reviews(p))
 
 CANDIDATE_HEADER = ("pr_id", "finding_id", "score")
 
@@ -316,6 +321,8 @@ def summary(pr, folded, rows):
     parts.append(f"{len(rows)} candidate links for {len({r[0] for r in rows})} comments to judge")
     if folded.unread_threads: parts.append(f"{folded.unread_threads} review threads past the first {THREAD_LIMIT} not read; "
                                            "a posted finding among them keeps the thread state last read")
+    if folded.unread_reviews: parts.append(f"{folded.unread_reviews} reviews past the first {REVIEW_LIMIT} not read; "
+                                           "the approval line may miss a later verdict")
     return f"PR #{pr}: " + ", ".join(parts)
 
 def main():
