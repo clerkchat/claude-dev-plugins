@@ -192,7 +192,7 @@ def rerouted_lines(wt):
     try: recs = rc.records(rc.fdir(wt))
     except SystemExit: recs = []
     rerouted = [r["id"] for r in recs if REROUTED_RE.match(r.get("note", "")) or any(REROUTED_RE.match(l) for l in rc.parse(r["path"])[1].splitlines())]
-    p = rc.notes_path(wt)
+    p = paths.notes(wt)
     in_notes = sum(1 for l in open(p, encoding="utf-8").read().splitlines() if REROUTED_RE.match(l)) if os.path.exists(p) else 0
     where = rerouted + ([f"{in_notes} in the branch notes"] if in_notes else [])
     return ["", f"**Rerouted:** {len(rerouted) + in_notes}: {', '.join(where)}."] if where else []
@@ -235,15 +235,14 @@ def pass_word(e):
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
 
-seen_path = paths.seen_backlog
 
 def read_seen(wt):
-    p = seen_path(wt)
+    p = paths.seen_backlog(wt)
     pairs = [line.split() for line in open(p, encoding="utf-8").read().splitlines()] if os.path.exists(p) else []
     return {pair[0]: int(pair[1]) for pair in pairs if len(pair) == 2 and pair[1].isdigit()}
 
 def write_seen(wt, seen):
-    try: open(seen_path(wt), "w", encoding="utf-8").write("".join(f"{repo} {n}\n" for repo, n in sorted(seen.items())))
+    try: open(paths.seen_backlog(wt), "w", encoding="utf-8").write("".join(f"{repo} {n}\n" for repo, n in sorted(seen.items())))
     except OSError: pass
 
 def highest(its):

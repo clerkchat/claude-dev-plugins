@@ -72,11 +72,10 @@ def git(wt, *args, check=False):
     if check and r.returncode != 0: sys.exit(git_failure(wt, args, r))
     return r.stdout.strip() if r.returncode == 0 else ""
 
-workspace_path = paths.workspace
 
 def workspace(wt):
     """(hub worktree or None, {repo: worktree}) from .clerk-dev/workspace.md."""
-    p = workspace_path(wt)
+    p = paths.workspace(wt)
     if not os.path.exists(p): return None, {}
     text = open(p, encoding="utf-8").read()
     repos = {r["Repo"]: r.get("Worktree", "") for r in table_rows(text) if r.get("Repo")}
@@ -418,7 +417,6 @@ def labeled(label, text):
 def rule_lines(heading, body, rule):
     return [f"### {heading}", "", body_section(body, "Rule") or rule, ""] + labeled("Why", body_section(body, "Why")) + labeled("Applies to", body_section(body, "Applies to"))
 
-notes_path = paths.notes
 
 def common_dir(wt): return git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
 
@@ -444,7 +442,7 @@ def headings(text, marker):
     return list(zip(parts[1::2], (b.strip() for b in parts[2::2])))
 
 def branch_notes(wt):
-    p = notes_path(wt)
+    p = paths.notes(wt)
     if not os.path.exists(p): return None, []
     sections = dict(headings(open(p, encoding="utf-8").read(), "##"))
     return sections.get("Purpose", ""), headings(sections.get("Guidance", ""), "###")
@@ -667,7 +665,7 @@ def build_log(d):
         repo = this_repo(w, repos)
         if not os.path.isdir(w) or not os.access(w, os.R_OK | os.X_OK):
             built.unread.append(repo); lines.append(f"{repo}: (worktree {w} {'cannot be read' if os.path.isdir(w) else 'does not exist'}; its build log is not counted)"); continue
-        if not os.path.exists(bm.log_path(w)): continue
+        if not os.path.exists(paths.build_log(w)): continue
         try:
             entries = bm.log_entries(w)
             rows = bm.progress(w, entries)

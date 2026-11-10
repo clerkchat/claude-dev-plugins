@@ -70,7 +70,7 @@ class SpinUpCase(TempCase):
         return records.branch_notes(wt)[0]
 
     def notes(self, wt):
-        with open(records.notes_path(wt), encoding="utf-8") as f:
+        with open(paths.notes(wt), encoding="utf-8") as f:
             return f.read()
 
     def setup_status(self, wt):

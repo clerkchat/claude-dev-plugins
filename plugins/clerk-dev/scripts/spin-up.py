@@ -100,7 +100,7 @@ def from_the_item(it):
     return f"## From the item (quoted, not Purpose or Guidance)\n\n{text}\n" if text else ""
 
 def write_notes(wt, it, iid, quoted):
-    p = records.notes_path(wt)
+    p = paths.notes(wt)
     extra = f"\n{from_the_item(it)}" if quoted else ""
     records.write_atomic(p, f"# Branch notes\n\n## Purpose\n{purpose(it, iid)}\n\n## Guidance\n{extra}")
     return f"seeded: {p}"
@@ -132,7 +132,7 @@ def seed_owed(wt, it, iid):
 SEEDS = {backlog.IDEA: seed_idea, backlog.CLEANUP: seed_owed, backlog.FOLLOWUP: seed_owed}
 
 def seed(wt, text):
-    if records.branch_notes(wt)[0]: sys.exit(f"{records.notes_path(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
+    if records.branch_notes(wt)[0]: sys.exit(f"{paths.notes(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
     _, _, it, iid = backlog.load(wt, text)
     paths.ensure(wt)
     return [write_notes(wt, it, iid, it['kind'] != backlog.IDEA), *SEEDS[it["kind"]](wt, it, iid)]

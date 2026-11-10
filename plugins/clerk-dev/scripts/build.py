@@ -82,7 +82,6 @@ edit with care.
 ENTRY_RE = re.compile(rf"^- \[( |x)\] ({ids.pattern(ids.BUILD, ids.MILESTONE)})\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS + tuple(OLD_FIELDS)) + r"): ?(.*)$")
 
-log_path = paths.build_log
 
 class Log(NamedTuple):
     entries: list
@@ -90,7 +89,7 @@ class Log(NamedTuple):
     unlinked: list
 
 def log(wt):
-    entries = read(log_path(wt))
+    entries = read(paths.build_log(wt))
     return Log(entries, *refind(wt, entries))
 
 def log_entries(wt): return log(wt).entries
@@ -126,7 +125,7 @@ def off_branch(wt, full):
 
 def path(wt):
     paths.ensure(wt)
-    return log_path(wt)
+    return paths.build_log(wt)
 
 def read(p):
     if not os.path.exists(p): return []
