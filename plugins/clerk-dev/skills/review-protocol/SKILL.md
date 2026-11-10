@@ -166,7 +166,8 @@ Read your input once: the patch, the records, or the listed files. Open other
 code only to confirm or refute one specific suspicion or question, a few files
 per item at most, not to explore the repository. If your input is very large,
 work through it in order and record under Coverage where you stopped reading
-closely.
+closely, naming the changed files you did not reach on its `Not read:` line
+(see Finding format).
 
 ## Discovery fallback
 
@@ -352,7 +353,12 @@ After the block, add at most three short sections:
 - `For other lenses`: one line per item, each starting with the lens name.
 - `Noticed, out of scope`: at most two lines.
 - `Coverage`: one or two sentences on what you checked and what you could not
-  (files too large, context missing, callers outside the repo).
+  (files too large, context missing, callers outside the repo). When a changed
+  file in your patch was not read closely (the reading budget ran out, you
+  skipped it, or you read only part of it), add one line, exactly
+  `Not read: <path>, <path>`, with repo-relative paths as git prints them. Leave
+  the line out when you read everything. The orchestrator re-runs your lens on
+  those files, so a file you leave off this line counts as reviewed.
 
 No preamble, no restating the diff, no praise (the credit lens is the one
 exception; its prompt names the fields a credit carries). If you found

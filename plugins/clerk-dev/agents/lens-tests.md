@@ -20,6 +20,21 @@ conventions (what is mocked, what is real, which helpers exist), and
 Without context, read two or three neighboring test files to learn the
 conventions before judging.
 
+## Read test files in full
+
+Read every new test file, and every heavily rewritten one, in full at HEAD
+before judging, and apply Shape, Assertions, and Factories and fixtures to the
+whole file, not only to the hunks in the patch. A file is heavily rewritten when
+more than half of its lines at HEAD are added or changed in the patch.
+
+When your reading budget does not reach a test file you should have read in
+full, write that file on the `Not read:` line under Coverage rather than
+stopping silently.
+
+`SCOPE: tests-only` means `DIFF` holds only the test files. Skip "Map behavior
+to tests" and concerns 1 to 3, which need the production diff, and apply the
+rest to the test code.
+
 ## Map behavior to tests
 
 List the behaviors the production diff adds or changes, in priority order:
@@ -96,31 +111,36 @@ denial test for a new guarded route is major.
    - Design: Does the plan shape its tests as Tests in the writing-code skill
      describes: shared setup in a hook, a nested group for a shared condition,
      one scenario per test?
-   - Pass: Shape tests as Tests in the writing-code skill describes: shared
-     setup in a hook, a nested group for a condition several tests share, one
-     scenario per test, and the deciding input visible in the test or its
-     nearest hook.
+   - Pass: Shape tests as Tests in the writing-code skill describes. Checklist:
+     setup hook, nested group, one scenario per test, deciding input visible.
 8. **Assertions.**
    - Review: a test that asserts an error is caught and logged pins a swallowed
      error in place (see the error-handling lens); report the swallow rather
      than asking for an assertion on the log. Tests with no assertion,
      assertions that cannot fail, assertions on counts where the content
      matters, expected error messages that were changed in production code
-     without updating the test.
+     without updating the test; two assertions in one test, or across tests of
+     one file, that assert the same thing about the same subject.
    - Design: What will each test assert: what the caller sees, with content
-     where it matters? A test that asserts an error was caught and logged pins a
-     swallowed error in place (see the error-handling lens).
-   - Pass: Assert on what the caller sees, never that an error was caught and
-     logged, which pins a swallowed error in place; every assertion must be able
-     to fail, assert content where it matters, and update expected error
-     messages with the production code.
+     where it matters, and each thing once per subject? A test that asserts an
+     error was caught and logged pins a swallowed error in place (see the
+     error-handling lens).
+   - Pass: Assert as Tests in the writing-code skill describes, and never that
+     an error was caught and logged, which pins a swallowed error in place; every
+     assertion must be able to fail, and expected error messages change with the
+     production code. Checklist: assert once, content where it matters.
 9. **Factories and fixtures.**
-   - Review: hand-built entities where factories exist; fixtures that encode an
-     invariant the production code no longer has.
+   - Review: hand-built entities where factories exist; `build()` plus a manual
+     insert where the factory has a persisting `create()`; a helper called with
+     arguments that only narrow what its defaults already do (truncating two
+     named tables when the helper's default truncates them all); fixtures that
+     encode an invariant the production code no longer has.
    - Design: Which factories and fixtures do the tests need, and does the plan
-     account for test setup (fixtures, containers) the repository already has?
-   - Pass: Build entities with the repository's factories where they exist, and
-     keep fixtures in line with the invariants the production code has now.
+     account for test setup (fixtures, containers) the repository already has,
+     including the factory's persisting method and the helpers' defaults?
+   - Pass: Build test data as Tests in the writing-code skill describes, and keep
+     fixtures in line with the invariants the production code has now.
+     Checklist: factory, `create()`, helper defaults.
 10. **Changed tests.**
    - Review: when the diff modifies an existing test, decide whether the test
      was wrong or the behavior changed, and whether the change is acknowledged.
@@ -133,6 +153,16 @@ denial test for a new guarded route is major.
    - Design: Which existing tests does the plan remove, and what replaces each
      one?
    - Pass: Replace a test you remove, or state why it is no longer needed.
+12. **Conventions of neighboring test files.**
+   - Review: a test file that deviates from its neighbors in import placement, a
+     dynamic import with no stated reason, or fixture or table reset done
+     differently. Report these as minor, one finding per file, citing the
+     neighboring test file as evidence.
+   - Design: Will the new test files follow the conventions of the neighboring
+     ones: import placement, static imports, fixture and table reset?
+   - Pass: Follow the conventions of neighboring test files, as Tests in the
+     writing-code skill describes, and reset fixtures and tables as the
+     neighbors do. Checklist: top imports, dynamic import only with a reason.
 
 ## Scenario quality
 
@@ -142,4 +172,9 @@ no test fails"). For a weak test: name the correct change that would break it.
 ## What not to report
 
 Coverage percentages, missing tests for trivial getters or pass-throughs, and
-style within test files unless it hides a failure.
+formatting or naming taste within test files.
+
+Copied state: fields copied from a model into a second object that the code then
+updates alongside it, in a test file as anywhere, is the design lens's concern
+(One source of truth). Do not report it; name it in one line under
+`For other lenses`.
