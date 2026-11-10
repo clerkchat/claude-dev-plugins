@@ -1700,7 +1700,7 @@ posted to that review; `--submit` renames it `submitted-<review id>.md`, and
 a later run's seed carries a submitted one (or one it inherited) as
 `earlier-<review id>.md`, still the user's review but not that run's,
 `close-<id>.md` a closing reply's own
-words, `keep.tsv` the threads kept open, `payload.json` from a dry run),
+words, `keep.tsv` the threads kept open, `groups.tsv` the findings merged under a lead, `payload.json` from a dry run),
 `posted.tsv` (per Post-marked finding: drafted, edited, or posted, the note
 followed, the anchor and commit the draft was written for, and once posted the
 comment's ids, URL, and anchor),
