@@ -53,10 +53,9 @@ keep those glosses when you show or summarize it, and gloss any id you add.
 
 It reads only files and git: the latest review run, this repository's
 backlog (its follow-ups and items, through `backlog.py`) and the hub
-repository's for the feature's parked ideas, `.clerk-dev/deferred.md`, and `.clerk-dev/passes.md` and `.clerk-dev/build.md` here and in the other
-worktrees of
-`.clerk-dev/workspace.md`, the feature records and design checks in the
-hub, and the commits since the review. It starts no agent and changes nothing except `.clerk-dev/status-seen-backlog`,
+repository's for the feature's parked ideas, the deferred items, and the passes and the build log here and in the other
+worktrees of the workspace file, the feature records and design checks in the
+hub, and the commits since the review. It starts no agent and changes nothing except its record of what it showed,
 which keeps one `<repo> <n>` line per backlog it read, the highest `BL-n` of the
 follow-ups owed here it showed there, so the next status can mark newer items as new. Pass `--run <label>` when the user names a run.
 

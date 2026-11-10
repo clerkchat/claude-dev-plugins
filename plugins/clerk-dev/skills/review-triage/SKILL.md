@@ -17,6 +17,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py *)
@@ -50,7 +51,7 @@ If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that keep
 items separate and commits clean.
 
-Run directory: `.clerk-dev/latest` unless the user names a label. The instructions
+Run directory: `<run>`, from `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> latest`, unless the user names a label (`paths.py <worktree> run <label>`). The instructions
 live in `<run>/instructions.tsv` (`merged_id`, choice, note, date, also,
 option), statuses in `<run>/status.tsv`, numbers in `<run>/numbers.tsv`
 (`number`, `merged_id`, `section`), posted texts in `<run>/posted/<merged

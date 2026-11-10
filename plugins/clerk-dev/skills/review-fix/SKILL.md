@@ -16,6 +16,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py *)
@@ -36,7 +37,7 @@ through the `building` skill's intake. The review run's files are the
 source of truth; see the `review` skill in this plugin for the run directory
 layout, the finding anchors, and `numbers.tsv`.
 
-Run directory: `.clerk-dev/latest` unless the user names a label. Scripts:
+Run directory: `<run>`, from `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> latest`, unless the user names a label (`paths.py <worktree> run <label>`). Scripts:
 `${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py` (re-render;
 `--set
 N=STATUS[:REF]` records a status) and

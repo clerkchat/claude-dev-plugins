@@ -8,9 +8,10 @@ from directory layout or branch names.
 ## Where it lives
 
 The file is created in the worktree where the job was set up, at
-`<worktree>/.clerk-dev/workspace.md`. Every other worktree in its table gets
-a symbolic link at the same path pointing at it, so a session in any of those
-worktrees reads the same file at `.clerk-dev/workspace.md`. Like everything
+the path `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> workspace` prints,
+the plugin's own place for it. Every other worktree in its table gets
+a symbolic link at the same path in that worktree, pointing at it, so a session in any of those
+worktrees reads the same file at `paths.py <worktree> workspace`. Like everything
 under `.clerk-dev/`, it is excluded from git through each repository's
 `.git/info/exclude`.
 
@@ -71,13 +72,14 @@ in an interactive session first.
    listing worktrees on the same branch name as this one first. The user can
    also name a path or leave that repository out.
 4. Ask for a short name for the job, proposing the branch name. When a
-   worktree in the table already has `.clerk-dev/feature/feature.md`, add
+   worktree in the table already has a feature (`.clerk-dev/feature.md`), add
    `Hub:` naming its repository; when several do, ask which is the hub.
 5. Show the table, and on confirmation write the file here. Then, for every
-   other worktree in it, create `.clerk-dev/` (and its `.git/info/exclude` entry
-   when needed) and link the file:
-   `ln -s <this file> <worktree>/.clerk-dev/workspace.md`. If a worktree
-   already has a `workspace.md` for another job, say so and ask whether
+   other worktree in it, run `paths.py ensure <worktree>` (which creates
+   `.clerk-dev/` and its `.git/info/exclude` entry when needed) and link the file:
+   `ln -s <this file> <link>`, where `<link>` is what `paths.py <worktree> workspace`
+   prints for that worktree. If a worktree
+   already has a workspace file for another job, say so and ask whether
    to replace it; never replace it silently. Say in one line where the file is.
 
 To change the job later, the user edits the file. To add a repository, add a

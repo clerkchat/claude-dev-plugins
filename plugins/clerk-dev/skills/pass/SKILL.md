@@ -28,7 +28,7 @@ allowed-tools:
 When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The catalogue of passes, their lenses, and how to suggest them for a piece is
-`passes.md` next to this file. The log is `.clerk-dev/passes.md`, managed only
+`passes.md` next to this file. The log is managed only
 through `${CLAUDE_PLUGIN_ROOT}/scripts/passes.py` (below, `passes.py`), which
 reads it strictly and refuses unsafe steps; when it refuses, say why in one line
 and ask, never edit the log around it. A lens's author-side text, its Pass

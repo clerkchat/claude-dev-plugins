@@ -2,7 +2,7 @@
 
 A feature's records are its history: what was considered, what was settled, and
 how it was broken down and planned. They live in the hub worktree, at
-`<hub>/.clerk-dev/feature/`, and are never committed.
+`<hub>/.clerk-dev/`, and are never committed.
 
 A feature is one unit of deployment: one worktree per repository, one pull
 request each, deployed together. A work branch merged back into the feature's
@@ -10,8 +10,18 @@ branch is part of it. A later refinement is a new feature with its own
 worktrees and records; features are not tracked across each other.
 
 ```
-.clerk-dev/feature/
-  feature.md                  name, summary, and the generated index of records
+.clerk-dev/
+  feature.md                  every active record in one readable file; generated, never edited
+  overview.md                 generated from the active records; never edited
+```
+
+The plugin keeps the records themselves, with the feature's name and summary and
+its checks, in a directory of its own that the scripts find
+(`paths.py <hub> feature-dir`). Everything else in `.clerk-dev/` is the user's.
+
+```
+<feature-dir>/
+  feature.md                  name and summary
   records/
     001-brainstorm-<slug>.md
     002-decision-<slug>.md
@@ -22,7 +32,6 @@ worktrees and records; features are not tracked across each other.
     BRIEF-13-1/raw/<lens>.md  each lens's reply, verbatim
     SURVEY-1.md               a survey of existing code (the design-check skill)
     SURVEY-1/raw/<lens>.md    each lens's reply, verbatim
-  overview.md                 generated from the active records; never edited
 ```
 
 `overview.md` is the feature's current state in one read, generated from the
@@ -450,9 +459,9 @@ started in, which depends on their background. Records stay there, where they
 are at hand while working.
 
 `records.py hub <worktree>` resolves it: the worktree named on the `Hub:` line
-of `.clerk-dev/workspace.md` (see `skills/review/workspace-manifest.md`),
+of the workspace file (see `skills/review/workspace-manifest.md`),
 or else the worktree itself. A session in any worktree of the workspace reads
 and writes the hub's records through the script.
 
 Removing the hub worktree removes the records with it. Before removing it, copy
-`.clerk-dev/feature/` somewhere to keep.
+`.clerk-dev/` somewhere to keep.
