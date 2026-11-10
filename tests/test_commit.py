@@ -3,6 +3,7 @@ import shutil
 import subprocess
 
 from helpers import GIT_ENV, SCRIPTS, TempCase, git, init_repo, write_file
+import paths
 import commit
 
 
@@ -19,6 +20,7 @@ class CommitScriptCase(TempCase):
         super().setUp()
         self.repo = init_repo(self.path("wt"), with_origin=False)
         self.wt = self.repo.path
+        self.build_log_rel = os.path.relpath(paths.build_log(self.wt), self.wt)
         self.head_before = self.repo.head()
         write_file(os.path.join(self.wt, "a.txt"), "a\n")
 
@@ -76,13 +78,13 @@ class CommitTrailerTest(CommitScriptCase):
 
 class CommitFilesTest(CommitScriptCase):
     def test_refuses_a_clerk_dev_file(self):
-        write_file(os.path.join(self.wt, ".clerk-dev", "build.md"), "x\n")
-        self.assertRefused("feat(api): add a\n", "a.txt", ".clerk-dev/build.md", shows=[".clerk-dev/build.md"])
+        write_file(paths.build_log(self.wt), "x\n")
+        self.assertRefused("feat(api): add a\n", "a.txt", self.build_log_rel, shows=[self.build_log_rel])
 
     def test_refuses_when_a_clerk_dev_path_is_already_staged(self):
-        write_file(os.path.join(self.wt, ".clerk-dev", "build.md"), "x\n")
-        git(self.wt, "add", "-f", ".clerk-dev/build.md")
-        self.assertRefused("feat(api): add a\n", shows=[".clerk-dev/build.md"])
+        write_file(paths.build_log(self.wt), "x\n")
+        git(self.wt, "add", "-f", self.build_log_rel)
+        self.assertRefused("feat(api): add a\n", shows=[self.build_log_rel])
 
     def test_commits_only_the_named_files(self):
         write_file(os.path.join(self.wt, "b.txt"), "b\n")

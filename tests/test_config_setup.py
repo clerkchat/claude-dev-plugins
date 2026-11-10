@@ -4,6 +4,7 @@ import sys
 import unittest
 
 from helpers import SCRIPTS, TempCase, git, init_repo, run_ok, run_script, write_file
+import paths
 
 sys.path.insert(0, SCRIPTS)
 import config
@@ -120,7 +121,7 @@ class WorkspaceNameTests(ScanCase):
     def setUp(self):
         super().setUp()
         rows = f"| api | {self.feat} |\n| web-app | {self.path('code/web/feat/y')} |\n| gone | {self.path('nowhere')} |\n"
-        write_file(os.path.join(self.feat, ".clerk-dev", "workspace.md"), f"# Review workspace: x\n\n| Repo | Worktree |\n| - | - |\n{rows}")
+        write_file(paths.workspace(self.feat), f"# Review workspace: x\n\n| Repo | Worktree |\n| - | - |\n{rows}")
 
     def test_the_workspace_name_wins(self):
         self.assertEqual(sorted(self.repos()), ["api", "web-app"])

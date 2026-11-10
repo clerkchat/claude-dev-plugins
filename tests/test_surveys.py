@@ -4,6 +4,7 @@ import sys
 import unittest
 
 from helpers import SCRIPTS, TempCase, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
+import paths
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -41,7 +42,7 @@ class SurveyFileCase(TempCase):
         self.root = self.repo.path
         write_feature_md(self.root)
         write_record(self.root, "BRIEF-5", "brief", "Spec five", body=BRIEF_BODY)
-        self.survey = os.path.join(self.root, ".clerk-dev", "feature", "checks", "SURVEY-1.md")
+        self.survey = os.path.join(paths.checks_dir(self.root), "SURVEY-1.md")
         write_file(self.survey, SURVEY.format(target=self.target))
 
     def status(self, *args):
@@ -51,7 +52,7 @@ class SurveyFileCase(TempCase):
 
     def index(self):
         run_ok("records", "index", self.root)
-        with open(os.path.join(self.root, ".clerk-dev", "feature", "feature.md")) as f:
+        with open(paths.feature_md(self.root)) as f:
             return f.read()
 
 
@@ -211,7 +212,7 @@ class ValidateSurveyItemsTests(SurveyFileCase):
 class ValidateDesignCheckWeightTests(SurveyFileCase):
     def setUp(self):
         super().setUp()
-        self.check = os.path.join(self.root, ".clerk-dev", "feature", "checks", "CHECK-1.md")
+        self.check = os.path.join(paths.checks_dir(self.root), "CHECK-1.md")
 
     def validate(self, weight):
         write_file(self.check, f"# Check\n\nChecked 2026-10-30: BRIEF-5.\n\n- [ ] Q-1. A question\n  - Weight: {weight}\n  - Status: open\n")

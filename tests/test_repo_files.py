@@ -2,6 +2,7 @@ import os
 import unittest
 
 from helpers import SCRIPTS, TempCase, git, init_repo, run_script
+import paths
 
 
 def write(path, text):
@@ -57,11 +58,11 @@ class MigrateTests(RepoFilesCase):
 
     def test_setup_and_workspace_files_move_to_their_new_names(self):
         write(os.path.join(self.common, "review-setup"), "context: never 2026-10-01\n")
-        write(os.path.join(self.second, ".clerk-dev", "review-workspace.md"), "Hub: main\n")
+        write(os.path.join(paths.clerk_dev(self.second), "review-workspace.md"), "Hub: main\n")
         code, out = self.migrate()
         self.assertEqual(code, 0, out)
         self.assertEqual(read(os.path.join(self.common, "clerk-dev", "setup")), "context: never 2026-10-01\n")
-        self.assertEqual(read(os.path.join(self.second, ".clerk-dev", "workspace.md")), "Hub: main\n")
+        self.assertEqual(read(paths.workspace(self.second)), "Hub: main\n")
         self.assertFalse(os.path.exists(os.path.join(self.common, "review-setup")))
         code, out = run_script("status", self.second, "--no-mark")
         self.assertEqual(code, 0, out)

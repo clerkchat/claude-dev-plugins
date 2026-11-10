@@ -3,6 +3,7 @@ import sys
 import unittest
 
 from helpers import SCRIPTS, TempCase
+import paths
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -14,15 +15,15 @@ class LinkLatestCase(TempCase):
     def setUp(self):
         super().setUp()
         self.worktree = self.path("wt")
-        self.clerk_dev = os.path.join(self.worktree, ".clerk-dev")
+        self.clerk_dev = paths.clerk_dev(self.worktree)
 
     def run_dir(self, label):
-        path = os.path.join(self.clerk_dev, label)
+        path = paths.run(self.worktree, label)
         os.makedirs(path)
         return path
 
     def target_of(self, name):
-        return os.readlink(os.path.join(self.clerk_dev, name))
+        return os.readlink(paths.latest(self.worktree, feature=name == "latest-feature"))
 
     def refusal(self, run):
         with self.assertRaises(SystemExit) as raised:
@@ -59,7 +60,7 @@ class WhenTheRunIsAFeatureRunTest(LinkLatestCase):
         self.assertEqual(self.target_of("latest-feature"), "20261106-1052-branch-feature")
 
     def test_leaves_latest_alone(self):
-        self.assertFalse(os.path.lexists(os.path.join(self.clerk_dev, "latest")))
+        self.assertFalse(os.path.lexists(paths.latest(self.worktree)))
 
 
 class RefusalTest(LinkLatestCase):
@@ -78,7 +79,7 @@ class RefusalTest(LinkLatestCase):
         self.assertIn("not a run directory", self.refusal(os.path.join(self.clerk_dev, "20261106-1052-branch")))
 
     def test_refuses_to_replace_a_latest_that_is_not_a_link(self):
-        os.makedirs(os.path.join(self.clerk_dev, "latest"))
+        os.makedirs(paths.latest(self.worktree))
         self.assertIn("is not a link", self.refusal(self.run_dir("20261106-1052-branch")))
 
 

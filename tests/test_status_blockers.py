@@ -3,6 +3,7 @@ import os
 import unittest
 
 from helpers import RunCase, add_backlog_item, drop_backlog_title, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
+import paths
 
 CHECK = """# Design check: R5 Spec five
 
@@ -16,15 +17,13 @@ Checked 2026-10-21: R5.
 
 FINDING = "- id: {n}\n  lens: tests\n  severity: minor\n  file: a.py\n  line: 1\n  title: Finding {n}\n"
 
-SEEN = "status-seen-backlog"
-
 
 class BlockersCase(RunCase):
     def setUp(self):
         super().setUp()
         self.repo = init_repo(self.path("work"))
         self.repo.git("checkout", "-q", "-b", "feat")
-        self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
+        self.run_dir = paths.latest(self.repo.path)
         write_feature_md(self.repo.path)
         write_record(self.repo.path, "R5", "spec", "Spec five", body="## Requirements\n\n1. One.\n\n## Baseline\n\nClean.")
 
@@ -34,7 +33,7 @@ class BlockersCase(RunCase):
         return out
 
     def write_check(self):
-        checks = os.path.join(self.repo.path, ".clerk-dev", "feature", "checks")
+        checks = paths.checks_dir(self.repo.path)
         os.makedirs(checks, exist_ok=True)
         with open(os.path.join(checks, "R5-1.md"), "w") as f:
             f.write(CHECK)
@@ -79,7 +78,7 @@ class BlockersTests(BlockersCase):
         self.assertIn("**Follow-ups owed here:**", out)
         self.assertIn("Send exportId back", out)
         self.assertIn("go through the follow-ups", out)
-        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", SEEN)))
+        self.assertFalse(os.path.exists(paths.seen_backlog(self.repo.path)))
 
     def test_a_fix_section_finding_appears_whatever_its_mark_and_a_closed_one_does_not(self):
         self.write_run(
@@ -110,7 +109,7 @@ class BacklogStatusCase(BlockersCase):
         self.today = datetime.date.today().isoformat()
 
     def write_workspace(self, *rows):
-        write_file(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), workspace_md(*rows))
+        write_file(paths.workspace(self.repo.path), workspace_md(*rows))
 
     def add(self, kind, title, *extra):
         return add_backlog_item(self.repo.path, kind, title, *extra)
@@ -132,14 +131,16 @@ class BacklogStatusCase(BlockersCase):
     def marking_status(self):
         return run_ok("status", self.repo.path)
 
-    def seen_path(self, name=SEEN):
-        return os.path.join(self.repo.path, ".clerk-dev", name)
+    def seen_path(self, name=None):
+        if name is None:
+            return paths.seen_backlog(self.repo.path)
+        return os.path.join(paths.ledger(self.repo.path), name)
 
-    def seen(self, name=SEEN):
+    def seen(self, name=None):
         with open(self.seen_path(name)) as f:
             return f.read()
 
-    def write_seen(self, text, name=SEEN):
+    def write_seen(self, text, name=None):
         write_file(self.seen_path(name), text)
 
     def detach(self, repo=None):

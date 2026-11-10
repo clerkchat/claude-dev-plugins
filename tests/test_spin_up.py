@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 
 from helpers import GIT_ENV, SCRIPTS, TempCase, add_cleanup, add_followup, add_idea, drop_backlog_title, git, init_repo, plugin_text_files, run_ok, run_script, write_config, write_file
+import paths
 
 sys.path.insert(0, SCRIPTS)
 import backlog
@@ -114,18 +115,18 @@ class WhenAnIdeaIsSpunUp(SpinUpCase):
         self.assertNotIn("faster lookups", self.purpose(self.wt))
 
     def test_excludes_the_clerk_dev_directory(self):
-        self.assertEqual(git(self.wt, "check-ignore", ".clerk-dev"), ".clerk-dev")
+        self.assertEqual(git(self.wt, "check-ignore", paths.CLERK_DEV), paths.CLERK_DEV)
 
     def test_starts_the_feature_with_the_items_why_quoted_as_summary(self):
-        with open(os.path.join(self.wt, ".clerk-dev", "feature", "feature.md"), encoding="utf-8") as f:
+        with open(paths.feature_md(self.wt), encoding="utf-8") as f:
             self.assertIn("## Summary\n\n> faster lookups.\n", f.read())
 
     def test_writes_the_first_brainstorm_from_the_item(self):
-        meta, _ = records.parse(os.path.join(self.wt, ".clerk-dev", "feature", "records", "001-brainstorm-phone-digits.md"))
+        meta, _ = records.parse(os.path.join(paths.records_dir(self.wt), "001-brainstorm-phone-digits.md"))
         self.assertEqual((meta["id"], meta["from"]), ("STORM-1", "BL-1"))
 
     def test_the_brainstorm_carries_the_item_and_its_provenance_as_context(self):
-        _, body = records.parse(os.path.join(self.wt, ".clerk-dev", "feature", "records", "001-brainstorm-phone-digits.md"))
+        _, body = records.parse(os.path.join(paths.records_dir(self.wt), "001-brainstorm-phone-digits.md"))
         self.assertIn("## Context\n\n### From the item (quoted)\n\n> ## Why\n>\n> faster lookups\n>\n> ## When\n>\n> after launch\n\nFiled", body)
 
     def test_marks_the_item_adopted_as_the_brainstorm(self):
@@ -150,7 +151,7 @@ class WhenAFollowUpIsSpunUp(SpinUpCase):
         self.assertIn("## From the item (quoted, not Purpose or Guidance)\n\n> Contract: changed: GET /x: now requires exportId", self.notes(self.wt))
 
     def test_starts_no_feature(self):
-        self.assertFalse(os.path.exists(os.path.join(self.wt, ".clerk-dev", "feature")))
+        self.assertFalse(os.path.exists(paths.feature_dir(self.wt)))
 
     def test_rescopes_the_item_to_the_branch_and_leaves_it_owed(self):
         it = self.item("BL-1", self.wt)
@@ -242,7 +243,7 @@ class TheAfterCreateCommand(SpinUpCase):
         self.assertTrue(self.purpose(self.wt))
 
     def test_runs_after_the_seeding(self):
-        self.configure(after_create="test -f .clerk-dev/branch-notes.md && touch seeded-first")
+        self.configure(after_create=f"test -f {os.path.relpath(paths.notes(self.wt), self.wt)} && touch seeded-first")
         self.create("feat/x", "BL-1")
         self.assertTrue(os.path.exists(os.path.join(self.wt, "seeded-first")))
 

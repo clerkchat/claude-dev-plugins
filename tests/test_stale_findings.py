@@ -2,6 +2,7 @@ import os
 import unittest
 
 from helpers import RunCase, add_backlog_item, init_repo, records, run_ok, write_file
+import paths
 
 sf = records.load_script("stale-findings.py")
 
@@ -49,7 +50,7 @@ class WhenTheWorkspaceNamesAMissingHubTests(FollowUpCommitCase):
     def setUp(self):
         super().setUp()
         self.close_with(self.fix)
-        write_file(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), f"Hub: {self.path('gone')}\n")
+        write_file(paths.workspace(self.repo.path), f"Hub: {self.path('gone')}\n")
 
     def test_the_commit_a_follow_up_was_done_in_is_still_labelled(self):
         self.assertEqual(self.labels(), {self.full(self.fix): "BL-1"})

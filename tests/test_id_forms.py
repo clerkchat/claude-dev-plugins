@@ -12,12 +12,9 @@ from helpers import (
     write_log,
     write_record,
 )
+import paths
 
 SPEC_BODY = "## Requirements\n\n1. {a}.\n2. {b}.\n\n## Baseline\n\nClean."
-
-
-def feature_dir(root):
-    return os.path.join(root, ".clerk-dev", "feature")
 
 
 def read_file(path):
@@ -43,7 +40,7 @@ class OldRecordsCase(TempCase):
         return run_ok("records", args[0], self.root, *args[1:])
 
     def record_file(self, name):
-        return os.path.join(feature_dir(self.root), "records", name)
+        return os.path.join(paths.records_dir(self.root), name)
 
 
 class RecordsTests(OldRecordsCase):
@@ -103,7 +100,7 @@ class RecordsTests(OldRecordsCase):
 class CheckTests(OldRecordsCase):
     def setUp(self):
         super().setUp()
-        checks = os.path.join(feature_dir(self.root), "checks")
+        checks = paths.checks_dir(self.root)
         write_file(
             os.path.join(checks, "R2-1.md"),
             "# Check\n\nChecked against: R2, R1.\n\n- [ ] Q1. Old question\n  - Weight: settle-first\n",
@@ -125,7 +122,7 @@ class CheckTests(OldRecordsCase):
 
     def test_the_index_names_checks_in_the_new_form_and_links_their_files(self):
         self.records("index")
-        text = read_file(os.path.join(feature_dir(self.root), "feature.md"))
+        text = read_file(paths.feature_md(self.root))
         self.assertIn("| [BRIEF-2-1](checks/R2-1.md) | BRIEF-2, DEC-1 | 1 | 0 |", text)
         self.assertIn("| [BRIEF-2-2](checks/BRIEF-2-2.md) | BRIEF-2 | 1 | 0 |", text)
 
@@ -144,7 +141,7 @@ class CheckTests(OldRecordsCase):
 
     def test_the_digest_cites_open_questions_by_the_new_check_name(self):
         repo = init_repo(self.path("digest"), with_origin=False)
-        os.rename(os.path.join(self.root, ".clerk-dev"), os.path.join(repo.path, ".clerk-dev"))
+        os.rename(paths.clerk_dev(self.root), paths.clerk_dev(repo.path))
         out = run_ok("records", "digest", repo.path)
         self.assertIn("- BRIEF-2-1.Q1 (settle-first): Old question", out)
         self.assertIn("- BRIEF-2-2.Q-1 (minor): New question", out)
@@ -152,7 +149,7 @@ class CheckTests(OldRecordsCase):
 
 class OverviewTests(OldRecordsCase):
     def overview(self, stamp):
-        write_file(os.path.join(feature_dir(self.root), "overview.md"), f"# Overview\n\n{stamp}\n\nBody.\n")
+        write_file(paths.overview(self.root), f"# Overview\n\n{stamp}\n\nBody.\n")
 
     def old_basis(self):
         key = "R1:active::Decision one|R2:active::Spec two"
@@ -168,8 +165,8 @@ class OverviewTests(OldRecordsCase):
         self.assertIn("current (through BRIEF-2)", self.records("overview-status"))
 
     def test_with_no_records_the_stamp_reads_none_and_the_old_sentinel_still_reads(self):
-        for name in os.listdir(os.path.join(feature_dir(self.root), "records")):
-            os.remove(os.path.join(feature_dir(self.root), "records", name))
+        for name in os.listdir(paths.records_dir(self.root)):
+            os.remove(os.path.join(paths.records_dir(self.root), name))
         empty = hashlib.sha1(b"").hexdigest()[:10]
         self.overview(f"Generated 2026-10-01 through R0 (basis {empty}). Do not edit.")
         self.assertIn("current (through R0)", self.records("overview-status"))
@@ -219,7 +216,7 @@ class BuildLogTests(TempCase):
 
     def test_a_pass_on_the_spec_in_either_form_counts_for_the_milestone(self):
         write_file(
-            os.path.join(self.repo.path, ".clerk-dev", "passes.md"),
+            paths.passes(self.repo.path),
             "- [ ] PASS-1. edge-cases on BRIEF-2\n  - Piece: BRIEF-2\n  - Status: open\n",
         )
         self.assertIn("edge-cases: PASS-1 open", self.repo.build_ok("milestones"))
@@ -239,7 +236,7 @@ class ItemListTests(TempCase):
         super().setUp()
         self.root = self.path("items")
         write_file(
-            os.path.join(self.root, ".clerk-dev", "deferred.md"),
+            paths.deferred(self.root),
             "# Deferred\n\n- [ ] D3. An old gap.\n  - From: this session\n  - Path: none\n  - Open: all\n  - Status: open\n",
         )
 
@@ -252,7 +249,7 @@ class ItemListTests(TempCase):
             with self.subTest(text=text):
                 run_ok("deferred", "reopen", self.root, text)
                 run_ok("deferred", "close", self.root, text, "--ref", "done")
-                self.assertIn("- [x] D3. An old gap.", read_file(os.path.join(self.root, ".clerk-dev", "deferred.md")))
+                self.assertIn("- [x] D3. An old gap.", read_file(paths.deferred(self.root)))
 
 
 class PassStepTests(TempCase):
@@ -267,7 +264,7 @@ class PassStepTests(TempCase):
         write_log(self.repo.path, "- [ ] M1. Piece five\n  - Spec: R5\n  - Passes: edge-cases\n  - Started: 2026-10-01\n")
         entries = [f"- [ ] P{n}. tests on R9\n  - Piece: R9\n  - Status: abandoned\n" for n in range(2, 12)]
         write_file(
-            os.path.join(self.repo.path, ".clerk-dev", "passes.md"),
+            paths.passes(self.repo.path),
             f"- [ ] P1. edge-cases on R5\n  - Piece: R5\n  - Status: open\n  - Start: {head}\n\n"
             + "\n".join(entries)
             + f"\n- [ ] P12. tests on R9\n  - Piece: R9\n  - Status: open\n  - Start: {head}\n",

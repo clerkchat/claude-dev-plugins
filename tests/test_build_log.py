@@ -12,6 +12,7 @@ from helpers import (
     write_log,
     write_record,
 )
+import paths
 
 
 def block_keys(repo, entry_id):
@@ -86,7 +87,7 @@ class BuiltRefusalTests(FeatureRepoCase):
         code, out = self.repo.build("built", *args)
         self.assertNotEqual(code, 0, out)
         self.assertIn(want, out)
-        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", "build.md")))
+        self.assertFalse(os.path.exists(paths.build_log(self.repo.path)))
 
     def test_a_record_not_in_the_hub(self):
         self.refuses("R99 is not a record in the hub", "R99", "--commit", self.c1)
@@ -134,7 +135,7 @@ class BuiltRefusalTests(FeatureRepoCase):
     def test_a_whole_plan_is_never_logged(self):
         code, out = self.repo.build("built", "R4", "--commit", self.c1)
         self.assertNotEqual(code, 0, out)
-        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", "build.md")))
+        self.assertFalse(os.path.exists(paths.build_log(self.repo.path)))
 
     def test_a_commit_is_required(self):
         code, out = self.repo.build("built", "R1")
@@ -424,10 +425,10 @@ class EdgeTests(FeatureRepoCase):
     def test_outside_a_git_repository_the_read_stops_with_git_reason(self):
         self.add_legacy_entries()
         bare = self.path("norepo")
-        os.makedirs(os.path.join(bare, ".clerk-dev"))
+        os.makedirs(paths.clerk_dev(bare))
         shutil.copy(
-            os.path.join(self.repo.path, ".clerk-dev", "build.md"),
-            os.path.join(bare, ".clerk-dev", "build.md"),
+            paths.build_log(self.repo.path),
+            paths.build_log(bare),
         )
         self.assertIn(f"git rev-parse --git-dir failed in {bare}: fatal: not a git repository", log_error(bare))
 

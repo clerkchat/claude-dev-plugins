@@ -15,6 +15,7 @@ from helpers import (
     write_file,
     write_record,
 )
+import paths
 
 PLAN_BODY = (
     "1. Piece one, spec R5. Done: when five is built.\n"
@@ -66,7 +67,7 @@ class StatusCase(TempCase):
         write_record(root, "R5", "spec", "Spec five", body=SPEC_BODY.format(a="Five one", b="Five two"))
         write_record(root, "R6", "spec", "Spec six", body=SPEC_BODY.format(a="Six one", b="Six two"))
         write_record(root, "R9", "spec", "Spec nine", body=SPEC_BODY.format(a="Nine one", b="Nine two"))
-        with open(os.path.join(root, ".clerk-dev", "feature", "overview.md"), "w") as f:
+        with open(paths.overview(root), "w") as f:
             f.write(OVERVIEW)
         self.c1 = self.repo.commit("feat: decision one")
         self.c2 = self.repo.commit("feat: plan step two")
@@ -169,12 +170,12 @@ class BacklogIdeasCase(StatusCase):
 
     def feature_md(self, wt=None):
         run_ok("records", "index", wt or self.repo.path)
-        with open(os.path.join(self.repo.path, ".clerk-dev", "feature", "feature.md")) as f:
+        with open(paths.feature_md(self.repo.path)) as f:
             return f.read()
 
     def write_workspace(self, wt, *rows, hub=None):
         table = "| Repo | Worktree |\n| --- | --- |\n" + "".join(f"| {name} | {path} |\n" for name, path in rows)
-        write_file(os.path.join(wt, ".clerk-dev", "workspace.md"), (f"Hub: {hub}\n\n" if hub else "") + table)
+        write_file(paths.workspace(wt), (f"Hub: {hub}\n\n" if hub else "") + table)
 
     def untitled_idea(self):
         write_file(os.path.join(self.repo.path, ".git", "clerk-dev", "backlog", "001.md"), "---\nid: BL-1\nkind: idea\nstatus: open\nscope: feat\n---\n")
@@ -327,7 +328,7 @@ class OtherRepositoryBriefTests(StatusCase):
         self.assertNotIn("BRIEF-12", self.implementation())
 
     def test_is_in_scope_when_a_pass_names_it(self):
-        write_file(os.path.join(self.repo.path, ".clerk-dev", "passes.md"), "- [ ] PASS-1. tests on BRIEF-12\n  - Piece: BRIEF-12\n  - Status: open\n")
+        write_file(paths.passes(self.repo.path), "- [ ] PASS-1. tests on BRIEF-12\n  - Piece: BRIEF-12\n  - Status: open\n")
         self.assertIn("- BRIEF-12 Spec twelve: 2 requirements, none logged as built", self.implementation())
 
 
@@ -405,8 +406,8 @@ class WorkspaceTests(StatusCase):
         self.other.commit("feat: decision three elsewhere")
         self.other_commit = self.other.head()
         self.write_workspace(self.other.path)
-        os.makedirs(os.path.join(self.other.path, ".clerk-dev"), exist_ok=True)
-        with open(os.path.join(self.other.path, ".clerk-dev", "workspace.md"), "w") as f:
+        os.makedirs(paths.clerk_dev(self.other.path), exist_ok=True)
+        with open(paths.workspace(self.other.path), "w") as f:
             f.write("Hub: hub\n\n" + self.workspace_table(self.other.path))
         self.other.build_ok("built", "R3", "--commit", self.other_commit)
 
@@ -414,7 +415,7 @@ class WorkspaceTests(StatusCase):
         return f"| Repo | Worktree |\n|---|---|\n| hub | {self.repo.path} |\n| other | {other_path} |\n"
 
     def write_workspace(self, other_path):
-        with open(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), "w") as f:
+        with open(paths.workspace(self.repo.path), "w") as f:
             f.write(self.workspace_table(other_path))
 
     def test_a_decision_built_in_another_worktree_reads_built(self):
@@ -432,7 +433,7 @@ class WorkspaceTests(StatusCase):
         self.assertIn("hub: PLAN-4 steps built: 1, 2, 3, 4", progress_section(self.repo))
 
     def break_other_log(self):
-        with open(os.path.join(self.other.path, ".clerk-dev", "build.md"), "a") as f:
+        with open(paths.build_log(self.other.path), "a") as f:
             f.write("garbage line\n")
 
     def test_a_record_built_in_a_readable_worktree_keeps_its_mark_beside_an_unreadable_log(self):
@@ -555,9 +556,9 @@ class GitFailureTests(DecisionsOnlyCase):
         self.repo.build_ok("built", "R1", "--commit", "HEAD")
         outside = self.path("norepo")
         os.makedirs(outside)
-        shutil.copytree(os.path.join(self.repo.path, ".clerk-dev"), os.path.join(outside, ".clerk-dev"))
+        shutil.copytree(paths.clerk_dev(self.repo.path), paths.clerk_dev(outside))
         if not with_log:
-            os.remove(os.path.join(outside, ".clerk-dev", "build.md"))
+            os.remove(paths.build_log(outside))
         code, out = run_script("status", outside, "--focus", "implementation", "--no-mark")
         self.assertEqual(code, 0, out)
         return out
