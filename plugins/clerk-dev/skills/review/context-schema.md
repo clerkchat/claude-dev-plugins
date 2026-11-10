@@ -126,7 +126,7 @@ review skill), run one `general-purpose` subagent with `model: sonnet`, effort
 the rest. It fills in what it can find and leaves out any section it cannot;
 an empty heading is worse than none, since lenses trust what is there.
 
-1. Orientation: `AGENTS.md`, `CLAUDE.md`, the README, the top-level layout,
+1. Orientation: `AGENTS.md`, `CLAUDE.md`, any `.claude/skills/*standards*`, the README, the top-level layout,
    and the package manifests. Note the languages, frameworks, and deployable
    units.
 2. Slices: map the main directories to layers and execution contexts, as
