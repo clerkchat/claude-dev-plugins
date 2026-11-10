@@ -395,6 +395,17 @@ def read_threads(run):
 def write_threads(run, rows):
     write_keyed(threads_path(run), THREAD_FIELDS, {mid: {**row, "replies": replies_cell(row.get("replies", []))} for mid, row in rows.items()})
 
+APPROVAL_FIELDS = ("author", "date")
+
+def approvals_path(run):
+    return os.path.join(run, "pr", "approvals.tsv")
+
+def read_approvals(run):
+    return read_keyed(approvals_path(run), APPROVAL_FIELDS)
+
+def write_approvals(run, rows):
+    write_keyed(approvals_path(run), APPROVAL_FIELDS, rows, header="review_id", order=list)
+
 def posted_threads(run, posted):
     return {mid: row for mid, row in read_threads(run).items() if row["comment_id"] == posted.get(mid, {}).get("comment_id")}
 

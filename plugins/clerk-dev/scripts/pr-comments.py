@@ -18,11 +18,19 @@ reads each comment with its candidates and decides; --judged applies its
 lines "pr_id<TAB>finding_id<TAB>same|different" (at most one `same` per
 comment). A linked comment
 renders inside the finding's card; an unlinked one renders as its own card in
-the "Pull request comments" section. Human comments are never filtered by any
-confidence bar.
+the "Pull request comments" section.
+
+Two skip rules keep noise out. A conversation comment by a noise bot (Linear,
+Vercel, Netlify, Codecov) is skipped; review threads and review summaries are
+never skipped by author. A comment, thread, or review whose whole text is a
+short courtesy phrase (LGTM, thanks, a thumbs up) is skipped; a thread only
+when every comment in it is. Skipped comments are recorded in pr/seen.tsv with
+their reason, never come back, and are counted by reason in the summary.
+Every APPROVED review not posted by this run is recorded with its author in
+pr/approvals.tsv, rewritten on each import, for the report's "Approved by" line.
 """
 import argparse, datetime, json, os, re, sys
-from collections import namedtuple
+from collections import Counter, namedtuple
 from records import load_script
 from gh_api import graphql, pr_number, repo_owner_name
 import run_files as rf
@@ -108,6 +116,23 @@ def thread_item(t):
 def submitted_reviews(p):
     return [r for r in p["reviews"]["nodes"] if r["state"] != "PENDING"]
 
+NOISE_BOTS = frozenset({"linear[bot]", "vercel[bot]", "netlify[bot]", "codecov[bot]", "codecov-commenter"})
+COURTESY_WORDS = frozenset({"lgtm", "thanks", "thank", "you", "ty", "thx", "approved", "nice", "done", "great", "good", "looks", "to",
+                            "me", "ship", "it", "work", "awesome", "perfect", "+1"})
+COURTESY_MAX_WORDS = 5
+NOT_WORD_CHARS = re.compile(r"[^\w\s+\u0080-\U0010ffff]|\ufe0f")
+
+def is_courtesy_word(w):
+    return w in COURTESY_WORDS or not w.isascii() and not any(ch.isalnum() for ch in w)
+
+def is_courtesy(body):
+    ws = NOT_WORD_CHARS.sub("", body.lower()).split()
+    return 0 < len(ws) <= COURTESY_MAX_WORDS and all(map(is_courtesy_word, ws))
+
+def skip_reason(c):
+    if c.kind == "comment" and c.author.lower() in NOISE_BOTS: return "bot"
+    return "courtesy" if all(is_courtesy(body) for body in (c.body, *(b for _, b in c.replies))) else ""
+
 def github_items(p, threads, own_review_ids=()):
     return ([thread_item(t) for t in threads]
             + [comment_item("review", r, state=r["state"]) for r in submitted_reviews(p)
@@ -157,7 +182,7 @@ def link_threads(run, posted, p, today):
         rf.write_threads(run, {mid: row for mid, row in rows.items() if row})
     return threads
 
-Folded = namedtuple("Folded", "new_ids updated linked left_out unread_threads")
+Folded = namedtuple("Folded", "new_ids updated linked left_out unread_threads skipped approvals", defaults=(Counter(), 0))
 
 def fetch(owner, name, pr, cwd):
     return graphql(Q, {"o": owner, "r": name, "n": pr}, cwd)["data"]["repository"]["pullRequest"]
@@ -166,17 +191,20 @@ def pr_dir(run):
     pd = os.path.join(run, "pr"); os.makedirs(pd, exist_ok=True)
     return pd
 
-SEEN_FIELDS = ("merged_id",)
+SEEN_FIELDS = ("merged_id", "skipped")
 
 def seen_path(run):
     return os.path.join(run, "pr", "seen.tsv")
 
 def read_seen(run):
-    return {k: int(r["merged_id"]) for k, r in rf.read_keyed(seen_path(run), SEEN_FIELDS, key=str).items() if r["merged_id"].isdigit()}
+    return rf.read_keyed(seen_path(run), SEEN_FIELDS, key=str)
+
+def seen_order(item):
+    key, row = item
+    return (0, int(row["merged_id"]), key) if row["merged_id"].isdigit() else (1, 0, key)
 
 def write_seen(run, seen):
-    rows = {k: {"merged_id": str(mid)} for k, mid in sorted(seen.items(), key=lambda kv: kv[1])}
-    rf.write_keyed(seen_path(run), SEEN_FIELDS, rows, header=None, order=list)
+    rf.write_keyed(seen_path(run), SEEN_FIELDS, dict(sorted(seen.items(), key=seen_order)), header=None, order=list)
 
 DUPLICATE_OF = re.compile(r"\n  duplicate_of: (\d+)")
 
@@ -194,17 +222,26 @@ def refreshed(mid, c, old):
 def import_items(run, items):
     header, entries = mf.read_entries(rf.merged_path(run))
     seen = read_seen(run)
-    new_ids, updated = [], 0
+    new_ids, updated, skipped = [], 0, Counter()
     for c in items:
-        mid = seen.get(c.key)
-        if mid is None:
-            mid = seen[c.key] = mf.next_entry_id(entries); new_ids.append(mid)
+        row = seen.get(c.key, {})
+        if row.get("skipped"): continue
+        if row.get("merged_id", "").isdigit():
+            mid = int(row["merged_id"])
+            if mid in entries: entries[mid] = refreshed(mid, c, entries[mid]); updated += 1
+        elif reason := skip_reason(c):
+            seen[c.key] = {"merged_id": "", "skipped": reason}; skipped[reason] += 1
+        else:
+            mid = mf.next_entry_id(entries); new_ids.append(mid)
+            seen[c.key] = {"merged_id": str(mid), "skipped": ""}
             entries[mid] = entry(mid, c)
-        elif mid in entries:
-            entries[mid] = refreshed(mid, c, entries[mid]); updated += 1
     mf.write_entries(rf.merged_path(run), header, entries)
     write_seen(run, seen)
-    return new_ids, updated
+    return new_ids, updated, skipped
+
+def approvals_of(p, own_review_ids, today):
+    return {r["databaseId"]: {"author": login(r), "date": today} for r in submitted_reviews(p)
+            if r["state"] == "APPROVED" and str(r["databaseId"]) not in own_review_ids}
 
 def fold_in(run, p, today):
     pd = pr_dir(run)
@@ -214,8 +251,10 @@ def fold_in(run, p, today):
     threads = link_threads(run, posted, p, today)
     own = rf.own_reviews(run, posted)
     own_reviews = [r for r in submitted_reviews(p) if r["body"].strip() and str(r["databaseId"]) in own]
-    new_ids, updated = import_items(run, github_items(p, threads.imported, own))
-    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread)
+    new_ids, updated, skipped = import_items(run, github_items(p, threads.imported, own))
+    approvals = approvals_of(p, own, today)
+    rf.write_approvals(run, approvals)
+    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread, skipped, len(approvals))
 
 CANDIDATE_HEADER = ("pr_id", "finding_id", "score")
 
@@ -250,8 +289,15 @@ def apply_judged(run, judged):
     mf.write_entries(rf.merged_path(run), header, entries)
     return links
 
+SKIPPED_REASONS = {"bot": "from noise bots", "courtesy": "courtesy-only"}
+
+def skipped_part(skipped):
+    return f"{sum(skipped.values())} skipped (" + ", ".join(f"{skipped[k]} {text}" for k, text in SKIPPED_REASONS.items() if skipped[k]) + ")"
+
 def summary(pr, folded, rows):
     parts = [f"{len(folded.new_ids)} new comments", f"{folded.updated} updated"]
+    if folded.skipped: parts.append(skipped_part(folded.skipped))
+    if folded.approvals: parts.append(f"{folded.approvals} approval" + "s" * (folded.approvals > 1))
     if folded.linked: parts.append(f"{folded.linked} posted findings linked")
     if folded.left_out: parts.append(f"{folded.left_out} threads of your own pending review left out")
     parts.append(f"{len(rows)} candidate links for {len({r[0] for r in rows})} comments to judge")
