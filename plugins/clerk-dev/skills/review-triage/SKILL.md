@@ -347,10 +347,13 @@ branch's pull request.
    changing nothing above it. When posting, the script appends the comments
    that fell back to the review body. Tell the user the whole file is theirs to
    edit, the generated part included.
-5. Tell the user which texts were drafted, any proposed general comment, and
-   that they can edit the Posted blocks in the report and `posted/review.md` in
-   place, or change a note and have it redrafted; wait for them to say they are
-   done.
+5. Show each text this pass drafted or redrafted (the ones passed with
+   `--posted`, and no other) in chat, as `finding N: <title>` followed by the
+   text as a blockquote, so the user need not hunt for them in the report. Then
+   say which findings were not drafted, any proposed general comment, and
+   that editing stays in the Posted blocks in the report and
+   `posted/review.md`, or a changed note to have a text redrafted; wait for
+   them to say they are done.
 6. Render, then run the preview again and show it: the comments with their
    anchors, every fallback, the review body, the head-moved line, and the
    pending-review line. When a finding cannot be posted, say why and what would
