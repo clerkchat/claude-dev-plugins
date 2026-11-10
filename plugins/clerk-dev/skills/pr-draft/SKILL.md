@@ -2,7 +2,26 @@
 name: pr-draft
 description: Draft, refine, and post pull request descriptions, one per repository in the change. Drafts go to .clerk-dev/pr-description.md; refinements are made in place and logged as notes that later drafts follow; posting pushes the branches, creates the pull requests, and links the siblings to each other. Use whenever the user asks for a PR description in any words: "draft a PR description", "draft the PR description for this", "write the PR description", "describe this PR", "write the PR descriptions for the feature", "in the PR draft, ...", "refine the PR description", "post the PRs", "open the pull requests", or /clerk-dev:pr-draft. Do not start it unprompted, from another skill, or at the end of a build, and never post without the user asking to post.
 argument-hint: "[--base <branch>] [<repo>...]"
-allowed-tools: Bash(git *), Bash(gh pr view *), Bash(gh pr create *), Bash(gh pr edit *), Bash(python3 *), Read, Write, Edit, Grep, Glob, Agent
+allowed-tools:
+  - Bash(git check-ignore *)
+  - Bash(git diff *)
+  - Bash(git for-each-ref *)
+  - Bash(git grep *)
+  - Bash(git log *)
+  - Bash(git ls-files *)
+  - Bash(git remote get-url *)
+  - Bash(git rev-list *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(gh pr view *)
+  - Bash(python3 *)
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+  - Agent
 ---
 
 # Pull request descriptions

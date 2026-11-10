@@ -2,7 +2,19 @@
 name: followups
 description: Work through this worktree's follow-ups (the repository backlog's follow-ups scoped to its branch), the work it owes because of changes in another repository, from a review or from coding there. Use when the user says "go through the follow-ups", "work the follow-ups", "do BL-4", "fix follow-up BL-2", or similar. Hands each item to the building skill's intake, one commit per item, and closes each item with its commit.
 argument-hint: "[BL-4[,BL-6...]]"
-allowed-tools: Bash(git *), Bash(gh pr view *), Bash(python3 *), Read, Grep, Glob, Agent, Write
+allowed-tools:
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(gh pr view *)
+  - Bash(python3 *)
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Write
 ---
 
 # Working follow-ups

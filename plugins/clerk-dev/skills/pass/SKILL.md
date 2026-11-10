@@ -2,7 +2,25 @@
 name: pass
 description: Write code in focused passes, one value at a time (edge cases, error handling, security, observability, DRY, and so on), each ended by a pass review with only that pass's lenses. Use when the user says "do an edge-cases pass", "make a security pass on this", "pass for observability", "what passes does this need", "guide me through a tests pass", "check the pass", "review the pass", "abandon the pass", or "how are the passes doing". Not for reviewing a whole branch (that is /clerk-dev:review) or fixing review findings (review-fix).
 argument-hint: "[<pass> [on BRIEF-<n> | on <paths>] [guide]] | suggest [BRIEF-<n>] | check PASS-<n> | abandon PASS-<n> | list | stats"
-allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Write, Grep, Glob
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git add *)
+  - Bash(git blame *)
+  - Bash(git check-ignore *)
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git merge-base *)
+  - Bash(git remote set-head origin --auto)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(git worktree list *)
+  - Bash(claude -p *)
+  - Read
+  - Edit
+  - Write
+  - Grep
+  - Glob
 ---
 
 # Passes

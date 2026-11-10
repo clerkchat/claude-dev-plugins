@@ -1,7 +1,13 @@
 ---
 name: status
 description: Say where a worktree's work stands and what to do next, for its review and for the feature it belongs to. Use when the user asks "where are we at", "where are we", "where are we on the design", "are we ready to build", "where are we on <an area or piece>", "where are we on the implementation", "how far along is the build", "what's built", "what's the status", "what's left", "what's next", "status of the review", "status of the feature", "anything new", "what's blocking us", "what's blocked", "anything blocking", or similar about this branch's review, fixes, follow-ups, passes, or feature records. Reports implementation progress per brief (requirements done, partial, in progress, not started; handoffs stopped on a question), new follow-ups (they arrive from other repositories at any time), passes in progress and their checks, open design questions, open items in briefs, passes in other repositories, the repository's backlog (orphaned items, cleanups whose code is gone, follow-ups this branch could take up), commits no review has read, staged changes, unmarked findings, the fix, discussion, and post queues, and findings whose code moved, then the next steps.
-allowed-tools: Bash(python3 *), Bash(git *), Read
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git status *)
+  - Read
 ---
 
 # Where the work stands
