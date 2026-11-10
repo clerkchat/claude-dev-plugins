@@ -101,5 +101,7 @@ in it.
   general or per place. A placement in the note (`on <path>:<line>`,
   `on <path>`, `in the review body`) is the script's; the text does not mention
   it.
+- The guidance file's rules bind like these; where one conflicts with a rule
+  here, the guidance wins, and the Post note wins over both.
 - Write paragraphs as plain lines; the script joins wrapped lines before
   sending.
