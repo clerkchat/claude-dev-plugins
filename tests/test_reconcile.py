@@ -134,6 +134,27 @@ class SeedLooseLineMatchTest(SeedOtherFindingCase):
                       "their threads come in as pull request comments", self.out)
 
 
+class SeedGroupTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        write_file(os.path.join(self.cur, "merged.md"), merged_md(defect(1, "a.py"), defect(2, "b.py")))
+        write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
+                   "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\tjudge\t7\topen\t\n2\t8\tjudge\t8\topen\t\n")
+        run_files.write_groups(self.prev, {8: {"lead": "7", "date": "2026-11-10"}})
+
+    def test_re_keys_the_group_row_when_lead_and_member_are_carried(self):
+        self.seed()
+        self.assertEqual(run_files.read_groups(self.cur), {2: {"lead": "1", "date": "2026-11-10"}})
+
+    def test_leaves_the_group_behind_and_names_it_when_the_lead_is_not_carried(self):
+        self.match_as("text")
+        write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
+                   "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\ttext\t7\topen\t\n2\t8\tjudge\t8\topen\t\n")
+        out = self.seed()
+        self.assertEqual(run_files.read_groups(self.cur), {})
+        self.assertIn("1 group left behind (finding 8 under finding 7)", out)
+
+
 class SeedJudgedMatchTest(SeedOtherFindingCase):
     def test_carries_the_posted_row(self):
         self.match_as("judge")

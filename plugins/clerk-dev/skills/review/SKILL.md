@@ -1393,7 +1393,8 @@ fixed. When a finding with a posted line, range, or file comment is marked
 comment, every render prints `posted
 finding N: marked fixed in <ref>; its thread on GitHub is still open`, and the
 card's Posted block says the same. The line stops once the thread is resolved,
-gone from the pull request, or kept open. Closing replies to the author and
+gone from the pull request, or kept open. A lead's thread is offered only
+once the lead and every finding it covers are marked `fixed`. Closing replies to the author and
 notifies them, so it is outward-facing like posting: the user is asked every
 time, and the user runs the close at a terminal, confirming it there. What
 holds: `post-review.py` asks at the terminal before it approves, requests

@@ -406,6 +406,40 @@ class PostedFlagTest(PostCase):
         self.assertIn("the file is empty", self.render_fails("--posted", f"1={self.draft}"))
 
 
+class CoveredPostedBlockTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--instruct", "2=post", "--posted", f"1={self.draft}")
+        run_files.write_groups(self.run_dir, {8: {"lead": "7", "date": "2026-11-10"}})
+
+    def post_lead(self):
+        run_files.write_posted(self.run_dir, {7: {**self.posted(7), "state": "posted", "kind": "line", "comment_id": "5", "path": "a.py", "line": "3"}})
+        self.render()
+
+    def test_says_the_member_is_covered_by_the_lead(self):
+        self.render()
+        self.assertIn("Covered by finding 1.", self.posted_section(2))
+
+    def test_shows_the_leads_posted_line_once_the_lead_is_posted(self):
+        self.post_lead()
+        self.assertIn("Posted on `a.py:3`", self.posted_section(2))
+
+    def test_writes_no_posted_row_for_the_member(self):
+        self.post_lead()
+        self.assertNotIn(8, run_files.read_posted(self.run_dir))
+
+    def test_leaves_the_instruction_block_as_it_was(self):
+        self.render()
+        self.assertIn("##### Instruction", self.card(2).split("##### Posted", 1)[0])
+
+    def test_leaves_the_leads_block_unchanged(self):
+        self.render()
+        self.assertIn("Say it plainly.", self.posted_section(1))
+
+    def test_refuses_a_posted_text_for_the_member(self):
+        self.assertIn("finding 2 is covered by finding 1; draft it under 1", self.render_fails("--posted", f"2={self.draft}"))
+
+
 class WhenABatchHoldsAnEmptyDraftTest(PostCase):
     def setUp(self):
         super().setUp()

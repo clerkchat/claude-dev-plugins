@@ -858,10 +858,10 @@ def awaits_posting(row, note):
     return not rf.is_posted(row) or rf.stale_text(row, note)
 
 def post_queue(run, instr, numbers, findings, sections):
-    posted, marks = rf.read_posted(run), rf.read_instructions(run)
+    posted, marks, groups = rf.read_posted(run), rf.read_instructions(run), rf.read_groups(run)
     credits = [mid for mid, sec in sections.items() if sec == "credit"]
     return [numbers[mid] for mid in (*findings, *credits)
-            if mid in numbers and sf.plain_choice(instr, mid) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", ""))]
+            if mid in numbers and mid not in groups and sf.plain_choice(instr, mid) == "post" and awaits_posting(posted.get(mid, {}), marks.get(mid, {}).get("note", ""))]
 
 def finding_groups(run, status, instr, numbers):
     sections, findings = rf.read_sections(run), sf.load_findings(run)

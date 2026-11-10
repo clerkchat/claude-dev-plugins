@@ -338,7 +338,8 @@ branch's pull request.
    `<run>/posted/draft-<merged id>.md`, prints `N=<path>` for each on its
    output and each finding's form, proposal for a repeat, or reason not
    drafted on its errors, and saves nothing when the answer holds anything
-   else, a finding not marked Post, or one finding twice. When it refuses,
+   else, a finding not marked Post, a finding covered by a lead ("finding 9
+   is covered by finding 4; draft it under 4"), or one finding twice. When it refuses,
    say what it refused and draft the batch once more, with its refusal line
    (the answer's line number and what it expected) quoted above the batch as
    the correction to make; leave out a finding it named as not marked Post.
@@ -417,7 +418,7 @@ branch's pull request.
    review's body: the script refuses to send one without the others. On no,
    the edit stays in the report, and the preview keeps listing it.
 8. Render, and report what went where, one line per finding from its Posted
-   line ("4 on `src/a.ts:12-14`", "9 in the review body"), and whether the
+   line ("4 on `src/a.ts:12-14`", "9 in the review body", "9 covered by 4"), and whether the
    pending review already existed or was created. The comments added to the
    pending review are visible only to the user until the review is submitted;
    published comments changed with `--update-published` are visible at once.

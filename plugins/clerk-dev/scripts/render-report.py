@@ -70,7 +70,7 @@ from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
 from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
-                       finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, read_instructions, read_kept_open,
+                       finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
                        posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
                        write_text, line_span)
@@ -82,6 +82,7 @@ NAMES = {}
 STATUS = {}
 INSTR = {}
 POSTED = {}
+GROUPS = {}
 THREADS = {}
 CLOSABLE = {}
 KEPT_OPEN = {}
@@ -641,7 +642,17 @@ def posted_link(row):
     link = f", [comment]({row['url']})" if row.get("url") else ""
     return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
 
+def posted_lead(mid):
+    lead = lead_of(GROUPS, mid)
+    return mid if lead is None else lead
+
+def covered_block(mid):
+    lead = lead_of(GROUPS, mid)
+    return (["##### Posted", "", f"Covered by finding {IDNUM.get(lead, f'#{lead}')}.", ""]
+            + posted_link(POSTED.get(lead, {})) + posted_thread_lines(THREADS.get(lead)))
+
 def posted_block(mid):
+    if mid in GROUPS: return covered_block(mid)
     text = posted_text(RUN, mid)
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
@@ -675,7 +686,7 @@ def fenced_text(block):
 
 def posted_blocks(cards):
     texts = {mid: fenced_text(blocks.get("Posted", [])) for mid, blocks in cards.items()}
-    return {mid: text for mid, text in texts.items() if text is not None}
+    return {mid: text for mid, text in texts.items() if text is not None and mid not in GROUPS}
 
 def flat(text):
     return " ".join(text.split())
@@ -797,7 +808,7 @@ def import_instruction_edits(run, cards, ins, today):
     return changed
 
 def has_posted_comment(mid):
-    return has_comment(POSTED.get(mid, {}))
+    return has_comment(POSTED.get(posted_lead(mid), {}))
 
 def decided(mid):
     return bool(choice_of(mid)) or status_of(STATUS, mid) != "open" or has_posted_comment(mid)
@@ -850,6 +861,9 @@ def file_spec(flag, spec, nums):
 
 def posted_draft(spec, nums):
     mid, text = file_spec("--posted", spec, nums)
+    if mid in GROUPS:
+        lead = lead_of(GROUPS, mid)
+        sys.exit(f"finding {nums.get(mid, f'#{mid}')} is covered by finding {nums.get(lead, f'#{lead}')}; draft it under {nums.get(lead, f'#{lead}')}")
     if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
     return mid, text
 
@@ -1197,8 +1211,8 @@ def main():
     today = a.date or ""
     merged = read_findings(a.run)
     verdicts, slices = read_verdicts(a.run), read_slices(a.run)
-    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID
-    NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run), a.run
+    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID, GROUPS
+    NAMES, TITLES, RUN, GROUPS = read_plain_names(a.routing), report_titles(a.run), a.run, read_groups(a.run)
     nums = read_numbers(a.run)
     load_credits(merged)
     flags = checked_flags(a, nums)
