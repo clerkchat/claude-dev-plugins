@@ -3,6 +3,7 @@
 
 Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implementation|review|blockers] [--area NAME|BRIEF-52]
        status.py [WORKTREE] --setup
+       status.py [WORKTREE] --map
 
 --focus design prints whether the feature is ready to build: readiness per
 piece of the overview's plan (brief, design check, settle-first questions,
@@ -64,6 +65,14 @@ gone or whose plan was superseded or discarded. It changes nothing.
 on a question, settle-first design questions, open follow-ups here, and open
 findings in the review's "Fix before merging" section, whatever their mark,
 then the next steps for each. It leaves .clerk-dev/status-seen-backlog untouched.
+
+--map prints only where the work sits across the feature: a header naming the
+feature, the repository, and the branch; the active plan's steps for this
+repository, or the pieces when no plan is active, each done [x], current [>]
+with what is happening on it, or not started [ ]; one line per other worktree
+of the feature with its progress; and the counts of follow-ups owed here and
+the feature's parked ideas. It prints nothing when there are no steps or pieces
+here and no other worktrees. The default view shows the same map first.
 
 --no-mark leaves .clerk-dev/status-seen-backlog untouched.
 """
@@ -394,6 +403,9 @@ def unsettled_brainstorms(recs):
     cited = {i for r in recs for i in ids.records_in(r.get("from", ""))}
     return [r for r in recs if r.get("type") == "brainstorm" and not any(ids.same(r["id"], c) for c in cited)]
 
+def feature_name(fp):
+    return (open(fp, encoding="utf-8").readline().strip().split(":", 1) + [""])[1].strip() or "feature"
+
 def feature_block(wt, rows, out):
     first, later = [], []
     rc = load_script("records.py")
@@ -402,7 +414,7 @@ def feature_block(wt, rows, out):
         out.append(f"**Feature:** {e}"); return first, later
     fp = os.path.join(d, "feature.md")
     if not os.path.exists(fp): return first, later
-    name = (open(fp, encoding="utf-8").readline().strip().split(":", 1) + [""])[1].strip() or "feature"
+    name = feature_name(fp)
     recs = rc.records(d)
     active = {}
     for r in recs:
@@ -464,6 +476,100 @@ def builders(wt, rows):
         if hub and theirs == hub and p != hub:
             out.append((f"{this_repo(p, {})} ({os.path.basename(p)})", p)); seen.add(p)
     return out
+
+class WorkItem(NamedTuple):
+    words: str
+    repo: str
+    step: str | None
+
+PIECE_RE = re.compile(r"\*\*(.+?)\*\*(?:\s*\(([\w.-]+)\))?")
+
+def plain_words(text):
+    """The text's first clause without the record ids it cites or the words naming them."""
+    rid = load_script("records.py").ID_RE.pattern
+    text = re.sub(r"\s*\([^()]*\)", lambda m: "" if re.search(rid, m.group(0)) else m.group(0), text)
+    text = re.sub(rf"(?i:\b(?:briefs?|specs?|decisions?|plans?|pieces|designs?)\s+)?{rid}(?:(?:,\s*|\s+and\s+){rid})*", "", text)
+    text = re.sub(r"\s+([,.;:)])", r"\1", re.sub(r"\s+", " ", text)).strip()
+    return load_script("build.py").label(re.sub(r"[,;:]+(?=[.,;:]|$)", "", text).strip(" ,.;:"))
+
+def owned(text, repos, default):
+    m = re.match(r"([\w.-]+):\s+", text)
+    return (m.group(1), text[m.end():]) if m and m.group(1) in repos else (default, text)
+
+def piece_item(text, repos, default):
+    m = PIECE_RE.match(text)
+    if m: return WorkItem(m.group(1).strip(), m.group(2) or default, None)
+    repo, text = owned(text, repos, default)
+    return WorkItem(plain_words(text), repo, None)
+
+def work_items(d, repos, home):
+    """("step", the active plans' steps) or ("piece", the active pieces records'
+    pieces), each with its repository: a leading `repo:` or a `(repo)` after a
+    piece's name, else the record's."""
+    rc, bd = load_script("records.py"), load_script("build.py")
+    live = [r for r in rc.records(d) if r.get("status") == "active"]
+    plans = [r for r in live if r.get("type") == "plan"]
+    if plans:
+        return "step", [WorkItem(plain_words(text), repo, ids.ref(r["id"], n)) for r in plans for n, s in rc.plan_steps(r).items()
+                        for repo, text in [owned(bd.step_piece(s), repos, r.get("repo") or home)]]
+    return "piece", [piece_item(re.sub(r"^\d+\.\s+", "", s), repos, r.get("repo") or home)
+                     for r in live if ids.record_type(r.get("type")) == "pieces" for s in rc.plan_steps(r).values()]
+
+def doing(entries, m, stage):
+    bd = load_script("build.py")
+    busy = [e["title"] for e in bd.handoffs(entries) if e["f"].get("Status") in bd.OPEN and ids.same(e["f"].get("Brief") or "", m["f"].get("Brief") or "")]
+    return ("the draft" if stage == "happy-path" else f"the {stage} pass") + (f": {', '.join(busy)}" if busy else "")
+
+def item_mark(log, item, built):
+    """("[x]" | "[>]" | "[ ]", what is happening on it) from the log's milestone
+    for the item, or a record entry that built the plan step."""
+    bd = load_script("build.py")
+    if item.step and any(ids.same(item.step, b) for b in built): return "[x]", ""
+    ms = [m for m in bd.milestones(log.entries) if m["f"].get("Status") != "abandoned"
+          and (ids.same(m["f"].get("Plan") or "", item.step) if item.step else m["title"].lower() == item.words.lower())]
+    if not ms: return "[ ]", ""
+    view = bd.milestone_view(log.path, ms[-1])
+    return ("[x]", "") if view.ready else ("[>]", doing(log.entries, ms[-1], view.stage))
+
+def marks(log, items, repo, canon):
+    built = list(load_script("build.py").built_records(log.entries, canon))
+    return [(it.words, *item_mark(log, it, built)) for it in items if it.repo == repo]
+
+def worktree_progress(log, kind, marked):
+    if log.err: return "build log unreadable"
+    if marked: return f"{sum(1 for _, m, _ in marked if m == '[x]')} of {len(marked)} {kind}{plural(marked)} done"
+    bd = load_script("build.py")
+    try: rows = bd.progress(log.path, log.entries) if log.entries else []
+    except SystemExit: return "build log unreadable"
+    total = sum(len(r.items) for r in rows)
+    return f"{sum(1 for r in rows for st, _, _ in r.state.values() if st == 'done')} of {total} requirements done" if total else "nothing built yet"
+
+def counts_line(wt):
+    owed, parked = len(bl.owed_followups(wt)), len(bl.feature_ideas(wt))
+    parts = ([f"owed here: {owed} follow-up{plural(owed)}"] if owed else []) + ([f"parked: {parked} idea{plural(parked)}"] if parked else [])
+    return [f"  {' · '.join(parts)}"] if parts else []
+
+def map_lines(wt, rows, mine, theirs):
+    """Where the work sits across the feature, or [] with nothing to map: no
+    steps or pieces for this worktree and no other worktrees."""
+    rc = load_script("records.py")
+    try: d, home = rc.fdir(wt), this_repo(rc.hub(wt), rows)
+    except SystemExit: return []
+    fp = os.path.join(d, "feature.md")
+    if not os.path.exists(fp): return []
+    me = this_repo(wt, rows)
+    kind, items = work_items(d, set(rows) | {me, home}, home)
+    canon = rc.resolver(rc.records(d))
+    here = marks(mine, items, me, canon)
+    if not here and not theirs: return []
+    lines = [f"{feature_name(fp)} · {me} ({branch_name(wt)})"]
+    lines += [f"  {m} {words}" + (f"  <- {note}" if note else "") for words, m, note in here]
+    for log in theirs:
+        repo = this_repo(log.path, rows)
+        lines.append(f"  {repo} ({branch_name(log.path)}): {worktree_progress(log, kind, marks(log, items, repo, canon))}")
+    return lines + counts_line(wt)
+
+def map_block(lines): return ["```", *lines, "```", ""] if lines else []
 
 def logged_briefs(canon, entries, passes=()):
     return {canon(x) for x in [*(e["f"].get("Brief") or e["f"].get("Record") for e in entries), *(e["f"].get("Piece") for e in passes)] if x}
@@ -994,6 +1100,8 @@ def next_lines(steps, empty=None):
     if steps: return ["", "**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)]
     return ["", f"**Next:** {empty}"] if empty else []
 
+def branch_name(wt): return git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+
 def emit_view(wt, out): emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out)))
 
 def main():
@@ -1004,23 +1112,29 @@ def main():
                     help="design: readiness to build; implementation: building progress and its next steps only; review: the review only; blockers: what blocks the work")
     ap.add_argument("--area", help="one area, or a brief id for one piece and its area")
     ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
+    ap.add_argument("--map", action="store_true", help="only where the work sits across the feature")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
     load_script("records.py").guard(wt)
     run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
     have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
-    branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+    branch = branch_name(wt)
     head = git(wt, "rev-parse", "HEAD")
     out = []
     fresh = not have_run and unbuilt(wt)
     rows = workspace_rows(wt)
     mine = read_build(wt)
+    if a.map:
+        lines = map_lines(wt, rows, mine, builder_logs(wt, rows))
+        if lines: emit(wt, "\n".join(lines))
+        return
     gaps = setup_gaps(wt, rows, mine.entries)
     if a.setup:
         emit(wt, "\n".join(f"- {g}" for g in gaps) if gaps else "Setup: complete."); return
     theirs = builder_logs(wt, rows)
     lead = {"implementation": "the implementation in ", "design": "the design of "}.get(a.focus, "")
     out.append(f"## What blocks {this_repo(wt, rows)} ({branch})\n" if a.focus == "blockers" else f"## Where {lead}{this_repo(wt, rows)} stands ({branch})\n")
+    if a.focus == "all" and not a.area: out += map_block(map_lines(wt, rows, mine, theirs))
     out += setup_lines(gaps)
     if fresh and a.focus == "all": out += purpose_lead(wt)
     if a.focus == "blockers":
