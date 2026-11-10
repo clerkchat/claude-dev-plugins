@@ -1,6 +1,6 @@
 ---
 name: review
-description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", "give this change a code review", "code review this", "do a code review", or /clerk-dev:review. In a worktree with a .clerk-dev/ directory, use this rather than the built-in code-review skill for any of these. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
+description: Multi-lens code review that records findings in the worktree's .clerk-dev/ runs. Use only when the user explicitly asks to run a review of a change: "review the staged changes", "review my last commit", "review the last 3 commits", "review since abc123", "run the review on HEAD", "re-review the branch", "run a full review", "do a final review pass", "give this change a code review", "code review this", "do a code review", or /clerk-dev:review; and, with --pr-comments-only, when the user asks to bring in or go through the pull request's review comments: "grab the PR comments", "go through the PR comments", "what did the reviewers say", "pull in the review comments". In a worktree with a .clerk-dev/ directory, use this rather than the built-in code-review skill for any of these. Do not use for questions about code, a request to look at or explain a function or file, or an informal opinion on a snippet; answer those directly. Fans out to one reviewer subagent per lens, verifies the findings, and adds them to the branch's review.
 argument-hint: "[target | staged | <commit> | since <ref>] [--final] [--standalone] [--pass PASS-<n>] [--feature [--consolidate] [--children-permission-mode <mode>]] [--quick | --deep] [--full | --fresh | --previous <label>] [--lenses a,b | +a | -a] [--no-pr-comments] [--plan-only] [--resume | --render | --pr-comments-only [label]] [--recheck N[,M]] [--split | --walk]"
 allowed-tools:
   - Bash(git blame *)
@@ -377,7 +377,10 @@ see Step 6b):
   `numbers.tsv`.
 
 Lens agents are provided by this plugin as `clerk-dev:lens-<lens>`; pass that
-full name as the subagent type.
+full name as the subagent type. The Agent tool takes it as `subagent_type`; an
+`agent()` call in a Workflow script takes it as `agentType` and silently drops
+`subagent_type`, which leaves every instance a generic workflow agent with no
+lens and no protocol.
 
 The protocol every lens agent follows is the `review-protocol` skill; you do not
 need to read it unless debugging agent output.
@@ -1015,8 +1018,11 @@ block, merges entries on the same file with overlapping or adjacent line ranges,
 keeps the highest severity and confidence and the union of lenses, slices, and
 evidence, and reports how many findings it parsed per file. If a raw file shows
 zero findings but visibly contains a `findings` block, the agent broke the
-format; read that file yourself rather than patching the script. Do not write a
-parser of your own. Merging by line range is deliberately mechanical; two
+format; read that file yourself rather than patching the script. Every lens
+emits a `findings` block, empty when it found nothing, so a raw file with no
+`findings` block at all means the instance did not run as its lens: stop, say
+which lenses, and rerun those instances with the right agent type rather than
+writing their findings up by hand. Do not write a parser of your own. Merging by line range is deliberately mechanical; two
 findings about the same defect in different files stay separate and the verifier
 sees both. A credit (lens `credit`) never merges with a finding of another kind;
 two credits on overlapping lines merge as findings do.

@@ -1,6 +1,6 @@
 ---
 name: review-fix
-description: Fix, address, or recheck a finding from a /clerk-dev:review report. Use whenever the user says "fix finding N", "fix 3 and 5 as recommended", "fix 4 but ...", "address finding N", "recheck N", or refers to a finding in a .clerk-dev/ report and asks for a change. Hands each fix to the building skill's intake, which builds and commits it, then rechecks it with the original lens and updates the report's tracking.
+description: Fix, address, or recheck a finding from a /clerk-dev:review report. Use whenever the user says "fix finding N", "fix 3 and 5 as recommended", "fix 4 but ...", "address finding N", "recheck N", "address the reviewer's comment", "do what the reviewer asked", or refers to a finding or a brought-in pull request comment in a .clerk-dev/ report and asks for a change. Hands each fix to the building skill's intake, which builds and commits it, then rechecks it with the original lens and updates the report's tracking.
 argument-hint: "N[,M...] [as recommended | but <adjustment>] [run label]"
 allowed-tools:
   - Bash(git add *)

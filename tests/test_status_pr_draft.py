@@ -28,10 +28,23 @@ class DraftStepCase(RunCase):
 
 
 class DraftStepTests(DraftStepCase):
-    def test_a_branch_never_reviewed_is_offered_the_draft(self):
+    def test_a_branch_never_reviewed_is_offered_a_review_not_the_draft(self):
         steps = self.next_steps()
         self.assertIn("Run a review", steps)
-        self.assertIn(DRAFT_STEP, steps)
+        self.assertNotIn(DRAFT_STEP, steps)
+
+    def test_a_fresh_branch_leads_with_its_purpose_not_the_review(self):
+        self.repo.git("reset", "-q", "--hard", "main")
+        os.makedirs(os.path.join(self.repo.path, ".clerk-dev"), exist_ok=True)
+        with open(os.path.join(self.repo.path, ".clerk-dev", "branch-notes.md"), "w") as f:
+            f.write("# Branch notes\n\n## Purpose\nDrafted today.\n\nWhat this branch builds: the widget.\n")
+        code, out = self.repo.status()
+        self.assertEqual(code, 0, out)
+        self.assertIn("**Purpose:** the widget.", out)
+        self.assertNotIn("Review:", out)
+        self.assertNotIn("Run a review", out)
+        self.assertNotIn(DRAFT_STEP, out)
+        self.assertIn("start the work the Purpose describes", out)
 
     def test_a_review_without_a_final_pass_is_not_offered_the_draft(self):
         self.write_run()
@@ -66,6 +79,14 @@ class DraftStepTests(DraftStepCase):
         self.repo.commit("feat: more after the final pass")
         steps = self.next_steps()
         self.assertIn("unreviewed commit", steps)
+        self.assertNotIn(DRAFT_STEP, steps)
+
+    def test_a_branch_main_already_holds_is_fresh_while_origin_lags(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.git("merge", "-q", "--ff-only", "feat")
+        self.repo.git("checkout", "-q", "feat")
+        steps = self.next_steps()
+        self.assertNotIn("Run a review", steps)
         self.assertNotIn(DRAFT_STEP, steps)
 
 
