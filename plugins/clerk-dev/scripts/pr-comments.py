@@ -136,10 +136,15 @@ def skip_reason(c):
     if c.kind == "comment" and c.author.lower() in NOISE_BOTS: return "bot"
     return "courtesy" if all(is_courtesy(body) for body in (c.body, *(b for _, b in c.replies))) else ""
 
+def is_own(r, own_review_ids):
+    return str(r["databaseId"]) in own_review_ids
+
+def commented_reviews(p):
+    return [r for r in submitted_reviews(p) if has_body(r)]
+
 def github_items(p, threads, own_review_ids=()):
     return ([thread_item(t) for t in threads]
-            + [comment_item("review", r, state=r["state"]) for r in submitted_reviews(p)
-               if has_body(r) and str(r["databaseId"]) not in own_review_ids]
+            + [comment_item("review", r, state=r["state"]) for r in commented_reviews(p) if not is_own(r, own_review_ids)]
             + [comment_item("comment", c) for c in p["comments"]["nodes"] if has_body(c)])
 
 Threads = namedtuple("Threads", "linked imported left_out unread")
@@ -249,7 +254,7 @@ def latest_verdicts(p):
 
 def approvals_of(p, own_review_ids, today):
     return {r["databaseId"]: {"author": login(r), "date": today} for r in latest_verdicts(p).values()
-            if r["state"] == "APPROVED" and str(r["databaseId"]) not in own_review_ids}
+            if r["state"] == "APPROVED" and not is_own(r, own_review_ids)}
 
 def fold_in(run, p, today):
     pd = pr_dir(run)
@@ -258,7 +263,7 @@ def fold_in(run, p, today):
     posted = rf.read_posted(run)
     threads = link_threads(run, posted, p, today)
     own = rf.own_reviews(run, posted)
-    own_reviews = [r for r in submitted_reviews(p) if has_body(r) and str(r["databaseId"]) in own]
+    own_reviews = [r for r in commented_reviews(p) if is_own(r, own)]
     new_ids, updated, skipped = import_items(run, github_items(p, threads.imported, own))
     approvals = approvals_of(p, own, today)
     rf.write_approvals(run, approvals)
