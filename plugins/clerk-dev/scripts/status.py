@@ -146,7 +146,7 @@ def milestone_drift(wt, d, entries):
     try:
         for m in bd.milestones(entries):
             ref = m["f"].get("Plan")
-            if not ref or m["f"].get("Status") == "abandoned" or bd.milestone_view(wt, m)[2]: continue
+            if not ref or m["f"].get("Status") == "abandoned" or bd.milestone_view(wt, m).ready: continue
             r, text = rc.plan_step(d, ref)
             who, fix = f"{m['id']} points at plan step {ref}", "; point its Plan line in .clerk-dev/build.md at the current plan's step, or abandon it (build.py abandon)"
             if not r: out.append(f"{who}, but no plan has that id{fix}")
