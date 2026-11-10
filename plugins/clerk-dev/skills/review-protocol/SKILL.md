@@ -297,20 +297,26 @@ per finding, fields in this order:
   origin: <new | worsened | existing; see Origin and fix scope>
   title: <a heading of at most ten words naming the defect in plain terms:
     "Upload route can exhaust the worker's memory". No file names, no code.>
-  claim: <one sentence: what is wrong>
+  claim: <one sentence that opens by naming the kind of problem ("one defect
+    with two consequences", "a race between two persist jobs"), not a cause
+    followed by every consequence>
   context: <one or two sentences of background a reader needs before the
     steps: the code involved and how it relates to this change. It may be code
     the diff added or altered, existing code the diff now relies on, or code
-    the diff should have updated and did not.>
-  steps: <how it goes wrong as a numbered sequence when it is a sequence of
-    events, one item per line, each starting with "1." "2." and so on; a single
-    sentence when it is one condition>
-  impact: <who is affected, how often, how bad. Separate from the mechanism.>
+    the diff should have updated and did not. Leave out what the snippet shows.>
+  steps: <how it goes wrong as a numbered sequence of events when it is a
+    sequence, one item per line, each starting with "1." "2." and so on; a
+    single sentence when it is one condition. Name the actors and use concrete
+    values ("calls A and B", "4 failed and 1 ok"), reusing the names across
+    items, not "for example X, or Y".>
+  impact: <who is affected, how often, how bad, one short line per reason, the
+    reason that points to the fix last. Separate from the mechanism.>
   uncertainty: <optional, one sentence: what the diff cannot show that the
-    impact depends on (deployment order, data volume, real data in this
-    path). Omit when nothing is uncertain.>
+    impact depends on (deployment order, data volume, real data in this path),
+    when it qualifies the finding as a whole. Omit when nothing is uncertain.>
   snippet: <optional, path:start-end of at most twelve lines at HEAD that make
-    the mechanism obvious when seen; omit when prose is enough>
+    the mechanism obvious when seen. Give it whenever the finding is about
+    specific code; omit when prose is enough>
   fix: <one or two sentences, or "none obvious". When there is more than one
     reasonable fix, label each alternative inline with (a), (b), and so on,
     so the user can pick one: "(a) Log at warn with `importId` and the
@@ -340,8 +346,10 @@ backticks (bare `__proto__` or `snake_case` is read as Markdown emphasis); no
 first person ("Reproduced with a copy of setPath" rather than "I reproduced");
 `steps` is a list with one event per item, in the order they happen, ending with
 the wrong outcome, with the items starting on the lines below `steps:` (no YAML
-`|` or `>` after the colon); `impact` says who is affected, how often, and how
-bad, and nothing about the mechanism.
+`|` or `>` after the colon), and no reason or description in an item; `impact`
+says who is affected, how often, and how bad, and nothing about the mechanism.
+Put each hedge on the point it qualifies ("probably", "if X"), and prefer a
+certain reason to a worst case.
 
 `title`, `context`, `steps`, and `impact` are what the author reads; `claim` is
 the one-sentence version the verifier and the merge step work from. Write all of
