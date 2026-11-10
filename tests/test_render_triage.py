@@ -1030,5 +1030,18 @@ class WhenAKeptOpenReasonIsLongAndMultilineTest(PostedThreadCase):
         self.assertNotIn("\n- [x] Open", self.show_thread())
 
 
+class CardSectionOrderTest(RenderRunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(7, "a.py", extra="  context: Why it is here.\n  steps: |\n    1. First.\n    2. Second.\n"))
+        self.write("verify/7.md", "verdict: confirmed | confidence: 90 | severity: major")
+        self.render()
+
+    def test_puts_the_cause_before_the_cost(self):
+        card = self.card(1)
+        order = [card.index(m) for m in ("a.py:3", "##### Context", "##### How it goes wrong", "##### Why it matters", "##### Recommendation")]
+        self.assertEqual(order, sorted(order))
+
+
 if __name__ == "__main__":
     unittest.main()

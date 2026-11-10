@@ -357,15 +357,10 @@ def card(n, e, v, slices, names, repo, head, section):
     return card_text(e, out + resolution_lines(e))
 
 def _sections(e, repo, head):
-    """Why it matters, Context, How it goes wrong, and the snippet. A pull
+    """Context, How it goes wrong, the snippet, and Why it matters. A pull
     request comment has them only when its verifier filled them in through
     overrides/<merged id>.md; the comment's own words are never rewritten."""
-    out = []
-    if e.get("impact"):
-        out += prose_block("Why it matters", e["impact"])
-        if e.get("uncertainty"):
-            out += [code_spans("Uncertain: " + e["uncertainty"].strip()), ""]
-    out += context_lines(e)
+    out = context_lines(e)
     how = e.get("steps") or e.get("scenario", "")
     if how:
         out += ["##### How it goes wrong", ""]
@@ -373,7 +368,12 @@ def _sections(e, repo, head):
             out += [code_spans(steps_md(how)), ""]
         else:
             out += prose(how)
-    return out + snippet_lines(e, repo, head)
+    out += snippet_lines(e, repo, head)
+    if e.get("impact"):
+        out += prose_block("Why it matters", e["impact"])
+        if e.get("uncertainty"):
+            out += [code_spans("Uncertain: " + e["uncertainty"].strip()), ""]
+    return out
 
 def context_lines(e):
     ctx = e.get("context") or e.get("what_changed")

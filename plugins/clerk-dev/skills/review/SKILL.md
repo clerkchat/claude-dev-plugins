@@ -1307,8 +1307,8 @@ What the document contains, so you can check it:
   scope line (fix size, origin, and any follow-up in another
   repository, such as "Fix size: trivial · New on this branch"); a status
   checkbox line; the bare `path:line`; the one-sentence claim;
-  then subheadings: Why it matters, Context, How it goes wrong (a numbered list
-  when it is a sequence), an optional snippet pulled from HEAD, Recommendation
+  then subheadings: Context, How it goes wrong (a numbered list
+  when it is a sequence), an optional snippet pulled from HEAD, Why it matters, Recommendation
   (or What would confirm it), Second opinion only when the verifier left a note,
   and Resolution once a fix has been made. A finding appended after a fix may
   say which fix surfaced it.
