@@ -35,6 +35,7 @@ instruction other than defer or ignore.
 """
 import argparse, datetime, os, re, subprocess, sys
 from records import load_script
+import paths
 import run_files as rf
 
 CLOSED_CHOICE = {"defer", "ignore"}
@@ -91,7 +92,7 @@ def followup_labels(repo):
 def narrow_covered(repo):
     """Commits read by narrow reviews of this branch."""
     covered = set()
-    root = os.path.join(repo, ".clerk-dev")
+    root = paths.runs_dir(repo)
     for d in sorted(os.listdir(root)) if os.path.isdir(root) else []:
         p = os.path.join(root, d, "narrow.txt")
         if d in ("latest", "latest-feature") or d.endswith("-feature") or not os.path.exists(p): continue

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse, datetime, os, re, shlex, subprocess, sys
 from typing import NamedTuple
-import backlog, config, records
+import backlog, config, paths, records
 
 BRAINSTORM = "brainstorm"
 NONE = "none"
@@ -134,7 +134,7 @@ SEEDS = {backlog.IDEA: seed_idea, backlog.CLEANUP: seed_owed, backlog.FOLLOWUP: 
 def seed(wt, text):
     if records.branch_notes(wt)[0]: sys.exit(f"{records.notes_path(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
     _, _, it, iid = backlog.load(wt, text)
-    records.exclude(wt)
+    paths.ensure(wt)
     return [write_notes(wt, it, iid, it['kind'] != backlog.IDEA), *SEEDS[it["kind"]](wt, it, iid)]
 
 def live_branch(store, it):
@@ -187,7 +187,6 @@ def main():
     cr = sp.add_parser("create", help="create the worktree, seed it from the item, and run the after-create command")
     cr.add_argument("wt"); cr.add_argument("branch"); cr.add_argument("--item", required=True, help="BL-n, or <repo>:BL-n for an item another repository owns")
     a = ap.parse_args()
-    records.guard(a.wt)
     if a.cmd == "where":
         p = plan(a.wt, a.branch, a.repo)
         refuse_taken(p)

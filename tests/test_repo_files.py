@@ -31,21 +31,6 @@ class RepoFilesCase(TempCase):
         return run_script("migrate-guidance", "repo-files", self.repo.path, *args)
 
 
-class GuardTests(RepoFilesCase):
-    def test_an_old_workspace_file_stops_status_with_the_migrate_hint(self):
-        write(os.path.join(self.repo.path, ".clerk-dev", "review-workspace.md"), "| Repo | Worktree |\n")
-        code, out = run_script("status", self.repo.path, "--no-mark")
-        self.assertNotEqual(code, 0)
-        self.assertIn("review-workspace.md", out)
-        self.assertIn("/clerk-dev:migrate", out)
-
-    def test_an_old_context_copy_stops_status(self):
-        self.old_context(self.repo.path, "## Slices\n")
-        code, out = run_script("status", self.repo.path, "--no-mark")
-        self.assertNotEqual(code, 0)
-        self.assertIn("/clerk-dev:migrate", out)
-
-
 @unittest.skipUnless(os.path.exists(os.path.join(SCRIPTS, "migrate-guidance.py")), "migrate-guidance.py is local to the plugin's own worktrees")
 class MigrateTests(RepoFilesCase):
     def test_identical_copies_become_one_repo_context_without_frontmatter(self):

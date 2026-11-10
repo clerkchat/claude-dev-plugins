@@ -52,7 +52,8 @@ Record frontmatter:
 """
 import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile, time
 from typing import NamedTuple
-import ids
+import ids, paths
+from paths import hub_of
 
 TYPES = ids.RECORD_TYPES
 STATUSES = ("active", "superseded", "discarded")
@@ -71,17 +72,7 @@ def git(wt, *args, check=False):
     if check and r.returncode != 0: sys.exit(git_failure(wt, args, r))
     return r.stdout.strip() if r.returncode == 0 else ""
 
-def exclude(wt):
-    """Create .clerk-dev/ and its .git/info/exclude entry."""
-    os.makedirs(os.path.join(wt, ".clerk-dev"), exist_ok=True)
-    if subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"]).returncode != 0:
-        common = git(wt, "rev-parse", "--git-common-dir")
-        if common:
-            exf = os.path.join(common if os.path.isabs(common) else os.path.join(wt, common), "info", "exclude")
-            os.makedirs(os.path.dirname(exf), exist_ok=True)
-            with open(exf, "a") as fh: fh.write(".clerk-dev/\n")
-
-def workspace_path(wt): return os.path.join(wt, ".clerk-dev", "workspace.md")
+workspace_path = paths.workspace
 
 def workspace(wt):
     """(hub worktree or None, {repo: worktree}) from .clerk-dev/workspace.md."""
@@ -150,9 +141,9 @@ def hub(wt):
     if h and not os.path.isdir(h): sys.exit(f"hub worktree {h} (from .clerk-dev/workspace.md) does not exist")
     return os.path.abspath(h or wt)
 
-def fdir(wt): return os.path.join(hub(wt), ".clerk-dev", "feature")
+def fdir(wt): return paths.feature_dir(hub(wt))
 
-def hub_of(d): return os.path.dirname(os.path.dirname(d))
+def started(d): return os.path.exists(paths.feature_meta(hub_of(d)))
 
 def parse(p):
     text = open(p, encoding="utf-8").read()
@@ -170,7 +161,7 @@ def render(meta, body, fields=FIELDS):
     return f"---\n{head}---\n{body}"
 
 def records(d):
-    rd = os.path.join(d, "records")
+    rd = paths.records_dir(hub_of(d))
     if not os.path.isdir(rd): return []
     out = [parse(os.path.join(rd, f))[0] for f in os.listdir(rd) if f.endswith(".md")]
     rs = sorted((r for r in out if ids.kind_of(r.get("id", "")) == ids.RECORD), key=lambda r: ids.number(r["id"]))
@@ -238,7 +229,7 @@ def question_in(path, q):
     return next((i for i in items_mod().read(path) if ids.same(i["id"], ids.item(ids.QUESTION, q))), None)
 
 def checks(d):
-    cd = os.path.join(d, "checks")
+    cd = paths.checks_dir(hub_of(d))
     if not os.path.isdir(cd): return []
     canon = resolver(records(d))
     out = []
@@ -262,7 +253,7 @@ def check_order(f):
     return (0, ids.sort_key(name)) if ids.kind_of(name) == ids.CHECK else (1, natural)
 
 def check_path(d, name):
-    cd = os.path.join(d, "checks")
+    cd = paths.checks_dir(hub_of(d))
     found = next((f for f in check_files(cd) if ids.check_from_file(f) == name or ids.same(ids.check_from_file(f), name)), None)
     return os.path.join(cd, found or ids.check_file(name))
 
@@ -333,7 +324,7 @@ def overview_state(d):
     """(through id or None, basis in the file or None, current basis, ids added since)."""
     rs = records(d)
     basis = basis_of(rs)
-    p = os.path.join(d, "overview.md")
+    p = paths.overview(hub_of(d))
     if not os.path.exists(p): return None, None, basis, [r["id"] for r in rs]
     head = open(p, encoding="utf-8").read(600)
     m = re.search(rf"through ({ids.pattern(ids.RECORD)}|{NO_RECORDS}) \(basis ([0-9a-f]+)\)", head)
@@ -349,15 +340,15 @@ def basis_of(rs):
 def overview_line(d):
     through, old, basis, added = overview_state(d)
     if through is None:
-        missing = not os.path.exists(os.path.join(d, "overview.md"))
+        missing = not os.path.exists(paths.overview(hub_of(d)))
         return ("No overview yet" if missing else "The overview has no stamp") + "; say \"refresh the overview\"."
     if old == basis: return f"Overview: [overview.md](overview.md), current (through {through})."
     since = f"; {', '.join(added)} came after" if added else "; statuses or areas changed since"
     return f"Overview: [overview.md](overview.md), stale (through {through}{since}); say \"refresh the overview\"."
 
 def index(d, wt):
-    p = os.path.join(d, "feature.md")
-    if not os.path.exists(p): return
+    if not started(d): return
+    p = paths.feature_meta(hub_of(d))
     text = open(p, encoding="utf-8").read()
     rs = records(d)
     repos = len({r.get("repo") for r in rs}) > 1
@@ -393,8 +384,6 @@ def index(d, wt):
             where = r.get("area") or "feature-wide"
             rows.append(f"- **{r['id']}** {r.get('type', '')} ({where}): [{r.get('title', '')}]({os.path.relpath(r['path'], d)}){note}")
         rows.append("")
-    stale = os.path.join(d, "guidance.md")
-    if os.path.exists(stale): os.remove(stale)
     block = "\n".join(rows).rstrip("\n") + "\n"
     text = re.sub(r"^## (Records|Ideas|Checks|History)\n.*?(?=^## |\Z)", "", text, flags=re.S | re.M).rstrip("\n")
     open(p, "w", encoding="utf-8").write(text + "\n\n" + block)
@@ -429,7 +418,7 @@ def labeled(label, text):
 def rule_lines(heading, body, rule):
     return [f"### {heading}", "", body_section(body, "Rule") or rule, ""] + labeled("Why", body_section(body, "Why")) + labeled("Applies to", body_section(body, "Applies to"))
 
-def notes_path(wt): return os.path.join(wt, ".clerk-dev", "branch-notes.md")
+notes_path = paths.notes
 
 def common_dir(wt): return git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir")
 
@@ -449,25 +438,6 @@ def repo_dir(wt): return os.path.join(common_dir(wt), "clerk-dev")
 def repo_context_path(wt): return os.path.join(repo_dir(wt), "repo-context.md")
 
 def setup_path(wt): return os.path.join(repo_dir(wt), "setup")
-
-def old_repo_files(wt):
-    common = os.path.dirname(repo_dir(wt))
-    old = [os.path.join(wt, ".clerk-dev", "review-workspace.md"),
-           os.path.join(wt, ".claude", "skills", "review-context", "SKILL.md"),
-           os.path.join(common, "review-setup")]
-    return [p for p in old if os.path.exists(p)]
-
-def guard(wt):
-    p = notes_path(wt)
-    if os.path.exists(p) and {"## Review", "## Fixes"} & set(open(p, encoding="utf-8").read().splitlines()):
-        sys.exit(f'{p} still has the old "## Review"/"## Fixes" sections; run /clerk-dev:migrate in this worktree first.')
-    old = old_repo_files(wt)
-    if old:
-        sys.exit(f"{', '.join(old)} still use the old names; run /clerk-dev:migrate in this worktree first.")
-
-def guard_file(path):
-    parts = os.path.abspath(path).split(os.sep)
-    if ".clerk-dev" in parts: guard(os.sep.join(parts[:parts.index(".clerk-dev")]) or os.sep)
 
 def headings(text, marker):
     parts = re.split(rf"^{marker} (.+?)[ \t]*$", text, flags=re.M)
@@ -531,7 +501,7 @@ def guidance(wt, area=None, context=None):
         warnings += lint("branch", rule)
     if not branch_rules: out += ["None.", ""]
     d = fdir(wt)
-    if os.path.exists(os.path.join(d, "feature.md")):
+    if started(d):
         out += ["## Feature guidance", ""]
         feature_rules = rules(d, area)
         for r, rule in feature_rules:
@@ -555,7 +525,7 @@ def plan_step(d, ref):
 def plan_pieces(d):
     """{code: name} of the plan's pieces, from the overview's Plan table, whose
     first column starts with the piece's code ("C core harness")."""
-    p = os.path.join(d, "overview.md")
+    p = paths.overview(hub_of(d))
     if not os.path.exists(p): return {}
     out = {}
     for line in section(open(p, encoding="utf-8").read(), "Plan").splitlines():
@@ -603,10 +573,10 @@ def names(wt, wanted):
                 e = next((e for e in load("build.py").log_entries(here) if ids.same(e["id"], X)), None)
                 if e: name = ("milestone: " if kind == ids.MILESTONE else f"handoff for {e['f']['Record']}: " if e["f"].get("Record") else "handoff: ") + e["title"]
             elif kind == ids.PASS:
-                e = next((e for e in load("passes.py").read(os.path.join(here, ".clerk-dev", "passes.md")) if ids.same(e["id"], X)), None)
+                e = next((e for e in load("passes.py").read(paths.passes(here)) if ids.same(e["id"], X)), None)
                 if e: name = f"pass: {e['title']}"
             elif kind == ids.DEFERRED:
-                e = next((i for i in load("deferred.py").read(os.path.join(here, ".clerk-dev", "deferred.md")) if ids.same(i["id"], X)), None)
+                e = next((i for i in load("deferred.py").read(paths.deferred(here)) if ids.same(i["id"], X)), None)
                 if e: name = f"deferred item: {e['text']}"
             if name is None and x in pieces: name = f"plan piece: {pieces[x]}"
         except SystemExit:
@@ -763,7 +733,7 @@ def brief_open_items(body):
 def digest(d, wt):
     rs = records(d)
     out = []
-    fp = os.path.join(d, "feature.md")
+    fp = paths.feature_meta(hub_of(d))
     out += ["# Summary", "", body_section(open(fp, encoding="utf-8").read(), "Summary") or "(none)", ""]
     live = [r for r in rs if r.get("status") == "active" and r.get("type") != "brainstorm"]
     lines, built = build_log(d)
@@ -787,7 +757,7 @@ def digest(d, wt):
     return "\n".join(out) + "\n"
 
 def stamp_overview(d, wt):
-    p = os.path.join(d, "overview.md")
+    p = paths.overview(hub_of(d))
     if not os.path.exists(p): sys.exit(f"{p} does not exist; write it first")
     rs = records(d)
     last = rs[-1]["id"] if rs else NO_RECORDS
@@ -818,8 +788,8 @@ def area_of(d, rids):
 
 def start_feature(wt, name, summary=""):
     h, d = hub(wt), fdir(wt)
-    exclude(h); os.makedirs(os.path.join(d, "records"), exist_ok=True)
-    p = os.path.join(d, "feature.md")
+    paths.ensure(h); os.makedirs(paths.records_dir(h), exist_ok=True)
+    p = paths.feature_meta(h)
     if os.path.exists(p): sys.exit(f"{p} already exists")
     _, repos = workspace(wt)
     open(p, "w", encoding="utf-8").write(
@@ -843,7 +813,7 @@ def new_record(wt, rtype, title, src="", area=None, repo=None, supersedes=None):
             "status": "" if rtype == "brainstorm" else "active",
             "from": ", ".join(parts),
             "supersedes": old["id"] if old else ""}
-    p = os.path.join(d, "records", ids.record_file(num, rtype, slug(title)))
+    p = os.path.join(paths.records_dir(hub_of(d)), ids.record_file(num, rtype, slug(title)))
     open(p, "w", encoding="utf-8").write(render(meta, f"\n# {meta['id']}. {meta['title']}\n\n"))
     if old: set_fields(old, status="superseded", superseded_by=meta["id"])
     index(d, wt)
@@ -868,7 +838,6 @@ def main():
     nm = sp.add_parser("names"); nm.add_argument("wt"); nm.add_argument("ids", nargs="+")
     gd = sp.add_parser("guidance"); gd.add_argument("wt"); gd.add_argument("--area"); gd.add_argument("--for", dest="ref"); gd.add_argument("--context"); gd.add_argument("--out")
     a = ap.parse_args()
-    guard(a.wt)
 
     if a.cmd == "hub":
         print(hub(a.wt)); return
@@ -884,7 +853,7 @@ def main():
     d = fdir(a.wt)
     if a.cmd == "start":
         print(start_feature(a.wt, a.name, a.summary)); return
-    if not os.path.exists(os.path.join(d, "feature.md")):
+    if not started(d):
         sys.exit(f"no feature in {d}; start one with: records.py start {a.wt} \"name\"")
 
     if a.cmd == "new":
@@ -922,13 +891,13 @@ def main():
         for r in hit: set_fields(r, area=slug(a.new))
         index(d, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
-        index(d, a.wt); print(os.path.join(d, "feature.md"))
+        index(d, a.wt); print(paths.feature_md(hub_of(d)))
     elif a.cmd == "digest":
         sys.stdout.write(digest(d, a.wt))
     elif a.cmd == "stamp-overview":
         print(f"overview stamped through {stamp_overview(d, a.wt)}")
     elif a.cmd == "overview-status":
-        print(re.sub(r"\[overview.md\]\(overview.md\)", os.path.join(d, "overview.md"), overview_line(d)))
+        print(re.sub(r"\[overview.md\]\(overview.md\)", paths.overview(hub_of(d)), overview_line(d)))
     elif a.cmd == "suggest":
         print("\n".join(suggestions(d)) or "nothing to suggest")
     elif a.cmd == "names":

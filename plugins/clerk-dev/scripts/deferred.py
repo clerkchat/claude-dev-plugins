@@ -17,11 +17,10 @@ a handoff "BUILD-9", or "this session".
 """
 import argparse, datetime, os
 from records import load_script
-import ids
+import ids, paths
 
 items = load_script("items.py")
 
-FILENAME = "deferred.md"
 EXTRAS = ("Path", "Open", "Revisit")
 REQUIRED = ("Path", "Open")
 CLOSING_STATUSES = ("fixed", "wont-fix")
@@ -37,8 +36,8 @@ commit, or wont-fix with a reason.
 """
 
 def path(wt):
-    load_script("records.py").exclude(wt)
-    return os.path.join(wt, ".clerk-dev", FILENAME)
+    paths.ensure(wt)
+    return paths.deferred(wt)
 
 def read(p):
     its = items.read(p, list(FIELDS))
@@ -71,7 +70,6 @@ def main():
     if args.cmd == "add":
         for k in REQUIRED:
             if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
-    load_script("records.py").guard(args.wt)
     p = path(args.wt); its = read(p)
     if args.cmd == "add":
         iid = add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in EXTRAS})

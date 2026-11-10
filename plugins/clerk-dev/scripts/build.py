@@ -62,8 +62,8 @@ Entry format:
 """
 import argparse, datetime, os, re, sys
 from typing import NamedTuple
-from records import exclude, git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
-import ids
+from records import git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
+import ids, paths
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("handed-off", "stopped", "done", "abandoned", "dropped")
@@ -82,7 +82,7 @@ edit with care.
 ENTRY_RE = re.compile(rf"^- \[( |x)\] ({ids.pattern(ids.BUILD, ids.MILESTONE)})\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS + tuple(OLD_FIELDS)) + r"): ?(.*)$")
 
-def log_path(wt): return os.path.join(wt, ".clerk-dev", "build.md")
+log_path = paths.build_log
 
 class Log(NamedTuple):
     entries: list
@@ -125,7 +125,7 @@ def off_branch(wt, full):
     return "it is on the main branch, older than this branch's base" if is_ancestor(wt, full, base) else "it is a merge commit, which the branch's own commits leave out"
 
 def path(wt):
-    exclude(wt)
+    paths.ensure(wt)
     return log_path(wt)
 
 def read(p):
@@ -383,7 +383,7 @@ def milestones(entries): return [e for e in entries if ids.kind_of(e["id"]) == i
 
 def pass_states(wt, spec):
     """{focus: latest pass entry} for passes on this spec in the pass log."""
-    p = os.path.join(wt, ".clerk-dev", "passes.md")
+    p = paths.passes(wt)
     if not os.path.exists(p): return {}
     out = {}
     for e in load_script("passes.py").read(p):
@@ -395,7 +395,7 @@ def pass_states(wt, spec):
 def open_findings(wt, e):
     """Open findings in a checked pass's run, or None when it cannot tell."""
     label = (e["f"].get("Check") or "").split(";")[0].strip()
-    run = os.path.join(wt, ".clerk-dev", label)
+    run = paths.run(wt, label)
     if not label or not os.path.exists(os.path.join(run, "merged.md")): return None
     sf = load_script("stale-findings.py")
     st, ins, num = sf.state(run)
@@ -468,7 +468,6 @@ def main():
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
-    load_script("records.py").guard(a.wt)
     p = path(a.wt); found = log(a.wt); entries = found.entries; today = datetime.date.today().isoformat()
 
     if a.cmd == "add":

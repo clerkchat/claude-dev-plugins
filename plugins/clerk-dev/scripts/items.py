@@ -127,8 +127,6 @@ def check_problems(path, items):
         if survey and f.get("Where") and not ABSOLUTE_WHERE.match(f["Where"].strip()): bad.append(f"{i['id']}: where {f['Where']!r}")
     return bad
 
-def guard_file(path): load_script("records.py").guard_file(path)
-
 def close(it, status, ref=None):
     set_status(it, status, (f"in {ref}" if re.fullmatch(r"[0-9a-f]{7,40}", ref) else ref) if ref else "closed")
 
@@ -145,7 +143,6 @@ def main():
     st = sp.add_parser("status"); st.add_argument("file"); st.add_argument("iid"); st.add_argument("value"); st.add_argument("--ref")
     sp.add_parser("validate").add_argument("file")
     a = ap.parse_args()
-    guard_file(a.file)
     if not os.path.exists(a.file): sys.exit(f"{a.file} does not exist")
     items = read(a.file)
     if a.cmd == "list":

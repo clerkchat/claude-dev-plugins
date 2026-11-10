@@ -70,7 +70,7 @@ then the next steps for each. It leaves .clerk-dev/status-seen-backlog untouched
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
 from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
-import ids
+import ids, paths
 import run_files as rf
 
 sf = load_script("stale-findings.py")
@@ -99,7 +99,7 @@ def workspace_rows(wt):
     return {n: os.path.realpath(os.path.expanduser(p)) for n, p in load_script("records.py").workspace(wt)[1].items()}
 
 def has_feature(p):
-    return os.path.exists(os.path.join(p, ".clerk-dev", "feature", "feature.md"))
+    return os.path.exists(paths.feature_meta(p))
 
 def hub_feature_elsewhere(wt, rows):
     """A worktree holding feature records that names this one in its review
@@ -114,7 +114,7 @@ def other_repos(wt, rows, d):
     """Repositories other than this one that its active records and open
     follow-ups name."""
     rc = load_script("records.py"); me = this_repo(wt, rows)
-    named = {r.get("repo") for r in (rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
+    named = {r.get("repo") for r in (rc.records(d) if d and rc.started(d) else []) if r.get("type") != "brainstorm" and r.get("status") == "active"}
     named |= {origin_repo(i) for i in bl.owed_followups(wt)}
     return sorted(n for n in named if n and n != me)
 
@@ -159,7 +159,7 @@ def setup_gaps(wt, rows, built):
         gaps.append(f"hub {declared} (the Hub line of .clerk-dev/workspace.md) does not exist; fix the line")
     try: d = rc.fdir(wt)
     except SystemExit: d = None
-    featured = bool(d) and os.path.exists(os.path.join(d, "feature.md"))
+    featured = bool(d) and rc.started(d)
     if d and not featured:
         elsewhere = hub_feature_elsewhere(wt, rows)
         passes, _ = read_passes(wt)
@@ -182,7 +182,7 @@ def next_step_lines(passes, entries):
     return ["", "**Next-step notes:**"] + notes if notes else []
 
 def deferred_lines(wt):
-    its = not_done(load_script("items.py").read(os.path.join(wt, ".clerk-dev", "deferred.md")))
+    its = not_done(load_script("items.py").read(paths.deferred(wt)))
     return [f"**Deferred items:** {len(its)} open."] + [f"- {i['id']}: {short(i['text'])}" + (f" (revisit: {i['fields']['Revisit']})" if i["fields"].get("Revisit") else "") for i in its] if its else []
 
 REROUTED_RE = re.compile(r"^\s*(?:[-*]\s+)?(?:\d{4}-\d{2}-\d{2}\.?\s+)?rerouted:", re.I)
@@ -199,7 +199,7 @@ def rerouted_lines(wt):
 
 def read_passes(wt):
     """The pass log's entries, or None with the reason when it cannot be read."""
-    p = os.path.join(wt, ".clerk-dev", "passes.md")
+    p = paths.passes(wt)
     if not os.path.exists(p): return [], None
     try: return load_script("passes.py").read(p), None
     except SystemExit as e: return [], str(e)
@@ -235,7 +235,7 @@ def pass_word(e):
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
 
-def seen_path(wt): return os.path.join(wt, ".clerk-dev", "status-seen-backlog")
+seen_path = paths.seen_backlog
 
 def read_seen(wt):
     p = seen_path(wt)
@@ -400,8 +400,8 @@ def feature_block(wt, rows, out):
     try: d = rc.fdir(wt)
     except SystemExit as e:
         out.append(f"**Feature:** {e}"); return first, later
-    fp = os.path.join(d, "feature.md")
-    if not os.path.exists(fp): return first, later
+    if not rc.started(d): return first, later
+    fp = paths.feature_meta(paths.hub_of(d))
     name = (open(fp, encoding="utf-8").readline().strip().split(":", 1) + [""])[1].strip() or "feature"
     recs = rc.records(d)
     active = {}
@@ -479,7 +479,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     me = this_repo(wt, rows)
     try: d = rc.fdir(wt)
     except SystemExit: d = None
-    recs = rc.records(d) if d and os.path.exists(os.path.join(d, "feature.md")) else []
+    recs = rc.records(d) if d and rc.started(d) else []
     canon = rc.resolver(recs)
     logged = logged_briefs(canon, entries)
     specs = briefs_in_scope(recs, me, entries, passes)
@@ -545,7 +545,7 @@ def overview_parts(d):
     """From overview.md: the Plan table's rows, the Open subsections, and each
     area's summary under By area. Older overviews without the Open subsections
     are read for a paragraph about disagreement."""
-    p = os.path.join(d, "overview.md")
+    p = paths.overview(paths.hub_of(d))
     parts = {"plan": [], "gaps": [], "disagreements": [], "areas": {}}
     if not os.path.exists(p): return parts
     text = open(p, encoding="utf-8").read()
@@ -602,7 +602,7 @@ def design_view(wt, out, logs):
     disagreements. Returns the next steps, design only."""
     rc = load_script("records.py"); bd = load_script("build.py")
     d = rc.fdir(wt)
-    if not os.path.exists(os.path.join(d, "feature.md")):
+    if not rc.started(d):
         out += ["", "**Design:** no feature records here or in a hub."]; return ["Start a feature: \"start a feature for <name>\"."]
     recs = rc.records(d); cs = rc.checks(d); ov = overview_parts(d); canon = rc.resolver(recs)
     specs = {r["id"]: r for r in recs if r.get("type") == "brief" and r.get("status") == "active"}
@@ -871,7 +871,7 @@ def review_section(wt, run, have_run, head, out):
     elif not unbuilt(wt):
         out.append("**Review:** none yet in this worktree.")
         steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
-    feature = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest-feature"))
+    feature = os.path.realpath(paths.latest(wt, feature=True))
     if os.path.exists(os.path.join(feature, "report.md")):
         out.append(f"**Feature review:** `.clerk-dev/{os.path.basename(feature)}/report.md` (the cross-repository check; `.clerk-dev/latest-feature`).")
     unreviewed, counts_fix = since_review(wt, run, reviewed, head, out, steps)
@@ -918,7 +918,7 @@ def pass_step(wt, e):
     if st == "ended" and e["f"].get("Note") != "no commits": return f"Check pass {e['id']}: \"check the pass\"."
     if st != "checked": return None
     label = (e["f"].get("Check") or "").split(";")[0].strip()
-    prun = os.path.join(wt, ".clerk-dev", label)
+    prun = paths.run(wt, label)
     if not label or not os.path.exists(os.path.join(prun, "merged.md")): return None
     pst, pin, pnum = sf.state(prun)
     left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
@@ -1006,8 +1006,7 @@ def main():
     ap.add_argument("--setup", action="store_true", help="only what the worktree is missing for a feature work session")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
-    load_script("records.py").guard(wt)
-    run = os.path.realpath(os.path.join(wt, ".clerk-dev", a.run or "latest"))
+    run = os.path.realpath(paths.run(wt, a.run) if a.run else paths.latest(wt))
     have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")

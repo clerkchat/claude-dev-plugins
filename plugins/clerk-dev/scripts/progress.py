@@ -29,6 +29,7 @@ already report their own completion to the orchestrator. --once prints the
 current line and exits. The script exits when every watched run has its report.
 """
 import argparse, os, time
+import paths
 from run_files import read_instances
 
 def mtime(path):
@@ -49,7 +50,7 @@ def state(run):
     return ("reviewing", f"{len(raws)}/{len(inst)}", mtime(os.path.join(run, "plan.md")))
 
 def child_run(path, since):
-    link = os.path.join(path, ".clerk-dev", "latest")
+    link = paths.latest(path)
     if not os.path.exists(link): return None
     run = os.path.realpath(link)
     return run if os.stat(run).st_mtime >= since or os.lstat(link).st_mtime >= since else None

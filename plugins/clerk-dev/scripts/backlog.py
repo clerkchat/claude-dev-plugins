@@ -367,7 +367,6 @@ def main():
     rs = sp.add_parser("rescope"); rs.add_argument("wt"); rs.add_argument("iid"); rs.add_argument("scope")
     ck = sp.add_parser("check"); ck.add_argument("wt"); ck.add_argument("iid", nargs="?")
     a = ap.parse_args()
-    records.guard(a.wt)
     if a.cmd == "add": print(add(a.wt, a))
     elif a.cmd == "list":
         if (a.owed or a.parked) and (a.kind or a.scope or a.repo): sys.exit("--owed and --parked take no --kind, --scope, or --repo")

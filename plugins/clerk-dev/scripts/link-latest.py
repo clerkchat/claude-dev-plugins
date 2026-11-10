@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 import os, sys
 from records import git
+import paths
 
-def link_name(label):
-    return "latest-feature" if label.endswith("-feature") else "latest"
+def in_real_dir(p): return os.path.join(os.path.realpath(os.path.dirname(p)), os.path.basename(p))
 
 def link_latest(worktree, run):
-    clerk_dev = os.path.realpath(os.path.join(worktree, ".clerk-dev"))
+    runs = os.path.realpath(paths.runs_dir(worktree))
     target = os.path.realpath(run)
     label = os.path.basename(target)
-    if os.path.dirname(target) != clerk_dev or not os.path.isdir(target) or label in ("latest", "latest-feature"):
-        sys.exit(f"not linked: {run} is not a run directory directly under {clerk_dev}")
-    link = os.path.join(clerk_dev, link_name(label))
+    if os.path.dirname(target) != runs or not os.path.isdir(target) or label in ("latest", "latest-feature"):
+        sys.exit(f"not linked: {run} is not a run directory directly under {runs}")
+    link = in_real_dir(paths.latest(worktree, feature=label.endswith("-feature")))
     if os.path.lexists(link) and not os.path.islink(link):
         sys.exit(f"not linked: {link} exists and is not a link")
-    staged = os.path.join(clerk_dev, f".{link_name(label)}.{os.getpid()}")
-    os.symlink(label, staged)
+    staged = os.path.join(os.path.dirname(link), f".{os.path.basename(link)}.{os.getpid()}")
+    os.symlink(os.path.relpath(target, os.path.dirname(link)), staged)
     os.replace(staged, link)
     return link
 
