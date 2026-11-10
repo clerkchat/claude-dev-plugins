@@ -34,6 +34,11 @@ class ReviewSkillTest(unittest.TestCase):
         self.assertIn("`review.md` the review body (the drafted sentence, then the range line and the how-reviewed block `--render-body` writes)", self.text)
 
 
+class BuildingCommitStepTest(unittest.TestCase):
+    def test_ends_each_commit_with_the_assisted_by_trailer(self):
+        self.assertIn("The message ends with the trailer `Assisted-by: clerk-dev <version>`", text_of(PLUGIN, "skills", "building", "SKILL.md"))
+
+
 class CommitsGuideTest(unittest.TestCase):
     def setUp(self):
         self.text = text_of(PLUGIN, "skills", "review", "commits.md")

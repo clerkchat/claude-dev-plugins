@@ -419,7 +419,10 @@ status lives only here; the brief is not edited for it.
    seen the source, says what was wrong and what can go wrong because of it,
    or for a follow-up what changed on the other side (the contract, in plain
    words), and what the change does, with the `rollout:` text when it is not
-   "none". No push, no amend. Several items get one commit each, in the
+   "none". The message ends with the trailer `Assisted-by: clerk-dev
+   <version>`, the version in `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`,
+   then the session's own attribution lines, as `skills/review/commits.md`
+   says. No push, no amend. Several items get one commit each, in the
    queue's order. When the route builds a record, mark the handoff done in
    the build log (or log the record it builds with `built`, as "The build
    log" describes), with
