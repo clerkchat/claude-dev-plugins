@@ -396,24 +396,36 @@ inventory stays out of it unless they ask.
 
 ### Where the work sits
 
-When the work moves to a new piece, milestone, plan step, area, or worktree,
-and when a session starts or resumes, the message that says so shows where
-the work now sits in the whole: a header line naming the feature, the
-repository, and the worktree, then a short ASCII checklist of the plan steps
-or pieces at the level the move happened, in the feature's own words and
-without ids, each marked done `[x]`, current `[>]` with what is happening on
-it, or not started `[ ]`.
+When the work moves to a new place in the plan, the message that says so
+shows where the work now sits in the whole feature. Print it with
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --map` and show
+its output as it is: a header line naming the feature, the repository, and
+the worktree; this worktree's plan steps (or pieces, with no plan) in the
+feature's own words and without ids, each marked done `[x]`, current `[>]`
+with what is happening on it, or not started `[ ]`; one line for each other
+worktree of the feature; and a last line counting the follow-ups owed here
+and the feature's parked ideas.
 
 ```
-dev-workflow · claude-dev-plugins (feat/dev-workflow)
-  [x] build log links commits to records
-  [>] builder agent  <- drafting its brief
-  [ ] building skill and intake
-  [ ] follow-ups carry contract and need
+where-the-work-sits · claude-dev-plugins (feat/where-the-work-sits)
+  [x] map draws from the feature's worktrees
+  [>] skills cite the map at their moves  <- building and status
+  [ ] status order fits the map
+  api (feat/where-the-work-sits): 2 of 4 steps done
+  owed here: 1 follow-up · parked: 2 ideas
 ```
 
-Draw it from the plan and the build log; with no plan, list the pieces; with
-neither, leave it out. Updates within a step stay one line, with no map.
+Fill in what is happening on the `[>]` line when the script cannot know it.
+When the script prints nothing, there is no map. The moves that show it:
+
+- building: a milestone or piece finishes and the next starts, and a session
+  resumes building;
+- status: always, at the top of its output;
+- spin-up: the new worktree's map;
+- feature: a plan is written or superseded.
+
+Everything else, passes and review triage included, keeps its one-line
+updates with no map.
 
 ### Diagrams
 

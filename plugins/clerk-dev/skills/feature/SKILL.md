@@ -108,7 +108,8 @@ Areas are not declared up front.
   numbered step is one milestone, naming its pieces, its brief, and the point
   where it is done (what works, and what a review can check). Building works
   milestone by milestone, so a plan without them is not finished. Replanning is
-  a new plan with `--supersedes`.
+  a new plan with `--supersedes`. After writing a plan, show the map of where
+  the work sits (`skills/review/tracking.md`).
 - **brief**: one per piece, `--repo` the repository it is built in, `--from` the
   pieces or design record. Before writing Approach, read the code the
   piece will touch: the patterns to follow, the helpers to reuse or extend,
