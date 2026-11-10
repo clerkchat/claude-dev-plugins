@@ -4,7 +4,7 @@ description: Fix, address, or recheck a finding from a /clerk-dev:review report.
 argument-hint: "N[,M...] [as recommended | but <adjustment>] [run label]"
 allowed-tools:
   - Bash(git add *)
-  - Bash(git commit *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/commit.py *)
   - Bash(git diff *)
   - Bash(git rev-parse *)
   - Bash(git show *)
@@ -51,7 +51,7 @@ head, counts) plus
 This session may fix dozens of findings in a row (the triage skill runs its
 whole queue here), so what enters it per fix must stay small: the builder's
 report, the recheck verdict, and one line from each command. The agents read the
-run files; you pass them paths. Run commands quietly (`git commit -q`,
+run files; you pass them paths. Run commands quietly (`commit.py`,
 `git show <sha> > <file>`, the renderer's one-line summary only), and never
 print a run file, a patch, or a whole TSV.
 

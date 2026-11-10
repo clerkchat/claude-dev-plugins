@@ -28,7 +28,7 @@ compacted skill may be cut short, and the steps it drops are the ones that keep
 items separate and commits clean.
 
 Keep this session small: pass the builder paths rather than file contents, run
-commands quietly (`git commit -q`), and print one line per item. The builder's
+commands quietly (`commit.py`), and print one line per item. The builder's
 report is the only thing an item should add here.
 
 ## Before the first item
