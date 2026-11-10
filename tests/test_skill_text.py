@@ -35,8 +35,14 @@ class ReviewSkillTest(unittest.TestCase):
 
 
 class BuildingCommitStepTest(unittest.TestCase):
-    def test_ends_each_commit_with_the_assisted_by_trailer(self):
-        self.assertIn("The message ends with the trailer `Assisted-by: clerk-dev <version>`", text_of(PLUGIN, "skills", "building", "SKILL.md"))
+    def setUp(self):
+        self.text = text_of(PLUGIN, "skills", "building", "SKILL.md")
+
+    def test_commits_with_the_commit_script(self):
+        self.assertIn("scripts/commit.py <worktree> <files>", self.text)
+
+    def test_says_the_script_adds_the_assisted_by_trailer(self):
+        self.assertIn("adds the trailer `Assisted-by: clerk-dev <version>`", self.text)
 
 
 class CommitsGuideTest(unittest.TestCase):

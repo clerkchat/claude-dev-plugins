@@ -4,7 +4,7 @@ description: Work through a /clerk-dev:review report's triage, or check its find
 argument-hint: "[fixes | discuss | post | check | all] [run label]"
 allowed-tools:
   - Bash(git add *)
-  - Bash(git commit *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/commit.py *)
   - Bash(git diff *)
   - Bash(git rev-parse *)
   - Bash(git show *)
