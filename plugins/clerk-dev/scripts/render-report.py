@@ -69,10 +69,10 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
-from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
+from run_files import (CLOSED_STATUSES, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
                        finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
-                       posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
+                       posted_threads, quoted_rest, read_approvals, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
                        write_text, line_span)
 mf = load_script("merge-findings.py")
 
@@ -83,6 +83,7 @@ STATUS = {}
 INSTR = {}
 POSTED = {}
 THREADS = {}
+APPROVALS = {}
 CLOSABLE = {}
 KEPT_OPEN = {}
 PR_LINKS = {}
@@ -631,9 +632,6 @@ def check_posted_notes():
 def fence_around(text, shortest):
     return "`" * max([shortest] + [len(r) + 1 for r in re.findall(r"^\s*(`{3,})", text, re.M)])
 
-def posted_fence(text):
-    return fence_around(text, 4)
-
 def posted_link(row):
     if not has_comment(row): return []
     span = line_span(row["line"], row.get("end_line"))
@@ -641,12 +639,15 @@ def posted_link(row):
     link = f", [comment]({row['url']})" if row.get("url") else ""
     return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
 
+def posted_body(text):
+    return ["> " + line if line else ">" for line in text.split("\n")]
+
 def posted_block(mid):
     text = posted_text(RUN, mid)
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
     elif is_moved(mid): body = ["Posted text: to be redrafted; the code moved."]
-    else: body = [posted_fence(text), text, posted_fence(text)]
+    else: body = posted_body(text)
     return ["##### Posted", ""] + body + [""] + posted_link(POSTED.get(mid, {})) + posted_thread_lines(THREADS.get(mid)) + close_lines(mid)
 
 def close_lines(mid):
@@ -664,36 +665,40 @@ def thread_states(row):
 def posted_thread_lines(row):
     return thread_lines(joined_replies(row["replies"]), thread_states(row)) if row else []
 
-def fenced_text(block):
-    body, opened = [], False
-    for line, kind in fenced_lines(block):
-        if kind == FENCE_BODY: body.append(line)
-        elif kind == FENCE_LINE:
-            if opened: return "\n".join(body)
-            opened = True
-    return None
+def quote_break(lines):
+    return next((i for i, line in enumerate(lines) if line.strip() and quoted_rest(line) is None), len(lines))
+
+def posted_lines(block):
+    return block[next((i for i, line in enumerate(block) if line.strip()), len(block)):]
+
+def quoted_text(block):
+    lines = posted_lines(block)
+    run = lines[:quote_break(lines)]
+    return "\n".join(quoted_rest(line) or "" for line in run) if run else None
+
+def breaks_quote(block):
+    lines = posted_lines(block)
+    return any(quoted_rest(line) is not None for line in lines[quote_break(lines):])
 
 def posted_blocks(cards):
-    texts = {mid: fenced_text(blocks.get("Posted", [])) for mid, blocks in cards.items()}
+    texts = {mid: quoted_text(blocks.get("Posted", [])) for mid, blocks in cards.items()}
     return {mid: text for mid, text in texts.items() if text is not None}
 
 def flat(text):
     return " ".join(text.split())
 
-def opens_fence(block):
-    return any(kind == FENCE_LINE for _, kind in fenced_lines(block))
-
-def warn_unclosed_posted(run, cards, texts):
+def warn_broken_quote(run, cards, texts):
     nums = read_numbers(run)
     for mid in sorted(cards):
-        if mid not in texts and opens_fence(cards[mid].get("Posted", [])):
-            print(f"warning: finding {nums.get(mid, f'#{mid}')}: its Posted text opens a fence it never closes; the edit was not read, "
+        if breaks_quote(cards[mid].get("Posted", [])) and not has_posted_comment(mid):
+            texts.pop(mid, None)
+            print(f"warning: finding {nums.get(mid, f'#{mid}')}: its Posted text has a line without `>` in the middle; the edit was not read, "
                   "and the report shows the stored text again", file=sys.stderr)
 
 def import_posted_edits(run, cards, today):
     snap = read_snapshot(run, "rendered-posted.tsv")
     texts = posted_blocks(cards)
-    warn_unclosed_posted(run, cards, texts)
+    warn_broken_quote(run, cards, texts)
     for mid, text in texts.items():
         if flat(text) not in (snap.get(mid), flat(posted_text(run, mid))): record_posted(run, mid, text, "edited", today)
 
@@ -826,6 +831,8 @@ def wrap_markdown(text, width):
         if not line.strip() or line.startswith("#") or line.startswith("|") or line.startswith("<!--") or line == "---" or len(line) <= width:
             out.append(line); continue
         if re.match(r"^\S+:\d+(\s|$)", line) and " " not in line.split("  ")[0]:
+            out.append(line); continue
+        if re.match(r"^>\s?( {4}|\t)", line):
             out.append(line); continue
         # Code spans never break across lines: hide their spaces while wrapping.
         NB = "\u0001"
@@ -1108,12 +1115,17 @@ def since_lines(numbered, routed):
         lines += ["Open in the previous review and not found this time; confirm before closing:", ""] + [code_spans(f"- {u['title']} (finding {u['prev_number']} there, {u['location']})") for u in notfound] + [""]
     return ["## Since the previous review", ""] + lines
 
+def approval_lines():
+    authors = dict.fromkeys(row["author"] for row in APPROVALS.values())
+    return [f"Approved by {', '.join('@' + a for a in authors)}.", ""] if authors else []
+
 def section_lines(a, routed, ordered_areas, slices):
     out = []
     for s in SECTIONS:
         sec, areas = s.key, ordered_areas[s.key]
-        if not areas: continue
-        out += ["---", "", f"## {s.heading}", ""] + ([s.intro(routed[sec]), ""] if s.intro else [])
+        lead = approval_lines() if sec == "pr" else []
+        if not areas and not lead: continue
+        out += ["---", "", f"## {s.heading}", ""] + lead + ([s.intro(routed[sec]), ""] if s.intro else [])
         for area, es in areas:
             if sec != "pr": out += [f"### {area}", ""]
             for i, e in enumerate(es):
@@ -1197,7 +1209,7 @@ def main():
     today = a.date or ""
     merged = read_findings(a.run)
     verdicts, slices = read_verdicts(a.run), read_slices(a.run)
-    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, IDNUM, TITLE_BY_ID
+    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, APPROVALS, IDNUM, TITLE_BY_ID
     NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run), a.run
     nums = read_numbers(a.run)
     load_credits(merged)
@@ -1207,7 +1219,7 @@ def main():
     apply_instructions(flags.instructions, flags.notes, today)
     for mid, text in flags.drafts: record_posted(a.run, mid, text, "drafted", today)
     warn_unlabeled_options(merged)
-    RECON, PR_LINKS, THREADS = read_reconcile(a.run), pr_links(merged), posted_threads(a.run, POSTED)
+    RECON, PR_LINKS, THREADS, APPROVALS = read_reconcile(a.run), pr_links(merged), posted_threads(a.run, POSTED), read_approvals(a.run)
     routed, unverified, rejected, hidden_minor = route_findings(merged, verdicts, a)
     overlapping = drop_overlapping_credits(routed)
     prior_nums = {} if a.renumber else dict(nums)

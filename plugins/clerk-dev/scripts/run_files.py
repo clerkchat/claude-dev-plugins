@@ -41,27 +41,35 @@ def write_keyed(path, fields, rows, header="merged_id", order=sorted):
     write_rows(path, (header, *fields) if header else None, ([str(k)] + [rows[k].get(f, "") for f in fields] for k in order(rows)))
 
 FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+QUOTE_RE = re.compile(r"^>\s?")
 PROSE, FENCE_LINE, FENCE_BODY = "", "fence", "body"
+
+def quoted_rest(line):
+    m = QUOTE_RE.match(line)
+    return line[m.end():] if m else None
 
 def closes_fence(line, fence):
     s = line.rstrip()
     return len(s) >= len(fence) and s == fence[0] * len(s)
 
 def fenced_lines(lines):
-    fence = ""
+    fence, quoted = "", False
     for line in lines:
+        rest = quoted_rest(line)
+        if fence and quoted and rest is None: fence = ""
         if fence:
-            if closes_fence(line, fence): fence = ""; yield line, FENCE_LINE
+            if closes_fence(rest if quoted else line, fence): fence = ""; yield line, FENCE_LINE
             else: yield line, FENCE_BODY
             continue
-        m = FENCE_RE.match(line)
+        quoted = rest is not None
+        m = FENCE_RE.match(rest if quoted else line)
         if m: fence = m.group(1)
         yield line, FENCE_LINE if m else PROSE
 
 def open_fence(lines):
     fence = ""
     for line, kind in fenced_lines(lines):
-        if kind == FENCE_LINE: fence = "" if fence else FENCE_RE.match(line).group(1)
+        if kind == FENCE_LINE and quoted_rest(line) is None: fence = "" if fence else FENCE_RE.match(line).group(1)
     return fence
 
 def line_span(lo, hi):
@@ -394,6 +402,17 @@ def read_threads(run):
 
 def write_threads(run, rows):
     write_keyed(threads_path(run), THREAD_FIELDS, {mid: {**row, "replies": replies_cell(row.get("replies", []))} for mid, row in rows.items()})
+
+APPROVAL_FIELDS = ("author", "date")
+
+def approvals_path(run):
+    return os.path.join(run, "pr", "approvals.tsv")
+
+def read_approvals(run):
+    return read_keyed(approvals_path(run), APPROVAL_FIELDS)
+
+def write_approvals(run, rows):
+    write_keyed(approvals_path(run), APPROVAL_FIELDS, rows, header="review_id", order=list)
 
 def posted_threads(run, posted):
     return {mid: row for mid, row in read_threads(run).items() if row["comment_id"] == posted.get(mid, {}).get("comment_id")}
