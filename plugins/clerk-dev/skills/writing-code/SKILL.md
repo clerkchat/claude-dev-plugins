@@ -88,6 +88,8 @@ riskier than it is.
 - Abstractions at the right level: no framework for one caller, no wrapper
   around one call, no parameter added to a shared type because one function
   needs it.
+- Before adding a fallback, find where the value is written. When one source
+  already holds the resolved value, read only that source.
 
 ## Tests
 
@@ -108,6 +110,14 @@ thing.
   "rejects the update".
 - Build test data with the repository's factories or builders, or add one,
   rather than repeating object literals.
+- Persist test data with the factory's persisting method (`create()`), not by
+  building the object and inserting it by hand.
+- Call a helper with its defaults, and pass an argument only when it changes
+  the outcome; an argument that only narrows what the default already does is
+  noise.
+- Put imports at the top of the file; a lazy or dynamic import needs a stated
+  reason.
+- Assert the same thing about the same subject once.
 - Keep what matters to a test visible: a reader should see, from the test and
   the nearest setup hook, every input its assertion depends on. Do not hide a
   scenario's deciding input three hooks up.

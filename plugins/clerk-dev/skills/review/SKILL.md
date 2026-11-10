@@ -258,6 +258,12 @@ its item in a few words.
 - [ ] Write report
 ```
 
+The tests lens's `tests-only` instance (Step 4) is a focus under "Whole
+change". When Step 6 re-runs lenses on files they left unread, add a
+top-level item for that wave, "Re-read skipped files", with its focuses under
+it, just before "Merge findings", which stays unchecked until the merge after
+the wave.
+
 After each wave, also refresh the interim view: run
 `merge-findings.py <run>/raw --readable <run>/so-far.md --title "Findings so
 far in <target>" --pending "<labels of parts not yet reviewed>"`.
@@ -687,8 +693,8 @@ a run whose `progress.md` has unchecked items, whose target matches, and whose
    <m> reviewers still to run, about <minutes> minutes."
 3. Launch only the missing reviewers, in waves, updating `progress.md` as
    before. Then continue from the first unchecked top-level item: merge (always
-   rerun, it is cheap and reads every raw file), verify only the unjudged
-   findings, report.
+   rerun, it is cheap and reads every raw file) with Step 6's check of
+   unread files, verify only the unjudged findings, report.
 
 If `HEAD` moved, the code changed under the review. Say so, name the old and new
 commits, and start a fresh run; do not mix raw files from two versions of the
@@ -868,6 +874,15 @@ can skip slices irrelevant to its lens. The unit of cost is tokens read, not
 price per token: a cheap model re-reading a large patch eleven times costs more
 than an expensive one reading each slice once.
 
+When the tests lens runs and the change touches test files (the included files
+of `files.tsv` that Step 1 classified as `tests`, by the repo context globs or
+the `tests` heuristic in `routing.md`), give it one more instance, whatever the
+size of the change, with `SCOPE: tests-only` and `DIFF` a patch of those files
+alone, written as Step 2 writes slice patches:
+`git diff BASE...HEAD -- <test files> > <run>/patch/tests-only.patch`. Its raw
+file is `raw/tests-tests-only.md`. It reads the test code on its own, where the
+other instances read it beside the production code it tests.
+
 Then size the plan. For each agent instance: input tokens are roughly the patch
 it reads plus 15,000 for context, protocol, and code it opens, times 1.5 for
 re-reads; output is small. To compare the weight of plans, multiply tokens by a
@@ -896,6 +911,7 @@ before launching anything:
 | --- | --- | --- | --- | --- | --- |
 | 1 | security | entities | patch/entities.patch | opus | raw/security-entities.md |
 | 2 | rollout | all | patch/whole.patch | opus | raw/rollout.md |
+| 3 | tests | tests-only | patch/tests-only.patch | sonnet | raw/tests-tests-only.md |
 
 ## Not run
 | lens | cause |
@@ -959,7 +975,7 @@ DIFF: <path to the patch for this instance's scope>
 BASE: <ref>
 HEAD: <ref>
 SLICES: <path or none>
-SCOPE: <all or slice name>
+SCOPE: <all, slice name, or tests-only (the tests lens only; see Step 4)>
 TRIAGE: <path to this slice's triage answers, or none>
 CONTEXT: <path to repo-context.md or none>
 MODE: <quick | standard | deep>
@@ -1033,6 +1049,23 @@ line as the lens wrote them; write nothing when there are none. An incremental
 or final run adds the lines whose key the file does not already hold and keeps
 the rest. The `review-triage` skill offers to file them ("Cleanups" in
 `skills/review/tracking.md`); a headless run only writes the file.
+
+Then read the `Coverage` section of every raw file. For each lens with a
+`Not read: <path>, <path>` line in any of its raw files, take the union of
+those paths that are included files of `files.tsv`, and run that lens once
+more on them alone: write
+`git diff BASE...HEAD -- <files> > <run>/patch/<lens>-reread.patch`, add the
+instance as a row to `## Instances` in `plan.md` (scope `all`, the lens's model
+in the plan, raw file `raw/<lens>-reread.md`), launch it with the Step 5
+prompt lines, `SCOPE: all` and `DIFF` the reread patch, write its raw file as
+this step writes any instance's, and run the merge and the `Cleanups owed`
+step again. A lens is re-run at most once per run, in headless runs as in
+interactive ones: one whose reread row `## Instances` already holds (a
+resumed run) is not re-run again. A run resumed at a moved `HEAD` re-runs
+nothing, since a new patch would show other code than its raw files read. A
+path still unread goes to `not-reviewed.md` (Step 8): one on a reread raw
+file's `Not read:` line, or, in a run that cannot re-run, one on any
+`Not read:` line.
 
 ## Step 6b: reconcile with the previous review
 
@@ -1228,10 +1261,13 @@ The renderer script produces the document; you supply three short inputs:
    merged id, a tab, a heading of at most ten words in plain terms.
 2. `<run>/summary.md`: three or four sentences on what the change does, where
    the risk concentrates, and the one or two things that must happen before
-   merge. Refer to findings by number.
+   merge. Refer to findings by number. Never claim coverage of a file
+   `not-reviewed.md` lists.
 3. `<run>/not-reviewed.md`: one line each for excluded files with size when it
-   matters, parts no lens looked at, focuses that did not run, and documents
-   dropped by the selection cap.
+   matters, parts no lens looked at, focuses that did not run, documents
+   dropped by the selection cap, and each file a lens left unread (Step 6), as
+   "`<path>`: not read by <lens phrase>", the phrase from the "Say it as"
+   column of `routing.md`.
 
 When `<run>/cleanups.md` exists, `summary.md` ends with one more sentence naming
 its keys and saying that triage offers to file their cleanups.
@@ -1641,9 +1677,11 @@ cross-repository check is starting and roughly how long it takes.
 ## Run directory contents
 
 `<run>` holds `target.txt`, `scope.md`, `files.tsv`, `slices.md`, `patch/`
-(`all.patch`, `whole.patch`, one per slice), `triage/`, `plan.md` (with the
-instance list and the `## Not run` table), `progress.md`,
-`raw/<lens>[-<slice>].md`, `so-far.md` (interim, unverified), `merged.md` (and
+(`all.patch`, `whole.patch`, one per slice, `tests-only.patch`, and
+`<lens>-reread.patch` per lens re-run on files it left unread), `triage/`,
+`plan.md` (with the instance list and the `## Not run` table), `progress.md`,
+`raw/<lens>[-<slice>].md` (`raw/tests-tests-only.md`,
+`raw/<lens>-reread.md`), `so-far.md` (interim, unverified), `merged.md` (and
 `merged-new.md` in incremental runs), `verify/<id>.md`, `guidance.md` (and
 `guidance-<repo>.md` in feature runs),
 `followups.md` (the follow-ups the branch owes, as `backlog.py list --owed

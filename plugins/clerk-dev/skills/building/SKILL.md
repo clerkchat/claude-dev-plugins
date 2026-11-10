@@ -406,7 +406,12 @@ status lives only here; the brief is not edited for it.
    a line, and record it when it changes a decision) or sent back with a
    correction.
 6. Read the diff (`git diff --stat`, then the parts that carry the handoff's
-   shape), and run the handoff's tests yourself.
+   shape), and run the handoff's tests yourself. Read each test file the
+   handoff added or rewrote against Tests in the `writing-code` skill. Send a
+   miss back once, to the same builder with SendMessage, with the correction,
+   as step 5 sends a deviation back. Check the diff for a rename the handoff did not
+   ask for (an existing name changed with no change in meaning) and send it
+   back the same way, with the correction to restore the name.
 7. **Commit.** `git add` only the handoff's files (the report's `files:`),
    never anything under `.clerk-dev/` or an untracked file the handoff did
    not create, then commit. The message stands alone, because review runs,
