@@ -267,11 +267,11 @@ def fold_in(run, p, today):
     posted = rf.read_posted(run)
     threads = link_threads(run, posted, p, today)
     own = rf.own_reviews(run, posted)
-    own_reviews = [r for r in commented_reviews(p) if is_own(r, own)]
+    linked_reviews = sum(is_own(r, own) for r in commented_reviews(p))
     new_ids, updated, skipped = import_items(run, github_items(p, threads.imported, own))
     approvals = approvals_of(p, own, today)
     rf.write_approvals(run, approvals)
-    return Folded(new_ids, updated, len(threads.linked) + len(own_reviews), threads.left_out, threads.unread, skipped, len(approvals),
+    return Folded(new_ids, updated, len(threads.linked) + linked_reviews, threads.left_out, threads.unread, skipped, len(approvals),
                   unread_reviews(p))
 
 CANDIDATE_HEADER = ("pr_id", "finding_id", "score")
