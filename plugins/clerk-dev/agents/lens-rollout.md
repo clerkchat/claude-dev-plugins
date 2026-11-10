@@ -85,12 +85,15 @@ correct is fine.
      risky; the off path still works and is tested; the gate is checked in
      every execution context that reaches the new code (request handler and
      job, not one of them); default state is the safe one; removal of a gate
-     deletes both the enum and the dead branch.
-   - Design: Is it behind a feature gate, and what is the plan to turn it on
-     and off?
+     deletes both the enum and the dead branch. Whether the gate is warranted:
+     a gate on a change that is neither user-visible nor risky, or whose off
+     path nothing will run, is a finding, rated `minor`. Whether the removal
+     condition is stated: a gate with none is a finding.
+   - Design: Is it behind a feature gate, what is the plan to turn it on and
+     off, and when will it be removed?
    - Pass: Put user-visible or risky behavior behind a feature gate when the
      codebase uses them, safe by default and checked in every execution context
-     that reaches the new code.
+     that reaches the new code, and state the condition for removing it.
 5. **Contracts with other deployables.**
    - Review: response fields removed or retyped while a client still reads
      them; required request fields added while an old client omits them;
@@ -146,6 +149,7 @@ feature gate, compatibility branch, or deprecated shim the change adds, as
 `<key>: <what it guards or keeps>; remove when <condition>`
 
 where the key is the identifier as it appears in the code (flag key, enum
-member, function or module name), so `git grep -F` finds it. Write `none` when
+member, function or module name), so `git grep -F` finds it. When the change states no removal condition, write
+`remove when: unstated` and report it as a finding under concern 4. Write `none` when
 the change adds nothing of the kind. A correctly gated addition is still not a
 finding; the findings block stays empty for it.

@@ -60,15 +60,20 @@ guidance.
 3. **One source of truth.**
    - Review: two lists, enums, schemas, or constants that must be kept in sync
      by hand; a type declared by hand that mirrors a schema; a string list that
-     must be updated whenever a new case is added elsewhere.
+     must be updated whenever a new case is added elsewhere; a copy of state
+     kept in step with its source by hand, such as fields copied from a model
+     into a second object the code then updates alongside it. This applies in
+     test files too.
    - Design: Does the design keep two lists, enums, schemas, or constants that
-     must be updated together by hand, or declare a type by hand that mirrors a
-     schema?
+     must be updated together by hand, declare a type by hand that mirrors a
+     schema, or copy state from a model into a second object it must then keep
+     in step?
    - Survey: Which code in these files keeps two lists, enums, schemas, or
-     constants in sync by hand, or declares a type by hand that mirrors a
-     schema?
+     constants in sync by hand, declares a type by hand that mirrors a schema,
+     or keeps a copy of a model's state in step by hand, in test files too?
    - Pass: Derive one list, enum, schema, constant, or type from the other
-     instead of keeping both by hand, and fold duplicated code from this piece
+     instead of keeping both by hand, read state from its source instead of
+     copying it into a second object, and fold duplicated code from this piece
      into one place.
 4. **Abstraction level.**
    - Review: a generic framework built for one use; a parameter or context
