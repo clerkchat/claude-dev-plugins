@@ -312,6 +312,39 @@ class FeatureRepoCase(TempCase):
         write_record(root, "R8", "plan", "Old plan", "superseded", "superseded_by: R4\n", "1. Old step. Done when old.")
 
 
+PLAN = """# Plan
+
+## Instances
+| # | lens | scope | patch | model | raw file |
+| --- | --- | --- | --- | --- | --- |
+| 1 | security | entities | patch/entities.patch | opus | raw/security-entities.md |
+| 2 | rollout | all | patch/whole.patch | opus | raw/rollout.md |
+"""
+
+
+def plan_md(instances, not_run=None):
+    rows = "".join(f"| {n} | {lens} | {scope} | patch/{scope}.patch | opus | raw/{lens}-{scope}.md |\n" for n, (lens, scope) in enumerate(instances, 1))
+    cut = "" if not_run is None else "\n## Not run\n| lens | cause |\n| --- | --- |\n" + "".join(f"| {lens} | {cause} |\n" for lens, cause in not_run)
+    return "# Plan\n\n## Instances\n| # | lens | scope | patch | model | raw file |\n| --- | --- | --- | --- | --- | --- |\n" + rows + cut
+
+
+SLICES = """## Slices
+- name: webhook-schema
+  label: Webhook schema
+  summary: new delivery-attempts table
+    and its migration
+  layer: schema
+  files:
+    - db/migrations/1.sql
+- name: delivery
+  summary: webhook intake retried through the queue
+## Seams
+- webhook-schema -> delivery: the delivery-attempts row
+## Order
+delivery, webhook-schema
+"""
+
+
 def merged_md(*entries):
     return "```findings\n" + "".join(entries) + "```\n"
 
@@ -342,8 +375,15 @@ class RunCase(TempCase):
         self.write("status.tsv", "merged_id\tstatus\tref\tdate\n"
                    + "".join(f"{m}\t{status}\t{ref}\t\n" for m, (status, ref) in sorted(rows.items())))
 
+    def write_plan(self, text=PLAN):
+        self.write("plan.md", text)
+
     def write_target(self, *lines):
         self.write("target.txt", "".join(l + "\n" for l in lines))
+
+    def write_files(self, included, excluded=()):
+        self.write("files.tsv", "file\tbytes\tadded\tremoved\ttokens\texcluded\n"
+                   + "".join(f"{name}\t10\t1\t0\t5\t{reason}\n" for name, reason in [*((f, "") for f in included), *((f, "generated") for f in excluded)]))
 
 
 def defect(mid, path, line=3, lens="correctness", extra=""):

@@ -2,13 +2,19 @@
 import argparse, datetime, json, os, re, shlex, subprocess, sys
 import gh_api, ids
 import run_files as rf
-from records import load_script
+from records import ROUTING, load_script, phrase_of, phrases, plugin_version, read_plain_names
 
 pc = load_script("pr-comments.py")
 
 VERDICTS = {"comment": "COMMENT", "request-changes": "REQUEST_CHANGES", "approve": "APPROVE"}
 CONFIRMED_VERDICTS = {"request-changes": "request changes", "approve": "approve"}
 DEFAULT_BODY = "Comments from my review of this pull request."
+HOW_REVIEWED = ("<!-- how reviewed: start -->", "<!-- how reviewed: end -->")
+SUMMARY_FOLD = ("<details><summary>How the change was reviewed</summary>", "</details>")
+RANGE_LINE = re.compile(r"^Reviewed (?:`[^`\n]+`|the \d+ commits? since the last review)")
+WHOLE_CHANGE = "**Whole change**: how the parts fit together, and what's left unfinished"
+NOT_RUN_CAUSES = {"quick": "quick review", "removed": "left out for this review"}
+NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 BLOCK_START = re.compile(r"^\s{0,3}(#|>|\||[-*+]\s|\d+[.)]\s)")
 SUGGESTION = re.compile(r"^(\s*(?:`{3,}|~{3,}))suggestion\b", re.M)
 LINE_KINDS = ("line", "range")
@@ -337,7 +343,7 @@ def review_head(run):
 
 def our_texts(run):
     posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post"]
-    return [DEFAULT_BODY, review_head(run), *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
+    return [DEFAULT_BODY, outside_block(review_head(run))[0], *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
 
 def before_ours(body, ours):
     return body[:min((at for at in (body.find(t) for t in ours if t) if at >= 0), default=len(body))].strip()
@@ -345,11 +351,12 @@ def before_ours(body, ours):
 def kept_body(run, ctx):
     p = ctx["pending"]
     if not p: return ""
-    if os.path.exists(rf.kept_body_path(run, p["id"])): return rf.read_text(rf.kept_body_path(run, p["id"]))
-    return "" if str(p["id"]) in rf.review_ids(rf.read_posted(run)) else before_ours(p.get("body") or "", our_texts(run))
+    if str(p["id"]) in rf.own_reviews(run, rf.read_posted(run)): return rf.kept_body_text(run, p["id"])
+    return before_ours(outside_block(p.get("body") or "")[0], our_texts(run))
 
-def saved_body(run, review_id):
-    return rf.read_text(rf.kept_body_path(run, review_id))
+def holds_our_body(run, ctx, rows):
+    if ctx["pending"]: return str(ctx["pending"]["id"]) in rf.own_reviews(run, rows)
+    return bool(rf.kept_body_ids(run, rf.RUN_STATES) & ctx["review_ids"])
 
 def review_body(run, rows, review_id, kept):
     parts = [part for part in (kept, review_head(run)) if part] or [DEFAULT_BODY]
@@ -359,6 +366,104 @@ def review_body(run, rows, review_id, kept):
             text = outgoing(rf.posted_text(run, mid), True)[0]
             parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
     return "\n\n".join(parts)
+
+def plural(n, word, say=str):
+    return f"{say(n)} {word}" + ("" if n == 1 else "s")
+
+def spelled(n):
+    return NUMBER_WORDS[n] if n < len(NUMBER_WORDS) else str(n)
+
+def commits_between(repo, base, head):
+    r = subprocess.run(["git", "-C", repo, "rev-list", "--count", f"{base}..{head}"], capture_output=True, text=True)
+    return int(r.stdout) if r.returncode == 0 and r.stdout.strip().isdigit() else None
+
+def is_ancestor(repo, base, head):
+    return subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", base, head], capture_output=True).returncode == 0
+
+def commits_since_last_review(run, repo, target):
+    prev = rf.previous_run(run)
+    if not (prev and os.path.isdir(prev) and rf.same_commit(target.base, rf.reviewed_head(prev)) and is_ancestor(repo, target.base, target.head)): return None
+    return commits_between(repo, target.base, target.head)
+
+def range_line(run, repo, parts):
+    target = rf.read_target(run)
+    if not (target.base and target.head): sys.exit("nothing rendered; target.txt has no BASE and HEAD lines")
+    span, files = f"`{target.base[:7]}..{target.head[:7]}`", plural(len(rf.included_files(run)), "file")
+    since = commits_since_last_review(run, repo, target)
+    reviewed = f"Reviewed the {plural(since, 'commit')} since the last review ({span}, {files})" if since else f"Reviewed {span} ({files})"
+    return f"{reviewed}, " + (f"in {plural(len(parts), 'part', spelled)} plus a pass over the whole change." if parts else "as one piece.")
+
+def in_name_order(names, lenses):
+    rank = {lens: at for at, lens in enumerate(names)}
+    return sorted(dict.fromkeys(lens for lens in lenses if lens != "credit"), key=lambda lens: rank.get(lens, len(rank)))
+
+def entry(head, lines):
+    return "\n".join([head, *(f"- {line}" for line in lines if line)])
+
+def one_line(text):
+    return " ".join(text.split()).replace("<!--", "&lt;!--")
+
+def in_sentence(label):
+    return label if label[:2].isupper() else label[:1].lower() + label[1:]
+
+def part_label(slices, name):
+    return one_line(rf.label_of(slices, name))
+
+def seams_line(slices):
+    crossings = [f"{in_sentence(part_label(slices, s.source))} to {in_sentence(part_label(slices, s.target))} ({one_line(s.crosses)})" for s in slices.seams]
+    return "Checked between parts: " + ", ".join(crossings) if crossings else ""
+
+def part_entry(names, slices, instances, name):
+    summary = one_line(slices.by_name[name].summary)
+    head = f"**{part_label(slices, name)}**" + (f": {summary}" if summary else "")
+    return entry(head, [phrases(names, in_name_order(names, (i.lens for i in instances if i.scope == name)))])
+
+def whole_change_entry(names, slices, instances):
+    whole = in_name_order(names, (i.lens for i in instances if i.scope == "all" or not slices.order))
+    return entry(WHOLE_CHANGE, [phrases(names, whole), seams_line(slices)])
+
+def described(names, lens):
+    return ": ".join(filter(None, (phrase_of(names, lens), names[lens].description if lens in names else "")))
+
+def legend(names, instances):
+    ran = in_name_order(names, (i.lens for i in instances))
+    return entry("**Focuses**", [described(names, lens) for lens in ran]) if ran else ""
+
+def not_run_line(run, names):
+    cut = {n.lens: NOT_RUN_CAUSES[n.cause] for n in rf.read_not_run(run) if n.cause in NOT_RUN_CAUSES}
+    return "Not run: " + ", ".join(f"{phrase_of(names, lens)} ({cut[lens]})" for lens in in_name_order(names, cut)) + "." if cut else ""
+
+def assisted_by_line():
+    version = plugin_version()
+    return f"<sub>Review assisted by clerk-dev{f' {version}' if version else ''}</sub>"
+
+def how_reviewed(run, names, slices):
+    instances = rf.read_instances(run)
+    if instances is None: sys.exit(f"nothing rendered; {run} has no plan.md")
+    entries = [*(part_entry(names, slices, instances, name) for name in slices.order), whole_change_entry(names, slices, instances)]
+    return "\n\n".join([HOW_REVIEWED[0], SUMMARY_FOLD[0], *entries,
+                        *filter(None, [legend(names, instances), not_run_line(run, names)]), SUMMARY_FOLD[1], assisted_by_line(), HOW_REVIEWED[1]])
+
+def without_fold(text):
+    _, closed, rest = text.partition(SUMMARY_FOLD[1])
+    return rest.strip() if closed and text.startswith(SUMMARY_FOLD[0]) else text
+
+def outside_block(text):
+    start = text.find(HOW_REVIEWED[0])
+    if start < 0: return text, ""
+    above, _, last = text[:start].rstrip().rpartition("\n\n")
+    above = (above if RANGE_LINE.match(last) else text[:start]).strip()
+    after = text[start + len(HOW_REVIEWED[0]):]
+    end = after.find(HOW_REVIEWED[1])
+    if end < 0: return "\n\n".join(filter(None, [above, without_fold(after.strip())])), ""
+    return above, after[end + len(HOW_REVIEWED[1]):].strip()
+
+def render_body(run, repo):
+    path, slices = rf.review_text_path(run), rf.read_slices(run)
+    above, below = outside_block(rf.read_text(path))
+    rendered = [range_line(run, repo, slices.order), how_reviewed(run, read_plain_names(ROUTING), slices)]
+    rf.write_text(path, "\n\n".join(filter(None, [above, *rendered, below])) + "\n")
+    print(f"wrote {path}", file=sys.stderr)
 
 def result_key(mid):
     return f"finding{mid}"
@@ -413,7 +518,7 @@ def submitted_label(review_id):
     return f"body of submitted review {review_id}"
 
 def submitted_body(run, rows, review_id):
-    return review_body(run, rows, review_id, saved_body(run, review_id))
+    return review_body(run, rows, review_id, rf.kept_body_text(run, review_id))
 
 def comment_updates(ctx, sending):
     return [update_call(ctx, it) for it in sending if it["action"] == "update" and it["anchor"]["kind"] != "body"]
@@ -543,7 +648,7 @@ def full_sha(commit, repo):
 
 def recorded_pr(run):
     number, url = (rf.read_text(os.path.join(run, "pr", "pr.txt")).split("\t") + [""])[:2]
-    target = (rf.read_text(os.path.join(run, "target.txt")).splitlines() or [""])[0].strip()
+    target = rf.read_target(run).target
     m = PULL_URL.search(url.strip()) or PULL_URL.search(target)
     if m: return int(m.group(3)), f"{m.group(1)}/{m.group(2)}"
     m = TARGET_PR.match(number.strip()) or TARGET_PR.match(target)
@@ -690,9 +795,10 @@ def posted_lines(sending, results):
     out = [f"  review {review['id']} {review.get('html_url', '')}"] if review else []
     return out + [f"  {named(it)}: {posted_where(it, results.get(result_key(it['id'])) or it['row'])}" for it in sending]
 
-def posted_summary(items, sending, adopted, held, results):
-    new = sum(it["action"] == "new" for it in sending)
-    parts = [f"posted {new} comments and updated {len(sending) - new} on review {results['review']['id']}"] if sending else []
+def posted_summary(items, sending, adopted, held, results, sent_body):
+    new, review = sum(it["action"] == "new" for it in sending), results["review"]["id"] if sent_body else ""
+    parts = ([f"posted {new} comments and updated {len(sending) - new} on review {review}"] if sending else
+             [f"sent the review body to review {review}"] if sent_body else [])
     parts += [f"recorded {len(adopted)} already on GitHub"] if adopted else []
     return "; ".join(parts + [f"skipped {len(items) - len(sending) - len(adopted) - len(held)} already posted"])
 
@@ -717,17 +823,19 @@ def post(a, ctx, items, reviewed):
     adopted = [it for it in items if it["action"] == "adopt"]
     refuse_blocked(sending)
     if held: print(held_line(held), file=sys.stderr)
-    if not (sending or adopted): print("nothing to post: every Post-marked finding is already posted", file=sys.stderr); return
     review_id = current_review(ctx)
     rows = planned_rows(rf.read_posted(a.run), sending + adopted, review_id, today())
-    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed) if sending else []
-    if sending: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
+    sends_body = bool(sending) or not holds_our_body(a.run, ctx, rows)
+    if not (sends_body or adopted):
+        print("nothing to post: the review body and every Post-marked finding are already posted", file=sys.stderr); return
+    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed) if sends_body else []
+    if sends_body: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
     if a.dry_run: write_payload(a.run, calls); return
     results = execute(calls, a.repo, ctx, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
-    kept = ctx["kept"] and (rf.kept_body_path(a.run, ctx["pending"]["id"]), ctx["kept"] + "\n")
+    kept = sends_body and (rf.kept_body_path(a.run, results["review"]["id"]), ctx["kept"] + "\n")
     record_sent(a.run, rows, results, sending, kept)
-    print(posted_summary(items, sending, adopted, held, results), file=sys.stderr)
+    print(posted_summary(items, sending, adopted, held, results, sends_body), file=sys.stderr)
 
 def unpicked_siblings(held, picked):
     return {rid: [it for it in held if it["submitted"] == rid and it not in picked] for rid in submitted_ids(picked)}
@@ -787,7 +895,7 @@ def submit(a, ctx, verdict):
     p = ctx["pending"]
     if not p: sys.exit("no pending review on the pull request; run --post first")
     rows = rf.read_posted(a.run)
-    if str(p["id"]) not in rf.review_ids(rows):
+    if str(p["id"]) not in rf.own_reviews(a.run, rows):
         sys.exit(f"nothing sent; pending review {p['id']} holds nothing this run posted; run --post first, or submit it on GitHub")
     body = review_body(a.run, rows, p["id"], ctx["kept"])
     warned = pending_warnings(a.run, ctx, rows, body)
@@ -798,6 +906,7 @@ def submit(a, ctx, verdict):
     what = submit_confirmation(verdict, drafts, warned)
     if what: confirm(a, ctx, what, ["--submit", verdict])
     execute(calls, a.repo, ctx)
+    rf.record_submitted(a.run, p["id"])
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
 def close_text(run, mid, shas):
@@ -1046,7 +1155,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Preview, post, and submit a run's Post-marked findings as a pending GitHub review.")
     ap.add_argument("run"); ap.add_argument("--repo", default="."); ap.add_argument("--pr", type=int)
     action = ap.add_mutually_exclusive_group()
-    action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
+    action.add_argument("--post", action="store_true", help="send the previewed comments and the review body to the pending review")
     action.add_argument("--submit", choices=list(VERDICTS),
                         help="submit the pending review with this verdict; approve, request-changes, and comment on a pending review "
                              "that holds drafts of your own or text that drew a warning ask you to type the pull request number at a terminal, "
@@ -1058,6 +1167,8 @@ def main(argv=None):
                         help="send the changed text of these findings' comments that GitHub already shows (in a submitted review) "
                              "once you type the pull request number at a terminal; --post never changes them")
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
+    action.add_argument("--render-body", action="store_true",
+                        help="write how the change was reviewed into posted/review.md below the text already there, replacing what an earlier run wrote")
     action.add_argument("--save-drafts", metavar="FILE",
                         help="save the post-drafter's answer in FILE as posted/draft-<merged id>.md, one per Post-marked finding; print N=<path> for each")
     ap.add_argument("--confirm", type=int, metavar="PR",
@@ -1068,6 +1179,7 @@ def main(argv=None):
         ap.error("--dry-run goes with --post, --submit, --close N, or --update-published N")
     if a.keep_open is not None: return keep_open(a.run, a.keep_open)
     if a.save_drafts: return save_drafts(a.run, a.save_drafts)
+    if a.render_body: return render_body(a.run, a.repo)
     reviewed = reviewed_commit(a.run, a.repo)
     ctx = {**fetch_pr(a.repo, a.run, a.pr, reviewed), "local": local_paths(a.run, a.repo)}
     ctx["kept"] = kept_body(a.run, ctx)

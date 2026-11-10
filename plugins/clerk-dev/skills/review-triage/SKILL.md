@@ -285,7 +285,8 @@ the pull request's head is not the reviewed commit, and whether a pending
 review exists; then, under "your own drafts in this pending review; submitting
 publishes them too", each comment in it this run did not post, with its
 `path:line` and first line. A pending review the user started on GitHub
-keeps its text, with this run's body below it, and the preview says so.
+keeps its text, with this run's body below it, and the preview says so; a
+how-reviewed block an earlier batch left in it is replaced, not kept.
 The script posts to the pull request the run recorded (`pr/pr.txt`, or the
 target), on the repository its URL names, so a checkout of a fork posts to the
 upstream pull request; without a URL, on the worktree's origin. It refuses a
@@ -297,7 +298,8 @@ branch's pull request.
    says to redraft ("note changed; redraft the posted text", or "code moved
    since drafting; redraft the posted text"). A text marked `edited` in
    `posted.tsv` is the user's and is never redrafted. With none to draft, go to
-   step 4, and with `posted/review.md` written too, to step 6.
+   step 4, and on from it to step 6 when `posted/review.md` already held a
+   sentence.
 2. Run the preview for the anchors.
 3. Draft with one `clerk-dev:post-drafter` agent per batch of up to eight
    findings, findings about the same issue in one batch. It has no tools and
@@ -332,11 +334,19 @@ branch's pull request.
    before the plugin was updated), stop and ask the user to run
    `/reload-plugins`, then post the review again; never draft with another
    agent type or in this session.
-4. Draft the review body in `<run>/posted/review.md`: one or two sentences on
-   what the review looked at and what the comments are about, under the
-   Drafting rules in `${CLAUDE_PLUGIN_ROOT}/agents/post-drafter.md`; the script
-   appends the comments that fell back to the review body. Keep one the user
-   wrote.
+4. Draft the review body: one neutral sentence on what the comments cover,
+   under the Drafting rules in `${CLAUDE_PLUGIN_ROOT}/agents/post-drafter.md`,
+   and no verdict, since the submit event is the verdict; with no comment to
+   post, no sentence. Write it to `<run>/posted/review.md`, unless the file
+   already holds a sentence (the user's, or one carried from an earlier
+   review), which is kept. Then run `python3
+   ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py <run> --repo <worktree>
+   --render-body`: below that text it writes the range line and a folded block
+   on how the change was reviewed (the parts, the focuses run on each, the
+   focuses a choice left out), replacing the block an earlier render wrote and
+   changing nothing above it. When posting, the script appends the comments
+   that fell back to the review body. Tell the user the whole file is theirs to
+   edit, the generated part included.
 5. Tell the user which texts were drafted, any proposed general comment, and
    that they can edit the Posted blocks in the report and `posted/review.md` in
    place, or change a note and have it redrafted; wait for them to say they are
@@ -351,9 +361,13 @@ branch's pull request.
    user only.
 7. Ask "Post these N comments to your pending review on pull request #<n>?",
    counting the comments that are new or changed since posting, leaving out
-   those under "published; changes on GitHub at once". On yes, run the
+   those under "published; changes on GitHub at once"; with no comment to
+   send, ask "Post the review body to your pending review on pull request
+   #<n>?". On yes, run the
    same command with `--post`. It adds every comment to the user's pending
-   review, creating one on the reviewed commit when there is none, and updates
+   review, creating one on the reviewed commit when there is none, and sends
+   the review body, alone when there is no comment, when the pending review
+   does not hold it yet; it updates
    comments of the pending review whose text changed since posting; it never
    changes a published comment, and names those it left; findings already posted and
    unchanged are skipped, and comments already on GitHub with the same file,

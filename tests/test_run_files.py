@@ -5,7 +5,7 @@ import unittest
 from contextlib import redirect_stderr
 from unittest import mock
 
-from helpers import SCRIPTS, RunCase, TempCase, defect, init_repo, merged_md
+from helpers import SCRIPTS, PLAN, SLICES, RunCase, TempCase, defect, init_repo, merged_md, plan_md
 
 sys.path.insert(0, SCRIPTS)
 import run_files
@@ -422,6 +422,119 @@ class FencedLinesTest(unittest.TestCase):
 
     def test_holds_the_rest_after_an_unclosed_fence_as_body(self):
         self.assertEqual(self.kinds("```", "a", "##### Instruction"), ["fence", "body", "body"])
+
+
+class ReadTargetTest(RunCase):
+    def test_reads_the_target_base_and_head(self):
+        self.write_target("pr 7", "abc123", "def456")
+        self.assertEqual(run_files.read_target(self.run_dir), ("pr 7", "abc123", "def456"))
+
+    def test_leaves_missing_lines_empty(self):
+        self.write_target("pr 7")
+        self.assertEqual(run_files.read_target(self.run_dir), ("pr 7", "", ""))
+
+    def test_reads_nothing_without_the_file(self):
+        self.assertEqual(run_files.read_target(self.run_dir), ("", "", ""))
+
+    def test_keeps_base_and_head_in_place_after_a_blank_first_line(self):
+        self.write_target("", "abc123", "def456")
+        self.assertEqual(run_files.read_target(self.run_dir), ("", "abc123", "def456"))
+
+    def test_reviewed_head_is_the_third_line(self):
+        self.write_target("pr 7", "abc123", "def456 ")
+        self.assertEqual(run_files.reviewed_head(self.run_dir), "def456")
+
+
+class LabelOfTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write("slices.md", SLICES)
+        self.slices = run_files.read_slices(self.run_dir)
+
+    def test_gives_the_label_of_a_slice(self):
+        self.assertEqual(run_files.label_of(self.slices, "webhook-schema"), "Webhook schema")
+
+    def test_derives_a_label_for_a_name_not_in_slices_md(self):
+        self.assertEqual(run_files.label_of(self.slices, "billing-core"), "Billing core")
+
+
+class ReadSlicesTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write("slices.md", SLICES)
+
+    def slices(self):
+        return run_files.read_slices(self.run_dir)
+
+    def test_reads_the_label_and_the_summary(self):
+        self.assertEqual(self.slices().by_name["webhook-schema"].label, "Webhook schema")
+
+    def test_joins_a_summary_continued_on_the_next_line(self):
+        self.assertEqual(self.slices().by_name["webhook-schema"].summary, "new delivery-attempts table and its migration")
+
+    def test_labels_a_slice_without_a_label_from_its_name(self):
+        self.assertEqual(self.slices().by_name["delivery"], ("Delivery", "webhook intake retried through the queue"))
+
+    def test_reads_the_order(self):
+        self.assertEqual(self.slices().order, ["delivery", "webhook-schema"])
+
+    def test_reads_an_order_written_as_a_list(self):
+        self.write("slices.md", SLICES.replace("delivery, webhook-schema", "- delivery\n- webhook-schema"))
+        self.assertEqual(self.slices().order, ["delivery", "webhook-schema"])
+
+    def test_leaves_out_an_order_name_that_is_no_slice(self):
+        self.write("slices.md", SLICES.replace("delivery, webhook-schema", "delivery whole webhook-schema"))
+        self.assertEqual(self.slices().order, ["delivery", "webhook-schema"])
+
+    def test_reads_the_seams(self):
+        self.assertEqual(self.slices().seams, [("webhook-schema", "delivery", "the delivery-attempts row")])
+
+    def test_reads_a_seam_whose_slice_names_are_in_backticks(self):
+        self.write("slices.md", SLICES.replace("- webhook-schema -> delivery:", "- `webhook-schema` -> `delivery`:"))
+        self.assertEqual(self.slices().seams, [("webhook-schema", "delivery", "the delivery-attempts row")])
+
+    def test_reads_nothing_without_the_file(self):
+        self.write("slices.md", "")
+        self.assertEqual(self.slices(), ({}, [], []))
+
+
+class ReadInstancesTest(RunCase):
+    def test_reads_the_lens_scope_and_raw_file_in_table_order(self):
+        self.write_plan()
+        self.assertEqual(run_files.read_instances(self.run_dir), [("security", "entities", "raw/security-entities.md"), ("rollout", "all", "raw/rollout.md")])
+
+    def test_ignores_a_table_outside_the_instances_section(self):
+        self.write_plan(PLAN + "\n## Not run\n| lens | scope | patch | model | raw file |\n| --- | --- | --- | --- | --- |\n| design | all | p | opus | raw/design.md |\n")
+        self.assertEqual([i.lens for i in run_files.read_instances(self.run_dir)], ["security", "rollout"])
+
+    def test_reads_none_without_a_plan(self):
+        self.assertIsNone(run_files.read_instances(self.run_dir))
+
+
+class ReadNotRunTest(RunCase):
+    def test_reads_the_lens_and_the_cause_of_each_row(self):
+        self.write_plan(plan_md([("security", "all")], [("tenancy", "quick"), ("design", "removed")]))
+        self.assertEqual(run_files.read_not_run(self.run_dir), [("tenancy", "quick"), ("design", "removed")])
+
+    def test_reads_nothing_from_a_table_without_rows(self):
+        self.write_plan(plan_md([("security", "all")], []))
+        self.assertEqual(run_files.read_not_run(self.run_dir), [])
+
+    def test_reads_nothing_without_the_table(self):
+        self.write_plan()
+        self.assertEqual(run_files.read_not_run(self.run_dir), [])
+
+    def test_reads_nothing_without_a_plan(self):
+        self.assertEqual(run_files.read_not_run(self.run_dir), [])
+
+
+class IncludedFilesTest(RunCase):
+    def test_lists_the_files_with_no_exclusion_reason(self):
+        self.write_files(["src/a.py", "src/b.py"], ["package-lock.json"])
+        self.assertEqual(run_files.included_files(self.run_dir), ["src/a.py", "src/b.py"])
+
+    def test_lists_nothing_without_the_file(self):
+        self.assertEqual(run_files.included_files(self.run_dir), [])
 
 
 if __name__ == "__main__":

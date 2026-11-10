@@ -1,13 +1,15 @@
 import io
 import json
 import os
+import re
 import shlex
+import shutil
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
-from helpers import SCRIPTS, GhRunCase, RunCase, TempCase, init_repo, merged_md, run_ok, write_file
+from helpers import SCRIPTS, SLICES, GhRunCase, RunCase, TempCase, init_repo, merged_md, plan_md, run_ok, write_file
 
 sys.path.insert(0, SCRIPTS)
 import gh_api
@@ -62,7 +64,7 @@ class PostCase(GhRunCase):
         self.ctx = {"owner": "acme", "name": "widgets", "pr": 7, "head": HEAD, "merge_base": MERGE_BASE, "files": ["src/a.py", "src/b.py"],
                     "pending": None, "review_ids": {"55"}, "comment_ids": {"901"}, "comments": [], "viewer": "me"}
         patcher = mock.patch.object(post, "fetch_pr", side_effect=lambda *a: self.ctx)
-        patcher.start()
+        self.fetch_pr = patcher.start()
         self.addCleanup(patcher.stop)
         diff = mock.patch.object(post, "pr_patch", return_value=PATCH)
         self.pr_diff = diff.start()
@@ -76,9 +78,9 @@ class PostCase(GhRunCase):
         self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
         if text is not False: self.write(f"posted/{mid}.md", text or f"Finding {mid} text.")
 
-    def pend(self, commit=HEAD, comments=None, body=""):
-        self.ctx["pending"] = {"id": 55, "node_id": "PRR_55", "commit_id": commit, "html_url": "https://gh/r/55", "body": body,
-                               "comments": comments or {}}
+    def pend(self, commit=HEAD, comments=None, body="", review_id=55):
+        self.ctx["pending"] = {"id": review_id, "node_id": f"PRR_{review_id}", "commit_id": commit, "html_url": f"https://gh/r/{review_id}",
+                               "body": body, "comments": comments or {}}
 
     def posted_row(self, mid, state="posted", **fields):
         row = {"state": state, "note": self.marks.get(mid, ""), "kind": "line", "path": "src/a.py", "line": "11", "end_line": "11",
@@ -93,10 +95,13 @@ class PostCase(GhRunCase):
         self.err = err.getvalue()
         return out.getvalue()
 
-    def calls(self, *args):
-        self.main("--post", "--dry-run", *args)
+    def payload(self, *args):
+        self.main(*args, "--dry-run")
         with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
             return json.load(fh)["calls"]
+
+    def calls(self, *args):
+        return self.payload("--post", *args)
 
     def call_for(self, mid):
         return next(c for c in self.calls() if c.get("finding") == mid)
@@ -636,6 +641,17 @@ class PendingReviewTest(PostCase):
         self.assertIn("exists on ccccccccc, another commit than the reviewed aaaaaaaaa", self.main())
 
 
+START = "<!-- how reviewed: start -->"
+END = "<!-- how reviewed: end -->"
+FOLD_OPEN = "<details><summary>How the change was reviewed</summary>"
+FOLD_CLOSE = "</details>"
+WHOLE_CHANGE = "**Whole change**: how the parts fit together, and what's left unfinished"
+
+
+def generated(what):
+    return f"Reviewed `ccccccc..ddddddd` (2 files), as one piece.\n\n{START}\n\n{what}\n\n{END}"
+
+
 class WhenThePendingReviewHasABodyTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -666,6 +682,16 @@ class WhenThePendingReviewHasABodyTest(PostCase):
         self.write("posted/review.md", "Nice work.")
         self.pend(body="My summary.\n\nNice work.")
         self.assertEqual(self.review_body(), "My summary.\n\nNice work.")
+
+    def test_replaces_the_block_an_earlier_round_left_in_it(self):
+        self.write("posted/review.md", "Nice work.\n\n" + generated("new"))
+        self.pend(body="My summary.\n\n" + generated("old") + "\n\nAn earlier body comment.")
+        self.assertEqual(self.review_body(), "My summary.\n\nNice work.\n\n" + generated("new"))
+
+    def test_takes_out_the_sentence_and_block_of_a_batch_this_run_never_recorded(self):
+        self.write("posted/review.md", "Nice work.\n\n" + generated("new"))
+        self.pend(body="My summary.\n\nNice work.\n\n" + generated("new"))
+        self.assertEqual(self.review_body(), "My summary.\n\nNice work.\n\n" + generated("new"))
 
 
 class AfterAReReviewOfAPendingReviewTest(PostCase):
@@ -702,11 +728,136 @@ class RepostTest(PostCase):
 
 
 
+class WhenNothingIsMarkedPostTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Nice work\noverall.")
+
+    def test_creates_the_pending_review_with_the_body(self):
+        self.assertEqual(self.calls(), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews",
+                                         "fields": {"commit_id": HEAD, "body": "Nice work overall."}, "as": "review"}])
+
+    def test_sets_the_body_of_a_pending_review_this_run_has_not_posted_to(self):
+        self.pend()
+        self.assertEqual(self.calls(), [{"method": "PUT", "path": "repos/acme/widgets/pulls/7/reviews/55", "fields": {"body": "Nice work overall."}}])
+
+    def test_posts_nothing_once_the_pending_review_holds_its_body(self):
+        self.pend()
+        self.write("posted/pending-55.md", "")
+        self.main("--post", "--dry-run")
+        self.assertIn("nothing to post: the review body and every Post-marked finding are already posted", self.err)
+
+    def test_posts_nothing_once_a_review_it_posted_is_on_github(self):
+        self.write("posted/pending-55.md", "")
+        self.main("--post", "--dry-run")
+        self.assertIn("nothing to post", self.err)
+
+    def test_creates_the_pending_review_again_when_the_one_it_posted_is_gone(self):
+        self.write("posted/pending-54.md", "")
+        self.assertEqual(self.calls()[0]["path"], "repos/acme/widgets/pulls/7/reviews")
+
+
+class WhenNothingIsMarkedPostAndThereIsNoBodyFileTest(PostCase):
+    def test_sends_the_default_body(self):
+        self.assertEqual(self.review_body(), post.DEFAULT_BODY)
+
+
+class WhenItPostedOnlyTheBodyTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Nice work.")
+        self.stub("rest", return_value={"id": 55, "node_id": "PRR_55", "html_url": "https://gh/r/55"})
+        self.main("--post")
+        self.posted = self.err
+        self.pend()
+
+    def test_says_it_sent_the_body(self):
+        self.assertIn("sent the review body to review 55", self.posted)
+
+    def test_submit_approve_accepts_the_pending_review(self):
+        self.assertEqual(self.payload("--submit", "approve"), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
+                                                                "fields": {"event": "APPROVE", "body": "Nice work."}}])
+
+
+def answered_review(review_id):
+    return {"id": review_id, "node_id": f"PRR_{review_id}", "html_url": f"https://gh/r/{review_id}"}
+
+
+class SubmittedReviewCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.stub("graphql", side_effect=lambda q, v, cwd: thread_answer(v))
+        self.rest = self.stub("rest", return_value=answered_review(55))
+        self.write("posted/review.md", "Nice work.")
+        self.first_run()
+        self.main("--post")
+        self.pend()
+        self.main("--submit", "approve")
+        self.ctx["pending"] = None
+
+    def first_run(self):
+        pass
+
+    def re_review(self, matches=""):
+        prev, self.run_dir = self.run_dir, self.path("cur")
+        os.makedirs(self.run_dir)
+        for name in ("merged.md", "numbers.tsv", "target.txt"): shutil.copy(os.path.join(prev, name), self.run_dir)
+        write_file(os.path.join(self.run_dir, "reconcile", "matches.tsv"), "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n" + matches)
+        run_ok("reconcile", prev, self.run_dir, "--seed")
+        self.write("posted/review.md", "Reviewed the 2 commits since the last review.")
+        self.rest.return_value = answered_review(56)
+
+    def post_and_approve(self):
+        self.main("--post")
+        self.pend(review_id=56)
+        return self.payload("--submit", "approve")
+
+
+class WhenItSubmittedABodyOnlyReviewTest(SubmittedReviewCase):
+    def test_records_the_review_as_submitted(self):
+        self.assertEqual((run_files.kept_body_ids(self.run_dir, ("submitted",)), run_files.kept_body_ids(self.run_dir, ("pending",))), ({"55"}, set()))
+
+    def test_post_after_it_opens_no_new_review(self):
+        self.main("--post", "--dry-run")
+        self.assertIn("nothing to post", self.err)
+
+
+class AfterAReReviewOfASubmittedBodyOnlyReviewTest(SubmittedReviewCase):
+    def setUp(self):
+        super().setUp()
+        self.re_review()
+
+    def test_carries_the_submitted_review_as_an_earlier_one(self):
+        self.assertEqual(run_files.kept_body_ids(self.run_dir, ("earlier",)), {"55"})
+
+    def test_post_opens_a_new_review_with_the_new_body(self):
+        self.assertEqual(self.calls(), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews",
+                                         "fields": {"commit_id": HEAD, "body": "Reviewed the 2 commits since the last review."}, "as": "review"}])
+
+    def test_submit_approve_accepts_the_new_review(self):
+        self.assertEqual(self.post_and_approve(), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/56/events",
+                                                    "fields": {"event": "APPROVE", "body": "Reviewed the 2 commits since the last review."}}])
+
+
+class AfterAReReviewOfASubmittedReviewWithCommentsTest(SubmittedReviewCase):
+    def first_run(self):
+        self.mark(1)
+
+    def setUp(self):
+        super().setUp()
+        self.re_review("1\t1\tjudge\t1\topen\t\n")
+        self.mark(1)
+
+    def test_carries_the_posted_comment_on_the_submitted_review(self):
+        self.assertEqual(run_files.read_posted(self.run_dir)[1]["review_id"], "55")
+
+    def test_submit_approve_accepts_the_new_review(self):
+        self.assertEqual(self.post_and_approve()[0]["path"], "repos/acme/widgets/pulls/7/reviews/56/events")
+
+
 class PublishedCase(PostCase):
     def update_calls(self, ids="1"):
-        self.main("--update-published", ids, "--dry-run")
-        with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
-            return json.load(fh)["calls"]
+        return self.payload("--update-published", ids)
 
 
 class WhenAPublishedCommentChangedTest(PublishedCase):
@@ -768,6 +919,14 @@ class WhenABodyCommentOfASubmittedReviewChangedTest(SubmittedBodyCommentCase):
         self.write("posted/pending-54.md", "My summary.")
         self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
 
+    def test_update_published_keeps_the_text_saved_from_that_review_once_submit_recorded_it(self):
+        self.write("posted/submitted-54.md", "My summary.")
+        self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
+
+    def test_update_published_keeps_the_text_saved_from_that_review_in_an_earlier_run(self):
+        self.write("posted/earlier-54.md", "My summary.")
+        self.assertEqual(self.body_of(54, self.update_calls()), "My summary.\n\nFinding 1 reworded.")
+
     def test_post_leaves_that_review_as_it_is(self):
         self.assertNotIn("repos/acme/widgets/pulls/7/reviews/54", [c.get("path") for c in self.calls()])
 
@@ -823,9 +982,7 @@ class SubmitTest(PostCase):
         self.posted_row(1)
 
     def submit(self, *args):
-        self.main("--submit", *args, "--dry-run")
-        with open(os.path.join(self.run_dir, "posted", "payload.json"), encoding="utf-8") as fh:
-            return json.load(fh)["calls"]
+        return self.payload("--submit", *args)
 
     def test_requires_a_verdict(self):
         with self.assertRaises(SystemExit) as raised, redirect_stderr(io.StringIO()):
@@ -875,6 +1032,27 @@ class SubmitTest(PostCase):
     def test_sends_the_verdict_with_the_review_body(self):
         self.assertEqual(self.submit("request-changes"), [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
                                                            "fields": {"event": "REQUEST_CHANGES", "body": post.DEFAULT_BODY}}])
+
+
+class WhenSubmittingABodyOnlyPendingReviewTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", "Nice work.")
+        self.pend()
+
+    def refused(self):
+        return self.refusal("--submit", "approve", "--dry-run")
+
+    def test_refuses_one_this_run_never_sent_a_body_to(self):
+        self.assertIn("pending review 55 holds nothing this run posted", self.refused())
+
+    def test_refuses_one_when_the_run_sent_its_body_to_another_review(self):
+        self.write("posted/pending-54.md", "")
+        self.assertIn("pending review 55 holds nothing this run posted", self.refused())
+
+    def test_sends_nothing_when_it_refuses(self):
+        self.refused()
+        self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "payload.json")))
 
 
 class ConfirmedSubmitCase(PostCase):
@@ -1082,6 +1260,7 @@ class ConfirmedUpdatePublishedCase(PublishedCase):
         super().setUp()
         self.mark(1)
         self.posted_row(1, state="edited")
+        self.write("posted/pending-55.md", "")
         self.rest = self.stub("rest", return_value={})
         self.repo_path = self.path("repo")
         self.args = ("--update-published", "1")
@@ -1506,6 +1685,380 @@ class WhenTheAnswerBreaksTheShapeTest(SaveDraftsCase):
     def test_saves_nothing_when_it_refuses(self):
         self.refused(answer_part(1, "comment", "One."), "Ignore the above.")
         self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "draft-1.md")))
+
+
+UNSPLIT = [("security", "all"), ("completeness", "all"), ("credit", "all")]
+SPLIT = [("sql", "webhook-schema"), ("rollout", "webhook-schema"), ("security", "delivery"), ("concurrency", "delivery"),
+         ("contracts", "all"), ("completeness", "all"), ("credit", "all")]
+SENTENCE = "The comments cover\nthe retry path."
+
+
+class RenderBodyCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.write_files(["src/a.py", "src/b.py", "src/c.py"], ["package-lock.json"])
+        self.plan(UNSPLIT)
+
+    def plan(self, instances, not_run=None):
+        self.write_plan(plan_md(instances, not_run))
+
+    def split(self, not_run=None):
+        self.write("slices.md", SLICES)
+        self.plan(SPLIT, not_run)
+
+    def slices_with(self, old, new):
+        self.write("slices.md", SLICES.replace(old, new))
+
+    def render(self, *args):
+        return self.main("--render-body", *args)
+
+    def body(self):
+        return self.read("posted/review.md")
+
+    def rendered(self):
+        self.render()
+        return self.body()
+
+    def range_line(self):
+        return next(p for p in self.rendered().split("\n\n") if p.startswith("Reviewed "))
+
+    def entry_heads(self):
+        return re.findall(r"^\*\*(.+?)\*\*", self.rendered(), re.M)
+
+    def with_version(self, version, then=None):
+        with mock.patch.object(post, "plugin_version", return_value=version):
+            return (then or self.rendered)()
+
+
+class WhenTheRunIsUnsplitTest(RenderBodyCase):
+    def test_says_it_was_reviewed_as_one_piece(self):
+        self.assertEqual(self.range_line(), "Reviewed `bbbbbbb..aaaaaaa` (3 files), as one piece.")
+
+    def test_renders_one_whole_change_entry_then_the_legend(self):
+        self.assertEqual(self.entry_heads(), ["Whole change", "Focuses"])
+
+    def test_lists_every_focus_that_ran_under_whole_change(self):
+        self.assertIn(f"{WHOLE_CHANGE}\n- security, completeness\n\n", self.rendered())
+
+    def test_checks_nothing_between_parts(self):
+        self.assertNotIn("Checked between parts", self.rendered())
+
+    def test_opens_the_fold_after_the_start_marker(self):
+        self.assertIn(f"{START}\n\n<details><summary>How the change was reviewed</summary>\n\n", self.rendered())
+
+    def test_closes_the_fold_before_the_end_marker(self):
+        self.assertTrue(self.with_version("9.8.7").endswith(f"\n\n</details>\n\n<sub>Review assisted by clerk-dev 9.8.7</sub>\n\n{END}\n"))
+
+    def test_ends_the_block_with_the_assisted_by_line(self):
+        self.assertIn(f"</details>\n\n<sub>Review assisted by clerk-dev 9.8.7</sub>\n\n{END}", self.with_version("9.8.7"))
+
+    def test_leaves_the_version_out_when_none_is_readable(self):
+        self.assertIn(f"</details>\n\n<sub>Review assisted by clerk-dev</sub>\n\n{END}", self.with_version(None))
+
+    def test_replaces_the_line_on_render_again(self):
+        self.with_version("1.0.0", self.render)
+        self.with_version("2.0.0", self.render)
+        self.assertEqual((self.body().count("Review assisted by"), "clerk-dev 2.0.0</sub>" in self.body()), (1, True))
+
+
+class WhenTheRunIsSplitTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.split()
+
+    def test_counts_the_parts_in_the_range_line(self):
+        self.assertEqual(self.range_line(), "Reviewed `bbbbbbb..aaaaaaa` (3 files), in two parts plus a pass over the whole change.")
+
+    def test_renders_the_parts_in_order_then_whole_change_then_the_legend(self):
+        self.assertEqual(self.entry_heads(), ["Delivery", "Webhook schema", "Whole change", "Focuses"])
+
+    def test_lists_the_focuses_of_a_part_in_the_plain_names_order(self):
+        self.assertIn("**Webhook schema**: new delivery-attempts table and its migration\n- rollout and rollback, database queries\n\n", self.rendered())
+
+    def test_lists_the_focuses_run_on_the_whole_change_under_it(self):
+        self.assertIn(f"{WHOLE_CHANGE}\n- agreements between parts, completeness\n", self.rendered())
+
+    def test_checks_the_seams_between_parts_by_their_labels(self):
+        self.assertIn("\n- Checked between parts: webhook schema to delivery (the delivery-attempts row)\n", self.rendered())
+
+    def test_describes_each_focus_that_ran_once_in_the_legend(self):
+        legend = self.rendered().split("**Focuses**\n", 1)[1].split("\n\n", 1)[0].splitlines()
+        self.assertEqual([line.split(":")[0] for line in legend],
+                         ["- security", "- rollout and rollback", "- concurrency", "- database queries", "- agreements between parts", "- completeness"])
+
+    def test_gives_each_focus_its_description(self):
+        self.assertIn("\n- database queries: indexes, ordering, migration locks\n", self.rendered())
+
+
+class NotRunLineTest(RenderBodyCase):
+    def not_run(self, *rows):
+        self.plan(UNSPLIT, list(rows))
+        return [line for line in self.rendered().splitlines() if line.startswith("Not run:")]
+
+    def test_names_each_focus_a_choice_cut_with_its_cause(self):
+        self.assertEqual(self.not_run(("design", "removed"), ("tenancy", "quick")),
+                         ["Not run: tenant isolation (quick review), design and reuse (left out for this review)."])
+
+    def test_is_absent_when_the_table_has_no_rows(self):
+        self.assertEqual(self.not_run(), [])
+
+    def test_is_absent_without_the_table(self):
+        self.assertEqual([line for line in self.rendered().splitlines() if line.startswith("Not run:")], [])
+
+    def test_never_names_credit(self):
+        self.not_run(("credit", "quick"), ("tenancy", "quick"))
+        self.assertNotIn("credit", self.body().lower())
+
+
+class WhenItReReviewsTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.git = init_repo(self.path("work"), with_origin=False)
+        self.first = self.git.commit("first review")
+        self.git.commit("fix one")
+        self.head = self.git.commit("fix two")
+        earlier_run(self.path("prev"), self.first)
+        run_files.write_previous(self.run_dir, "prev")
+        self.write_target("pr 7", self.first, self.head)
+
+    def range_line(self):
+        self.render("--repo", self.git.path)
+        return next(p for p in self.body().split("\n\n") if p.startswith("Reviewed "))
+
+    def test_counts_the_commits_since_the_last_review(self):
+        self.assertEqual(self.range_line(), f"Reviewed the 2 commits since the last review (`{self.first[:7]}..{self.head[:7]}`, 3 files), as one piece.")
+
+    def test_names_the_range_when_the_base_is_not_the_last_reviewed_head(self):
+        self.write_target("pr 7", MERGE_BASE, self.head)
+        self.assertEqual(self.range_line(), f"Reviewed `bbbbbbb..{self.head[:7]}` (3 files), as one piece.")
+
+
+class WhenTheRunHasOddRecordsTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("slices.md", SLICES)
+
+    def test_lists_a_part_with_no_instances_by_its_heading_alone(self):
+        self.plan([("security", "delivery")])
+        self.assertIn("**Webhook schema**: new delivery-attempts table and its migration\n\n", self.rendered())
+
+    def test_counts_no_files_without_a_file_table(self):
+        os.remove(os.path.join(self.run_dir, "files.tsv"))
+        self.assertIn("(0 files)", self.range_line())
+
+    def test_counts_no_files_for_an_empty_file_table(self):
+        self.write("files.tsv", "")
+        self.assertIn("(0 files)", self.range_line())
+
+    def test_lists_nothing_under_whole_change_when_only_credit_ran(self):
+        self.write("slices.md", "")
+        self.plan([("credit", "all")])
+        self.assertEqual((f"{WHOLE_CHANGE}\n\n" in self.rendered(), "**Focuses**" in self.body()), (True, False))
+
+    def test_names_a_seam_slice_with_no_entry_by_its_name_as_a_label(self):
+        self.slices_with("webhook-schema -> delivery", "webhook-schema -> billing-queue")
+        self.assertIn("to billing queue (the delivery-attempts row)", self.rendered())
+
+    def test_puts_a_summary_with_a_newline_and_markdown_on_one_line(self):
+        self.slices_with("webhook intake retried through the queue", "first\n    # second | third <!-- x -->")
+        self.assertIn("**Delivery**: first # second | third &lt;!-- x -->\n", self.rendered())
+
+    def test_keeps_a_label_starting_with_a_heading_mark_inside_its_bold_head(self):
+        self.write("slices.md", "## Slices\n- name: a\n  label: # Big part\n  summary: s\n## Order\na\n")
+        self.assertIn("**# Big part**: s\n", self.rendered())
+
+
+class WhenTheLastReviewIsUnusableTest(WhenItReReviewsTest):
+    PLAIN = "Reviewed `{base}..{head}` (3 files), as one piece."
+
+    def plain(self):
+        return self.PLAIN.format(base=self.first[:7], head=self.head[:7])
+
+    def test_gives_the_plain_range_line_when_the_run_directory_is_gone(self):
+        shutil.rmtree(self.path("prev"))
+        self.assertEqual(self.range_line(), self.plain())
+
+    def test_gives_the_plain_range_line_when_the_base_is_not_an_ancestor_of_the_head(self):
+        self.git.git("checkout", "-q", "-b", "side", self.git.base)
+        side = self.git.commit("on the side")
+        self.write_target("pr 7", self.first, side)
+        self.assertEqual(self.range_line(), self.PLAIN.format(base=self.first[:7], head=side[:7]))
+
+
+class WhenTheBlockIsNeverClosedTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", f"Mine.\n\n{START}\n\nAlso mine.\n")
+        self.render()
+
+    def test_keeps_the_text_after_the_start_marker_above_the_new_block(self):
+        self.assertTrue(self.body().startswith("Mine.\n\nAlso mine.\n\nReviewed "))
+
+    def test_writes_one_block(self):
+        self.assertEqual(self.body().count(START), 1)
+
+
+class WhenTheBlockIsNeverClosedBelowAnEarlierFoldTest(RenderBodyCase):
+    def fold(self):
+        return f"{FOLD_OPEN}\n\n**Whole change**: x\n- security\n\n{FOLD_CLOSE}"
+
+    def render_over(self, below_fold):
+        self.write("posted/review.md", "\n\n".join(filter(None, ["Mine.", "Reviewed `ccccccc..ddddddd` (3 files), as one piece.",
+                                                                   START, self.fold(), below_fold])) + "\n")
+        return self.rendered()
+
+    def test_writes_one_fold(self):
+        self.assertEqual(self.render_over("").count(FOLD_OPEN), 1)
+
+    def test_keeps_the_text_above_it(self):
+        self.assertTrue(self.render_over("").startswith("Mine.\n\nReviewed `bbbbbbb..aaaaaaa`"))
+
+    def test_keeps_the_text_after_the_fold(self):
+        self.assertTrue(self.render_over("Also mine.").startswith("Mine.\n\nAlso mine.\n\nReviewed "))
+
+
+class WhenAPendingBodyHasItsMarkersOutOfOrderTest(PostCase):
+    def test_keeps_the_text_after_the_start_marker(self):
+        self.mark(1)
+        self.pend(body=f"Mine.\n\n{END}\n\nMore.\n\n{START}\n\nLast words.")
+        self.assertIn("Last words.", self.review_body())
+
+
+class WhenAPendingBodyHasAnUnclosedBlockTest(PostCase):
+    def test_keeps_the_text_after_the_start_marker(self):
+        self.mark(1)
+        self.pend(body=f"My summary.\n\n{START}\n\nAlso mine.")
+        self.assertEqual(self.review_body(), "My summary.\n\nAlso mine.")
+
+
+class WhenRenderingTheBodyTest(RenderBodyCase):
+    def test_asks_github_nothing(self):
+        self.render()
+        self.fetch_pr.assert_not_called()
+        self.assertNoUnstubbedGh()
+
+
+class WhenTheRunCannotBeRenderedTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", SENTENCE)
+
+    def test_stops_without_a_plan(self):
+        os.remove(os.path.join(self.run_dir, "plan.md"))
+        self.assertIn("nothing rendered; ", self.refusal("--render-body"))
+        self.assertEqual(self.body(), SENTENCE)
+
+    def test_names_the_missing_plan(self):
+        os.remove(os.path.join(self.run_dir, "plan.md"))
+        self.assertTrue(self.refusal("--render-body").endswith("has no plan.md"))
+
+    def test_stops_when_the_target_has_no_base_and_head(self):
+        self.write_target("pr 7")
+        self.assertEqual(self.refusal("--render-body"), "nothing rendered; target.txt has no BASE and HEAD lines")
+        self.assertEqual(self.body(), SENTENCE)
+
+    def test_stops_when_the_target_is_missing(self):
+        os.remove(os.path.join(self.run_dir, "target.txt"))
+        self.assertEqual(self.refusal("--render-body"), "nothing rendered; target.txt has no BASE and HEAD lines")
+
+
+class WhenTheRunHasFindingsTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.posted_row(1)
+        self.split([("tenancy", "quick")])
+        self.block = self.rendered()
+
+    def test_names_no_finding_slice_lens_or_run_detail(self):
+        for leaked in ("Finding 1", "correctness", "major", "webhook-schema", "sql", "opus", "raw/", "patch/", "confidence", "tokens"):
+            with self.subTest(leaked):
+                self.assertNotIn(leaked, self.block)
+
+    def test_holds_no_count_of_findings_or_comments(self):
+        self.assertIsNone(re.search(r"\b(\d+|one|two|three|no) (findings?|comments?)\b", self.block, re.I))
+
+    def test_holds_no_record_id(self):
+        self.assertIsNone(re.search(r"\b[A-Z]+-\d+\b", self.block))
+
+
+class WhenTheBodyHasEveryPartTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(5)
+        self.pend(body="My summary.")
+        self.write("posted/review.md", SENTENCE)
+        self.render()
+
+    def test_puts_the_pending_text_first_then_the_file_then_the_comments_that_fell_back(self):
+        sentence = " ".join(SENTENCE.split("\n"))
+        self.assertEqual(self.review_body(), "My summary.\n\n" + self.body().replace(SENTENCE, sentence).strip() + "\n\nFinding 5 text.")
+
+
+class RenderAgainTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/review.md", SENTENCE)
+        self.first = self.rendered()
+
+    def test_keeps_the_drafted_sentence_above_the_range_line(self):
+        self.assertTrue(self.first.startswith(SENTENCE + "\n\nReviewed "))
+
+    def test_changes_nothing_when_the_run_is_unchanged(self):
+        self.assertEqual(self.rendered(), self.first)
+
+    def test_keeps_text_the_user_wrote_above_the_block(self):
+        self.write("posted/review.md", self.first.replace(SENTENCE, "My own words."))
+        self.assertEqual(self.rendered(), self.first.replace(SENTENCE, "My own words."))
+
+    def test_replaces_the_block_with_the_runs_records_now(self):
+        self.plan([("tenancy", "all")])
+        self.assertEqual((self.rendered().count(START), "tenant isolation" in self.body()), (1, True))
+
+
+class WhenTheBodyHoldsTheRenderedBlockTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.split([("tenancy", "quick")])
+        self.write("posted/review.md", SENTENCE)
+        self.render()
+
+    def test_sends_the_file_with_paragraphs_joined_and_the_lists_and_details_lines_intact(self):
+        self.assertEqual(self.review_body(), self.body().replace(SENTENCE, " ".join(SENTENCE.split("\n"))).strip())
+
+    def test_draws_no_warning_in_the_preview(self):
+        self.assertNotIn("warning:", self.main().split("review body:")[1])
+
+
+class WhenAPartSummaryNamesInternalMaterialTest(RenderBodyCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1)
+        self.plan(SPLIT)
+
+    def summarized(self, summary):
+        self.slices_with("webhook intake retried through the queue", summary)
+        self.render()
+
+    def test_warns_in_the_preview(self):
+        self.summarized("intake as .clerk-dev/latest/plan.md says")
+        self.assertIn("warning: the text names a .clerk-dev path", self.main().split("review body:")[1])
+
+    def test_warns_in_the_submit_dry_run(self):
+        self.summarized("intake as .clerk-dev/latest/plan.md says")
+        self.pend()
+        self.posted_row(1)
+        self.payload("--submit", "comment")
+        self.assertIn("review body:\n  warning: the text names a .clerk-dev path", self.err)
+
+    def test_refuses_a_local_path_of_this_machine(self):
+        self.summarized(f"intake in {self.run_dir}")
+        self.assertIn("the review body: its text names a local path", self.refusal())
+
+    def test_refuses_a_secret(self):
+        self.summarized("intake with key AKIAABCDEFGH12345678")
+        self.assertIn("the review body: its text holds what looks like an AWS access key", self.refusal())
 
 
 class FetchPrCase(GhRunCase):

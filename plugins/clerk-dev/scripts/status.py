@@ -861,13 +861,13 @@ def review_section(wt, run, have_run, head, out):
     status = instr = numbers = {}
     reviewed = ""
     if have_run:
-        target = open(os.path.join(run, "target.txt")).read().splitlines()
-        reviewed = target[2].strip() if len(target) > 2 else ""
+        target = rf.read_target(run)
+        reviewed = target.head
         status, instr, numbers = sf.state(run)
         label = os.path.basename(run)
         when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(run, "report.md"))).strftime("%Y-%m-%d %H:%M") \
             if os.path.exists(os.path.join(run, "report.md")) else "not finished"
-        out.append(f"**Review:** `.clerk-dev/{label}` of {target[0] if target else '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
+        out.append(f"**Review:** `.clerk-dev/{label}` of {target.target or '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
     elif not unbuilt(wt):
         out.append("**Review:** none yet in this worktree.")
         steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")

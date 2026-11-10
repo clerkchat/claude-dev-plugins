@@ -30,3 +30,11 @@ table, or check that callers rely on is removed or changed.
 - **A type is a claim.** Readers check it against the diff: a `refactor` or
   `chore` that changes behavior is live, and a commit with no type (the
   user's own) is sorted from its diff.
+
+## Attribution trailer
+
+Every commit a skill writes ends with the trailer
+`Assisted-by: clerk-dev <version>`, the `version` in the plugin's
+`.claude-plugin/plugin.json` (`records.py`'s `plugin_version()` reads it). Put
+it before any attribution lines the session adds, such as `Co-Authored-By`. The
+user's own commits get none.

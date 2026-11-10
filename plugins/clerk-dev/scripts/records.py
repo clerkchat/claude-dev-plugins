@@ -50,7 +50,7 @@ Record frontmatter:
   supersedes: DEC-3
   ---
 """
-import argparse, datetime, importlib.util, os, re, subprocess, sys, tempfile, time
+import argparse, datetime, importlib.util, json, os, re, subprocess, sys, tempfile, time
 from typing import NamedTuple
 import ids
 
@@ -131,6 +131,13 @@ def last_fetch(common):
     if not os.path.exists(fh): return None
     mtime = os.path.getmtime(fh)
     return datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M"), age(time.time() - mtime)
+
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
+def plugin_version():
+    try:
+        with open(os.path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as fh: return json.load(fh)["version"]
+    except Exception: return None
 
 def write_atomic(path, text):
     path = os.path.abspath(path)
@@ -495,15 +502,20 @@ REVIEW_SKILL = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__f
 TRACKING = os.path.join(REVIEW_SKILL, "tracking.md")
 ROUTING = os.path.join(REVIEW_SKILL, "routing.md")
 
+class PlainName(NamedTuple):
+    phrase: str
+    description: str
+
 def read_plain_names(path):
-    names, inside = {}, False
-    if not path or not os.path.exists(path): return names
-    for line in open(path, encoding="utf-8"):
-        if line.startswith("## "): inside = line.strip() == "## Plain names"; continue
-        if not inside: continue
-        m = re.match(r"^\|\s*`([a-z-]+)`\s*\|\s*([^|]+)\|", line)
-        if m: names[m.group(1)] = m.group(2).strip()
-    return names
+    if not path or not os.path.exists(path): return {}
+    rows = table_rows(section(open(path, encoding="utf-8").read(), "Plain names"))
+    return {r["Lens"].strip("`"): PlainName(r.get("Say it as", ""), r.get("Described as", "")) for r in rows if r.get("Lens")}
+
+def phrase_of(names, lens):
+    return names[lens].phrase if lens in names else lens.replace("-", " ")
+
+def phrases(names, lenses):
+    return ", ".join(phrase_of(names, lens) for lens in lenses)
 
 def branch_scope_rule():
     return body_section(open(TRACKING, encoding="utf-8").read(), "Branch scope")

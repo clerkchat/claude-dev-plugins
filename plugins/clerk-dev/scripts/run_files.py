@@ -1,6 +1,6 @@
 import json, os, re, subprocess, sys
 from collections import namedtuple
-from records import load_script
+from records import load_script, section, table_rows
 
 mf = load_script("merge-findings.py")
 
@@ -254,9 +254,68 @@ def located(e, note):
 def same_commit(a, b):
     return bool(a and b) and (a.startswith(b) or b.startswith(a))
 
+Target = namedtuple("Target", "target base head")
+
+def read_target(run):
+    path = os.path.join(run, "target.txt")
+    lines = [line.strip() for line in open(path, encoding="utf-8").read().splitlines()] if os.path.exists(path) else []
+    return Target(*(lines + ["", "", ""])[:3])
+
 def reviewed_head(run):
-    target = read_text(os.path.join(run, "target.txt")).splitlines()
-    return target[2].strip() if len(target) >= 3 else ""
+    return read_target(run).head
+
+Slice = namedtuple("Slice", "label summary")
+Slices = namedtuple("Slices", "by_name order seams")
+Seam = namedtuple("Seam", "source target crosses")
+SLICE_NAME = re.compile(r"^- name:\s*(.+)$")
+SEAM = re.compile(r"^-\s*`?([^`\s]+?)`?\s*->\s*`?([^`\s:]+?)`?\s*:\s*(.+?)\s*$")
+SLICE_FIELD = re.compile(r"^(\w+):\s*(.*)$")
+
+def name_as_label(name):
+    return name.replace("-", " ").capitalize()
+
+def indent_of(line):
+    return len(line) - len(line.lstrip())
+
+def slice_fields(lines):
+    fields, cur, key, indent = {}, None, None, None
+    for line in lines:
+        m = SLICE_NAME.match(line)
+        if m: cur, key, indent = fields.setdefault(m.group(1).strip(), {}), None, None; continue
+        if line.startswith("#"): cur = None; continue
+        if cur is None or not line.strip(): continue
+        m = SLICE_FIELD.match(line.strip())
+        if m and (indent is None or indent_of(line) <= indent): key, indent = m.group(1), indent_of(line); cur[key] = m.group(2).strip()
+        elif key: cur[key] = f"{cur[key]} {line.strip()}".strip()
+    return fields
+
+def read_slices(run):
+    text = read_text(os.path.join(run, "slices.md"))
+    by_name = {name: Slice(f.get("label") or name_as_label(name), f.get("summary", "")) for name, f in slice_fields(text.splitlines()).items()}
+    order = [name for name in dict.fromkeys(re.split(r"[\s,`]+", section(text, "Order"))) if name in by_name]
+    return Slices(by_name, order, [Seam(*m.groups()) for m in map(SEAM.match, section(text, "Seams").splitlines()) if m])
+
+def label_of(slices, name):
+    return slices.by_name[name].label if name in slices.by_name else name_as_label(name)
+
+Instance = namedtuple("Instance", "lens scope raw")
+NotRun = namedtuple("NotRun", "lens cause")
+
+def plan_table(run, heading):
+    text = read_text(os.path.join(run, "plan.md"), None)
+    return None if text is None else table_rows(section(text, heading))
+
+def read_instances(run):
+    rows = plan_table(run, "Instances")
+    return None if rows is None else [Instance(r["lens"], r["scope"], r["raw file"]) for r in rows]
+
+def read_not_run(run):
+    return [NotRun(r.get("lens", "").strip("`"), r.get("cause", "")) for r in plan_table(run, "Not run") or []]
+
+def included_files(run):
+    lines = read_text(os.path.join(run, "files.tsv")).splitlines()
+    head = lines[0].split("\t") if lines else []
+    return [row["file"] for row in (dict(zip(head, line.split("\t"))) for line in lines[1:]) if not row.get("excluded", "").strip()]
 
 def drafted_for(e, note, commit):
     path, line, end = located(e, note) or ("", None, None)
@@ -273,8 +332,27 @@ def posted_path(run, mid):
 def review_text_path(run):
     return os.path.join(run, "posted", "review.md")
 
-def kept_body_path(run, review_id):
-    return os.path.join(run, "posted", f"pending-{review_id}.md")
+RUN_STATES = ("pending", "submitted")
+KEPT_STATES = (*RUN_STATES, "earlier")
+KEPT_BODY = re.compile(rf"^({'|'.join(KEPT_STATES)})-(\d+)\.md$")
+
+def kept_body_path(run, review_id, state="pending"):
+    return os.path.join(run, "posted", f"{state}-{review_id}.md")
+
+def kept_body_ids(run, states=KEPT_STATES):
+    folder = os.path.join(run, "posted")
+    return {m.group(2) for m in map(KEPT_BODY.match, os.listdir(folder) if os.path.isdir(folder) else []) if m and m.group(1) in states}
+
+def kept_body_text(run, review_id):
+    return next((t for t in (read_text(kept_body_path(run, review_id, s), None) for s in KEPT_STATES) if t is not None), "")
+
+def record_submitted(run, review_id):
+    pending, submitted = kept_body_path(run, review_id), kept_body_path(run, review_id, "submitted")
+    if os.path.exists(pending): os.replace(pending, submitted)
+    else: write_text(submitted, "\n")
+
+def own_reviews(run, rows):
+    return review_ids(rows) | kept_body_ids(run)
 
 def draft_path(run, mid):
     return os.path.join(run, "posted", f"draft-{mid}.md")
