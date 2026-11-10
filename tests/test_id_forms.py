@@ -5,7 +5,9 @@ import unittest
 
 from helpers import (
     TempCase,
+    feature_md_link,
     init_repo,
+    read_feature_md,
     run_ok,
     write_feature_md,
     write_file,
@@ -120,11 +122,14 @@ class CheckTests(OldRecordsCase):
 
         self.assertEqual(records.check_header("# Check\n"), (records.DESIGN_CHECK, []))
 
+    def check_link(self, name):
+        return feature_md_link(self.root, os.path.join(paths.checks_dir(self.root), name))
+
     def test_the_index_names_checks_in_the_new_form_and_links_their_files(self):
         self.records("index")
-        text = read_file(paths.feature_meta(self.root))
-        self.assertIn("| [BRIEF-2-1](checks/R2-1.md) | BRIEF-2, DEC-1 | 1 | 0 |", text)
-        self.assertIn("| [BRIEF-2-2](checks/BRIEF-2-2.md) | BRIEF-2 | 1 | 0 |", text)
+        text = read_feature_md(self.root)
+        self.assertIn(f"| [BRIEF-2-1]({self.check_link('R2-1.md')}) | BRIEF-2, DEC-1 | 1 | 0 |", text)
+        self.assertIn(f"| [BRIEF-2-2]({self.check_link('BRIEF-2-2.md')}) | BRIEF-2 | 1 | 0 |", text)
 
     def test_questions_in_either_form_are_named(self):
         out = self.records("names", "BRIEF-2-1.Q-1", "R2-1.Q1", "R2-2.Q-1", "brief-2-2", "BRIEF-2-3").splitlines()

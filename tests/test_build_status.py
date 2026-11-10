@@ -8,6 +8,7 @@ from helpers import (
     add_backlog_item,
     clone,
     init_repo,
+    read_feature_md,
     records,
     run_ok,
     run_script,
@@ -170,8 +171,7 @@ class BacklogIdeasCase(StatusCase):
 
     def feature_md(self, wt=None):
         run_ok("records", "index", wt or self.repo.path)
-        with open(paths.feature_meta(self.repo.path)) as f:
-            return f.read()
+        return read_feature_md(self.repo.path)
 
     def write_workspace(self, wt, *rows, hub=None):
         table = "| Repo | Worktree |\n| --- | --- |\n" + "".join(f"| {name} | {path} |\n" for name, path in rows)

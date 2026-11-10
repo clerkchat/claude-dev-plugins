@@ -129,6 +129,15 @@ def write_feature_md(root):
     write_file(paths.feature_meta(root), FEATURE_MD)
 
 
+def read_feature_md(root):
+    with open(paths.feature_md(root)) as f:
+        return f.read()
+
+
+def feature_md_link(root, path):
+    return os.path.relpath(path, os.path.dirname(paths.feature_md(root)))
+
+
 def read_log(root):
     with open(paths.build_log(root)) as f:
         return f.read()

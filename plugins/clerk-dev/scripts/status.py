@@ -401,8 +401,7 @@ def feature_block(wt, rows, out):
     except SystemExit as e:
         out.append(f"**Feature:** {e}"); return first, later
     if not rc.started(d): return first, later
-    fp = paths.feature_meta(paths.hub_of(d))
-    name = (open(fp, encoding="utf-8").readline().strip().split(":", 1) + [""])[1].strip() or "feature"
+    name = rc.feature_name(paths.hub_of(d)) or "feature"
     recs = rc.records(d)
     active = {}
     for r in recs:
