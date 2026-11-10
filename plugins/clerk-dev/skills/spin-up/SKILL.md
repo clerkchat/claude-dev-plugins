@@ -2,7 +2,14 @@
 name: spin-up
 description: Walk the repository's backlog, take up one item or file a new one, and spin up a worktree off main for it with git worktree add, seed it so the next session can start, and run the configured after-create command there. Use when the user says "start on a backlog item", "spin up a worktree for BL-4", "take up BL-7", "what's in the backlog", "start new work off main", "spin up", or /clerk-dev:spin-up.
 argument-hint: "[BL-4 | <repo>:BL-4 | <new work in a sentence>]"
-allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git rev-parse *)
+  - Bash(git status *)
+  - Bash(git worktree add *)
+  - Read
+  - Write
+  - Edit
 ---
 
 # Spinning up new work

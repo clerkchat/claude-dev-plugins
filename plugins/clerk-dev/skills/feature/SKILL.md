@@ -2,7 +2,17 @@
 name: feature
 description: Keep a feature's records while designing it - brainstorms, designs, decisions, pieces, plans, and briefs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the brief for", "write the spec for", "what did we decide about X", or "show the feature records".
 argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | brief <piece> | list]"
-allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
 ---
 
 # Feature records

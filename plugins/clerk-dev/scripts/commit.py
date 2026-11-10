@@ -24,7 +24,7 @@ def subject_error(subject, types):
     return f"subject does not match <type>(<area>)!?: <text> with type one of {', '.join(types)}\n  offending subject: {subject}"
 
 def with_trailer(message, version):
-    line = "Assisted-by: clerk-dev" + (f" {version}" if version else "")
+    line = "Assisted-by: Matthias' clerk-dev" + (f" {version}" if version else "")
     paras = message.strip().split("\n\n")
     last = [l for l in paras[-1].split("\n") if not l.startswith("Assisted-by:")]
     if len(paras) > 1 and all(TRAILER_LINE.match(l) for l in last): paras[-1:] = ["\n".join([line, *last])]

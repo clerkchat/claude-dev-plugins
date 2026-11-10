@@ -1,7 +1,20 @@
 ---
 name: building
 description: The one intake for every item that becomes code: a coding request, a brief's requirements, a pass item, a review finding, or a follow-up. Sizes each against this repository's code in the session that owns the branch, hands the work to clerk-dev:builder at a model and effort, reviews the result, commits, keeps the build log, and works milestones. Use when the user says "build the plan", "build the next step", "build BRIEF-9", "build finding 4", "start building", "send the next handoff", or similar; and, in a worktree with a .clerk-dev/ directory, before any edit for a request to change code however it is phrased: "do a to d", "make that change", "fix it", "go ahead", "implement that", or a yes to changes the session itself proposed. The builder agent does not load this skill; it preloads writing-code.
-allowed-tools: Bash(git *), Bash(python3 *), Read, Grep, Glob, Agent, Write
+allowed-tools:
+  - Bash(git add *)
+  - Bash(git diff *)
+  - Bash(git grep *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(python3 *)
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Write
 ---
 
 # Building
@@ -427,7 +440,7 @@ status lives only here; the brief is not edited for it.
    or for a follow-up what changed on the other side (the contract, in plain
    words), and what the change does, with the `rollout:` text when it is not
    "none". The script refuses a subject that is not in that form and
-   adds the trailer `Assisted-by: clerk-dev <version>` before the session's own
+   adds the trailer `Assisted-by: Matthias' clerk-dev <version>` before the session's own
    attribution lines, so write only those, as `skills/review/commits.md` says. No push, no amend. Several items get one commit each, in the
    queue's order. When the route builds a record, mark the handoff done in
    the build log (or log the record it builds with `built`, as "The build
