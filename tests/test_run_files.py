@@ -398,6 +398,32 @@ class KeptOpenTest(RunCase):
         self.assertEqual(run_files.read_kept_open(self.run_dir), {})
 
 
+class GroupRowsTest(RunCase):
+    ROWS = {7: {"lead": "4", "date": "2026-11-10"}, 9: {"lead": "4", "date": "2026-11-10"}, 12: {"lead": "2", "date": "2026-11-09"}}
+
+    def setUp(self):
+        super().setUp()
+        run_files.write_groups(self.run_dir, self.ROWS)
+        self.groups = run_files.read_groups(self.run_dir)
+
+    def test_reads_back_the_lead_and_the_date(self):
+        self.assertEqual(self.groups, self.ROWS)
+
+    def test_finds_the_lead_of_a_member(self):
+        self.assertEqual(run_files.lead_of(self.groups, 9), 4)
+
+    def test_finds_no_lead_for_a_finding_in_no_group(self):
+        self.assertIsNone(run_files.lead_of(self.groups, 4))
+
+    def test_lists_the_members_of_each_lead_in_order(self):
+        self.assertEqual(run_files.members_of(self.groups), {2: [12], 4: [7, 9]})
+
+
+class WithoutAGroupsFileTest(RunCase):
+    def test_reads_no_groups(self):
+        self.assertEqual(run_files.read_groups(self.run_dir), {})
+
+
 class FencedLinesTest(unittest.TestCase):
     def kinds(self, *lines):
         return [kind for _, kind in run_files.fenced_lines(lines)]

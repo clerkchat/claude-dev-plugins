@@ -241,9 +241,12 @@ def named(it):
 def numbered(mid, nums):
     return finding_word(number_of(mid, nums))
 
+def refuse_problems(outcome, problems):
+    blocked = [f"{name}: {problem}" for name, problem in problems if problem]
+    if blocked: sys.exit(f"{outcome}; " + "; ".join(blocked))
+
 def refuse_blocked(items):
-    blocked = [f"{named(it)}: {it['problem']}" for it in items if it["problem"]]
-    if blocked: sys.exit("nothing sent; " + "; ".join(blocked))
+    refuse_problems("nothing sent", ((named(it), it["problem"]) for it in items))
 
 def print_warnings(label, warnings):
     if warnings: print("\n".join([label, *warning_lines(warnings)]), file=sys.stderr)
@@ -252,6 +255,7 @@ def drafted_elsewhere(it, e, reviewed):
     return it["action"] == "new" and e is not None and rf.code_moved(it["row"], rf.drafted_for(e, it["note"], reviewed))
 
 SENDS = ("new", "update")
+RECORDS = (*SENDS, "adopt")
 
 def pending_id(ctx):
     return str(ctx["pending"]["id"]) if ctx["pending"] else ""
@@ -317,6 +321,7 @@ class Planning(NamedTuple):
     sections: dict
     titles: dict
     taken: set
+    groups: dict
 
 def place_item(p, mid, e, row, note, gone):
     if row.get("kind") and not gone:
@@ -328,7 +333,13 @@ def place_item(p, mid, e, row, note, gone):
     where, fallback, problem = resolve(e, note, p.ctx["files"], p.hunks, lines_now_for(p.run, mid, note, p.repo, p.reviewed))
     return where, fallback, problem, "new"
 
+def covered_item(p, mid, lead):
+    return {**item_head(mid, p.nums, p.found, p.titles), "action": "covered", "lead": number_of(lead, p.nums),
+            "problem": None, "warnings": [], "published": False, "existing": None}
+
 def plan_item(p, mid):
+    lead = rf.lead_of(p.groups, mid)
+    if lead is not None: return covered_item(p, mid, lead)
     ctx = p.ctx
     e, row, note = p.found.get(mid), p.rows.get(mid, {}), p.ins[mid].get("note", "")
     it = {**item_head(mid, p.nums, p.found, p.titles), "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
@@ -353,7 +364,7 @@ def plan_items(run, ctx, hunks, reviewed, repo):
     ins, rows, nums = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run)
     p = Planning(run=run, ctx=ctx, hunks=hunks, reviewed=reviewed, repo=repo, ins=ins, rows=rows, nums=nums,
                  found=findings(run), sections=rf.read_sections(run), titles=rf.report_titles(run),
-                 taken=recorded_comments(rows))
+                 taken=recorded_comments(rows), groups=rf.read_groups(run))
     posting = in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums)
     return [plan_item(p, mid) for mid in posting]
 
@@ -362,7 +373,8 @@ def review_head(run):
     return unwrap(head) if head else ""
 
 def our_texts(run):
-    posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post"]
+    groups = rf.read_groups(run)
+    posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post" and mid not in groups]
     return [DEFAULT_BODY, outside_block(review_head(run))[0], *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
 
 def before_ours(body, ours):
@@ -764,6 +776,7 @@ def update_line(it):
 
 def item_lines(it):
     out = [f"{named(it)}: {it['title']}"]
+    if it["action"] == "covered": return out + [f"  covered by {finding_word(it['lead'])}"]
     a = it["anchor"]
     if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{rf.line_span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
     if it["gone"]: out.append(f"  {it['gone']}")
@@ -795,7 +808,7 @@ def preview(run, ctx, items, reviewed):
     staged, held = [it for it in items if not it["published"]], published_items(items)
     out = [f"pull request: {ctx['owner']}/{ctx['name']}#{ctx['pr']}", *(line for it in staged for line in item_lines(it))]
     review_id = current_review(ctx)
-    sending = [it for it in staged if it["action"] != "skip" and not it["problem"]]
+    sending = [it for it in staged if it["action"] in RECORDS and not it["problem"]]
     rows = planned_rows(rf.read_posted(run), sending, review_id, "")
     out += body_lines("review body", review_body(run, rows, review_id, ctx["kept"]), ctx)
     if ctx["kept"]: out.append(f"  keeps the text already in pending review {ctx['pending']['id']} on GitHub, with this run's text below it")
@@ -820,7 +833,7 @@ def posted_summary(items, sending, adopted, held, results, sent_body):
     parts = ([f"posted {new} comments and updated {len(sending) - new} on review {review}"] if sending else
              [f"sent the review body to review {review}"] if sent_body else [])
     parts += [f"recorded {len(adopted)} already on GitHub"] if adopted else []
-    return "; ".join(parts + [f"skipped {len(items) - len(sending) - len(adopted) - len(held)} already posted"])
+    return "; ".join(parts + [f"skipped {sum(it['action'] == 'skip' for it in items)} already posted"])
 
 def held_line(held):
     return (f"not sent: {', '.join(map(named, held))} changed since posting, and GitHub already shows the comment; "
@@ -1116,6 +1129,62 @@ def keep_open(run, spec):
     record_kept(run, mid, m.group(2) or "")
     print(f"{numbered(mid, nums)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
 
+GROUP_SPEC = re.compile(r"^(#?\d+):(.+)$", re.S)
+
+class Grouping(NamedTuple):
+    nums: dict
+    ins: dict
+    rows: dict
+    groups: dict
+    leads: dict
+    credits: set
+
+def grouping(run):
+    groups = rf.read_groups(run)
+    return Grouping(nums=rf.read_numbers(run), ins=rf.read_instructions(run), rows=rf.read_posted(run), groups=groups,
+                    leads=rf.members_of(groups), credits=rf.credit_ids(rf.read_findings(run)))
+
+def group_problem(g, lead, mid):
+    covering = rf.lead_of(g.groups, mid)
+    if g.ins.get(mid, {}).get("choice") != "post": return "it is not marked Post"
+    if mid in g.credits: return "it is a credit"
+    if rf.has_comment(g.rows.get(mid, {})): return "it already has a comment on GitHub"
+    if covering is not None and (mid == lead or covering != lead): return f"it is covered by {numbered(covering, g.nums)}"
+    if mid != lead and mid in g.leads: return "it leads a group of its own"
+    return None
+
+def member_problem(g, lead, mid):
+    return "it is the lead itself" if mid == lead else group_problem(g, lead, mid)
+
+def redraft_lead(run, g, lead):
+    state = g.rows.get(lead, {}).get("state")
+    if state == "edited":
+        print(f"{numbered(lead, g.nums)}: its text is marked edited and stays, though the group changed under it", file=sys.stderr)
+    if state != "drafted": return
+    rf.write_posted(run, {mid: row for mid, row in g.rows.items() if mid != lead})
+    if os.path.exists(rf.posted_path(run, lead)): os.remove(rf.posted_path(run, lead))
+    print(f"{numbered(lead, g.nums)}: its drafted text is dropped; draft it again with the findings it covers", file=sys.stderr)
+
+def group(run, spec):
+    m = GROUP_SPEC.match(spec.strip())
+    if not m: sys.exit(f"bad --group {spec!r}; use LEAD:M[,N]")
+    g = grouping(run)
+    lead, members = rf.finding_id(m.group(1), g.nums), in_number_order(picked_ids(m.group(2), g.nums, "--group"), g.nums)
+    refuse_problems("nothing recorded", [(numbered(lead, g.nums), group_problem(g, lead, lead)),
+                                         *((numbered(mid, g.nums), member_problem(g, lead, mid)) for mid in members)])
+    rf.write_groups(run, {**g.groups, **{mid: {"lead": str(lead), "date": today()} for mid in members}})
+    for mid in members: print(f"{numbered(mid, g.nums)}: covered by {numbered(lead, g.nums)}", file=sys.stderr)
+    redraft_lead(run, g, lead)
+
+def ungroup(run, spec):
+    nums, groups = rf.read_numbers(run), rf.read_groups(run)
+    picked, leads = picked_ids(spec, nums, "--ungroup"), rf.members_of(groups)
+    loose = [numbered(mid, nums) for mid in sorted(picked) if mid not in groups and mid not in leads]
+    if loose: sys.exit("nothing removed; not in a group: " + ", ".join(loose))
+    freed = {member: rf.lead_of(groups, member) for mid in picked for member in leads.get(mid, [mid])}
+    rf.write_groups(run, {mid: row for mid, row in groups.items() if mid not in freed})
+    for mid in in_number_order(freed, nums): print(f"{numbered(mid, nums)}: no longer covered by {numbered(freed[mid], nums)}", file=sys.stderr)
+
 DRAFT_HEAD = re.compile(r"^## (#?\d+): (.+?)\s*$")
 DRAFT_FORM = re.compile(r"^(?:comment|question|suggestion)(?:, one general comment|, one per place)?$")
 NOT_DRAFTED = re.compile(r"^not drafted: (.+)$")
@@ -1151,11 +1220,13 @@ def answer_parts(text):
     return parts
 
 def checked_drafts(run, parts):
-    nums, ins, seen = rf.read_numbers(run), rf.read_instructions(run), set()
+    nums, ins, groups, seen = rf.read_numbers(run), rf.read_instructions(run), rf.read_groups(run), set()
     out = []
     for number, form, text in parts:
         mid = rf.finding_id(number, nums)
+        lead = rf.lead_of(groups, mid)
         if ins.get(mid, {}).get("choice") != "post": sys.exit(f"nothing saved; finding {number} is not marked Post")
+        if lead is not None: sys.exit(f"nothing saved; finding {number} is covered by {numbered(lead, nums)}; draft it under {number_of(lead, nums)}")
         if mid in seen: sys.exit(f"nothing saved; finding {number} is answered twice")
         seen.add(mid)
         out.append((number, mid, form, text))
@@ -1187,6 +1258,9 @@ def main(argv=None):
                         help="send the changed text of these findings' comments that GitHub already shows (in a submitted review) "
                              "once you type the pull request number at a terminal; --post never changes them")
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
+    action.add_argument("--group", metavar="LEAD:M[,N]",
+                        help="record that findings M and N are covered by the comment of finding LEAD, which is drafted and posted for them all")
+    action.add_argument("--ungroup", metavar="N[,M]", help="take these findings out of their groups; naming a lead dissolves its group")
     action.add_argument("--render-body", action="store_true",
                         help="write how the change was reviewed into posted/review.md below the text already there, replacing what an earlier run wrote")
     action.add_argument("--save-drafts", metavar="FILE",
@@ -1198,6 +1272,8 @@ def main(argv=None):
     if a.dry_run and not (a.post or a.submit or a.close or a.update_published):
         ap.error("--dry-run goes with --post, --submit, --close N, or --update-published N")
     if a.keep_open is not None: return keep_open(a.run, a.keep_open)
+    if a.group: return group(a.run, a.group)
+    if a.ungroup: return ungroup(a.run, a.ungroup)
     if a.save_drafts: return save_drafts(a.run, a.save_drafts)
     if a.render_body: return render_body(a.run, a.repo)
     reviewed = reviewed_commit(a.run, a.repo)

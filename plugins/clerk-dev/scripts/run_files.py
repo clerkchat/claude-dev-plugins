@@ -409,18 +409,43 @@ def read_kept_open(run):
 def write_kept_open(run, rows):
     write_keyed(kept_open_path(run), KEPT_OPEN_FIELDS, rows)
 
+GROUP_FIELDS = ("lead", "date")
+
+def groups_path(run):
+    return os.path.join(run, "posted", "groups.tsv")
+
+def read_groups(run):
+    """groups.tsv: merged id of a covered member, the merged id of the lead whose comment covers it, date."""
+    return read_keyed(groups_path(run), GROUP_FIELDS)
+
+def write_groups(run, rows):
+    write_keyed(groups_path(run), GROUP_FIELDS, rows)
+
+def lead_of(groups, mid):
+    return merged_key(groups[mid]["lead"]) if mid in groups else None
+
+def members_of(groups):
+    leads = {}
+    for mid in sorted(groups):
+        lead = lead_of(groups, mid)
+        if lead is not None: leads.setdefault(lead, []).append(mid)
+    return leads
+
 Closable = namedtuple("Closable", "posted status thread")
 
 def is_open_and_ours(thread):
     return thread.get("state") == "open" and thread.get("by_viewer") == "1"
 
+def all_fixed(status, mids):
+    return all(status_of(status, mid) == "fixed" for mid in mids)
+
 def closable(run):
-    posted, status, kept = read_posted(run), read_status(run), read_kept_open(run)
+    posted, status, kept, members = read_posted(run), read_status(run), read_kept_open(run), members_of(read_groups(run))
     threads = posted_threads(run, posted)
     credits = credit_ids(read_findings(run))
     return {mid: Closable(row, status[mid], threads[mid]) for mid, row in sorted(posted.items())
             if has_thread(row) and mid not in credits and mid not in kept
-            and status_of(status, mid) == "fixed" and is_open_and_ours(threads.get(mid, {}))}
+            and all_fixed(status, [mid, *members.get(mid, [])]) and is_open_and_ours(threads.get(mid, {}))}
 
 NUMBER_FIELDS = ("merged_id", "section")
 
