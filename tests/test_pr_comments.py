@@ -454,6 +454,15 @@ class ApprovalsTest(FoldInCase):
         self.fold(reviews=[review(9, "APPROVED", "", "bob"), review(2, "APPROVED", "", "carol")])
         self.assertEqual(list(self.approvals().values()), ["bob", "carol"])
 
+    def test_leaves_out_a_reviewer_who_later_requested_changes(self):
+        self.fold(reviews=[review(2, "APPROVED", "", "bob"), review(3, "CHANGES_REQUESTED", "Not yet.", "bob")])
+        self.assertEqual(self.approvals(), {})
+
+    def test_keeps_a_reviewer_who_approved_after_requesting_changes(self):
+        self.fold(reviews=[review(2, "CHANGES_REQUESTED", "Not yet.", "bob"), review(3, "COMMENTED", "Hm.", "bob"),
+                           review(4, "APPROVED", "", "bob")])
+        self.assertEqual(self.approvals(), {4: "bob"})
+
     def test_leaves_out_a_review_that_is_not_an_approval(self):
         self.fold(reviews=[review(2, "COMMENTED", "", "bob"), review(3, "PENDING", "", "carol")])
         self.assertEqual(self.approvals(), {})

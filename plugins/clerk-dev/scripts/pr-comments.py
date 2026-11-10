@@ -242,8 +242,13 @@ def import_items(run, items):
     write_seen(run, seen)
     return new_ids, updated, skipped
 
+VERDICTS = ("APPROVED", "CHANGES_REQUESTED", "DISMISSED")
+
+def latest_verdicts(p):
+    return {login(r): r for r in submitted_reviews(p) if r["state"] in VERDICTS}
+
 def approvals_of(p, own_review_ids, today):
-    return {r["databaseId"]: {"author": login(r), "date": today} for r in submitted_reviews(p)
+    return {r["databaseId"]: {"author": login(r), "date": today} for r in latest_verdicts(p).values()
             if r["state"] == "APPROVED" and str(r["databaseId"]) not in own_review_ids}
 
 def fold_in(run, p, today):
