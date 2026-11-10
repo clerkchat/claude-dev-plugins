@@ -126,10 +126,7 @@ def write_record(root, record_id, record_type, title, status="active", extra="",
 
 
 def write_feature_md(root):
-    feature = paths.feature_dir(root)
-    os.makedirs(feature, exist_ok=True)
-    with open(os.path.join(feature, "feature.md"), "w") as f:
-        f.write(FEATURE_MD)
+    write_file(paths.feature_meta(root), FEATURE_MD)
 
 
 def read_log(root):

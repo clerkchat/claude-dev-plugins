@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-USAGE = """Manage a worktree's deferred list, <worktree>/.clerk-dev/deferred.md.
+USAGE = """Manage a worktree's deferred list (paths.py deferred).
 
 A deferred item is a known gap with a path chosen for now: marking a finding,
 question, follow-up, or pass item Defer adds one, and the source's outcome names

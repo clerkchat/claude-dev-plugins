@@ -2,8 +2,10 @@ import datetime
 import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, drop_backlog_title, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
+from helpers import RunCase, add_backlog_item, drop_backlog_title, init_repo, records, run_ok, run_script, write_feature_md, write_file, write_record
 import paths
+
+link = records.load_script("link-latest.py")
 
 CHECK = """# Design check: R5 Spec five
 
@@ -498,6 +500,57 @@ class CreditsInStatusTests(PostQueueCase):
     def test_a_posted_credit_is_not_queued(self):
         self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4, 5)])
         self.assertNotIn("marked to post", self.full_status())
+
+
+
+class RunNamingCase(BlockersCase):
+    LABEL = "20261110-0900-branch"
+
+    def setUp(self):
+        super().setUp()
+        self.run_dir = paths.run(self.repo.path, self.LABEL)
+        self.write_run({1: "look"})
+        self.write("report.md", "# Review\n")
+        link.link_latest(self.repo.path, self.run_dir)
+
+    def link_reported_run(self, label):
+        run = paths.run(self.repo.path, label)
+        write_file(os.path.join(run, "report.md"), "# Review\n")
+        link.link_latest(self.repo.path, run)
+
+    def full_status(self, *args):
+        code, out = self.repo.status(*args)
+        self.assertEqual(code, 0, out)
+        return out
+
+
+class CurrentRunNamingTests(RunNamingCase):
+    def test_the_review_line_names_review_md(self):
+        self.assertIn("**Review:** `.clerk-dev/review.md` of branch", self.full_status())
+
+    def test_the_marking_step_names_review_md(self):
+        self.assertIn("Mark the unmarked finding (1) in `.clerk-dev/review.md`.", self.full_status())
+
+    def test_preflight_names_review_md(self):
+        self.assertIn("- Latest run: `.clerk-dev/review.md` of branch", run_ok("preflight", self.repo.path))
+
+
+class WhenALaterRunIsCurrentTests(RunNamingCase):
+    def setUp(self):
+        super().setUp()
+        self.link_reported_run("20261110-1000-branch")
+
+    def test_a_run_given_by_label_is_named_by_its_report(self):
+        self.assertIn(f"**Review:** `.clerk-dev/.ledger/runs/{self.LABEL}/report.md` of branch", self.full_status("--run", self.LABEL))
+
+
+class WhenAFeatureRunIsLinkedTests(RunNamingCase):
+    def setUp(self):
+        super().setUp()
+        self.link_reported_run(self.LABEL + "-feature")
+
+    def test_the_feature_review_names_review_feature_md(self):
+        self.assertIn("**Feature review:** `.clerk-dev/review-feature.md` (the cross-repository check).", self.full_status())
 
 
 if __name__ == "__main__":

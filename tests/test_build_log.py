@@ -425,7 +425,7 @@ class EdgeTests(FeatureRepoCase):
     def test_outside_a_git_repository_the_read_stops_with_git_reason(self):
         self.add_legacy_entries()
         bare = self.path("norepo")
-        os.makedirs(paths.clerk_dev(bare))
+        os.makedirs(paths.ledger(bare))
         shutil.copy(
             paths.build_log(self.repo.path),
             paths.build_log(bare),

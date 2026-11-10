@@ -56,6 +56,30 @@ class WhenTheWorkspaceNamesAMissingHubTests(FollowUpCommitCase):
         self.assertEqual(self.labels(), {self.full(self.fix): "BL-1"})
 
 
+class NarrowCoveredCase(FollowUpCommitCase):
+    def write_narrow(self, directory, head):
+        write_file(os.path.join(directory, "narrow.txt"), f"{head}\n{self.reviewed}\n{head}\n")
+
+    def covered(self):
+        return sf.narrow_covered(self.repo.path)
+
+
+class NarrowCoveredTests(NarrowCoveredCase):
+    def test_a_narrow_run_covers_the_commits_it_read(self):
+        self.write_narrow(paths.run(self.repo.path, "20261110-0900-narrow"), self.fix)
+        self.assertEqual(self.covered(), {self.full(self.fix)})
+
+
+class WhenTheUserKeepsNotesAndLogsTests(NarrowCoveredCase):
+    def setUp(self):
+        super().setUp()
+        for name in ("notes", "logs"):
+            self.write_narrow(os.path.join(paths.clerk_dev(self.repo.path), name), self.later)
+
+    def test_their_directories_are_not_read_as_runs(self):
+        self.assertEqual(self.covered(), set())
+
+
 class DeltaTests(FollowUpCommitCase):
     def setUp(self):
         super().setUp()

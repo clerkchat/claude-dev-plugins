@@ -37,7 +37,7 @@ class BacklogCase(TempCase):
         write_file(paths.workspace(hub_wt), text)
         for _, wt in rows:
             if wt != hub_wt:
-                os.makedirs(paths.clerk_dev(wt), exist_ok=True)
+                os.makedirs(paths.ledger(wt), exist_ok=True)
                 os.symlink(paths.workspace(hub_wt), paths.workspace(wt))
 
     def attempt(self, *args):
@@ -510,7 +510,7 @@ class RegistryTests(TwoRepositoryCase):
         os.makedirs(self.path("plain"))
         self.registry(("worker", self.path("plain"), "main"))
         out = self.refused("add", self.feat, "x", "--kind", "followup", "--origin", "a b", "--repo", "worker")
-        self.assertEqual(out, f"repository worker is not in .clerk-dev/workspace.md or {self.path('local.md')}, and {self.path('plain')} is not a git checkout")
+        self.assertEqual(out, f"repository worker is not in the workspace manifest ({paths.workspace(self.feat)}) or {self.path('local.md')}, and {self.path('plain')} is not a git checkout")
 
 
 class HubWithRegistryTests(TwoRepositoryCase):

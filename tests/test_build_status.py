@@ -170,7 +170,7 @@ class BacklogIdeasCase(StatusCase):
 
     def feature_md(self, wt=None):
         run_ok("records", "index", wt or self.repo.path)
-        with open(paths.feature_md(self.repo.path)) as f:
+        with open(paths.feature_meta(self.repo.path)) as f:
             return f.read()
 
     def write_workspace(self, wt, *rows, hub=None):
@@ -406,7 +406,7 @@ class WorkspaceTests(StatusCase):
         self.other.commit("feat: decision three elsewhere")
         self.other_commit = self.other.head()
         self.write_workspace(self.other.path)
-        os.makedirs(paths.clerk_dev(self.other.path), exist_ok=True)
+        os.makedirs(paths.ledger(self.other.path), exist_ok=True)
         with open(paths.workspace(self.other.path), "w") as f:
             f.write("Hub: hub\n\n" + self.workspace_table(self.other.path))
         self.other.build_ok("built", "R3", "--commit", self.other_commit)

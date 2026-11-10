@@ -18,24 +18,24 @@ in progress, the design questions and open items of the briefs being built, and
 next steps about building. --focus review leaves out the feature and the build.
 
 Prints a short Markdown summary:
-  - the review run (label, target, reviewed commit, date), and the feature
-    run's report when .clerk-dev/latest-feature points at one;
+  - the review run (its report, target, reviewed commit, date), and the feature
+    run's report when one is linked;
   - commits since the review that no review has read: not a follow-up's
     commit, not the fix of a finding (status.tsv, commits.tsv, or a
     resolution note names it), not covered by a narrow review, not
     formatting only, not a merge; plus staged and unstaged changes;
   - this worktree's open follow-ups, marking the ones added since the last
-    status (remembered in .clerk-dev/status-seen-backlog);
-  - open follow-ups in the other worktrees of .clerk-dev/workspace.md;
+    status (remembered in the ledger's status-seen-backlog);
+  - open follow-ups in the other worktrees of the workspace manifest;
   - findings: unmarked ones by report section, the unmarked ones added
     since the first report (tagged [new] in the report), the fix queue, discussions,
     the post queue (marked Post, not yet posted or changed since posting),
     in-progress fixes, and open findings whose code moved since the review;
-  - implementation progress from the build log (.clerk-dev/build.md): per
+  - implementation progress from the build log (build.py): per
     brief, requirements done, partial, in progress, and not started; handoffs
     stopped on a question or not landed; handoffs built since the last review;
     and the other worktrees' progress;
-  - this worktree's passes (.clerk-dev/passes.md): open, ended but unchecked,
+  - this worktree's passes (passes.py): open, ended but unchecked,
     and checked ones whose check run still has open findings;
   - the feature, when the hub (records.py hub) holds one: records by type,
     open design questions (settle-first ones named), open items in active
@@ -44,7 +44,7 @@ Prints a short Markdown summary:
     and fixes have landed, the last step is the final pass.
 
   - the setup gaps first, under Setup, when there are any (see --setup);
-  - open deferred items (.clerk-dev/deferred.md) after the follow-ups: the
+  - open deferred items (deferred.py) after the follow-ups: the
     count, and each item's id, text, and Revisit;
   - the Note of each open pass and open handoff, the next-step note a
     checkpoint left, under Next-step notes.
@@ -63,9 +63,9 @@ gone or whose plan was superseded or discarded. It changes nothing.
 --focus blockers prints the short list of what blocks the work: handoffs stopped
 on a question, settle-first design questions, open follow-ups here, and open
 findings in the review's "Fix before merging" section, whatever their mark,
-then the next steps for each. It leaves .clerk-dev/status-seen-backlog untouched.
+then the next steps for each. It does not record which follow-ups it showed.
 
---no-mark leaves .clerk-dev/status-seen-backlog untouched.
+--no-mark does not record which follow-ups it showed.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
@@ -139,7 +139,7 @@ def milestone_drift(wt, d, entries):
             ref = m["f"].get("Plan")
             if not ref or m["f"].get("Status") == "abandoned" or bd.milestone_view(wt, m)[2]: continue
             r, text = rc.plan_step(d, ref)
-            who, fix = f"{m['id']} points at plan step {ref}", "; point its Plan line in .clerk-dev/build.md at the current plan's step, or abandon it (build.py abandon)"
+            who, fix = f"{m['id']} points at plan step {ref}", "; point its Plan line in the build log at the current plan's step, or abandon it (build.py abandon)"
             if not r: out.append(f"{who}, but no plan has that id{fix}")
             elif r.get("status") != "active": out.append(f"{who}, but {r['id']} is {r.get('status')}" + (f" by {r['superseded_by']}" if r.get("superseded_by") else "") + fix)
             elif text is None: out.append(f"{who}, but {r['id']} has no such step{fix}")
@@ -152,18 +152,19 @@ def setup_gaps(wt, rows, built):
     rc = load_script("records.py"); gaps = []
     purpose, _ = rc.branch_notes(wt)
     if not purpose: gaps.append("Purpose: " + ("the branch notes have no Purpose" if purpose is not None else "no .clerk-dev/branch-notes.md") + "; draft it as tracking.md's Branch notes describes and show it to the user")
+    manifest = f"the workspace manifest ({os.path.relpath(paths.workspace(wt), wt)})"
     missing = [(n, p) for n, p in rows.items() if not os.path.isdir(p)]
-    gaps += [f"workspace row {n}: {p} does not exist; fix the row in .clerk-dev/workspace.md or create the worktree" for n, p in missing]
+    gaps += [f"workspace row {n}: {p} does not exist; fix the row in {manifest} or create the worktree" for n, p in missing]
     declared, _ = rc.workspace(wt)
     if declared and os.path.realpath(os.path.expanduser(declared)) not in rows.values() and not os.path.isdir(os.path.expanduser(declared)):
-        gaps.append(f"hub {declared} (the Hub line of .clerk-dev/workspace.md) does not exist; fix the line")
+        gaps.append(f"hub {declared} (the Hub line of {manifest}) does not exist; fix the line")
     try: d = rc.fdir(wt)
     except SystemExit: d = None
     featured = bool(d) and rc.started(d)
     if d and not featured:
         elsewhere = hub_feature_elsewhere(wt, rows)
         passes, _ = read_passes(wt)
-        if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to .clerk-dev/workspace.md (skills/review/workspace-manifest.md)")
+        if elsewhere: gaps.append(f"feature records are in {elsewhere} but this worktree has no hub; add a `Hub:` line to {manifest} (skills/review/workspace-manifest.md)")
         elif built or passes: gaps.append("this worktree has a " + ("build log" if built else "pass log") + " but no feature; start one: records.py start <worktree> \"<name>\" (the feature skill)")
     named = other_repos(wt, rows, d)
     if named:
@@ -803,7 +804,7 @@ def blockers_view(wt, out, logs, run, have_run):
         steps.append(followups_step(open_items))
     if fix:
         out += ["", f"**Findings to fix before merging:** {len(fix)} ({number_list(fix)})"]
-        steps.append(f"Mark the finding{plural(fix)} in {SECTION_NAMES['fix']} in `.clerk-dev/{os.path.basename(run)}/report.md`, then fix {'it' if len(fix) == 1 else 'them'}: \"work the queue\".")
+        steps.append(f"Mark the finding{plural(fix)} in {SECTION_NAMES['fix']} in `{paths.run_name(wt, run)}`, then fix {'it' if len(fix) == 1 else 'them'}: \"work the queue\".")
     if not steps and not hidden: out += ["", "Nothing blocking."]
     return steps
 
@@ -863,16 +864,15 @@ def review_section(wt, run, have_run, head, out):
         target = rf.read_target(run)
         reviewed = target.head
         status, instr, numbers = sf.state(run)
-        label = os.path.basename(run)
         when = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(run, "report.md"))).strftime("%Y-%m-%d %H:%M") \
             if os.path.exists(os.path.join(run, "report.md")) else "not finished"
-        out.append(f"**Review:** `.clerk-dev/{label}` of {target.target or '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
+        out.append(f"**Review:** `{paths.run_name(wt, run)}` of {target.target or '?'}, reviewed up to `{reviewed[:9]}`, report from {when}.")
     elif not unbuilt(wt):
         out.append("**Review:** none yet in this worktree.")
         steps.append("Run a review: `/clerk-dev:review` (or \"review the branch\").")
     feature = os.path.realpath(paths.latest(wt, feature=True))
     if os.path.exists(os.path.join(feature, "report.md")):
-        out.append(f"**Feature review:** `.clerk-dev/{os.path.basename(feature)}/report.md` (the cross-repository check; `.clerk-dev/latest-feature`).")
+        out.append(f"**Feature review:** `{paths.run_name(wt, feature, feature=True)}` (the cross-repository check).")
     unreviewed, counts_fix = since_review(wt, run, reviewed, head, out, steps)
     staged = git(wt, "diff", "--cached", "--name-only").splitlines()
     unstaged = git(wt, "diff", "--name-only").splitlines()
@@ -928,7 +928,7 @@ def passes_section(wt, out):
     if perr:
         out.append(f"**Passes:** the log could not be read: {perr}")
     elif passes:
-        more = "; earlier ones in `.clerk-dev/passes.md`" if len(passes) > 5 else ""
+        more = f"; earlier ones in `{os.path.relpath(paths.passes(wt), wt)}`" if len(passes) > 5 else ""
         out.append(f"**Passes:** {len(passes)} ({'; '.join(pass_line(e) for e in passes[-5:])}{more}).")
     return passes, [s for s in (pass_step(wt, e) for e in passes) if s]
 
@@ -965,7 +965,7 @@ def findings_section(wt, run, review, open_items, head, out):
         steps.append(f"Review the {len(unreviewed)} unreviewed commits with an incremental review of the branch: \"re-review the branch\".")
     if moved: steps.append(f"Cross-check the finding{plural(moved)} whose code moved ({len(moved)}): \"cross-check the findings\".")
     n_unmarked = sum(len(v) for v in unmarked.values())
-    if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `.clerk-dev/{os.path.basename(run)}/report.md`.")
+    if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `{paths.run_name(wt, run)}`.")
     if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
     if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
     if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")

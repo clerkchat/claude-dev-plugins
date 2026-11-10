@@ -122,7 +122,7 @@ class CheckTests(OldRecordsCase):
 
     def test_the_index_names_checks_in_the_new_form_and_links_their_files(self):
         self.records("index")
-        text = read_file(paths.feature_md(self.root))
+        text = read_file(paths.feature_meta(self.root))
         self.assertIn("| [BRIEF-2-1](checks/R2-1.md) | BRIEF-2, DEC-1 | 1 | 0 |", text)
         self.assertIn("| [BRIEF-2-2](checks/BRIEF-2-2.md) | BRIEF-2 | 1 | 0 |", text)
 

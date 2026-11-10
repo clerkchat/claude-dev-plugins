@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a worktree's pass log, <worktree>/.clerk-dev/passes.md.
+"""Keep a worktree's pass log (paths.py passes).
 
 A pass is a bounded stretch of writing with one focus on one piece of work,
 ending in commits and a pass review with only the pass's lenses over only the

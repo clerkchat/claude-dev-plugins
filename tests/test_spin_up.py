@@ -118,7 +118,7 @@ class WhenAnIdeaIsSpunUp(SpinUpCase):
         self.assertEqual(git(self.wt, "check-ignore", paths.CLERK_DEV), paths.CLERK_DEV)
 
     def test_starts_the_feature_with_the_items_why_quoted_as_summary(self):
-        with open(paths.feature_md(self.wt), encoding="utf-8") as f:
+        with open(paths.feature_meta(self.wt), encoding="utf-8") as f:
             self.assertIn("## Summary\n\n> faster lookups.\n", f.read())
 
     def test_writes_the_first_brainstorm_from_the_item(self):

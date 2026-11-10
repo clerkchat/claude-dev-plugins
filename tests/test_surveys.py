@@ -52,7 +52,7 @@ class SurveyFileCase(TempCase):
 
     def index(self):
         run_ok("records", "index", self.root)
-        with open(paths.feature_md(self.root)) as f:
+        with open(paths.feature_meta(self.root)) as f:
             return f.read()
 
 

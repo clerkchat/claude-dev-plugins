@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manage a feature's records, <hub worktree>/.clerk-dev/feature/.
+"""Manage a feature's records, kept in the hub worktree's ledger (paths.py feature-dir).
 
 A feature's records are point-in-time documents: brainstorms, designs,
 decisions, pieces, plans, and briefs. Each is one Markdown file under
@@ -15,7 +15,7 @@ use, and the index groups records by them. The area is a label, not content, so
 it can be changed at any time (tag, rename-area).
 
 The hub is the worktree that holds the records: the worktree named on the
-`Hub:` line of .clerk-dev/workspace.md, or else this worktree.
+`Hub:` line of the workspace manifest (paths.py workspace), or else this worktree.
 
 Usage:
   records.py hub WORKTREE
@@ -74,7 +74,7 @@ def git(wt, *args, check=False):
 
 
 def workspace(wt):
-    """(hub worktree or None, {repo: worktree}) from .clerk-dev/workspace.md."""
+    """(hub worktree or None, {repo: worktree}) from the workspace manifest."""
     p = paths.workspace(wt)
     if not os.path.exists(p): return None, {}
     text = open(p, encoding="utf-8").read()
@@ -137,7 +137,7 @@ def write_atomic(path, text):
 
 def hub(wt):
     h, _ = workspace(wt)
-    if h and not os.path.isdir(h): sys.exit(f"hub worktree {h} (from .clerk-dev/workspace.md) does not exist")
+    if h and not os.path.isdir(h): sys.exit(f"hub worktree {h} (from {paths.workspace(wt)}) does not exist")
     return os.path.abspath(h or wt)
 
 def fdir(wt): return paths.feature_dir(hub(wt))
@@ -889,7 +889,7 @@ def main():
         for r in hit: set_fields(r, area=slug(a.new))
         index(d, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
-        index(d, a.wt); print(paths.feature_md(hub_of(d)))
+        index(d, a.wt); print(paths.feature_meta(hub_of(d)))
     elif a.cmd == "digest":
         sys.stdout.write(digest(d, a.wt))
     elif a.cmd == "stamp-overview":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a worktree's build log, <worktree>/.clerk-dev/build.md, and report
+"""Keep a worktree's build log (paths.py build-log) and report
 progress against the feature's briefs.
 
 The build log records each handoff, one delegation of implementation work: the

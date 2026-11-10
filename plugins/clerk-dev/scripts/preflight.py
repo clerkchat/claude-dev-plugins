@@ -44,8 +44,8 @@ def purpose_state(path):
 def latest_run(wt, head):
     run = os.path.realpath(paths.latest(wt))
     if not os.path.isdir(run): return "none"
-    label = os.path.basename(run)
-    if not os.path.exists(os.path.join(run, "target.txt")): return f"`.clerk-dev/{label}`, stopped before scoping finished"
+    name = paths.run_name(wt, run)
+    if not os.path.exists(os.path.join(run, "target.txt")): return f"`{name}`, stopped before scoping finished"
     target = rf.read_target(run)
     what, at = target.target or "?", target.head
     progress = os.path.join(run, "progress.md")
@@ -54,7 +54,7 @@ def latest_run(wt, head):
     elif unchecked: state = f"unfinished ({unchecked} unchecked progress items)"
     else: state = "unfinished (no report yet)"
     where = "at current HEAD" if at and at == head else (f"at `{at[:9]}`, HEAD has moved" if at else "HEAD unknown")
-    return f"`.clerk-dev/{label}` of {what}, {state}, {where}"
+    return f"`{name}` of {what}, {state}, {where}"
 
 def block(path, log_n):
     out = []
