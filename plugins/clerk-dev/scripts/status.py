@@ -52,7 +52,8 @@ Prints a short Markdown summary:
     `rerouted:` (an answer recorded in the wrong place): the count, and which.
 
 --setup prints only what a feature work session is missing, one line each with
-what to do, or "Setup: complete.": a Purpose in the branch notes; a hub and
+what to do, or "Setup: complete.": the move of plugin files left in the old
+layout (migrate-layout.py); a Purpose in the branch notes; a hub and
 feature when the worktree has a build log or passes, or another worktree names
 it in its workspace and holds feature records; a review workspace when
 records, briefs, or follow-ups name other repositories (or it lacks a row for
@@ -150,6 +151,8 @@ def setup_gaps(wt, rows, built):
     """What a feature work session in this worktree is missing, one line each
     with what to do. Reads only; never writes."""
     rc = load_script("records.py"); gaps = []
+    mig = load_script("migrate-layout.py")
+    if mig.old_names(wt): gaps.append(f"old file layout in .clerk-dev/: move it with python3 {os.path.abspath(mig.__file__)} {wt} (--dry-run first)")
     purpose, _ = rc.branch_notes(wt)
     if not purpose: gaps.append("Purpose: " + ("the branch notes have no Purpose" if purpose is not None else "no .clerk-dev/branch-notes.md") + "; draft it as tracking.md's Branch notes describes and show it to the user")
     manifest = f"the workspace manifest ({os.path.relpath(paths.workspace(wt), wt)})"

@@ -2,7 +2,7 @@ import datetime
 import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, drop_backlog_title, init_repo, records, run_ok, run_script, write_feature_md, write_file, write_record
+from helpers import SCRIPTS, RunCase, add_backlog_item, drop_backlog_title, init_repo, records, run_ok, run_script, write_feature_md, write_file, write_record
 import paths
 
 link = records.load_script("link-latest.py")
@@ -31,6 +31,11 @@ class BlockersCase(RunCase):
 
     def blockers(self):
         code, out = self.repo.status("--focus", "blockers")
+        self.assertEqual(code, 0, out)
+        return out
+
+    def setup_gaps(self):
+        code, out = self.repo.status("--setup")
         self.assertEqual(code, 0, out)
         return out
 
@@ -291,6 +296,24 @@ class SetupTests(BlockersCase):
         add_backlog_item(self.repo.path, "followup", "Send exportId back", "--origin", "web abc1234")
         code, out = self.repo.status("--setup")
         self.assertIn("name web but there is no review workspace", out)
+
+    def test_the_new_layout_asks_for_no_move(self):
+        self.assertNotIn("old file layout", self.setup_gaps())
+
+    def test_the_users_own_files_ask_for_no_move(self):
+        write_file(os.path.join(paths.clerk_dev(self.repo.path), "notes", "troubleshooting.md"), "mine\n")
+        write_file(os.path.join(paths.clerk_dev(self.repo.path), "logs", "api.log"), "mine\n")
+        self.assertNotIn("old file layout", self.setup_gaps())
+
+
+class WhenThePluginFilesHaveTheOldLayoutTests(BlockersCase):
+    def setUp(self):
+        super().setUp()
+        write_file(os.path.join(paths.clerk_dev(self.repo.path), "build.md"), "old\n")
+
+    def test_setup_names_the_move_command(self):
+        script = os.path.join(SCRIPTS, "migrate-layout.py")
+        self.assertIn(f"- old file layout in .clerk-dev/: move it with python3 {script} {self.repo.path} (--dry-run first)", self.setup_gaps())
 
 
 class PreflightTests(BlockersCase):
