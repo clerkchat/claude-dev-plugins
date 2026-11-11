@@ -71,7 +71,7 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
-from run_files import (CLOSED_STATUSES, covered_refusal, number_of, numbered as finding_named, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
+from run_files import (CLOSED_STATUSES, covered_refusal, numbered as finding_named, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
                        finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
                        posted_threads, quoted_rest, read_approvals, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
@@ -626,12 +626,12 @@ def check_posted_anchors():
 def check_posted_notes():
     for mid in sorted(POSTED):
         if choice_of(mid) != "post" or not note_changed(mid): continue
-        n = number_of(mid, IDNUM)
+        name = finding_named(mid, IDNUM)
         if POSTED[mid]["state"] == "edited":
-            print(f"warning: finding {n}: note changed after its posted text was edited; the edit stands", file=sys.stderr)
+            print(f"warning: {name}: note changed after its posted text was edited; the edit stands", file=sys.stderr)
             POSTED[mid]["note"] = INSTR[mid]["note"]
         else:
-            print(f"finding {n}: note changed; redraft the posted text", file=sys.stderr)
+            print(f"{name}: note changed; redraft the posted text", file=sys.stderr)
 
 def fence_around(text, shortest):
     return "`" * max([shortest] + [len(r) + 1 for r in re.findall(r"^\s*(`{3,})", text, re.M)])
