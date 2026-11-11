@@ -476,6 +476,15 @@ class PostQueueTests(PostQueueCase):
         self.assertNotIn("post the review", out)
 
 
+class WhenAFindingIsCoveredByAnotherTest(PostQueueCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/groups.tsv", "merged_id\tlead\tdate\n2\t1\t2026-11-10\n")
+
+    def test_the_lead_stands_for_the_group_in_the_post_queue(self):
+        self.assertIn("marked to post, not yet posted or changed since posting: 3 (1, 3, 4)", self.full_status())
+
+
 class WhenAFindingIgnoredEarlierIsMarkedPostTest(PostQueueCase):
     def setUp(self):
         super().setUp()
@@ -485,7 +494,7 @@ class WhenAFindingIgnoredEarlierIsMarkedPostTest(PostQueueCase):
         self.assertIn("marked to post, not yet posted or changed since posting: 4 (1, 2, 3, 4)", self.full_status())
 
 
-class CloseStepTests(PostQueueCase):
+class CloseCase(PostQueueCase):
     def setUp(self):
         super().setUp()
         self.write("posted.tsv", POSTED_HEADER + "".join(f"{n}\tposted\tinline\t\tT{n}\t{n}\t\ta.py\t1\t1\tRIGHT\tline\t\n" for n in (1, 2, 3, 4)))
@@ -493,12 +502,27 @@ class CloseStepTests(PostQueueCase):
         self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\tby_viewer\n"
                    "1\t1\tT1\topen\t0\t1\t1\t\td\t1\n2\t2\tT2\tresolved\t0\t1\t1\t\td\t1\n")
 
+
+class CloseStepTests(CloseCase):
     def test_names_the_fixed_findings_with_an_open_thread(self):
         self.assertIn("Close the posted thread of finding 1; see Closing posted threads in the `review` skill.", self.full_status())
 
     def test_names_nothing_when_no_thread_is_open(self):
         self.write("pr/threads.tsv", "merged_id\tcomment_id\tthread_id\tstate\toutdated\tcan_resolve\tline\treplies\tdate\n")
         self.assertNotIn("Close the posted thread", self.full_status())
+
+
+class WhenAGroupHoldsAnOpenMemberTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/groups.tsv", "merged_id\tlead\tdate\n3\t1\t2026-11-10\n")
+
+    def test_names_no_lead_while_a_member_is_open(self):
+        self.assertNotIn("Close the posted thread", self.full_status())
+
+    def test_names_the_lead_once_every_member_is_fixed(self):
+        self.write_status({1: ("fixed", "abc"), 2: ("fixed", "abc"), 3: ("fixed", "abc")})
+        self.assertIn("Close the posted thread of finding 1;", self.full_status())
 
 
 class CreditsInStatusTests(PostQueueCase):

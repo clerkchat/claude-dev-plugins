@@ -69,9 +69,17 @@ in it.
 - A finding in Needs confirmation (section `confirm`), or one whose card or
   verifier's note leaves the outcome uncertain, is asked as a question ("Can
   `retry` run after the lock is released here?"), not stated.
-- Tone: a suggestion, not an order. Open a non-critical fix with
-  "Suggestion:", never "Optional." or "Please also". Keep firm language for
-  seriously critical problems: security, data loss, or broken behavior.
+- Open each finding's comment with a short label naming its nature ("safety",
+  "minor cleanup", "tech debt"), chosen per comment; there is no fixed list.
+  The label stands in for "Suggestion:"; no comment opens with "Suggest".
+- Tone: describe, do not direct. Write "X would do Y", not "Suggest X". Use
+  firm words for facts ("insecure", "incorrect"), never for priority
+  ("blocking", "must fix", "worth fixing").
+- One topic per comment: no "Related" or "Separately" lines, no reference to
+  another comment, and a related item in the note is not pulled in as text.
+- For a cheap, certain fix, lead with the fix and its certain benefits and
+  leave out the worst case. Test: could the author make the fix without the
+  full reasoning?
 - When the card lists alternative fixes, keep each of them in the draft.
 - When the fix is not obvious from prose alone, show its shape in a short
   snippet, not a full patch; skip it when one sentence already says the fix.
@@ -93,5 +101,7 @@ in it.
   general or per place. A placement in the note (`on <path>:<line>`,
   `on <path>`, `in the review body`) is the script's; the text does not mention
   it.
+- The guidance file's rules bind like these; where one conflicts with a rule
+  here, the guidance wins, and the Post note wins over both.
 - Write paragraphs as plain lines; the script joins wrapped lines before
   sending.

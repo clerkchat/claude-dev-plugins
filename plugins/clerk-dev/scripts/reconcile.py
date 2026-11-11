@@ -210,14 +210,15 @@ def append_mode(new_path, cur, judged=None, recheck=None):
     print(f"incremental: {len(new)} new findings: {counts['duplicate']} duplicates, {counts['regressed']} regressions, "
           f"{counts['stale']} already covered by a fix, {len(folded.appended)} appended", file=sys.stderr)
 
-Posting = namedtuple("Posting", "posted kept")
+Posting = namedtuple("Posting", "posted kept groups")
 
 def read_posting(run):
-    return Posting(rf.read_posted(run), rf.read_kept_open(run))
+    return Posting(rf.read_posted(run), rf.read_kept_open(run), rf.read_groups(run))
 
 def write_posting(run, posting):
     rf.write_posted(run, posting.posted)
     if posting.kept: rf.write_kept_open(run, posting.kept)
+    if posting.groups: rf.write_groups(run, posting.groups)
 
 def copy_new(src, dst):
     if os.path.exists(src) and not os.path.exists(dst):
@@ -237,12 +238,21 @@ def seed_reviews(prev, cur, rows):
         for rid in rf.kept_body_ids(prev, (state,)): copy_new(rf.kept_body_path(prev, rid, state), rf.kept_body_path(cur, rid, into))
     if rf.kept_body_ids(prev, ("pending",)) | rf.review_ids(rows): copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
 
+def seed_groups(pid, carried, prev_posting, cur_posting):
+    row = prev_posting.groups[pid]
+    cid, lead = carried.get(pid), carried.get(rf.lead_of(prev_posting.groups, pid))
+    if cid is None or lead is None: return False
+    cur_posting.groups.setdefault(cid, {**row, "lead": str(lead)})
+    return True
+
 def seed_postings(prev, cur, pairs):
     prev_posting, cur_posting = read_posting(prev), read_posting(cur)
+    carried = dict(pairs)
     seeded = [cid for pid, cid in pairs if seed_posted(prev, cur, pid, cid, prev_posting, cur_posting)]
-    if seeded: write_posting(cur, cur_posting)
+    left_behind = [pid for pid in sorted(prev_posting.groups) if not seed_groups(pid, carried, prev_posting, cur_posting)]
+    if seeded or len(left_behind) < len(prev_posting.groups): write_posting(cur, cur_posting)
     seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
-    return len(seeded)
+    return len(seeded), left_behind
 
 def prev_name(pid, pnum):
     return f"finding {pnum[pid]}" if pid in pnum else f"#{pid}"
@@ -250,6 +260,10 @@ def prev_name(pid, pnum):
 def lost_line(lost, pnum):
     names = ", ".join(prev_name(pid, pnum) for pid in lost)
     return f"{len(lost)} posted findings not found again ({names}); their threads come in as pull request comments"
+
+def group_left_line(left_behind, groups, pnum):
+    names = ", ".join(f"{prev_name(pid, pnum)} under {prev_name(rf.lead_of(groups, pid), pnum)}" for pid in left_behind)
+    return f"{len(left_behind)} group{'s' if len(left_behind) > 1 else ''} left behind ({names})"
 
 def loose_line(loose, pnum):
     names = ", ".join(f"{prev_name(pid, pnum)} with #{cid}" for pid, cid in loose)
@@ -283,13 +297,14 @@ def seed(prev, cur, label, pnum):
             st[cid] = {"status": m["prev_status"], "ref": m["prev_ref"], "date": ""}; carried += 1
         seed_resolution(prev, cur, pid, cid, label)
     confident = confident_pairs(prev, cur, pairs, matches)
-    seeded_posted = seed_postings(prev, cur, confident)
+    seeded_posted, left_behind = seed_postings(prev, cur, confident)
     rf.write_status(cur, st)
     matched, prev_posted = {pid for pid, _ in pairs}, rf.read_posted(prev)
     lost = [pid for pid, row in sorted(prev_posted.items()) if rf.has_thread(row) and pid not in matched]
     loose = [(pid, cid) for pid, cid in pairs if pid in prev_posted and (pid, cid) not in confident]
     print(f"seeded {carried} statuses" + (f" and {seeded_posted} posted findings" if seeded_posted else "") + f" from {label}"
-          + (f"; {lost_line(lost, pnum)}" if lost else "") + (f"; {loose_line(loose, pnum)}" if loose else ""), file=sys.stderr)
+          + (f"; {lost_line(lost, pnum)}" if lost else "") + (f"; {loose_line(loose, pnum)}" if loose else "")
+          + (f"; {group_left_line(left_behind, rf.read_groups(prev), pnum)}" if left_behind else ""), file=sys.stderr)
 
 def judged_same(path):
     pairs = []

@@ -71,8 +71,8 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
-from run_files import (CLOSED_STATUSES, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
-                       finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, read_instructions, read_kept_open,
+from run_files import (CLOSED_STATUSES, covered_refusal, numbered as finding_named, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
+                       finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
                        posted_threads, quoted_rest, read_approvals, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
                        write_text, line_span)
@@ -85,6 +85,7 @@ NAMES = {}
 STATUS = {}
 INSTR = {}
 POSTED = {}
+GROUPS = {}
 THREADS = {}
 APPROVALS = {}
 CLOSABLE = {}
@@ -361,15 +362,10 @@ def card(n, e, v, slices, names, repo, head, section):
     return card_text(e, out + resolution_lines(e))
 
 def _sections(e, repo, head):
-    """Why it matters, Context, How it goes wrong, and the snippet. A pull
+    """Context, How it goes wrong, the snippet, and Why it matters. A pull
     request comment has them only when its verifier filled them in through
     overrides/<merged id>.md; the comment's own words are never rewritten."""
-    out = []
-    if e.get("impact"):
-        out += prose_block("Why it matters", e["impact"])
-        if e.get("uncertainty"):
-            out += [code_spans("Uncertain: " + e["uncertainty"].strip()), ""]
-    out += context_lines(e)
+    out = context_lines(e)
     how = e.get("steps") or e.get("scenario", "")
     if how:
         out += ["##### How it goes wrong", ""]
@@ -377,7 +373,12 @@ def _sections(e, repo, head):
             out += [code_spans(steps_md(how)), ""]
         else:
             out += prose(how)
-    return out + snippet_lines(e, repo, head)
+    out += snippet_lines(e, repo, head)
+    if e.get("impact"):
+        out += prose_block("Why it matters", e["impact"])
+        if e.get("uncertainty"):
+            out += [code_spans("Uncertain: " + e["uncertainty"].strip()), ""]
+    return out
 
 def context_lines(e):
     ctx = e.get("context") or e.get("what_changed")
@@ -417,7 +418,7 @@ def card_blocks(lines):
 def warn_open_fence(run, lines, cards):
     if not open_fence(lines): return
     last = list(cards)[-1] if cards else None
-    where = f"from finding {read_numbers(run).get(last, f'#{last}')} on" if cards else "above the findings"
+    where = f"from {finding_named(last, read_numbers(run))} on" if cards else "above the findings"
     print(f"warning: report.md leaves a fence open {where}; no edit below where it opens was read", file=sys.stderr)
 
 def read_card_blocks(run):
@@ -620,17 +621,17 @@ def is_moved(mid):
 def check_posted_anchors():
     for mid in sorted(POSTED):
         if is_moved(mid) and not is_stale(mid):
-            print(f"finding {IDNUM.get(mid, f'#{mid}')}: code moved since drafting; redraft the posted text", file=sys.stderr)
+            print(f"{finding_named(mid, IDNUM)}: code moved since drafting; redraft the posted text", file=sys.stderr)
 
 def check_posted_notes():
     for mid in sorted(POSTED):
         if choice_of(mid) != "post" or not note_changed(mid): continue
-        n = IDNUM.get(mid, f"#{mid}")
+        name = finding_named(mid, IDNUM)
         if POSTED[mid]["state"] == "edited":
-            print(f"warning: finding {n}: note changed after its posted text was edited; the edit stands", file=sys.stderr)
+            print(f"warning: {name}: note changed after its posted text was edited; the edit stands", file=sys.stderr)
             POSTED[mid]["note"] = INSTR[mid]["note"]
         else:
-            print(f"finding {n}: note changed; redraft the posted text", file=sys.stderr)
+            print(f"{name}: note changed; redraft the posted text", file=sys.stderr)
 
 def fence_around(text, shortest):
     return "`" * max([shortest] + [len(r) + 1 for r in re.findall(r"^\s*(`{3,})", text, re.M)])
@@ -642,10 +643,20 @@ def posted_link(row):
     link = f", [comment]({row['url']})" if row.get("url") else ""
     return [f"Posted {where}{link}" + ("." if row["state"] == "posted" else "; changed since posting."), ""]
 
+def posted_lead(mid):
+    lead = lead_of(GROUPS, mid)
+    return mid if lead is None else lead
+
+def covered_block(mid):
+    lead = lead_of(GROUPS, mid)
+    return (["##### Posted", "", f"Covered by {finding_named(lead, IDNUM)}.", ""]
+            + posted_link(POSTED.get(lead, {})) + posted_thread_lines(THREADS.get(lead)))
+
 def posted_body(text):
     return ["> " + line if line else ">" for line in text.split("\n")]
 
 def posted_block(mid):
+    if mid in GROUPS: return covered_block(mid)
     text = posted_text(RUN, mid)
     if not text: body = ["Posted text: not drafted yet."]
     elif is_stale(mid): body = ["Posted text: to be redrafted; the note changed."]
@@ -685,7 +696,7 @@ def breaks_quote(block):
 
 def posted_blocks(cards):
     texts = {mid: quoted_text(blocks.get("Posted", [])) for mid, blocks in cards.items()}
-    return {mid: text for mid, text in texts.items() if text is not None}
+    return {mid: text for mid, text in texts.items() if text is not None and mid not in GROUPS}
 
 def flat(text):
     return " ".join(text.split())
@@ -695,7 +706,7 @@ def warn_broken_quote(run, cards, texts):
     for mid in sorted(cards):
         if breaks_quote(cards[mid].get("Posted", [])) and not has_posted_comment(mid):
             texts.pop(mid, None)
-            print(f"warning: finding {nums.get(mid, f'#{mid}')}: its Posted text has a line without `>` in the middle; the edit was not read, "
+            print(f"warning: {finding_named(mid, nums)}: its Posted text has a line without `>` in the middle; the edit was not read, "
                   "and the report shows the stored text again", file=sys.stderr)
 
 def import_posted_edits(run, cards, today):
@@ -805,7 +816,7 @@ def import_instruction_edits(run, cards, ins, today):
     return changed
 
 def has_posted_comment(mid):
-    return has_comment(POSTED.get(mid, {}))
+    return has_comment(POSTED.get(posted_lead(mid), {}))
 
 def decided(mid):
     return bool(choice_of(mid)) or status_of(STATUS, mid) != "open" or has_posted_comment(mid)
@@ -860,6 +871,7 @@ def file_spec(flag, spec, nums):
 
 def posted_draft(spec, nums):
     mid, text = file_spec("--posted", spec, nums)
+    if covered := covered_refusal(GROUPS, mid, nums): sys.exit(covered)
     if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
     return mid, text
 
@@ -1205,15 +1217,15 @@ def report_closable(run):
     global CLOSABLE, KEPT_OPEN
     CLOSABLE, KEPT_OPEN = closable(run), read_kept_open(run)
     for mid, c in CLOSABLE.items():
-        print(f"posted finding {IDNUM.get(mid, f'#{mid}')}: {still_open(c.status)}", file=sys.stderr)
+        print(f"posted {finding_named(mid, IDNUM)}: {still_open(c.status)}", file=sys.stderr)
 
 def main():
     a = parse_args()
     today = a.date or ""
     merged = read_findings(a.run)
     verdicts, slices = read_verdicts(a.run), read_slices(a.run)
-    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, APPROVALS, IDNUM, TITLE_BY_ID
-    NAMES, TITLES, RUN = read_plain_names(a.routing), report_titles(a.run), a.run
+    global NAMES, TITLES, RUN, RECON, PR_LINKS, THREADS, APPROVALS, IDNUM, TITLE_BY_ID, GROUPS
+    NAMES, TITLES, RUN, GROUPS = read_plain_names(a.routing), report_titles(a.run), a.run, read_groups(a.run)
     nums = read_numbers(a.run)
     load_credits(merged)
     flags = checked_flags(a, nums)

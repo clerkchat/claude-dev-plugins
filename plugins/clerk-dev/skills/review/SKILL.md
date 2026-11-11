@@ -1321,8 +1321,8 @@ What the document contains, so you can check it:
   scope line (fix size, origin, and any follow-up in another
   repository, such as "Fix size: trivial · New on this branch"); a status
   checkbox line; the bare `path:line`; the one-sentence claim;
-  then subheadings: Why it matters, Context, How it goes wrong (a numbered list
-  when it is a sequence), an optional snippet pulled from HEAD, Recommendation
+  then subheadings: Context, How it goes wrong (a numbered list
+  when it is a sequence), an optional snippet pulled from HEAD, Why it matters, Recommendation
   (or What would confirm it), Second opinion only when the verifier left a note,
   and Resolution once a fix has been made. A finding appended after a fix may
   say which fix surfaced it.
@@ -1407,7 +1407,8 @@ fixed. When a finding with a posted line, range, or file comment is marked
 comment, every render prints `posted
 finding N: marked fixed in <ref>; its thread on GitHub is still open`, and the
 card's Posted block says the same. The line stops once the thread is resolved,
-gone from the pull request, or kept open. Closing replies to the author and
+gone from the pull request, or kept open. A lead's thread is offered only
+once the lead and every finding it covers are marked `fixed`. Closing replies to the author and
 notifies them, so it is outward-facing like posting: the user is asked every
 time, and the user runs the close at a terminal, confirming it there. What
 holds: `post-review.py` asks at the terminal before it approves, requests
@@ -1716,7 +1717,7 @@ posted to that review; `--submit` renames it `submitted-<review id>.md`, and
 a later run's seed carries a submitted one (or one it inherited) as
 `earlier-<review id>.md`, still the user's review but not that run's,
 `close-<id>.md` a closing reply's own
-words, `keep.tsv` the threads kept open, `payload.json` from a dry run),
+words, `keep.tsv` the threads kept open, `groups.tsv` the findings merged under a lead, `payload.json` from a dry run),
 `posted.tsv` (per Post-marked finding: drafted, edited, or posted, the note
 followed, the anchor and commit the draft was written for, and once posted the
 comment's ids, URL, and anchor),

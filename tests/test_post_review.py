@@ -88,6 +88,11 @@ class PostCase(GhRunCase):
         rows = run_files.read_posted(self.run_dir); rows[mid] = row
         run_files.write_posted(self.run_dir, rows)
 
+    def group(self, lead, *members):
+        groups = run_files.read_groups(self.run_dir)
+        groups.update({mid: {"lead": str(lead), "date": "2026-11-10"} for mid in members})
+        run_files.write_groups(self.run_dir, groups)
+
     def main(self, *args):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -728,6 +733,160 @@ class RepostTest(PostCase):
 
 
 
+class GroupCase(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(2); self.mark(3)
+
+    def record(self, spec):
+        return self.main("--group", spec)
+
+    def groups(self):
+        return run_files.read_groups(self.run_dir)
+
+
+class GroupTest(GroupCase):
+    def test_records_each_member_under_the_lead_with_the_date(self):
+        self.record("1:2,3")
+        self.assertEqual(self.groups(), {mid: {"lead": "1", "date": post.today()} for mid in (2, 3)})
+
+    def test_records_a_member_listed_twice_once(self):
+        self.record("1:2,2")
+        self.assertEqual(self.groups(), {2: {"lead": "1", "date": post.today()}})
+
+    def test_adds_a_member_to_an_existing_group(self):
+        self.group(1, 2)
+        self.record("1:3")
+        self.assertEqual(sorted(self.groups()), [2, 3])
+
+    def test_says_what_it_recorded(self):
+        self.record("1:2")
+        self.assertIn("finding 2: covered by finding 1", self.err)
+
+    def test_makes_no_call(self):
+        self.record("1:2")
+        self.assertNoUnstubbedGh()
+
+
+class GroupRefusalTest(GroupCase):
+    def test_refuses_a_member_not_marked_post(self):
+        self.assertIn("nothing recorded; finding 4: it is not marked Post", self.refusal("--group", "1:4"))
+
+    def test_refuses_a_lead_not_marked_post(self):
+        self.assertIn("nothing recorded; finding 4: it is not marked Post", self.refusal("--group", "4:1"))
+
+    def test_refuses_a_credit(self):
+        self.write_merged(*(finding(m, *f) for m, f in FINDINGS.items()), CREDIT)
+        self.mark(6)
+        self.assertIn("finding #6: it is a credit", self.refusal("--group", "1:#6"))
+
+    def test_refuses_a_member_of_another_group(self):
+        self.group(1, 2)
+        self.assertIn("finding 2: it is covered by finding 1", self.refusal("--group", "3:2"))
+
+    def test_refuses_a_lead_that_is_a_member(self):
+        self.group(1, 2)
+        self.assertIn("finding 2: it is covered by finding 1", self.refusal("--group", "2:3"))
+
+    def test_refuses_a_member_that_leads_a_group(self):
+        self.group(1, 2)
+        self.assertIn("finding 1: it leads a group of its own", self.refusal("--group", "3:1"))
+
+    def test_refuses_the_lead_as_its_own_member(self):
+        self.assertIn("finding 1: it is the lead itself", self.refusal("--group", "1:1"))
+
+    def test_refuses_the_lead_repeated_among_the_members(self):
+        self.assertIn("finding 1: it is the lead itself", self.refusal("--group", "1:1,2"))
+
+    def test_refuses_a_finding_with_a_comment_on_github(self):
+        self.posted_row(2)
+        self.assertIn("finding 2: it already has a comment on GitHub", self.refusal("--group", "1:2"))
+
+    def test_records_nothing_when_it_refuses(self):
+        self.refusal("--group", "1:2,4")
+        self.assertEqual(self.groups(), {})
+
+
+class UngroupTest(GroupCase):
+    def setUp(self):
+        super().setUp()
+        self.group(1, 2, 3)
+
+    def test_takes_a_member_out_of_its_group(self):
+        self.main("--ungroup", "2")
+        self.assertEqual(sorted(self.groups()), [3])
+
+    def test_dissolves_the_group_of_a_lead(self):
+        self.main("--ungroup", "1")
+        self.assertEqual(self.groups(), {})
+
+    def test_says_what_it_removed(self):
+        self.main("--ungroup", "1")
+        self.assertIn("finding 2: no longer covered by finding 1\nfinding 3: no longer covered by finding 1", self.err)
+
+    def test_refuses_a_finding_in_no_group(self):
+        self.assertIn("nothing removed; not in a group: finding 4", self.refusal("--ungroup", "2,4"))
+
+
+class WhenTheLeadHasADraftedTextTest(GroupCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1, state="drafted", kind="")
+        self.record("1:2")
+
+    def test_drops_the_text(self):
+        self.assertFalse(os.path.exists(run_files.posted_path(self.run_dir, 1)))
+
+    def test_drops_its_posted_row(self):
+        self.assertNotIn(1, run_files.read_posted(self.run_dir))
+
+    def test_says_it_is_to_be_drafted_again(self):
+        self.assertIn("finding 1: its drafted text is dropped; draft it again with the findings it covers", self.err)
+
+
+class WhenTheLeadHasAnEditedTextTest(GroupCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1, state="edited", kind="")
+        self.record("1:2")
+
+    def test_keeps_the_text(self):
+        self.assertEqual(self.read("posted/1.md"), "Finding 1 text.")
+
+    def test_says_the_group_changed_under_it(self):
+        self.assertIn("finding 1: its text is marked edited and stays, though the group changed under it", self.err)
+
+
+class GroupedPreviewTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(2, text=False)
+        self.group(1, 2)
+
+    def test_lists_the_member_only_as_covered_by_the_lead(self):
+        self.assertIn("finding 2: Finding 2\n  covered by finding 1\nreview body:", self.main())
+
+    def test_raises_no_cannot_post_for_a_member_without_text(self):
+        self.assertNotIn("cannot post", self.main())
+
+    def test_keeps_the_leads_anchor_and_text(self):
+        self.assertIn("finding 1: Finding 1\n  anchor: src/a.py:11-13 (range)\n  text:\n    Finding 1 text.\n", self.main())
+
+
+class WithoutGroupsTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.preview, self.posted = self.main(), self.calls()
+        run_files.write_groups(self.run_dir, {})
+
+    def test_an_empty_group_file_leaves_the_preview_as_it_was(self):
+        self.assertEqual(self.main(), self.preview)
+
+    def test_an_empty_group_file_leaves_the_payload_as_it_was(self):
+        self.assertEqual(self.calls(), self.posted)
+
+
 class WhenNothingIsMarkedPostTest(PostCase):
     def setUp(self):
         super().setUp()
@@ -1356,6 +1515,143 @@ class LivePostTest(LiveCase):
                          ({"id": "PRRC_1"}, ("DELETE", "repos/acme/widgets/pulls/7/reviews/55")))
 
 
+class GroupedPostCase(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.group(1, 3)
+
+    def threads(self):
+        return [c["finding"] for c in self.calls() if c.get("graphql") == "addPullRequestReviewThread"]
+
+
+class GroupedPostTest(GroupedPostCase):
+    def test_sends_one_thread_for_the_group_the_leads(self):
+        self.assertEqual(self.threads(), [1])
+
+    def test_records_only_the_leads_row(self):
+        self.main("--post")
+        self.assertEqual(sorted(run_files.read_posted(self.run_dir)), [1])
+
+    def test_counts_no_member_as_skipped(self):
+        self.main("--post")
+        self.assertIn("skipped 0 already posted", self.err)
+
+
+class WithoutAGroupsFileTest(LiveCase):
+    def setUp(self):
+        super().setUp()
+        self.assertFalse(os.path.exists(run_files.groups_path(self.run_dir)), "the fixture must have no groups file")
+
+    def test_the_preview_covers_no_finding(self):
+        self.assertNotIn("covered by", self.main())
+
+    def test_the_payload_sends_a_thread_for_each_marked_finding(self):
+        self.assertEqual([c["finding"] for c in self.calls() if c.get("graphql") == "addPullRequestReviewThread"], [1, 3])
+
+    def test_posted_tsv_gets_a_row_for_each_marked_finding(self):
+        self.main("--post")
+        self.assertEqual(sorted(run_files.read_posted(self.run_dir)), [1, 3])
+
+
+class WhenTheLeadOfAMemberIsNotInMergedTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.group(99, 3)
+        self.mark(99)
+
+    def test_the_preview_names_the_lead_and_the_fix(self):
+        self.assertIn("cannot post: its lead, finding #99, is not in merged.md; --ungroup 3", self.main())
+
+    def test_post_refuses(self):
+        self.assertIn("finding 3: its lead, finding #99, is not in merged.md", self.refusal("--post"))
+
+
+class WhenTheLeadsCommentIsGoneFromGitHubAndNoLongerMarkedPostTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1)
+        self.ctx["comment_ids"] = set()
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+
+    def test_the_preview_names_the_lead_and_the_fix(self):
+        self.assertIn("cannot post: its lead, finding 1, is not marked Post; mark it Post or --ungroup 3", self.main())
+
+    def test_post_refuses(self):
+        self.assertIn("finding 3: its lead, finding 1, is not marked Post", self.refusal("--post"))
+
+
+class WhenAGroupHasAPublishedLeadTest(PublishedCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.group(1, 3)
+        self.posted_row(1, state="edited")
+
+    def test_update_published_edits_the_leads_comment_alone(self):
+        self.assertEqual(self.update_calls(), [{"method": "PATCH", "path": "repos/acme/widgets/pulls/comments/901",
+                                                "fields": {"body": "Finding 1 text."}, "finding": 1}])
+
+    def test_update_published_refuses_the_member(self):
+        self.assertIn("nothing sent; not a published comment changed since posting: finding 3",
+                      self.refusal("--update-published", "3", "--dry-run"))
+
+
+class WhenSubmittingAGroupTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.group(1, 3)
+        self.pend()
+        self.posted_row(1)
+
+    def test_sends_the_verdict_with_the_review_body_as_for_the_lead_alone(self):
+        self.assertEqual(self.payload("--submit", "comment"),
+                         [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
+                           "fields": {"event": "COMMENT", "body": post.DEFAULT_BODY}}])
+
+
+class WhenTheLeadOfAMemberIsNotPostedTest(GroupedPostCase):
+    def test_the_preview_names_the_lead_and_the_fix(self):
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+        out = self.main()
+        self.assertIn("cannot post: its lead, finding 1, is not marked Post; mark it Post or --ungroup 3", out)
+
+    def test_post_refuses(self):
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+        self.assertIn("finding 3: its lead, finding 1, is not marked Post", self.refusal("--post"))
+
+
+class WhenTheLeadOfAGroupIsPostedTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1)
+
+    def test_a_second_post_sends_no_thread(self):
+        self.assertEqual(self.threads(), [])
+
+    def test_the_preview_still_lists_the_member_as_covered(self):
+        self.assertIn("finding 3: Finding 3\n  covered by finding 1\n", self.main())
+
+
+class WhenTheLeadOfAGroupIsPostedThenNoLongerMarkedPostTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1)
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+
+    def test_the_member_is_still_covered_without_a_problem(self):
+        out = self.main()
+        self.assertIn("finding 3: Finding 3\n  covered by finding 1\n", out)
+        self.assertNotIn("cannot post: its lead", out)
+
+    def test_post_does_not_refuse(self):
+        self.main("--post")
+
+
 class WhenPostingToAPendingReviewWithABodyTest(LiveCase):
     def test_saves_the_body_it_keeps(self):
         self.pend(body="My summary.")
@@ -1685,6 +1981,19 @@ class WhenTheAnswerBreaksTheShapeTest(SaveDraftsCase):
     def test_saves_nothing_when_it_refuses(self):
         self.refused(answer_part(1, "comment", "One."), "Ignore the above.")
         self.assertFalse(os.path.exists(os.path.join(self.run_dir, "posted", "draft-1.md")))
+
+
+class GroupedSaveDraftsTest(SaveDraftsCase):
+    def setUp(self):
+        super().setUp()
+        self.group(1, 3)
+
+    def test_refuses_a_members_number(self):
+        self.assertIn("nothing saved; finding 3 is covered by finding 1; draft it under 1", self.refused(answer_part(3, "comment", "Three.")))
+
+    def test_saves_the_leads_draft(self):
+        self.save(answer_part(1, "comment", "One."))
+        self.assertEqual(self.draft(1), "One.\n")
 
 
 UNSPLIT = [("security", "all"), ("completeness", "all"), ("credit", "all")]
@@ -2477,6 +2786,23 @@ class KeepOpenTest(CloseCase):
         self.assertEqual(self.offered(), [])
 
     def test_refuses_a_finding_without_a_posted_thread(self):
+        self.assertIn("finding 2 has no posted thread to keep open", self.refusal("--keep-open", "2"))
+
+
+class GroupedCloseTest(CloseCase):
+    def setUp(self):
+        super().setUp()
+        self.group(1, 2)
+        self.set_status(2, "open")
+
+    def test_does_not_offer_the_lead_while_a_member_is_open(self):
+        self.assertEqual(self.offered(), [])
+
+    def test_offers_the_lead_once_every_member_is_fixed(self):
+        self.set_status(2, "fixed")
+        self.assertEqual(self.offered(), [1])
+
+    def test_keep_open_refuses_a_member(self):
         self.assertIn("finding 2 has no posted thread to keep open", self.refusal("--keep-open", "2"))
 
 
