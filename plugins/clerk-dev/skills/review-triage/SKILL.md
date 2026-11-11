@@ -299,11 +299,10 @@ branch's pull request.
    says to redraft ("note changed; redraft the posted text", or "code moved
    since drafting; redraft the posted text"). A text marked `edited` in
    `posted.tsv` is the user's and is never redrafted. With none to draft, go to
-   step 4, and on from it to step 6 when `posted/review.md` already held a
+   step 5, and on from it to step 7 when `posted/review.md` already held a
    sentence.
 2. Run the preview for the anchors.
-
-   Then look at the findings to draft for ones that overlap: the same cause or
+3. Look at the findings to draft for ones that overlap: the same cause or
    the same fix, not findings that are only short or in the same file. For
    each set, ask whether to merge them, naming the lead and why ("Merge 4 and
    9 into one comment under 4, since both are the lock released before
@@ -311,7 +310,7 @@ branch's pull request.
    the lowest number; the user may name another. Record each yes with
    `post-review.py <run> --group LEAD:M[,N]`, and undo one with `--ungroup
    N[,M]`. With one finding to draft, or none overlapping, say nothing.
-3. Draft with one `clerk-dev:post-drafter` agent per batch of up to eight
+4. Draft with one `clerk-dev:post-drafter` agent per batch of up to eight
    findings, findings about the same issue in one batch. It has no tools and
    carries the Drafting rules, so its prompt holds everything it drafts from.
    Open its prompt with the line on the author's text below, then per finding:
@@ -354,7 +353,7 @@ branch's pull request.
    before the plugin was updated), stop and ask the user to run
    `/reload-plugins`, then post the review again; never draft with another
    agent type or in this session.
-4. Draft the review body: one neutral sentence on what the comments cover,
+5. Draft the review body: one neutral sentence on what the comments cover,
    under the Drafting rules in `${CLAUDE_PLUGIN_ROOT}/agents/post-drafter.md`,
    and no verdict, since the submit event is the verdict; with no comment to
    post, no sentence. Write it to `<run>/posted/review.md`, unless the file
@@ -367,11 +366,11 @@ branch's pull request.
    changing nothing above it. When posting, the script appends the comments
    that fell back to the review body. Tell the user the whole file is theirs to
    edit, the generated part included.
-5. Tell the user which texts were drafted, any proposed general comment, and
+6. Tell the user which texts were drafted, any proposed general comment, and
    that editing stays in the Posted blocks in the report and
    `posted/review.md`, or a changed note to have a text redrafted; wait for
    them to say they are done.
-6. Render, then run the preview again and show it: the comments with their
+7. Render, then run the preview again and show it: the comments with their
    anchors, every fallback, the review body, the head-moved line, and the
    pending-review line. When a finding cannot be posted, say why and what would
    settle it (a text to draft, a placement in its note, an edit that drops a
@@ -394,7 +393,7 @@ branch's pull request.
    --why "<the correction it came from>"`), since the drafter's rules change
    only there. Either way, say in one line what the rule says and where it
    went.
-7. Ask "Post these N comments to your pending review on pull request #<n>?",
+8. Ask "Post these N comments to your pending review on pull request #<n>?",
    counting the comments that are new or changed since posting, leaving out
    those under "published; changes on GitHub at once"; with no comment to
    send, ask "Post the review body to your pending review on pull request
@@ -420,12 +419,12 @@ branch's pull request.
    `--confirm <pull request number>` and relay what it printed. Name every finding whose comment shares a submitted
    review's body: the script refuses to send one without the others. On no,
    the edit stays in the report, and the preview keeps listing it.
-8. Render, and report what went where, one line per finding from its Posted
+9. Render, and report what went where, one line per finding from its Posted
    line ("4 on `src/a.ts:12-14`", "9 in the review body", "9 covered by 4"), and whether the
    pending review already existed or was created. The comments added to the
    pending review are visible only to the user until the review is submitted;
    published comments changed with `--update-published` are visible at once.
-9. Ask whether to submit the review now, and with which verdict: Comment,
+10. Ask whether to submit the review now, and with which verdict: Comment,
    Request changes, or Approve. Propose none and recommend none; the verdict is
    the user's. When the preview listed drafts of the user's own in the pending
    review, name each (`path:line` and its first line) in the question and say
