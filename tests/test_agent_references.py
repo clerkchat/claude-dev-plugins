@@ -3,6 +3,7 @@ import re
 import unittest
 
 from helpers import PLUGIN, ROOT, TempCase, plugin_text_files, referring_files, run_ok
+import paths
 
 REFERENCE = re.compile(r"clerk-dev:([a-z0-9][a-z0-9-]*[a-z0-9])(-?<)?")
 
@@ -115,8 +116,8 @@ class GuidanceBranchScopeTests(TempCase):
 
     def test_the_guidance_file_carries_the_branch_scope_rule_ahead_of_purpose(self):
         root = self.path("wt")
-        os.makedirs(os.path.join(root, ".clerk-dev"))
-        with open(os.path.join(root, ".clerk-dev", "branch-notes.md"), "w") as f:
+        os.makedirs(paths.clerk_dev(root))
+        with open(paths.notes(root), "w") as f:
             f.write("# Branch notes\n\n## Purpose\nBuild the widget.\n")
         scope = self.scope(root)
         self.assertLess(scope.index(self.rule()), scope.index("### Purpose"))

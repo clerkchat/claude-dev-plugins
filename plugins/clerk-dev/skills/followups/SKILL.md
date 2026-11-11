@@ -96,13 +96,13 @@ Open each item with a progress line: "Follow-up 3 of 9 (BL-4): 2 done, 7 left
    its title and body (the need), `Contract:` from `contract` (what the other
    side now sends or accepts, which the change must match), `From:` from
    `origin` (repository and commit), and `Finding:` from `finding`. Find the source repository's
-   worktree by its name in `.clerk-dev/workspace.md`, and pass its path
+   worktree by its name in the workspace file (`paths.py <worktree> workspace`), and pass its path
    and the commit so the builder can read the change with
    `git -C <path> show <sha>`. When the item names a
    finding, add the source run's `resolution/<merged id>.md` if it exists
    (resolve the number through that run's `numbers.tsv`). Point it at the
    guidance file, whose branch scope and rules the change follows. When this
-   worktree has a review run (`.clerk-dev/latest` with a `merged.md`), give the builder the command
+   worktree has a review run (`paths.py <worktree> latest` resolves to a run with a `merged.md`), give the builder the command
    to list the open findings in the files it will change:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py <run> --repo
    <worktree> --open-in <files>`,

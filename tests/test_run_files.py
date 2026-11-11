@@ -424,10 +424,12 @@ class WithoutAGroupsFileTest(RunCase):
         self.assertEqual(run_files.read_groups(self.run_dir), {})
 
 
-class FencedLinesTest(unittest.TestCase):
+class FencedLinesCase(unittest.TestCase):
     def kinds(self, *lines):
         return [kind for _, kind in run_files.fenced_lines(lines)]
 
+
+class FencedLinesTest(FencedLinesCase):
     def test_marks_prose_fences_and_bodies(self):
         self.assertEqual(self.kinds("a", "```", "b", "```", "c"), ["", "fence", "body", "fence", ""])
 
@@ -448,6 +450,34 @@ class FencedLinesTest(unittest.TestCase):
 
     def test_holds_the_rest_after_an_unclosed_fence_as_body(self):
         self.assertEqual(self.kinds("```", "a", "##### Instruction"), ["fence", "body", "body"])
+
+    def test_holds_quoted_lines_inside_an_unquoted_fence_as_body(self):
+        self.assertEqual(self.kinds("```", "> ```", "x", "```"), ["fence", "body", "body", "fence"])
+
+
+class QuotedFencedLinesTest(FencedLinesCase):
+    def test_marks_a_quoted_fence_and_its_body(self):
+        self.assertEqual(self.kinds("> ```suggestion", "> x", "> ```", "> y"), ["fence", "body", "fence", ""])
+
+    def test_holds_a_quoted_heading_inside_it_as_body(self):
+        self.assertEqual(self.kinds("> ```", "> # x", "> ```"), ["fence", "body", "fence"])
+
+    def test_holds_a_bare_quote_marker_inside_it_as_body(self):
+        self.assertEqual(self.kinds("> ```", ">", "> ```"), ["fence", "body", "fence"])
+
+    def test_closes_at_the_end_of_the_quoted_run(self):
+        self.assertEqual(self.kinds("> ```", "> x", "", "##### Instruction"), ["fence", "body", "", ""])
+
+    def test_reads_the_line_that_ends_the_quoted_run_on_its_own(self):
+        self.assertEqual(self.kinds("> ```", "> x", "```", "y"), ["fence", "body", "fence", "body"])
+
+
+class OpenFenceTest(unittest.TestCase):
+    def test_reports_an_unquoted_fence_left_open(self):
+        self.assertEqual(run_files.open_fence(["```", "x"]), "```")
+
+    def test_never_reports_a_quoted_fence_left_open(self):
+        self.assertEqual(run_files.open_fence(["> ```", "> x"]), "")
 
 
 class ReadTargetTest(RunCase):

@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Keep a feature's records while designing it - brainstorms, designs, decisions, pieces, plans, and briefs, grouped by the areas the thinking splits into - in the hub worktree's .clerk-dev/feature/. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the brief for", "write the spec for", "what did we decide about X", or "show the feature records".
+description: Keep a feature's records while designing it - brainstorms, designs, decisions, pieces, plans, and briefs, grouped by the areas the thinking splits into - in the hub worktree. Use when the user says "start a feature", "let's brainstorm X", "capture this", "park that idea", "guidance: ...", "record this as guidance", "as a rule", "from now on", "let's skip that for now", "save that for later", "what ideas did we park", "split this out into its own area", "write this up as a brainstorm", "let's settle on", "record a decision", "we decided", "supersede DEC-3", "break this into pieces", "make a plan", "write the brief for", "write the spec for", "what did we decide about X", or "show the feature records".
 argument-hint: "[start <name> | brainstorm | design | decide | breakdown | plan | brief <piece> | list]"
 allowed-tools:
   - Bash(python3 *)
@@ -51,7 +51,7 @@ user before going on, then carry on with the request.
 
 1. `records.py hub <worktree>` prints the hub. Records always go there, whatever
    worktree the session is in.
-2. If the hub has no `.clerk-dev/feature/feature.md`, there is no feature yet.
+2. If the hub has no `.clerk-dev/feature.md`, there is no feature yet.
    Asked for a record anyway, offer to start one, proposing the branch name as
    its name.
 
@@ -64,7 +64,7 @@ what this branch builds, the feature summary is what the whole feature is for,
 and they should agree.
 
 When the feature spans repositories, the hub is the worktree the user starts in.
-Once a second repository joins, set up `.clerk-dev/workspace.md` as
+Once a second repository joins, set up the workspace file as
 `skills/review/workspace-manifest.md` describes, with the `Hub:` line naming
 this repository, so sessions in the other worktrees find the records.
 
@@ -247,7 +247,7 @@ pause: say so in one line and do it.
 To refresh: write `records.py digest <worktree>` to a scratch file, and hand it
 to a `general-purpose` subagent on `model: fable`, effort `high` (finding the
 gaps and disagreements across every record is the part that needs it; falling back to Opus at the same effort as Model fallback in the `review` skill describes), with the path of `records.md` (for the format
-and rules) and the output path `<hub>/.clerk-dev/feature/overview.md`, asking it
+and rules) and the output path `.clerk-dev/overview.md` in the hub, asking it
 to write the overview from the digest alone, citing ids for every statement.
 The digest marks each brief built or not and lists every idea with its status;
 the overview names an adopted idea by the record it became, and never calls

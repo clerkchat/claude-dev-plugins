@@ -1,4 +1,6 @@
+import glob
 import os
+import re
 import unittest
 
 from helpers import PLUGIN, ROOT
@@ -71,3 +73,31 @@ class ReadmeTest(unittest.TestCase):
 
     def test_says_how_to_bump(self):
         self.assertIn("scripts/bump-version.py <patch|minor|major>", self.text)
+
+
+class PromptPathsTest(unittest.TestCase):
+    LEDGER = re.compile(r"\.ledger/")
+    OLD_PATH = re.compile(
+        r"\.clerk-dev/(?:latest|<label>|\d{8}-|build\.md|passes\.md|deferred\.md|workspace\.md"
+        r"|status-seen-backlog|feature/|pr-body\.md|pr-description\.generated\.md|pr-draft-notes\.md)"
+    )
+
+    def prompt_files(self):
+        found = glob.glob(os.path.join(PLUGIN, "skills", "**", "*.md"), recursive=True)
+        found += glob.glob(os.path.join(PLUGIN, "agents", "**", "*.md"), recursive=True)
+        return found + [os.path.join(ROOT, "README.md")]
+
+    def offenders(self, pattern):
+        hits = []
+        for path in self.prompt_files():
+            with open(path, encoding="utf-8") as f:
+                for number, line in enumerate(f, 1):
+                    if pattern.search(line):
+                        hits.append(f"{os.path.relpath(path, ROOT)}:{number}")
+        return hits
+
+    def test_no_prompt_names_a_ledger_path(self):
+        self.assertEqual(self.offenders(self.LEDGER), [])
+
+    def test_no_prompt_names_an_old_plugin_owned_path(self):
+        self.assertEqual(self.offenders(self.OLD_PATH), [])

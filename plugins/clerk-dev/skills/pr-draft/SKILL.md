@@ -55,7 +55,7 @@ The scripts below are in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 
 ## 1. The repositories
 
-The unit is every row of `.clerk-dev/workspace.md` (read as
+The unit is every row of the workspace file (`paths.py <worktree> workspace`, read as
 `skills/review/workspace-manifest.md` says), or only this worktree when there
 is no workspace. `<repo>` arguments narrow it to those rows. A row whose
 worktree is missing gets one line in the report and is skipped.
@@ -106,7 +106,7 @@ For each repository, read:
   records (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py list <worktree>
   --active`, then the briefs, decisions, and designs that bear on this
   repository), the open items in briefs (`records.py digest <worktree>`), and
-  the open items in `.clerk-dev/deferred.md`, and the worktree's open backlog
+  the open deferred items (`paths.py <worktree> deferred`), and the worktree's open backlog
   follow-ups this branch owes (`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py
   list <worktree> --owed`);
   these become Left out on purpose items. Keep what a reviewer would weigh
@@ -120,13 +120,13 @@ For each repository, read:
   dropped; a decided choice may still be described in the stage it shaped,
   but not as open;
 - the latest review's deferred and discussed findings
-  (`.clerk-dev/latest/report.md`), for Left out on purpose; with no report
+  (`.clerk-dev/review.md`), for Left out on purpose; with no report
   there (a review planned but not run), there are none, and step 3's review
   warning covers it;
 - the pull request's current body, when there is one, and an earlier
   `.clerk-dev/pr-description.md`, when there is one: the author's own
   statement, to build on where it still holds;
-- the draft notes, `.clerk-dev/pr-draft-notes.md` (step 10), when there are
+- the draft notes (`paths.py <worktree> pr-notes`, step 10), when there are
   any: every note for this repository is a rule for this draft, and every
   open note for this pull request is an edit it keeps;
 - the review's state: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py
@@ -138,7 +138,7 @@ Everything is translated into what the change does: nothing in the draft cites
 where it came from.
 
 When re-drafting, keep the user's edits. They are the differences between
-`.clerk-dev/pr-description.md` and `.clerk-dev/pr-description.generated.md`,
+`.clerk-dev/pr-description.md` and the generated copy (`paths.py <worktree> pr-generated`),
 the copy of what the skill last wrote (step 8), together with the open notes
 for this pull request. Carry each into the new draft unless the code has
 changed under it, and then say so in the report. Re-read the open items:
@@ -292,11 +292,10 @@ request's number and link.
 
 Write each draft to `<worktree>/.clerk-dev/pr-description.md`, replacing an
 earlier one, as plain Markdown with no hard wrapping and no render step, and
-the same text to `<worktree>/.clerk-dev/pr-description.generated.md`, the
-record of what the skill wrote, against which step 3 finds the user's edits. When
-`git -C <worktree> check-ignore -q .clerk-dev` fails, add a `.clerk-dev/` line
-to the `info/exclude` file under `git -C <worktree> rev-parse
---git-common-dir`, keeping its other lines, and say so once.
+the same text to the path `paths.py <worktree> pr-generated` prints, the
+record of what the skill wrote, against which step 3 finds the user's edits.
+First run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py ensure <worktree>`,
+which creates `.clerk-dev/` and excludes it from git; say so once when it had to.
 
 Drafting and refining use only `gh pr view`, and never preview the draft:
 the user previews it with their own tools. Only step 11 creates or edits a
@@ -330,7 +329,7 @@ When the user asks for a change to a draft ("in the PR draft, define pin
 earlier", "drop that section"), make it in `.clerk-dev/pr-description.md` of
 the repositories it concerns, and in their siblings when the change is to
 something every draft shares (a shared term, the deploy order). Then log it in
-`.clerk-dev/pr-draft-notes.md` of each repository changed, one entry per
+the draft notes of each repository changed (`paths.py <worktree> pr-notes`), one entry per
 change:
 
 ```
@@ -372,13 +371,13 @@ for every repository of the unit that has a draft:
    say which branch and why.
 3. **Create.** For each repository with no open pull request for the branch
    (`gh pr view`): the title is the draft's Title section; the body is
-   everything after it, written to `.clerk-dev/pr-body.md` with soft wraps
+   everything after it, written to the path `paths.py <worktree> pr-body` prints (`<pr-body>`) with soft wraps
    joined: an editor or formatter may have hard-wrapped the draft, and GitHub
    shows every newline in a body as a line break. Join each paragraph's and
    each list item's continuation lines into one line, and leave code blocks,
    tables, headings, and `<details>` tags as they are. Run `gh pr create
    -R <owner>/<repo> --base <base> --head <branch> --title "<title>"
-   --body-file <worktree>/.clerk-dev/pr-body.md`, adding `--draft` for a
+   --body-file <pr-body>`, adding `--draft` for a
    draft. Owner and repo come from `git -C <worktree> remote get-url origin`,
    without the host, any leading `/` or `:`, and a trailing `.git`. A
    repository that already has an open pull request keeps its body; only step
@@ -387,9 +386,9 @@ for every repository of the unit that has a draft:
    `gh pr view --json body`, since the user may have edited it on GitHub;
    replace each sibling's branch name in the sibling list with its number and
    link (`[#123](<url>)`), changing nothing else; and save it with `gh pr edit
-   <number> -R <owner>/<repo> --body-file <worktree>/.clerk-dev/pr-body.md`.
+   <number> -R <owner>/<repo> --body-file <pr-body>`.
    Write the same body back to `.clerk-dev/pr-description.md`, under its
-   Title section, and to `pr-description.generated.md`.
+   Title section, and to the generated copy.
 5. **Report**: each pull request's number, link, and whether it is a draft,
    and any repository not posted with why. A single repository has no
    sibling list, and step 4 is skipped.

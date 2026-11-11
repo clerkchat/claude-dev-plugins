@@ -2,6 +2,7 @@ import os
 import unittest
 
 from helpers import RunCase, init_repo
+import paths
 
 DRAFT_STEP = '"draft the PR description"'
 
@@ -12,7 +13,7 @@ class DraftStepCase(RunCase):
         self.repo = init_repo(self.path("work"))
         self.repo.git("checkout", "-q", "-b", "feat")
         self.repo.commit("feat: the change")
-        self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
+        self.run_dir = paths.latest(self.repo.path)
 
     def write_run(self):
         self.write("merged.md", "")
@@ -35,8 +36,8 @@ class DraftStepTests(DraftStepCase):
 
     def test_a_fresh_branch_leads_with_its_purpose_not_the_review(self):
         self.repo.git("reset", "-q", "--hard", "main")
-        os.makedirs(os.path.join(self.repo.path, ".clerk-dev"), exist_ok=True)
-        with open(os.path.join(self.repo.path, ".clerk-dev", "branch-notes.md"), "w") as f:
+        os.makedirs(paths.clerk_dev(self.repo.path), exist_ok=True)
+        with open(paths.notes(self.repo.path), "w") as f:
             f.write("# Branch notes\n\n## Purpose\nDrafted today.\n\nWhat this branch builds: the widget.\n")
         code, out = self.repo.status()
         self.assertEqual(code, 0, out)

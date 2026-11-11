@@ -141,9 +141,10 @@ with "where are we?".
   repository you started the feature in), outside any worktree, so they outlive
   the branch. Spin-up takes a parked idea up in a new worktree off main, with
   the idea as the new feature's first brainstorm.
-- Records live in `.clerk-dev/feature/` in the worktree you started in (the
-  hub), where other repositories of the feature find them. Reviews check the
-  code against the active briefs.
+- Records live in the worktree you started in (the hub), where other
+  repositories of the feature find them; `.clerk-dev/feature.md` there reads
+  every active record in one file. Reviews check the code against the active
+  briefs.
 
 #### Design checks
 
@@ -257,7 +258,7 @@ Other ways to start:
 > Review the staged changes. / Review my last commit. / Do a quick review of
 > the branch. / Review the whole feature. / Review the branch without tech debt.
 
-**2. Read the report** at `.clerk-dev/latest/report.md`: a summary, a table of
+**2. Read the report** at `.clerk-dev/review.md`: a summary, a table of
 findings, and one card per finding, grouped:
 
 | Group                   | What it holds                                                          |
@@ -329,6 +330,17 @@ Reads the whole branch fresh and reports only what would hold the merge (a
 broken path, a security hole, a rollout that fails), ending with pass or not
 pass. Like a good reviewer on the last round, it sets aside new nits and does
 not reopen findings you declined or deferred, so the review can end.
+
+#### Where files go
+
+A worktree's `.clerk-dev/` is excluded from git. On top sit the files you open
+and edit: `branch-notes.md`, `review.md` (the current review's report),
+`review-feature.md` (the feature review's), `pr-description.md`, `feature.md`
+(the feature's active records in one file), and `overview.md`. Everything the
+plugin keeps for itself (runs, the build log, the backlog's markers, the
+records) sits in a hidden ledger directory inside it; the scripts and
+skills reach it, and you do not need to. Anything else you put in `.clerk-dev/`,
+such as `notes/` or `logs/`, is yours and the plugin never touches it.
 
 #### The slash command
 

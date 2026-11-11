@@ -17,6 +17,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py *)
@@ -50,7 +51,7 @@ If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that keep
 items separate and commits clean.
 
-Run directory: `.clerk-dev/latest` unless the user names a label. The instructions
+Run directory: `<run>`, from `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> latest`, unless the user names a label (`paths.py <worktree> run <label>`). The instructions
 live in `<run>/instructions.tsv` (`merged_id`, choice, note, date, also,
 option), statuses in `<run>/status.tsv`, numbers in `<run>/numbers.tsv`
 (`number`, `merged_id`, `section`), posted texts in `<run>/posted/<merged
@@ -345,8 +346,10 @@ branch's pull request.
    the correction to make; leave out a finding it named as not marked Post.
    After a second refusal of the same batch, stop drafting it and tell the
    user which findings it held and the refusal line. Apply the drafts in one render with
-   `--posted N=<path>` for each line it printed, and no other draft file. Tell
-   the user which findings were not drafted and why. When the
+   `--posted N=<path>` for each line it printed, and no other draft file. Then
+   show each text this render applied, and no other, in chat as `finding N:
+   <title>` followed by the text as a blockquote, so the user need not hunt for
+   them in the report. Tell the user which findings were not drafted and why. When the
    `clerk-dev:post-drafter` agent type is not available (a session started
    before the plugin was updated), stop and ask the user to run
    `/reload-plugins`, then post the review again; never draft with another
@@ -365,9 +368,9 @@ branch's pull request.
    that fell back to the review body. Tell the user the whole file is theirs to
    edit, the generated part included.
 5. Tell the user which texts were drafted, any proposed general comment, and
-   that they can edit the Posted blocks in the report and `posted/review.md` in
-   place, or change a note and have it redrafted; wait for them to say they are
-   done.
+   that editing stays in the Posted blocks in the report and
+   `posted/review.md`, or a changed note to have a text redrafted; wait for
+   them to say they are done.
 6. Render, then run the preview again and show it: the comments with their
    anchors, every fallback, the review body, the head-moved line, and the
    pending-review line. When a finding cannot be posted, say why and what would
