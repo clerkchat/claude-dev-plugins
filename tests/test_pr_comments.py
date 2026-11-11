@@ -2,6 +2,7 @@ import io
 import os
 import sys
 import unittest
+from collections import Counter
 from contextlib import redirect_stderr
 from unittest import mock
 
@@ -28,14 +29,19 @@ def thread(gid, state="COMMENTED", body="Looks off.", replies=(), reply_state=No
             "viewerCanResolve": True, "comments": {"nodes": comments}, **fields}
 
 
-def review(gid, state, body="Summary."):
-    return {"databaseId": gid, "author": {"login": "me"}, "body": body, "state": state, "url": f"u{gid}"}
+def review(gid, state, body="Summary.", login="me"):
+    return {"databaseId": gid, "author": {"login": login}, "body": body, "state": state, "url": f"u{gid}"}
 
 
-def pull_request(threads=(), reviews=(), total=None):
+def conversation_comment(gid, body, login="alice"):
+    return {"databaseId": gid, "author": {"login": login}, "body": body, "url": f"u{gid}"}
+
+
+def pull_request(threads=(), reviews=(), total=None, comments=(), review_total=None):
     return {"number": 7, "url": "https://gh/pull/7", "headRefName": "feat",
             "reviewThreads": {"totalCount": len(threads) if total is None else total, "nodes": list(threads)},
-            "reviews": {"nodes": list(reviews)}, "comments": {"nodes": []}}
+            "reviews": {"totalCount": len(reviews) if review_total is None else review_total, "nodes": list(reviews)},
+            "comments": {"nodes": list(comments)}}
 
 
 def posted_row(comment_id, kind="line"):
@@ -99,8 +105,8 @@ class FoldInCase(GhRunCase):
         super().setUp()
         self.write("merged.md", merged_md())
 
-    def fold(self, *threads, reviews=()):
-        return pr_comments.fold_in(self.run_dir, pull_request(threads, reviews), DATE)
+    def fold(self, *threads, reviews=(), comments=()):
+        return pr_comments.fold_in(self.run_dir, pull_request(threads, reviews, comments=comments), DATE)
 
 
 class FoldInTest(FoldInCase):
@@ -120,7 +126,7 @@ class FoldInTest(FoldInCase):
 
     def test_records_each_comment_as_seen(self):
         self.fold(thread(1))
-        self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:1": 1})
+        self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:1": {"merged_id": "1", "skipped": ""}})
 
     def test_keeps_the_payload_and_the_pull_request(self):
         self.fold()
@@ -138,6 +144,10 @@ class FoldInTest(FoldInCase):
     def test_counts_the_threads_past_the_first_page(self):
         folded = pr_comments.fold_in(self.run_dir, pull_request([thread(1)], total=130), DATE)
         self.assertEqual(folded.unread_threads, 129)
+
+    def test_counts_the_reviews_past_the_first_page(self):
+        folded = pr_comments.fold_in(self.run_dir, pull_request(reviews=[review(2, "APPROVED", "", "bob")], review_total=104), DATE)
+        self.assertEqual(folded.unread_reviews, 103)
 
     def test_writes_no_threads_file_without_posted_findings(self):
         self.fold(thread(1))
@@ -355,8 +365,128 @@ class WhenTheCommentIsAlreadyLinkedTest(ApplyJudgedCase):
 
 class SeenTest(GhRunCase):
     def test_reads_back_what_it_wrote(self):
-        pr_comments.write_seen(self.run_dir, {"thread:5": 2, "review:9": 1})
-        self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:5": 2, "review:9": 1})
+        seen = {"thread:5": {"merged_id": "2", "skipped": ""}, "review:9": {"merged_id": "1", "skipped": ""},
+                "comment:3": {"merged_id": "", "skipped": "bot"}}
+        pr_comments.write_seen(self.run_dir, seen)
+        self.assertEqual(pr_comments.read_seen(self.run_dir), seen)
+
+    def test_lists_skipped_rows_after_imported_ones(self):
+        pr_comments.write_seen(self.run_dir, {"comment:3": {"merged_id": "", "skipped": "bot"}, "thread:5": {"merged_id": "2", "skipped": ""}})
+        self.assertEqual(list(pr_comments.read_seen(self.run_dir)), ["thread:5", "comment:3"])
+
+    def test_reads_a_file_of_one_column_rows_as_imported(self):
+        self.write("pr/seen.tsv", "thread:5\t2\n")
+        self.assertEqual(pr_comments.read_seen(self.run_dir), {"thread:5": {"merged_id": "2", "skipped": ""}})
+
+
+class IsCourtesyTest(unittest.TestCase):
+    def test_accepts_a_short_courtesy_phrase(self):
+        self.assertTrue(all(map(pr_comments.is_courtesy, ["LGTM", "Thanks!", "Looks good to me.", "thanks, done", "Ship it", "+1", "👍", "👍🏽 👍\ufe0f"])))
+
+    def test_rejects_a_phrase_with_more_in_it(self):
+        self.assertFalse(pr_comments.is_courtesy("thanks, but rename X"))
+
+    def test_rejects_more_than_five_words(self):
+        self.assertFalse(pr_comments.is_courtesy("thanks thanks thanks thanks thanks thanks"))
+
+    def test_rejects_an_empty_body(self):
+        self.assertFalse(pr_comments.is_courtesy(" \n"))
+
+
+class SkippedCommentsTest(FoldInCase):
+    def test_skips_a_conversation_comment_of_a_noise_bot(self):
+        folded = self.fold(comments=[conversation_comment(5, "Linked to ENG-1.", "Linear[bot]")])
+        self.assertEqual((folded.new_ids, folded.skipped), ([], {"bot": 1}))
+
+    def test_keeps_a_review_thread_of_the_same_bot(self):
+        self.assertEqual(self.fold(thread(1, body="Real finding.", login="linear[bot]")).new_ids, [1])
+
+    def test_keeps_a_conversation_comment_of_another_bot(self):
+        self.assertEqual(self.fold(comments=[conversation_comment(5, "Found a bug.", "coderabbitai[bot]")]).new_ids, [1])
+
+    def test_skips_a_courtesy_comment_of_a_human(self):
+        folded = self.fold(comments=[conversation_comment(5, "LGTM")])
+        self.assertEqual((folded.new_ids, folded.skipped), ([], {"courtesy": 1}))
+
+    def test_skips_a_thread_whose_every_comment_is_courtesy(self):
+        self.assertEqual(self.fold(thread(1, body="thanks!", replies=["+1"])).skipped, {"courtesy": 1})
+
+    def test_keeps_a_courtesy_root_with_a_substantive_reply(self):
+        self.assertEqual(self.fold(thread(1, body="thanks!", replies=["Please also fix b.py."])).new_ids, [1])
+
+    def test_keeps_a_courtesy_opening_followed_by_more(self):
+        self.assertEqual(self.fold(comments=[conversation_comment(5, "thanks, but rename X")]).new_ids, [1])
+
+    def test_records_the_reason_in_seen(self):
+        self.fold(comments=[conversation_comment(5, "LGTM")])
+        self.assertEqual(pr_comments.read_seen(self.run_dir), {"comment:5": {"merged_id": "", "skipped": "courtesy"}})
+
+    def test_does_not_write_a_finding_for_it(self):
+        self.fold(comments=[conversation_comment(5, "LGTM")])
+        self.assertNotIn("LGTM", self.read("merged.md"))
+
+
+class WhenASkippedCommentIsFetchedAgainTest(FoldInCase):
+    def setUp(self):
+        super().setUp()
+        self.fold(comments=[conversation_comment(5, "LGTM")])
+        self.folded = self.fold(comments=[conversation_comment(5, "LGTM, but fix the typo in a.py please")])
+
+    def test_does_not_import_it_even_with_a_changed_body(self):
+        self.assertEqual(self.folded.new_ids, [])
+
+    def test_does_not_count_it_again(self):
+        self.assertEqual(self.folded.skipped, {})
+
+
+class ApprovalsTest(FoldInCase):
+    def approvals(self):
+        return {k: v["author"] for k, v in run_files.read_approvals(self.run_dir).items()}
+
+    def test_records_an_approval_with_a_courtesy_body(self):
+        self.fold(reviews=[review(2, "APPROVED", "LGTM", "bob")])
+        self.assertEqual(self.approvals(), {2: "bob"})
+
+    def test_records_an_approval_without_a_body(self):
+        self.fold(reviews=[review(2, "APPROVED", "", "bob")])
+        self.assertEqual(self.approvals(), {2: "bob"})
+
+    def test_records_an_approval_that_also_becomes_a_card(self):
+        folded = self.fold(reviews=[review(2, "APPROVED", "Fix a.py first.", "bob")])
+        self.assertEqual((self.approvals(), folded.new_ids), ({2: "bob"}, [1]))
+
+    def test_records_the_approvals_in_the_order_given(self):
+        self.fold(reviews=[review(9, "APPROVED", "", "bob"), review(2, "APPROVED", "", "carol")])
+        self.assertEqual(list(self.approvals().values()), ["bob", "carol"])
+
+    def test_leaves_out_a_reviewer_who_later_requested_changes(self):
+        self.fold(reviews=[review(2, "APPROVED", "", "bob"), review(3, "CHANGES_REQUESTED", "Not yet.", "bob")])
+        self.assertEqual(self.approvals(), {})
+
+    def test_keeps_a_reviewer_who_approved_after_requesting_changes(self):
+        self.fold(reviews=[review(2, "CHANGES_REQUESTED", "Not yet.", "bob"), review(3, "COMMENTED", "Hm.", "bob"),
+                           review(4, "APPROVED", "", "bob")])
+        self.assertEqual(self.approvals(), {4: "bob"})
+
+    def test_leaves_out_a_review_that_is_not_an_approval(self):
+        self.fold(reviews=[review(2, "COMMENTED", "", "bob"), review(3, "PENDING", "", "carol")])
+        self.assertEqual(self.approvals(), {})
+
+    def test_leaves_out_an_approval_this_run_posted(self):
+        self.write("posted/submitted-2.md", "")
+        self.fold(reviews=[review(2, "APPROVED", "Our summary.", "me")])
+        self.assertEqual(self.approvals(), {})
+
+    def test_rewrites_the_file_from_the_pull_request_each_time(self):
+        self.fold(reviews=[review(2, "APPROVED", "", "bob")])
+        self.fold()
+        self.assertEqual(self.approvals(), {})
+
+    def test_counts_the_approvals(self):
+        self.assertEqual(self.fold(reviews=[review(2, "APPROVED", "", "bob")]).approvals, 1)
+
+    def test_counts_a_courtesy_approval_as_skipped(self):
+        self.assertEqual(self.fold(reviews=[review(2, "APPROVED", "LGTM", "bob")]).skipped, {"courtesy": 1})
 
 
 class ShortlistTest(GhRunCase):
@@ -371,8 +501,24 @@ class ShortlistTest(GhRunCase):
 
 
 class SummaryTest(unittest.TestCase):
-    def summary(self, linked=0, left_out=0, unread=0):
-        return pr_comments.summary(12, pr_comments.Folded([5, 6, 7], 1, linked, left_out, unread), [(5, 1, 0.5)])
+    def summary(self, linked=0, left_out=0, unread=0, skipped=None, approvals=0, unread_reviews=0):
+        folded = pr_comments.Folded([5, 6, 7], 1, linked, left_out, unread, Counter(skipped or {}), approvals, unread_reviews)
+        return pr_comments.summary(12, folded, [(5, 1, 0.5)])
+
+    def test_counts_the_skipped_comments_by_reason(self):
+        self.assertIn("1 updated, 3 skipped (2 from noise bots, 1 courtesy-only), ", self.summary(skipped={"bot": 2, "courtesy": 1}))
+
+    def test_names_only_the_reasons_that_occurred(self):
+        self.assertIn(", 1 skipped (1 courtesy-only), ", self.summary(skipped={"courtesy": 1}))
+
+    def test_says_nothing_when_nothing_was_skipped(self):
+        self.assertNotIn("skipped", self.summary())
+
+    def test_adds_the_approvals(self):
+        self.assertIn("1 updated, 2 approvals, ", self.summary(approvals=2))
+
+    def test_says_approval_for_one(self):
+        self.assertIn(", 1 approval, ", self.summary(approvals=1))
 
     def test_counts_new_updated_and_candidates(self):
         self.assertEqual(self.summary(), "PR #12: 3 new comments, 1 updated, 1 candidate links for 1 comments to judge")
@@ -382,6 +528,9 @@ class SummaryTest(unittest.TestCase):
 
     def test_adds_the_pending_threads_left_out(self):
         self.assertIn(", 2 threads of your own pending review left out, ", self.summary(left_out=2))
+
+    def test_adds_the_reviews_past_the_first_page(self):
+        self.assertIn(", 5 reviews past the first 100 not read; the approval line may miss a later verdict", self.summary(unread_reviews=5))
 
     def test_adds_the_threads_past_the_first_page(self):
         self.assertIn(", 30 review threads past the first 100 not read; ", self.summary(unread=30))

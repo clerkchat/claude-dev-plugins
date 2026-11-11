@@ -280,6 +280,36 @@ class PullRequestCommentCardTest(RenderCase):
         self.assertIn("> Replies: @amy: Agreed.\n\nState: marked resolved on GitHub; outdated on GitHub", self.card(3))
 
 
+class ApprovalCase(RenderCase):
+    def approve(self, *authors):
+        run_files.write_approvals(self.run_dir, {i: {"author": a, "date": self.DATE} for i, a in enumerate(authors, 1)})
+        self.render()
+
+
+class ApprovalLineTest(ApprovalCase):
+    def test_adds_no_line_without_approvals(self):
+        self.assertNotIn("Approved by", self.report())
+
+    def test_lists_each_approver_once_in_file_order(self):
+        self.approve("bob", "amy", "bob")
+        self.assertIn("Approved by @bob, @amy.", self.report())
+
+    def test_renders_the_section_with_the_line_alone(self):
+        self.approve("bob")
+        self.assertIn("## Pull request comments\n\nApproved by @bob.\n\n---\n", self.report())
+
+
+class WhenAnApprovedPullRequestHasCommentsTest(ApprovalCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(7, "a.py"), defect(8, "b.py"), defect(9, "c.py", lens="pr-review", extra="  author: amy\n"))
+        self.write("verify/9.md", "verdict: confirmed | confidence: 90 | severity: major")
+
+    def test_puts_the_line_first_in_the_section(self):
+        self.approve("bob")
+        self.assertIn("## Pull request comments\n\nApproved by @bob.\n\n#### ", self.report())
+
+
 class WhenAPullRequestCommentReplyOpensAFenceTest(RenderCase):
     def setUp(self):
         super().setUp()
@@ -338,7 +368,7 @@ class WhenTheVerifierRejectsAPostedFindingTest(SeededPostedCommentCase):
         self.assertIn(", merged 7, ", self.report())
 
     def test_keeps_its_posted_block(self):
-        self.assertIn("##### Posted\n\n````\nSay it plainly.\n````", self.card_of(7))
+        self.assertIn("##### Posted\n\n> Say it plainly.\n", self.card_of(7))
 
 
 class WhenAPostedFindingFallsBelowTheBarTest(SeededPostedCommentCase):
@@ -375,10 +405,10 @@ class PostedBlockTest(PostCase):
     def test_is_absent_from_a_card_not_marked_post(self):
         self.assertNotIn("##### Posted", self.card(2))
 
-    def test_fences_text_that_holds_a_suggestion_with_a_longer_fence(self):
-        write_file(self.draft, "Try:\n\n````suggestion\nx = 1\n````\n")
+    def test_quotes_a_suggestion_inside_the_text(self):
+        write_file(self.draft, "Try:\n\n```suggestion\nx = 1\n```\n")
         self.render("--posted", f"1={self.draft}")
-        self.assertIn("`````\nTry:", self.posted_section(1))
+        self.assertIn("> Try:\n>\n> ```suggestion\n> x = 1\n> ```\n", self.posted_section(1))
 
 
 class PostedFlagTest(PostCase):
@@ -394,9 +424,9 @@ class PostedFlagTest(PostCase):
         self.render("--posted", f"1={self.draft}")
         self.assertEqual((self.posted(7)["state"], self.posted(7)["note"]), ("drafted", "keep it short"))
 
-    def test_renders_the_text_in_a_four_backtick_fence(self):
+    def test_renders_the_text_as_a_blockquote(self):
         self.render("--posted", f"1={self.draft}")
-        self.assertIn("````\nSay it plainly.\n````", self.posted_section(1))
+        self.assertIn("\n> Say it plainly.\n", self.posted_section(1))
 
     def test_rejects_a_missing_file(self):
         self.assertIn("bad --posted", self.render_fails("--posted", "1=nope.md"))
@@ -511,12 +541,16 @@ class PostedEditTest(PostCase):
         self.edit_text("Say it gently.")
         self.assertEqual(self.posted(7)["state"], "edited")
 
-    def test_keeps_a_heading_line_inside_the_fence_as_text(self):
-        self.edit_text("# Heads up\nSay it gently.")
+    def test_keeps_a_quoted_heading_line_as_text(self):
+        self.edit_text("# Heads up\n> Say it gently.")
         self.assertEqual(self.read("posted/7.md"), "# Heads up\nSay it gently.\n")
 
+    def test_reads_a_blank_line_that_lost_its_quote_marker_as_a_blank_line(self):
+        self.edit_text("Say it\n\n> gently.")
+        self.assertEqual(self.read("posted/7.md"), "Say it\n\ngently.\n")
+
     def test_ignores_a_rewrapped_but_unchanged_text(self):
-        self.edit_text("Say it\nplainly.")
+        self.edit_text("Say it\n> plainly.")
         self.assertEqual(self.posted(7)["state"], "drafted")
 
     def test_ignores_an_unchanged_block_from_an_older_render(self):
@@ -528,25 +562,63 @@ class PostedEditTest(PostCase):
         self.assertEqual(self.read("posted/7.md"), "Say it gently.\n")
 
 
-class WhenAPostedEditLeavesItsFenceOpenTest(PostCase):
+class PostedRoundTripTest(PostCase):
+    def round_trip(self, text):
+        write_file(self.draft, text + "\n\nSay it plainly.\n")
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("Say it plainly.", "Say it gently.")
+        self.render()
+        return self.read("posted/7.md")
+
+    def assertRoundTrips(self, text):
+        self.assertEqual(self.round_trip(text), text + "\n\nSay it gently.\n")
+
+    def test_keeps_a_suggestion_block(self):
+        self.assertRoundTrips("Try:\n\n```suggestion\nx = 1\n```")
+
+    def test_keeps_blank_lines(self):
+        self.assertRoundTrips("One.\n\n\nTwo.")
+
+    def test_keeps_indented_code_lines(self):
+        self.assertRoundTrips("Like:\n\n    x = 1\n        y = 2")
+
+    def test_keeps_a_line_that_starts_with_a_quote_marker(self):
+        self.assertRoundTrips("> You said this.\n>\n> > And this.")
+
+
+class WhenAPostedEditBreaksItsQuoteTest(PostCase):
     def setUp(self):
         super().setUp()
+        write_file(self.draft, "Say it plainly.\nThen stop.\n")
         self.render("--posted", f"1={self.draft}")
-        self.edit_report("Say it plainly.\n````", "Say it gently.")
+        self.edit_report("Say it plainly.", "Say it gently.\nAn unquoted line.")
         self.out = self.render()
 
     def test_warns_that_the_edit_was_not_read(self):
-        self.assertIn("warning: finding 1: its Posted text opens a fence it never closes; the edit was not read", self.out)
+        self.assertIn("warning: finding 1: its Posted text has a line without `>` in the middle; the edit was not read", self.out)
+
+    def test_keeps_the_stored_text(self):
+        self.assertEqual(self.read("posted/7.md"), "Say it plainly.\nThen stop.\n")
+
+    def test_shows_the_stored_text_again(self):
+        self.assertIn("\n> Say it plainly.\n> Then stop.\n", self.posted_section(1))
+
+
+class WhenAReportStillHoldsAFencedPostedTextTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.render("--posted", f"1={self.draft}")
+        self.edit_report("> Say it plainly.", "````\nSay it gently.\n````")
+        self.render()
 
     def test_keeps_the_stored_text(self):
         self.assertEqual(self.read("posted/7.md"), "Say it plainly.\n")
 
-    def test_shows_the_stored_text_again(self):
-        self.assertIn("````\nSay it plainly.\n````", self.posted_section(1))
+    def test_records_no_edit(self):
+        self.assertEqual(self.posted(7)["state"], "drafted")
 
-
-    def test_warns_that_nothing_below_the_open_fence_was_read(self):
-        self.assertIn("warning: report.md leaves a fence open from finding 1 on; no edit below where it opens was read", self.out)
+    def test_shows_the_stored_text_as_a_blockquote(self):
+        self.assertIn("\n> Say it plainly.\n", self.posted_section(1))
 
 
 class WhenARenderWithAPostedEditStopsOnABadFlagTests:
@@ -933,9 +1005,6 @@ class FenceAroundTest(unittest.TestCase):
     def test_outgrows_an_indented_fence_in_the_text(self):
         self.assertEqual(render.fence_around("a\n  ````\nb", 3), "`````")
 
-    def test_posted_fence_starts_at_four(self):
-        self.assertEqual(render.posted_fence("plain"), "````")
-
 
 class UnbalancedFenceInSnippetTest(RenderCase):
     def setUp(self):
@@ -1006,6 +1075,15 @@ class WrapMarkdownTest(unittest.TestCase):
 
     def test_closes_only_on_the_same_fence_character(self):
         self.assertIn(LONG, self.wrap("~~~", "```", LONG, "~~~"))
+
+    def test_leaves_a_line_inside_a_quoted_fence_alone(self):
+        self.assertIn(f"> {LONG}", self.wrap("> ```", f"> {LONG}", "> ```"))
+
+    def test_wraps_again_after_the_quoted_run_ends(self):
+        self.assertNotIn(LONG, self.wrap("> ```", "> x", "", LONG))
+
+    def test_leaves_indented_code_inside_a_quote_alone(self):
+        self.assertIn(f">     {LONG}", self.wrap(f">     {LONG}"))
 
     def test_keeps_the_quote_marker_on_every_wrapped_line(self):
         lines = self.wrap(f"> {LONG}{FILLER} - [x] Open")

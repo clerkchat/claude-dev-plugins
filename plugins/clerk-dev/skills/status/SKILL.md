@@ -59,7 +59,8 @@ hub, and the commits since the review. It starts no agent and changes nothing ex
 which keeps one `<repo> <n>` line per backlog it read, the highest `BL-n` of the
 follow-ups owed here it showed there, so the next status can mark newer items as new. Pass `--run <label>` when the user names a run.
 
-Show its output as it is. Then add one or two sentences: which step to take
+Show its output as it is, starting with the map of where the work sits
+(`skills/review/tracking.md`) when it prints one. Then add one or two sentences: which step to take
 first and why, when the order is not obvious from the list. The order the script
 gives follows the dependencies (a handoff stopped on a question or not landed
 first, then a pass in progress, then settle-first

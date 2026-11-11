@@ -1192,7 +1192,14 @@ request for this branch; skipping its comments."), and when the reason is
 `gh`, add the one-time line under First runs in a repository. Otherwise:
 
 1. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pr-comments.py <run> --repo <repo>` (add `--pr N` when the branch's pull
-   request cannot be found from the branch). It adds each review thread, review
+   request cannot be found from the branch). It skips a conversation comment by
+   a noise bot (Linear, Vercel, Netlify, Codecov; review threads and summaries
+   are never skipped by author) and any comment, thread, or review whose whole
+   text is a short courtesy phrase (LGTM, thanks, a thumbs up), records each in
+   `pr/seen.tsv` with its reason so it never returns, and counts them in its
+   summary line. Every approving review goes to `pr/approvals.tsv`, which the
+   report's "Pull request comments" section opens with as "Approved by @a,
+   @b." It adds each other review thread, review
    summary with a body, and conversation comment as an entry in `merged.md` with
    `lens: pr-review`, the author, the link, the replies, and the GitHub state;
    known comments are refreshed, not duplicated. It writes a shortlist of up to
@@ -1505,9 +1512,9 @@ ticks one and writes notes in the report; the renderer imports them into
 and shows a Triage column and count in the glance section.
 
 A card marked Post also gets a `##### Posted` block after the checklist: the
-text that goes to the author, from `<run>/posted/<merged id>.md`, in a
-four-backtick fence; or "Posted text: not drafted yet."; or "Posted text: to be
-redrafted; the note changed." The user edits the fenced text in the report like
+text that goes to the author, from `<run>/posted/<merged id>.md`, as a `>`
+blockquote; or "Posted text: not drafted yet."; or "Posted text: to be
+redrafted; the note changed." The user edits the quoted text in the report like
 Notes: an edit is saved to `posted/<merged id>.md` at the next render and marks
 the text `edited` in `<run>/posted.tsv`. Agents set it with `--posted
 N=<file>`, never by editing the report. The Post note steers the text (tone,
@@ -1533,8 +1540,10 @@ render stamps the report with a generation number and keeps what it wrote under
 `.render/<generation>/`; a saved report is compared with the render it came
 from, so a buffer saved after a later render contributes only the lines the user
 changed. The stamp names what survives a render: the checkboxes, the Notes
-lines, and the Posted text. A Posted text whose fence the edit left open is not
-read: the render warns and shows the stored text again; relay that warning. The previous report is kept as `report.prev.md`.
+lines, and the Posted text. A Posted text with an unquoted line in the middle
+of its quote is not read: the render warns and shows the stored text again;
+relay that warning. A Posted text still in a fence, from a report rendered
+before blockquotes, is not read either. The previous report is kept as `report.prev.md`.
 Two ticked boxes use the first, and the card and the render's warning say so; relay that warning to
 the user. Edits anywhere else in the report are not kept. Agents set
 instructions with `--instruct N=<choice>[:note]` and add notes with

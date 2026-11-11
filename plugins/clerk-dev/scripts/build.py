@@ -396,44 +396,51 @@ def open_findings(wt, e):
     st, ins, num = sf.state(run)
     return sum(1 for m in sf.load_findings(run) if m in num and sf.is_open(m, st, ins))
 
+class MilestoneView(NamedTuple):
+    rows: list
+    next: str | None
+    ready: bool
+    stage: str | None
+
 def milestone_view(wt, m):
-    """(rows of (focus, word, required), next step or None, ready)."""
+    """Rows of (focus, word, required); the next step and the focus of the
+    first pass not through, or None for both; and whether it is ready."""
     plan = [x.strip() for x in m["f"].get("Passes", "").split(",") if x.strip()]
     req = {x.strip() for x in m["f"].get("Required", "").split(",") if x.strip()}
     skipped = {s.split(":", 1)[0].strip(): s.split(":", 1)[1].strip() if ":" in s else "" for s in m["multi"]["Skipped"]}
     states = pass_states(wt, m["f"].get("Brief"))
-    rows, nxt, ready = [], None, True
+    rows, waiting = [], []
     for f in plan:
         e = states.get(f)
         if f in skipped:
             rows.append((f, f"skipped: {skipped[f]}", f in req)); continue
         if not e or e["f"].get("Status") == "abandoned":
-            rows.append((f, "not run" if not e else "abandoned", f in req)); ready = False
-            nxt = nxt or (f"draft {m['title']}: start the happy-path pass and send its handoffs" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Brief')}" + (" (required)" if f in req else ""))
+            rows.append((f, "not run" if not e else "abandoned", f in req))
+            waiting.append((f, f"draft {m['title']}: start the happy-path pass and send its handoffs" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Brief')}" + (" (required)" if f in req else "")))
             continue
         st = e["f"].get("Status")
         if st == "open":
-            rows.append((f, f"{e['id']} open", f in req)); ready = False
-            nxt = nxt or (f"finish the draft ({e['id']}), then end it" if f == "happy-path" else f"finish pass {e['id']} ({f}), then end it")
+            rows.append((f, f"{e['id']} open", f in req))
+            waiting.append((f, f"finish the draft ({e['id']}), then end it" if f == "happy-path" else f"finish pass {e['id']} ({f}), then end it"))
         elif st == "ended" and e["f"].get("Note") != "no commits":
-            rows.append((f, f"{e['id']} ended, not checked", f in req)); ready = False
-            nxt = nxt or f"check pass {e['id']} ({f})"
+            rows.append((f, f"{e['id']} ended, not checked", f in req))
+            waiting.append((f, f"check pass {e['id']} ({f})"))
         else:
             word = f"{e['id']} " + ("no changes" if e["f"].get("Note") == "no commits" and st == "ended" else "checked")
             n = open_findings(wt, e) if st == "checked" else 0
             if n: word += f", {n} open finding{'s' if n != 1 else ''}"
             if n and f in req:
-                ready = False
                 label = (e["f"].get("Check") or "").split(";")[0].strip()
-                nxt = nxt or f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""
+                waiting.append((f, f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""))
             rows.append((f, word, f in req))
-    return rows, nxt, ready
+    stage, nxt = waiting[0] if waiting else (None, None)
+    return MilestoneView(rows, nxt, not waiting, stage)
 
 def milestone_lines(wt, entries):
     out, steps = [], []
     for m in milestones(entries):
         if m["f"].get("Status") == "abandoned": continue
-        rows, nxt, ready = milestone_view(wt, m)
+        rows, nxt, ready, _ = milestone_view(wt, m)
         out.append(f"{m['id']} {m['title']} ({m['f'].get('Brief')}): " + ("complete" if ready else "in progress"))
         out.append("  " + "; ".join(f"{f}{' (required)' if r else ''}: {w}" for f, w, r in rows))
         if nxt: steps.append(f"{m['id']} {m['title']}: {nxt}.")
