@@ -1538,8 +1538,9 @@ class GroupedPostTest(GroupedPostCase):
 
 
 class WithoutAGroupsFileTest(LiveCase):
-    def test_there_is_no_groups_file(self):
-        self.assertFalse(os.path.exists(run_files.groups_path(self.run_dir)))
+    def setUp(self):
+        super().setUp()
+        self.assertFalse(os.path.exists(run_files.groups_path(self.run_dir)), "the fixture must have no groups file")
 
     def test_the_preview_covers_no_finding(self):
         self.assertNotIn("covered by", self.main())
