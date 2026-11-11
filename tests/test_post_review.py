@@ -1562,6 +1562,22 @@ class WhenTheLeadOfAGroupIsPostedTest(GroupedPostCase):
         self.assertIn("finding 3: Finding 3\n  covered by finding 1\n", self.main())
 
 
+class WhenTheLeadOfAGroupIsPostedThenNoLongerMarkedPostTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1)
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+
+    def test_the_member_is_still_covered_without_a_problem(self):
+        out = self.main()
+        self.assertIn("finding 3: Finding 3\n  covered by finding 1\n", out)
+        self.assertNotIn("cannot post: its lead", out)
+
+    def test_post_does_not_refuse(self):
+        self.main("--post")
+
+
 class WhenPostingToAPendingReviewWithABodyTest(LiveCase):
     def test_saves_the_body_it_keeps(self):
         self.pend(body="My summary.")
