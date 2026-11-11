@@ -333,9 +333,16 @@ def place_item(p, mid, e, row, note, gone):
     where, fallback, problem = resolve(e, note, p.ctx["files"], p.hunks, lines_now_for(p.run, mid, note, p.repo, p.reviewed))
     return where, fallback, problem, "new"
 
+def lead_problem(p, mid, lead):
+    named_lead = numbered(lead, p.nums)
+    unmark = f"mark it Post or --ungroup {number_of(mid, p.nums)}"
+    if p.ins.get(lead, {}).get("choice") != "post": return f"its lead, {named_lead}, is not marked Post; {unmark}"
+    if lead not in p.found: return f"its lead, {named_lead}, is not in merged.md; --ungroup {number_of(mid, p.nums)}"
+    return None
+
 def covered_item(p, mid, lead):
     return {**item_head(mid, p.nums, p.found, p.titles), "action": "covered", "lead": number_of(lead, p.nums),
-            "problem": None, "warnings": [], "published": False, "existing": None}
+            "problem": lead_problem(p, mid, lead), "warnings": [], "published": False, "existing": None}
 
 def plan_item(p, mid):
     lead = rf.lead_of(p.groups, mid)
@@ -776,7 +783,8 @@ def update_line(it):
 
 def item_lines(it):
     out = [f"{named(it)}: {it['title']}"]
-    if it["action"] == "covered": return out + [f"  covered by {finding_word(it['lead'])}"]
+    if it["action"] == "covered":
+        return out + [f"  covered by {finding_word(it['lead'])}"] + ([f"  cannot post: {it['problem']}"] if it["problem"] else [])
     a = it["anchor"]
     if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{rf.line_span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
     if it["gone"]: out.append(f"  {it['gone']}")
@@ -854,7 +862,7 @@ def post(a, ctx, items, reviewed):
     held = published_items(items)
     sending = [it for it in items if it["action"] in SENDS and not it["published"]]
     adopted = [it for it in items if it["action"] == "adopt"]
-    refuse_blocked(sending)
+    refuse_blocked(sending + [it for it in items if it["action"] == "covered"])
     if held: print(held_line(held), file=sys.stderr)
     review_id = current_review(ctx)
     rows = planned_rows(rf.read_posted(a.run), sending + adopted, review_id, today())

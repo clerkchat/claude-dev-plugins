@@ -750,6 +750,10 @@ class GroupTest(GroupCase):
         self.record("1:2,3")
         self.assertEqual(self.groups(), {mid: {"lead": "1", "date": post.today()} for mid in (2, 3)})
 
+    def test_records_a_member_listed_twice_once(self):
+        self.record("1:2,2")
+        self.assertEqual(self.groups(), {2: {"lead": "1", "date": post.today()}})
+
     def test_adds_a_member_to_an_existing_group(self):
         self.group(1, 2)
         self.record("1:3")
@@ -790,6 +794,9 @@ class GroupRefusalTest(GroupCase):
 
     def test_refuses_the_lead_as_its_own_member(self):
         self.assertIn("finding 1: it is the lead itself", self.refusal("--group", "1:1"))
+
+    def test_refuses_the_lead_repeated_among_the_members(self):
+        self.assertIn("finding 1: it is the lead itself", self.refusal("--group", "1:1,2"))
 
     def test_refuses_a_finding_with_a_comment_on_github(self):
         self.posted_row(2)
@@ -1528,6 +1535,19 @@ class GroupedPostTest(GroupedPostCase):
     def test_counts_no_member_as_skipped(self):
         self.main("--post")
         self.assertIn("skipped 0 already posted", self.err)
+
+
+class WhenTheLeadOfAMemberIsNotPostedTest(GroupedPostCase):
+    def test_the_preview_names_the_lead_and_the_fix(self):
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+        out = self.main()
+        self.assertIn("cannot post: its lead, finding 1, is not marked Post; mark it Post or --ungroup 3", out)
+
+    def test_post_refuses(self):
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+        self.assertIn("finding 3: its lead, finding 1, is not marked Post", self.refusal("--post"))
 
 
 class WhenTheLeadOfAGroupIsPostedTest(GroupedPostCase):
