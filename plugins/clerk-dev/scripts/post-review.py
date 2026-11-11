@@ -334,7 +334,8 @@ def place_item(p, mid, e, row, note, gone):
     return where, fallback, problem, "new"
 
 def lead_problem(p, mid, lead):
-    if rf.has_comment(p.rows.get(lead, {})): return None
+    row = p.rows.get(lead, {})
+    if rf.has_comment(row) and on_github(row, p.ctx): return None
     named_lead = numbered(lead, p.nums)
     unmark = f"mark it Post or --ungroup {number_of(mid, p.nums)}"
     if p.ins.get(lead, {}).get("choice") != "post": return f"its lead, {named_lead}, is not marked Post; {unmark}"
