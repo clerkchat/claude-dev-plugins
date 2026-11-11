@@ -71,7 +71,7 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
-from run_files import (CLOSED_STATUSES, covered_refusal, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
+from run_files import (CLOSED_STATUSES, covered_refusal, number_of, numbered as finding_named, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
                        finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
                        posted_threads, quoted_rest, read_approvals, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
@@ -418,7 +418,7 @@ def card_blocks(lines):
 def warn_open_fence(run, lines, cards):
     if not open_fence(lines): return
     last = list(cards)[-1] if cards else None
-    where = f"from finding {read_numbers(run).get(last, f'#{last}')} on" if cards else "above the findings"
+    where = f"from {finding_named(last, read_numbers(run))} on" if cards else "above the findings"
     print(f"warning: report.md leaves a fence open {where}; no edit below where it opens was read", file=sys.stderr)
 
 def read_card_blocks(run):
@@ -621,12 +621,12 @@ def is_moved(mid):
 def check_posted_anchors():
     for mid in sorted(POSTED):
         if is_moved(mid) and not is_stale(mid):
-            print(f"finding {IDNUM.get(mid, f'#{mid}')}: code moved since drafting; redraft the posted text", file=sys.stderr)
+            print(f"{finding_named(mid, IDNUM)}: code moved since drafting; redraft the posted text", file=sys.stderr)
 
 def check_posted_notes():
     for mid in sorted(POSTED):
         if choice_of(mid) != "post" or not note_changed(mid): continue
-        n = IDNUM.get(mid, f"#{mid}")
+        n = number_of(mid, IDNUM)
         if POSTED[mid]["state"] == "edited":
             print(f"warning: finding {n}: note changed after its posted text was edited; the edit stands", file=sys.stderr)
             POSTED[mid]["note"] = INSTR[mid]["note"]
@@ -649,7 +649,7 @@ def posted_lead(mid):
 
 def covered_block(mid):
     lead = lead_of(GROUPS, mid)
-    return (["##### Posted", "", f"Covered by finding {IDNUM.get(lead, f'#{lead}')}.", ""]
+    return (["##### Posted", "", f"Covered by {finding_named(lead, IDNUM)}.", ""]
             + posted_link(POSTED.get(lead, {})) + posted_thread_lines(THREADS.get(lead)))
 
 def posted_body(text):
@@ -706,7 +706,7 @@ def warn_broken_quote(run, cards, texts):
     for mid in sorted(cards):
         if breaks_quote(cards[mid].get("Posted", [])) and not has_posted_comment(mid):
             texts.pop(mid, None)
-            print(f"warning: finding {nums.get(mid, f'#{mid}')}: its Posted text has a line without `>` in the middle; the edit was not read, "
+            print(f"warning: {finding_named(mid, nums)}: its Posted text has a line without `>` in the middle; the edit was not read, "
                   "and the report shows the stored text again", file=sys.stderr)
 
 def import_posted_edits(run, cards, today):
@@ -871,8 +871,7 @@ def file_spec(flag, spec, nums):
 
 def posted_draft(spec, nums):
     mid, text = file_spec("--posted", spec, nums)
-    covered = covered_refusal(GROUPS, mid, nums)
-    if covered: sys.exit(covered)
+    if covered := covered_refusal(GROUPS, mid, nums): sys.exit(covered)
     if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
     return mid, text
 
@@ -1218,7 +1217,7 @@ def report_closable(run):
     global CLOSABLE, KEPT_OPEN
     CLOSABLE, KEPT_OPEN = closable(run), read_kept_open(run)
     for mid, c in CLOSABLE.items():
-        print(f"posted finding {IDNUM.get(mid, f'#{mid}')}: {still_open(c.status)}", file=sys.stderr)
+        print(f"posted {finding_named(mid, IDNUM)}: {still_open(c.status)}", file=sys.stderr)
 
 def main():
     a = parse_args()

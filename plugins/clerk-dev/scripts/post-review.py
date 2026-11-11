@@ -223,23 +223,14 @@ def row_anchor(row):
 def findings(run):
     return {e["id"]: e for e in rf.read_findings(run)}
 
-def number_of(mid, nums):
-    return nums.get(mid, f"#{mid}")
-
 def item_head(mid, nums, found, titles):
-    return {"id": mid, "number": number_of(mid, nums), "title": rf.title_of(found[mid], titles) if mid in found else "(not in merged.md)"}
+    return {"id": mid, "number": rf.number_of(mid, nums), "title": rf.title_of(found[mid], titles) if mid in found else "(not in merged.md)"}
 
 def in_number_order(mids, nums):
     return sorted(mids, key=lambda m: nums.get(m, 10 ** 6))
 
-def finding_word(number):
-    return f"finding {number}"
-
 def named(it):
-    return finding_word(it["number"])
-
-def numbered(mid, nums):
-    return finding_word(number_of(mid, nums))
+    return rf.finding_word(it["number"])
 
 def refuse_problems(outcome, problems):
     blocked = [f"{name}: {problem}" for name, problem in problems if problem]
@@ -336,14 +327,14 @@ def place_item(p, mid, e, row, note, gone):
 def lead_problem(p, mid, lead):
     row = p.rows.get(lead, {})
     if rf.has_comment(row) and on_github(row, p.ctx): return None
-    named_lead = numbered(lead, p.nums)
-    unmark = f"mark it Post or --ungroup {number_of(mid, p.nums)}"
+    named_lead = rf.numbered(lead, p.nums)
+    unmark = f"mark it Post or --ungroup {rf.number_of(mid, p.nums)}"
     if p.ins.get(lead, {}).get("choice") != "post": return f"its lead, {named_lead}, is not marked Post; {unmark}"
-    if lead not in p.found: return f"its lead, {named_lead}, is not in merged.md; --ungroup {number_of(mid, p.nums)}"
+    if lead not in p.found: return f"its lead, {named_lead}, is not in merged.md; --ungroup {rf.number_of(mid, p.nums)}"
     return None
 
 def covered_item(p, mid, lead):
-    return {**item_head(mid, p.nums, p.found, p.titles), "action": "covered", "lead": number_of(lead, p.nums),
+    return {**item_head(mid, p.nums, p.found, p.titles), "action": "covered", "lead": rf.number_of(lead, p.nums),
             "problem": lead_problem(p, mid, lead), "warnings": [], "published": False, "existing": None}
 
 def plan_item(p, mid):
@@ -764,7 +755,7 @@ def checked_body(run, ctx, rows, review_id):
 
 def pending_comment_label(comment, rows, nums):
     mid = next((m for m, row in rows.items() if row.get("comment_id") == str(comment["id"])), None)
-    return f"comment of {numbered(mid, nums)}" if mid else f"draft of yours on {draft_place(comment)}"
+    return f"comment of {rf.numbered(mid, nums)}" if mid else f"draft of yours on {draft_place(comment)}"
 
 def pending_warnings(run, ctx, rows, body):
     nums = rf.read_numbers(run)
@@ -786,7 +777,7 @@ def update_line(it):
 def item_lines(it):
     out = [f"{named(it)}: {it['title']}"]
     if it["action"] == "covered":
-        return out + [f"  covered by {finding_word(it['lead'])}"] + ([f"  cannot post: {it['problem']}"] if it["problem"] else [])
+        return out + [f"  covered by {rf.finding_word(it['lead'])}"] + ([f"  cannot post: {it['problem']}"] if it["problem"] else [])
     a = it["anchor"]
     if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{rf.line_span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
     if it["gone"]: out.append(f"  {it['gone']}")
@@ -891,7 +882,7 @@ def refuse_split_bodies(held, picked):
 def picked_published(run, spec, held):
     nums, by_id = rf.read_numbers(run), {it["id"]: it for it in held}
     picked = picked_ids(spec, nums, "--update-published")
-    refused = [numbered(mid, nums) for mid in sorted(picked) if mid not in by_id]
+    refused = [rf.numbered(mid, nums) for mid in sorted(picked) if mid not in by_id]
     if refused: sys.exit("nothing sent; not a published comment changed since posting: " + ", ".join(refused))
     return [it for it in held if it["id"] in picked]
 
@@ -1041,10 +1032,10 @@ def chosen(run, spec, items):
     nums, by_id = rf.read_numbers(run), {it["id"]: it for it in items}
     picked = picked_ids(spec, nums, "--close")
     settled = settled_threads(run, picked - by_id.keys())
-    refused = [numbered(mid, nums) for mid in sorted(picked) if mid not in by_id and mid not in settled]
+    refused = [rf.numbered(mid, nums) for mid in sorted(picked) if mid not in by_id and mid not in settled]
     if refused: sys.exit("nothing sent; not closable (a thread you posted, still open, marked fixed, not kept open): " + ", ".join(refused))
     refuse_blocked([by_id[mid] for mid in sorted(picked) if mid in by_id])
-    for mid in sorted(settled): print(f"{numbered(mid, nums)}: {settled[mid]}; skipped", file=sys.stderr)
+    for mid in sorted(settled): print(f"{rf.numbered(mid, nums)}: {settled[mid]}; skipped", file=sys.stderr)
     return [it for it in items if it["id"] in picked]
 
 def close_calls(it):
@@ -1135,9 +1126,9 @@ def keep_open(run, spec):
     if not m: sys.exit(f"bad --keep-open {spec!r}; use N[:reason]")
     nums = rf.read_numbers(run)
     mid = rf.finding_id(m.group(1), nums)
-    if not rf.has_thread(rf.read_posted(run).get(mid, {})): sys.exit(f"{numbered(mid, nums)} has no posted thread to keep open")
+    if not rf.has_thread(rf.read_posted(run).get(mid, {})): sys.exit(f"{rf.numbered(mid, nums)} has no posted thread to keep open")
     record_kept(run, mid, m.group(2) or "")
-    print(f"{numbered(mid, nums)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
+    print(f"{rf.numbered(mid, nums)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
 
 GROUP_SPEC = re.compile(r"^(#?\d+):(.+)$", re.S)
 
@@ -1159,7 +1150,7 @@ def group_problem(g, lead, mid):
     if g.ins.get(mid, {}).get("choice") != "post": return "it is not marked Post"
     if mid in g.credits: return "it is a credit"
     if rf.has_comment(g.rows.get(mid, {})): return "it already has a comment on GitHub"
-    if covering is not None and (mid == lead or covering != lead): return f"it is covered by {numbered(covering, g.nums)}"
+    if covering is not None and (mid == lead or covering != lead): return f"it is covered by {rf.numbered(covering, g.nums)}"
     if mid != lead and mid in g.leads: return "it leads a group of its own"
     return None
 
@@ -1169,31 +1160,31 @@ def member_problem(g, lead, mid):
 def redraft_lead(run, g, lead):
     state = g.rows.get(lead, {}).get("state")
     if state == "edited":
-        print(f"{numbered(lead, g.nums)}: its text is marked edited and stays, though the group changed under it", file=sys.stderr)
+        print(f"{rf.numbered(lead, g.nums)}: its text is marked edited and stays, though the group changed under it", file=sys.stderr)
     if state != "drafted": return
     rf.write_posted(run, {mid: row for mid, row in g.rows.items() if mid != lead})
     if os.path.exists(rf.posted_path(run, lead)): os.remove(rf.posted_path(run, lead))
-    print(f"{numbered(lead, g.nums)}: its drafted text is dropped; draft it again with the findings it covers", file=sys.stderr)
+    print(f"{rf.numbered(lead, g.nums)}: its drafted text is dropped; draft it again with the findings it covers", file=sys.stderr)
 
 def group(run, spec):
     m = GROUP_SPEC.match(spec.strip())
     if not m: sys.exit(f"bad --group {spec!r}; use LEAD:M[,N]")
     g = grouping(run)
     lead, members = rf.finding_id(m.group(1), g.nums), in_number_order(picked_ids(m.group(2), g.nums, "--group"), g.nums)
-    refuse_problems("nothing recorded", [(numbered(lead, g.nums), group_problem(g, lead, lead)),
-                                         *((numbered(mid, g.nums), member_problem(g, lead, mid)) for mid in members)])
+    refuse_problems("nothing recorded", [(rf.numbered(lead, g.nums), group_problem(g, lead, lead)),
+                                         *((rf.numbered(mid, g.nums), member_problem(g, lead, mid)) for mid in members)])
     rf.write_groups(run, {**g.groups, **{mid: {"lead": str(lead), "date": today()} for mid in members}})
-    for mid in members: print(f"{numbered(mid, g.nums)}: covered by {numbered(lead, g.nums)}", file=sys.stderr)
+    for mid in members: print(f"{rf.numbered(mid, g.nums)}: covered by {rf.numbered(lead, g.nums)}", file=sys.stderr)
     redraft_lead(run, g, lead)
 
 def ungroup(run, spec):
     nums, groups = rf.read_numbers(run), rf.read_groups(run)
     picked, leads = picked_ids(spec, nums, "--ungroup"), rf.members_of(groups)
-    loose = [numbered(mid, nums) for mid in sorted(picked) if mid not in groups and mid not in leads]
+    loose = [rf.numbered(mid, nums) for mid in sorted(picked) if mid not in groups and mid not in leads]
     if loose: sys.exit("nothing removed; not in a group: " + ", ".join(loose))
     freed = {member: rf.lead_of(groups, member) for mid in picked for member in leads.get(mid, [mid])}
     rf.write_groups(run, {mid: row for mid, row in groups.items() if mid not in freed})
-    for mid in in_number_order(freed, nums): print(f"{numbered(mid, nums)}: no longer covered by {numbered(freed[mid], nums)}", file=sys.stderr)
+    for mid in in_number_order(freed, nums): print(f"{rf.numbered(mid, nums)}: no longer covered by {rf.numbered(freed[mid], nums)}", file=sys.stderr)
 
 DRAFT_HEAD = re.compile(r"^## (#?\d+): (.+?)\s*$")
 DRAFT_FORM = re.compile(r"^(?:comment|question|suggestion)(?:, one general comment|, one per place)?$")
@@ -1234,9 +1225,8 @@ def checked_drafts(run, parts):
     out = []
     for number, form, text in parts:
         mid = rf.finding_id(number, nums)
-        covered = rf.covered_refusal(groups, mid, nums)
         if ins.get(mid, {}).get("choice") != "post": sys.exit(f"nothing saved; finding {number} is not marked Post")
-        if covered: sys.exit(f"nothing saved; {covered}")
+        if covered := rf.covered_refusal(groups, mid, nums): sys.exit(f"nothing saved; {covered}")
         if mid in seen: sys.exit(f"nothing saved; finding {number} is answered twice")
         seen.add(mid)
         out.append((number, mid, form, text))

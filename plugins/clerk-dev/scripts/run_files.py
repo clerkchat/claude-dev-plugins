@@ -443,11 +443,19 @@ def write_groups(run, rows):
 def lead_of(groups, mid):
     return merged_key(groups[mid]["lead"]) if mid in groups else None
 
+def number_of(mid, nums):
+    return nums.get(mid, f"#{mid}")
+
+def finding_word(number):
+    return f"finding {number}"
+
+def numbered(mid, nums):
+    return finding_word(number_of(mid, nums))
+
 def covered_refusal(groups, mid, nums):
     lead = lead_of(groups, mid)
     if lead is None: return None
-    number = lambda m: nums.get(m, f"#{m}")
-    return f"finding {number(mid)} is covered by finding {number(lead)}; draft it under {number(lead)}"
+    return f"{numbered(mid, nums)} is covered by {numbered(lead, nums)}; draft it under {number_of(lead, nums)}"
 
 def members_of(groups):
     leads = {}
