@@ -69,7 +69,7 @@ import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from records import ROUTING, load_script, phrase_of, phrases, read_plain_names
-from run_files import (CLOSED_STATUSES, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
+from run_files import (CLOSED_STATUSES, covered_refusal, FENCE_BODY, FENCE_LINE, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
                        finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
                        posted_threads, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
@@ -861,9 +861,8 @@ def file_spec(flag, spec, nums):
 
 def posted_draft(spec, nums):
     mid, text = file_spec("--posted", spec, nums)
-    if mid in GROUPS:
-        lead = lead_of(GROUPS, mid)
-        sys.exit(f"finding {nums.get(mid, f'#{mid}')} is covered by finding {nums.get(lead, f'#{lead}')}; draft it under {nums.get(lead, f'#{lead}')}")
+    covered = covered_refusal(GROUPS, mid, nums)
+    if covered: sys.exit(covered)
     if not text.strip(): sys.exit(f"bad --posted {spec!r}; the file is empty")
     return mid, text
 

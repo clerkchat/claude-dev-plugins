@@ -1224,9 +1224,9 @@ def checked_drafts(run, parts):
     out = []
     for number, form, text in parts:
         mid = rf.finding_id(number, nums)
-        lead = rf.lead_of(groups, mid)
+        covered = rf.covered_refusal(groups, mid, nums)
         if ins.get(mid, {}).get("choice") != "post": sys.exit(f"nothing saved; finding {number} is not marked Post")
-        if lead is not None: sys.exit(f"nothing saved; finding {number} is covered by {numbered(lead, nums)}; draft it under {number_of(lead, nums)}")
+        if covered: sys.exit(f"nothing saved; {covered}")
         if mid in seen: sys.exit(f"nothing saved; finding {number} is answered twice")
         seen.add(mid)
         out.append((number, mid, form, text))

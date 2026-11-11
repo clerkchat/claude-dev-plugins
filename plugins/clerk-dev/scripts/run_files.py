@@ -424,6 +424,12 @@ def write_groups(run, rows):
 def lead_of(groups, mid):
     return merged_key(groups[mid]["lead"]) if mid in groups else None
 
+def covered_refusal(groups, mid, nums):
+    lead = lead_of(groups, mid)
+    if lead is None: return None
+    number = lambda m: nums.get(m, f"#{m}")
+    return f"finding {number(mid)} is covered by finding {number(lead)}; draft it under {number(lead)}"
+
 def members_of(groups):
     leads = {}
     for mid in sorted(groups):
