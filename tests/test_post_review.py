@@ -1537,6 +1537,79 @@ class GroupedPostTest(GroupedPostCase):
         self.assertIn("skipped 0 already posted", self.err)
 
 
+class WithoutAGroupsFileTest(LiveCase):
+    def test_there_is_no_groups_file(self):
+        self.assertFalse(os.path.exists(run_files.groups_path(self.run_dir)))
+
+    def test_the_preview_covers_no_finding(self):
+        self.assertNotIn("covered by", self.main())
+
+    def test_the_payload_sends_a_thread_for_each_marked_finding(self):
+        self.assertEqual([c["finding"] for c in self.calls() if c.get("graphql") == "addPullRequestReviewThread"], [1, 3])
+
+    def test_posted_tsv_gets_a_row_for_each_marked_finding(self):
+        self.main("--post")
+        self.assertEqual(sorted(run_files.read_posted(self.run_dir)), [1, 3])
+
+
+class WhenTheLeadOfAMemberIsNotInMergedTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.group(99, 3)
+        self.mark(99)
+
+    def test_the_preview_names_the_lead_and_the_fix(self):
+        self.assertIn("cannot post: its lead, finding #99, is not in merged.md; --ungroup 3", self.main())
+
+    def test_post_refuses(self):
+        self.assertIn("finding 3: its lead, finding #99, is not in merged.md", self.refusal("--post"))
+
+
+class WhenTheLeadsCommentIsGoneFromGitHubAndNoLongerMarkedPostTest(GroupedPostCase):
+    def setUp(self):
+        super().setUp()
+        self.posted_row(1)
+        self.ctx["comment_ids"] = set()
+        self.marks.pop(1)
+        self.write_instructions({m: ("post", n) for m, n in self.marks.items()})
+
+    def test_the_preview_names_the_lead_and_the_fix(self):
+        self.assertIn("cannot post: its lead, finding 1, is not marked Post; mark it Post or --ungroup 3", self.main())
+
+    def test_post_refuses(self):
+        self.assertIn("finding 3: its lead, finding 1, is not marked Post", self.refusal("--post"))
+
+
+class WhenAGroupHasAPublishedLeadTest(PublishedCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.group(1, 3)
+        self.posted_row(1, state="edited")
+
+    def test_update_published_edits_the_leads_comment_alone(self):
+        self.assertEqual(self.update_calls(), [{"method": "PATCH", "path": "repos/acme/widgets/pulls/comments/901",
+                                                "fields": {"body": "Finding 1 text."}, "finding": 1}])
+
+    def test_update_published_refuses_the_member(self):
+        self.assertIn("nothing sent; not a published comment changed since posting: finding 3",
+                      self.refusal("--update-published", "3", "--dry-run"))
+
+
+class WhenSubmittingAGroupTest(PostCase):
+    def setUp(self):
+        super().setUp()
+        self.mark(1); self.mark(3)
+        self.group(1, 3)
+        self.pend()
+        self.posted_row(1)
+
+    def test_sends_the_verdict_with_the_review_body_as_for_the_lead_alone(self):
+        self.assertEqual(self.payload("--submit", "comment"),
+                         [{"method": "POST", "path": "repos/acme/widgets/pulls/7/reviews/55/events",
+                           "fields": {"event": "COMMENT", "body": post.DEFAULT_BODY}}])
+
+
 class WhenTheLeadOfAMemberIsNotPostedTest(GroupedPostCase):
     def test_the_preview_names_the_lead_and_the_fix(self):
         self.marks.pop(1)

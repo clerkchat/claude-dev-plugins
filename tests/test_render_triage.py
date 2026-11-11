@@ -872,6 +872,24 @@ class WhenAPostedFindingIsMarkedFixedTest(PostedThreadCase):
         self.assertNotIn(self.STILL_OPEN, self.out + self.report())
 
 
+class WhenAGroupedLeadIsMarkedFixedTest(PostedThreadCase):
+    STILL_OPEN = WhenAPostedFindingIsMarkedFixedTest.STILL_OPEN
+
+    def setUp(self):
+        super().setUp()
+        run_files.write_groups(self.run_dir, {8: {"lead": "7", "date": "2026-11-10"}})
+        self.render("--set", "1=fixed:abc1234")
+
+    def test_says_nothing_while_a_member_is_not_fixed(self):
+        self.show_thread()
+        self.assertNotIn(self.STILL_OPEN, self.out + self.report())
+
+    def test_says_so_once_every_member_is_fixed(self):
+        self.render("--set", "2=fixed:abc1234")
+        self.show_thread()
+        self.assertIn(f"posted finding 1: {self.STILL_OPEN}", self.out)
+
+
 class WhenAPostedThreadIsKeptOpenTest(PostedThreadCase):
     def setUp(self):
         super().setUp()
