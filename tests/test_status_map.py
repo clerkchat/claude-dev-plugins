@@ -2,6 +2,7 @@ import os
 import unittest
 
 from helpers import TempCase, add_followup, add_idea, init_repo, write_feature_md, write_file, write_record
+import paths
 
 PLAN_BODY = (
     "1. Step one, brief R5. Done: when it runs.\n"
@@ -70,7 +71,7 @@ class WhenTheFeatureHasAnotherWorktreeTests(MapCase):
         self.web = init_repo(self.path("web"), with_origin=False)
         self.web.git("checkout", "-q", "-b", "feat-web")
         table = "| Repo | Worktree |\n| --- | --- |\n" + f"| api | {self.repo.path} |\n| web | {self.web.path} |\n"
-        write_file(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), table)
+        write_file(paths.workspace(self.repo.path), table)
 
     def test_the_other_worktree_is_one_line_with_its_branch_and_step_progress(self):
         self.plan(PLAN_BODY + "4. web: Step four on the web. Done: when it renders.\n")

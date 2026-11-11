@@ -2,7 +2,10 @@ import datetime
 import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, drop_backlog_title, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
+from helpers import SCRIPTS, RunCase, add_backlog_item, drop_backlog_title, init_repo, records, run_ok, run_script, write_feature_md, write_file, write_record
+import paths
+
+link = records.load_script("link-latest.py")
 
 CHECK = """# Design check: R5 Spec five
 
@@ -16,15 +19,13 @@ Checked 2026-10-21: R5.
 
 FINDING = "- id: {n}\n  lens: tests\n  severity: minor\n  file: a.py\n  line: 1\n  title: Finding {n}\n"
 
-SEEN = "status-seen-backlog"
-
 
 class BlockersCase(RunCase):
     def setUp(self):
         super().setUp()
         self.repo = init_repo(self.path("work"))
         self.repo.git("checkout", "-q", "-b", "feat")
-        self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
+        self.run_dir = paths.latest(self.repo.path)
         write_feature_md(self.repo.path)
         write_record(self.repo.path, "R5", "spec", "Spec five", body="## Requirements\n\n1. One.\n\n## Baseline\n\nClean.")
 
@@ -33,8 +34,13 @@ class BlockersCase(RunCase):
         self.assertEqual(code, 0, out)
         return out
 
+    def setup_gaps(self):
+        code, out = self.repo.status("--setup")
+        self.assertEqual(code, 0, out)
+        return out
+
     def write_check(self):
-        checks = os.path.join(self.repo.path, ".clerk-dev", "feature", "checks")
+        checks = paths.checks_dir(self.repo.path)
         os.makedirs(checks, exist_ok=True)
         with open(os.path.join(checks, "R5-1.md"), "w") as f:
             f.write(CHECK)
@@ -79,7 +85,7 @@ class BlockersTests(BlockersCase):
         self.assertIn("**Follow-ups owed here:**", out)
         self.assertIn("Send exportId back", out)
         self.assertIn("go through the follow-ups", out)
-        self.assertFalse(os.path.exists(os.path.join(self.repo.path, ".clerk-dev", SEEN)))
+        self.assertFalse(os.path.exists(paths.seen_backlog(self.repo.path)))
 
     def test_a_fix_section_finding_appears_whatever_its_mark_and_a_closed_one_does_not(self):
         self.write_run(
@@ -110,7 +116,7 @@ class BacklogStatusCase(BlockersCase):
         self.today = datetime.date.today().isoformat()
 
     def write_workspace(self, *rows):
-        write_file(os.path.join(self.repo.path, ".clerk-dev", "workspace.md"), workspace_md(*rows))
+        write_file(paths.workspace(self.repo.path), workspace_md(*rows))
 
     def add(self, kind, title, *extra):
         return add_backlog_item(self.repo.path, kind, title, *extra)
@@ -132,14 +138,16 @@ class BacklogStatusCase(BlockersCase):
     def marking_status(self):
         return run_ok("status", self.repo.path)
 
-    def seen_path(self, name=SEEN):
-        return os.path.join(self.repo.path, ".clerk-dev", name)
+    def seen_path(self, name=None):
+        if name is None:
+            return paths.seen_backlog(self.repo.path)
+        return os.path.join(paths.ledger(self.repo.path), name)
 
-    def seen(self, name=SEEN):
+    def seen(self, name=None):
         with open(self.seen_path(name)) as f:
             return f.read()
 
-    def write_seen(self, text, name=SEEN):
+    def write_seen(self, text, name=None):
         write_file(self.seen_path(name), text)
 
     def detach(self, repo=None):
@@ -288,6 +296,24 @@ class SetupTests(BlockersCase):
         add_backlog_item(self.repo.path, "followup", "Send exportId back", "--origin", "web abc1234")
         code, out = self.repo.status("--setup")
         self.assertIn("name web but there is no review workspace", out)
+
+    def test_the_new_layout_asks_for_no_move(self):
+        self.assertNotIn("old file layout", self.setup_gaps())
+
+    def test_the_users_own_files_ask_for_no_move(self):
+        write_file(os.path.join(paths.clerk_dev(self.repo.path), "notes", "troubleshooting.md"), "mine\n")
+        write_file(os.path.join(paths.clerk_dev(self.repo.path), "logs", "api.log"), "mine\n")
+        self.assertNotIn("old file layout", self.setup_gaps())
+
+
+class WhenThePluginFilesHaveTheOldLayoutTests(BlockersCase):
+    def setUp(self):
+        super().setUp()
+        write_file(os.path.join(paths.clerk_dev(self.repo.path), "build.md"), "old\n")
+
+    def test_setup_names_the_move_command(self):
+        script = os.path.join(SCRIPTS, "migrate-layout.py")
+        self.assertIn(f"- old file layout in .clerk-dev/: move it with python3 {script} {self.repo.path} (--dry-run first)", self.setup_gaps())
 
 
 class PreflightTests(BlockersCase):
@@ -497,6 +523,57 @@ class CreditsInStatusTests(PostQueueCase):
     def test_a_posted_credit_is_not_queued(self):
         self.write_posted([(n, "posted", "inline") for n in (1, 2, 3, 4, 5)])
         self.assertNotIn("marked to post", self.full_status())
+
+
+
+class RunNamingCase(BlockersCase):
+    LABEL = "20261110-0900-branch"
+
+    def setUp(self):
+        super().setUp()
+        self.run_dir = paths.run(self.repo.path, self.LABEL)
+        self.write_run({1: "look"})
+        self.write("report.md", "# Review\n")
+        link.link_latest(self.repo.path, self.run_dir)
+
+    def link_reported_run(self, label):
+        run = paths.run(self.repo.path, label)
+        write_file(os.path.join(run, "report.md"), "# Review\n")
+        link.link_latest(self.repo.path, run)
+
+    def full_status(self, *args):
+        code, out = self.repo.status(*args)
+        self.assertEqual(code, 0, out)
+        return out
+
+
+class CurrentRunNamingTests(RunNamingCase):
+    def test_the_review_line_names_review_md(self):
+        self.assertIn("**Review:** `.clerk-dev/review.md` of branch", self.full_status())
+
+    def test_the_marking_step_names_review_md(self):
+        self.assertIn("Mark the unmarked finding (1) in `.clerk-dev/review.md`.", self.full_status())
+
+    def test_preflight_names_review_md(self):
+        self.assertIn("- Latest run: `.clerk-dev/review.md` of branch", run_ok("preflight", self.repo.path))
+
+
+class WhenALaterRunIsCurrentTests(RunNamingCase):
+    def setUp(self):
+        super().setUp()
+        self.link_reported_run("20261110-1000-branch")
+
+    def test_a_run_given_by_label_is_named_by_its_report(self):
+        self.assertIn(f"**Review:** `.clerk-dev/.ledger/runs/{self.LABEL}/report.md` of branch", self.full_status("--run", self.LABEL))
+
+
+class WhenAFeatureRunIsLinkedTests(RunNamingCase):
+    def setUp(self):
+        super().setUp()
+        self.link_reported_run(self.LABEL + "-feature")
+
+    def test_the_feature_review_names_review_feature_md(self):
+        self.assertIn("**Feature review:** `.clerk-dev/review-feature.md` (the cross-repository check).", self.full_status())
 
 
 if __name__ == "__main__":

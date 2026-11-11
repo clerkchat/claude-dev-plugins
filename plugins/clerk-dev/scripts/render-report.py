@@ -64,6 +64,8 @@ Any `{#<merged id>}` token in the summary, overrides, or finding text is
 replaced by that finding's current number. Titles come from the finding's
 `title` field, overridden by RUN_DIR/titles.tsv (merged id, tab, title) when
 present, else shortened from the claim.
+When RUN_DIR is the run `latest` (`latest-feature`) points at, each render
+links review.md (review-feature.md) to its report, as link-latest.py does.
 """
 import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
@@ -75,6 +77,7 @@ from run_files import (CLOSED_STATUSES, PROSE, closable, code_moved, credit_ids,
                        posted_threads, quoted_rest, read_approvals, stale_text, status_of, status_row, title_of, write_instructions, write_number_rows, write_posted, write_status,
                        write_text, line_span)
 mf = load_script("merge-findings.py")
+links = load_script("link-latest.py")
 
 SEV = {"blocker": 3, "major": 2, "minor": 1}
 TITLES = {}
@@ -1233,6 +1236,7 @@ def main():
     text = render_report(a, merged, verdicts, routed, ordered_areas, numbered, slices, unverified, rejected, hidden_minor, overlapping)
     outp = write_report(a, text, numbered)
     write_numbers(a.run, numbered, prior_nums)
+    links.link_if_latest(a.run)
     print(f"report: {outp}; {section_counts(routed, ' ')}, unverified {len(unverified)}, rejected {len(rejected)}", file=sys.stderr)
 
 if __name__ == "__main__": main()

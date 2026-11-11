@@ -43,14 +43,14 @@ parts: the area, the prompt, the block it reads back, its sort and earlier
 runs, the file's name and header, and the report's counts. A record's
 repository is its `repo` field, at the worktree the workspace file lists for
 it, defaulting to this worktree.
-The kind names its file `<hub>/.clerk-dev/feature/checks/<run>.md` and gives
-the `<subject>` it is on; the run's own files go in
-`<hub>/.clerk-dev/feature/checks/<run>/`.
+Set `<checks>` to the output of `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <hub> checks-dir`.
+The kind names its file `<checks>/<run>.md` and gives the `<subject>` it is
+on; the run's own files go in `<checks>/<run>/`.
 
 1. **Guidance.** Before launching, write the guidance file of each repository
    the prompt names, with `records.py guidance <that repository's worktree>
    [--area <the kind's area>] [--context <its CONTEXT>]
-   --out <hub>/.clerk-dev/feature/checks/<run>/guidance-<repo>.md`: its branch
+   --out <checks>/<run>/guidance-<repo>.md`: its branch
    scope, its branch guidance, the feature's active guidance, and its review
    context's Known noise.
 2. **Launch.** Launch one `clerk-dev:lens-<lens>` agent per lens, all in one
@@ -63,7 +63,7 @@ the `<subject>` it is on; the run's own files go in
    own model. A question settled before building costs far less than the
    rework it saves.
 3. **Keep the raw output.** Write each agent's reply verbatim to
-   `<hub>/.clerk-dev/feature/checks/<run>/raw/<lens>.md` with
+   `<checks>/<run>/raw/<lens>.md` with
    `${CLAUDE_PLUGIN_ROOT}/scripts/agent-reply.py <output_file> --out <path>
    --header "# <lens> on <subject>" --header "usage: <tokens>, <duration>"`, where
    `output_file` is the one the Agent tool returned for that agent and the
@@ -126,7 +126,7 @@ the lenses", with these parts.
   REPO: <absolute path of the repository the records are about>
   CONTEXT: <<git common dir>/clerk-dev/repo-context.md of that repository, or none>
   GUIDANCE: <path of that repository's guidance file>
-  WORKSPACE: <.clerk-dev/workspace.md, or none>
+  WORKSPACE: <path of the workspace file, or none>
   ```
 
   The records' repository is found as "Running the lenses" says. Records **span
@@ -176,7 +176,7 @@ BRIEF-85").
 - **Files.** `<k>` is one more than the highest existing survey's. Resolve the
   target with `${CLAUDE_PLUGIN_ROOT}/scripts/survey-files.py <repository>
   <path>... [--cap <n>] [--exclude <glob>]... --out
-  <hub>/.clerk-dev/feature/checks/SURVEY-<k>/files.txt`, which expands each
+  <checks>/SURVEY-<k>/files.txt`, which expands each
   directory to its tracked files, drops what `measure-patch.py`'s default
   exclusions drop, and writes the absolute paths, sorted, one per line; that
   file is `FILES`. Pass as `--exclude` the globs of the `tests` and `config`
@@ -204,7 +204,7 @@ BRIEF-85").
   REPO: <absolute path of the repository>
   CONTEXT: <<git common dir>/clerk-dev/repo-context.md of that repository, or none>
   GUIDANCE: <path of that repository's guidance file>
-  WORKSPACE: <.clerk-dev/workspace.md, or none>
+  WORKSPACE: <path of the workspace file, or none>
   ```
 
 - **Block.** The `survey` block.

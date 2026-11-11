@@ -15,6 +15,7 @@ SCRIPTS = os.path.join(PLUGIN, "scripts")
 sys.path.insert(0, SCRIPTS)
 import config
 import gh_api
+import paths
 import records
 import run_files
 
@@ -114,7 +115,7 @@ def write_file(path, text):
 
 
 def write_record(root, record_id, record_type, title, status="active", extra="", body=""):
-    records = os.path.join(root, ".clerk-dev", "feature", "records")
+    records = paths.records_dir(root)
     os.makedirs(records, exist_ok=True)
     text = (
         f"---\nid: {record_id}\ntype: {record_type}\ntitle: {title}\n"
@@ -125,19 +126,25 @@ def write_record(root, record_id, record_type, title, status="active", extra="",
 
 
 def write_feature_md(root):
-    feature = os.path.join(root, ".clerk-dev", "feature")
-    os.makedirs(feature, exist_ok=True)
-    with open(os.path.join(feature, "feature.md"), "w") as f:
-        f.write(FEATURE_MD)
+    write_file(paths.feature_meta(root), FEATURE_MD)
+
+
+def read_feature_md(root):
+    with open(paths.feature_md(root)) as f:
+        return f.read()
+
+
+def feature_md_link(root, path):
+    return os.path.relpath(path, os.path.dirname(paths.feature_md(root)))
 
 
 def read_log(root):
-    with open(os.path.join(root, ".clerk-dev", "build.md")) as f:
+    with open(paths.build_log(root)) as f:
         return f.read()
 
 
 def write_log(root, text):
-    with open(os.path.join(root, ".clerk-dev", "build.md"), "w") as f:
+    with open(paths.build_log(root), "w") as f:
         f.write(text)
 
 

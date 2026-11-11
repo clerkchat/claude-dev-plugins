@@ -2,23 +2,35 @@
 
 What the plugin keeps between runs, beyond each run's own directory. All of it
 lives under `.clerk-dev/` in a worktree, which is excluded from git through
-`.git/info/exclude` and never committed. The repository's backlog of ideas,
+`.git/info/exclude` and never committed. The top of `.clerk-dev/` holds only the
+files the user opens (`branch-notes.md`, `review.md`, `review-feature.md`,
+`pr-description.md`, `feature.md`, `overview.md`); everything else the plugin
+keeps for itself sits in a hidden directory of its own, which the scripts reach
+and the prompts never name: `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py
+<worktree> <name>` prints any path below. Anything else in `.clerk-dev/`, such as
+the user's `notes/` or `logs/`, is the user's and is never read, written, or
+removed. The repository's backlog of ideas,
 cleanups, and follow-ups is the exception: it lives in
 `<git common dir>/clerk-dev/backlog/`, shared by every worktree of the
 repository and kept by `scripts/backlog.py` (Follow-ups below).
 
 | File                      | Scope                                                                                                                                                     | Written by                                                                                                                                                                                                                                    | Read by                                                                                                                                                               |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.clerk-dev/<label>/`        | one review run                                                                                                                                            | the review orchestrator                                                                                                                                                                                                                       | everything below; see "Run directory contents" in `SKILL.md`                                                                                                          |
-| `.clerk-dev/latest`          | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
-| `.clerk-dev/latest-feature`  | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `status.py`                                                                                                                                          |
+| a review run's directory | one review run                                                                                                                                            | the review orchestrator                                                                                                                                                                                                                       | everything below; see "Run directory contents" in `SKILL.md`                                                                                                          |
+| the `latest` link | link to this branch's newest review run; never a feature run                                                                                              | the review orchestrator, except feature mode's coordinating session and `--standalone` narrow runs                                                                                                                                            | fix skill, incremental review                                                                                                                                         |
+| the `latest-feature` link | link to the newest feature run (`<label>-feature`), in the worktree feature mode was started from                                                         | feature mode's coordinating session                                                                                                                                                                                                           | the user, `status.py`                                                                                                                                          |
 | `.clerk-dev/branch-notes.md` | what this worktree's branch is for (Purpose) and the rules the user set for this branch only (Guidance); may be written before the first review | the review orchestrator, the `building` skill's setup check (drafts Purpose when missing), any skill recording an answer's guidance for this branch ("Guidance from answers" below), the user | `records.py guidance`, whose file every lens, verifier, and builder handoff gets; the `building` skill's intake and the builder (Branch scope below) |
-| `.clerk-dev/status-seen-backlog` | one `<repo> <n>` line per backlog: the highest `BL-n` of the follow-ups owed here that status showed from it; never written on a detached HEAD | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
-| `.clerk-dev/deferred.md` | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
-| `.clerk-dev/workspace.md` | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `building` skill (clients of a changed contract), the `followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
-| `.clerk-dev/feature/` | a feature's records (brainstorms, designs, decisions, pieces, plans, briefs) and `feature.md` with their index; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
-| `.clerk-dev/passes.md` | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and pass-review result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
-| `.clerk-dev/build.md` | this worktree's milestones (a plan row's ordered passes, required ones, skips) and handoffs: brief requirements covered and their status (including requirements a decision dropped from a brief), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or brief built directly by a commit); the only place requirement status lives | `build.py`, from the `building` and `pass` skills | `status.py` (progress per brief, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
+| `.clerk-dev/review.md` | the current review's report: a link to the newest review run's `report.md`, there once the report exists | `render-report.py`, for the run `latest` points at | the user |
+| `.clerk-dev/review-feature.md` | the same for the newest feature run's report | `render-report.py`, for the run `latest-feature` points at | the user |
+| `.clerk-dev/pr-description.md` | the pull request description draft, for the user to read and edit | the `pr-draft` skill, the user | the `pr-draft` skill, the user |
+| `.clerk-dev/feature.md` | every active record of the feature in one readable file; only in the hub worktree | `records.py`, regenerated after each change; never edited | the user |
+| `.clerk-dev/overview.md` | the feature's current state in one read, generated from the active records; only in the hub worktree | the `feature` skill; never edited | the user |
+| the status marker | one `<repo> <n>` line per backlog: the highest `BL-n` of the follow-ups owed here that status showed from it; never written on a detached HEAD | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
+| the deferred items | known gaps with a path chosen for now: what was deferred, from where, what was done meanwhile, what is left, when to look again ("Deferred items" below) | `deferred.py`, from every skill that applies Defer | `status.py` (open count and items), the user, a plan step's "deferred items reviewed" |
+| the workspace file | the repositories and worktrees of a review job across repositories; the file in the worktree where the job was set up, a link to it in every other worktree of the job | the review orchestrator's feature mode (set up with the user, see `workspace-manifest.md`), the user | feature mode, the `building` skill (clients of a changed contract), the `followups` skill (source worktrees), `status.py` (follow-ups owed elsewhere), follow-ups (consuming worktrees) |
+| a feature's records | a feature's records (brainstorms, designs, decisions, pieces, plans, briefs) with its name and summary and its design checks, kept in the plugin's own place; only in the hub worktree (see `skills/feature/records.md`) | `records.py`, from the `feature` skill; the user | the `feature` skill, the review orchestrator (active records for the reviewed repository, as documents) |
+| the passes log | this worktree's passes: focus, lenses, piece, mode, commit range, checklist, and pass-review result (see `skills/pass/passes.md`) | `passes.py`, from the `pass` skill | the `pass` skill, the user |
+| the build log | this worktree's milestones (a plan row's ordered passes, required ones, skips) and handoffs: brief requirements covered and their status (including requirements a decision dropped from a brief), model and effort, commit and its subject (to re-find it after a rebase), questions, accepted deviations; and record entries (`Record:` a decision, plan step, or brief built directly by a commit); the only place requirement status lives | `build.py`, from the `building` and `pass` skills | `status.py` (progress per brief, next steps), `records.py digest` (the overview's Plan, and the decisions and plan steps marked built), the user |
 
 ## Branch notes
 
@@ -90,8 +102,8 @@ Drafting Purpose when the file or section is missing:
 5. For a fresh branch with no changes yet, draft from the request alone, and
    keep it short.
 6. Write the file with both headings (an empty Guidance when there is nothing
-   for it), create `.clerk-dev/` and its `.git/info/exclude` entry if
-   needed, and say in one line that it was drafted and where. Do not wait for
+   for it), run `paths.py ensure <worktree>` (it creates `.clerk-dev/` and its
+   `.git/info/exclude` entry), and say in one line that it was drafted and where. Do not wait for
    approval; the user edits it when it is wrong. The one exception is an
    interactive review: it shows the draft and asks the user to check it before
    any reviewer runs (Branch notes first in the review skill).
@@ -178,7 +190,8 @@ A line not in that form (no `changed:` or `wanted:`, or no `; needs:`) is
 not filed as written: restate it in the form from the rest of the report or
 finding, or ask the builder for it, as a malformed report is sent back.
 
-Find the owing repository's worktree in `.clerk-dev/workspace.md` (see
+Find the owing repository's worktree in the workspace file (`paths.py <worktree>
+workspace`; see
 `workspace-manifest.md`) and scope the item to that worktree's branch (`git -C
 <its worktree> branch --show-current`). When the file is missing or does not
 list the owing repository, file it by name through the registry with `--repo
@@ -576,7 +589,7 @@ Status, where it stands: `open`, `in-progress`, `fixed`, `wont-fix`,
 
 ## Deferred items
 
-A deferred item (`DEFER-3`, in `.clerk-dev/deferred.md`, kept by `deferred.py`) is a
+A deferred item (`DEFER-3`, kept by `deferred.py`) is a
 known gap with a path chosen for now, not an idea: ideas are good things for
 later, a deferred item is something this work already knows is missing. Its
 fields are From (the source), Path (what was done for now), Open (what is left
@@ -593,7 +606,7 @@ looked at when the step ended: closed, or revisited with a new trigger.
 
 Untracked files in the worktree, such as personal notes, drafts, and scratch
 specs, are the user's own. Reviews do not read them, and fixes never stage or
-commit them. The plugin's own files are only those under `.clerk-dev/`,
-including feature records, which the user writes too. Documents
+commit them. The plugin's own files are only the ones it
+keeps under `.clerk-dev/` (see the table above), including feature records, which the user writes too. Documents
 committed to the repository are read through the repo-context
 `## Work tracking` section and never written to.

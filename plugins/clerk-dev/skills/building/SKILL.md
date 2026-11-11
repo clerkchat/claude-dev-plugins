@@ -332,7 +332,7 @@ the user asks for one.
 
 ## The build log
 
-The build log, `.clerk-dev/build.md`, is kept with
+The build log is kept with
 `${CLAUDE_PLUGIN_ROOT}/scripts/build.py` (below, `build.py`). An entry is
 written only for a route that builds a record: a brief's requirements, a
 piece grown from an item included, through `build.py add` and `done`; or a
@@ -490,8 +490,8 @@ The builder sees only this repository, so its `follow-ups:` covers the clients
 it happens to know about. When its `contract:` line is not "none", check every
 related worktree yourself, without a model:
 
-1. The worktrees: every other row of `.clerk-dev/workspace.md`
-   (`skills/review/workspace-manifest.md`). When the file is missing, check
+1. The worktrees: every other row of the workspace file
+   (`paths.py <worktree> workspace`; `skills/review/workspace-manifest.md`). When the file is missing, check
    nothing elsewhere: say in one line that no other repositories are known for
    this branch, so their clients were not checked, and that a feature review
    sets them up.

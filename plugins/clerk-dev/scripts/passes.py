@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a worktree's pass log, <worktree>/.clerk-dev/passes.md.
+"""Keep a worktree's pass log (paths.py passes).
 
 A pass is a bounded stretch of writing with one focus on one piece of work,
 ending in commits and a pass review with only the pass's lenses over only the
@@ -39,8 +39,8 @@ Entry format:
     - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
 import argparse, datetime, json, os, re, subprocess, sys
-from records import PLUGIN_ROOT, load_script, plugin_version, write_atomic
-import ids
+from records import PLUGIN_ROOT, plugin_version, write_atomic
+import ids, paths
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -59,16 +59,6 @@ def git(wt, *args, check=True):
     r = subprocess.run(["git", "-C", wt, *args], capture_output=True, text=True)
     if check and r.returncode != 0: sys.exit(f"git {' '.join(args)} failed: {r.stderr.strip()}")
     return r.stdout.strip()
-
-def path(wt):
-    d = os.path.join(wt, ".clerk-dev"); os.makedirs(d, exist_ok=True)
-    if subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"]).returncode != 0:
-        common = git(wt, "rev-parse", "--git-common-dir", check=False)
-        if common:
-            exf = os.path.join(common if os.path.isabs(common) else os.path.join(wt, common), "info", "exclude")
-            os.makedirs(os.path.dirname(exf), exist_ok=True)
-            with open(exf, "a") as fh: fh.write(".clerk-dev/\n")
-    return os.path.join(d, "passes.md")
 
 def read(p):
     if not os.path.exists(p): return []
@@ -124,9 +114,6 @@ def counts(check):
     m = re.search(r";\s*((?:[a-z-]+ \d+(?:, )?)+)\s*(?:;|$)", check or "")
     return {k: int(v) for k, v in re.findall(r"([a-z-]+) (\d+)", m.group(1))} if m else None
 
-def guard(wt):
-    load_script("records.py").guard(wt)
-
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -145,8 +132,7 @@ def main():
     l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
     sp.add_parser("stats").add_argument("wt")
     a = ap.parse_args()
-    guard(a.wt)
-    p = path(a.wt); passes = read(p); today = datetime.date.today().isoformat()
+    paths.ensure(a.wt); p = paths.passes(a.wt); passes = read(p); today = datetime.date.today().isoformat()
 
     if a.cmd == "start":
         op = [e["id"] for e in passes if e["f"].get("Status") == "open"]
