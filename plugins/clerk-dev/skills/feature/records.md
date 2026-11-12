@@ -44,8 +44,9 @@ paths.
 
 Manage files only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`: it
 assigns ids, writes the frontmatter, marks superseded records, and regenerates
-the index. Write the body with Edit or Write after `records.py new` creates the
-file.
+the index. `records.py new` creates the file with its header; add the body below the
+header with Edit, never Write or a heredoc over the file, which would erase the
+header and the id.
 
 Record bodies and the overview carry diagrams as "Diagrams" in
 `skills/review/tracking.md` describes.

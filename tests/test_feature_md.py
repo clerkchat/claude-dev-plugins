@@ -81,6 +81,28 @@ class WhenPlanStepsSitUnderAHeadingTests(FeatureCase):
         self.assertNotIn("warning", self.records("index"))
 
 
+class WhenARecordFileIsBrokenTests(FeatureCase):
+    def write_raw(self, name, text):
+        with open(os.path.join(paths.records_dir(self.root), name), "w") as f:
+            f.write(text)
+
+    def test_indexing_names_a_file_whose_header_is_missing(self):
+        write_record(self.root, "PLAN-1", "plan", "Plain", body="1. Piece one. Done: when it is.")
+        self.write_raw("BRIEF-2-bare.md", "# BRIEF-2. Bare\n\nbody only\n")
+        out = self.records("index")
+        self.assertIn("warning: BRIEF-2-bare.md has no record header with an id: the body replaced the header", out)
+
+    def test_indexing_names_two_files_sharing_an_id(self):
+        write_record(self.root, "PLAN-1", "plan", "First", body="1. A. Done: when it is.")
+        self.write_raw("PLAN-1-copy.md", "---\nid: PLAN-1\ntype: plan\ntitle: Copy\n---\n\n1. B. Done: when it is.\n")
+        self.assertIn("warning: PLAN-1 is used by both PLAN-1-copy.md and PLAN-1.md", self.records("index"))
+
+    def test_indexing_stays_quiet_for_whole_distinct_records(self):
+        write_record(self.root, "PLAN-1", "plan", "First", body="1. A. Done: when it is.")
+        write_record(self.root, "DESIGN-2", "design", "Second", body="## Shape\n\nX.")
+        self.assertNotIn("warning", self.records("index"))
+
+
 class ConcatenationTests(WithRecordsCase):
     def test_contents_list_the_current_records_in_body_order(self):
         self.assertEqual(
