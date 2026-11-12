@@ -518,9 +518,19 @@ def guidance(wt, area=None, context=None):
     if known: out += ["## Repository noise", "", "Patterns that look wrong but are intentional in this repository; do not report them.", "", known, ""]
     return "\n".join(out).rstrip("\n") + "\n", warnings
 
-def plan_steps(r):
-    body = parse(r["path"])[1].split("\n## ", 1)[0]
+def numbered(body):
     return {int(re.match(r"\d+", t).group(0)): t.strip() for t in re.split(r"^(?=\d+\.\s)", body, flags=re.M)[1:]}
+
+def plan_steps(r):
+    return numbered(parse(r["path"])[1].split("\n## ", 1)[0])
+
+def misplaced_steps(r):
+    """Why a plan with no readable steps has none: its numbered steps sit under a
+    `## ` heading, which plan_steps does not read. None when the plan has steps or none at all."""
+    if plan_steps(r): return None
+    under_heading = parse(r["path"])[1].partition("\n## ")[2]
+    if not numbered(under_heading): return None
+    return f"plan {r['id']} has numbered steps under a '## ' heading; steps are read only directly under the title, before the first '## ' heading"
 
 def plan_step(h, ref):
     p = ids.read(ref, ids.REF)
@@ -894,6 +904,9 @@ def main():
         for r in hit: set_fields(r, area=slug(a.new))
         concatenate(h, a.wt); print(f"{len(hit)} records moved from {a.old} to {slug(a.new)}")
     elif a.cmd == "index":
+        for r in records(h):
+            problem = r.get("type") == "plan" and misplaced_steps(r)
+            if problem: print(f"warning: {problem}", file=sys.stderr)
         concatenate(h, a.wt); print(paths.feature_md(h))
     elif a.cmd == "digest":
         sys.stdout.write(digest(h, a.wt))

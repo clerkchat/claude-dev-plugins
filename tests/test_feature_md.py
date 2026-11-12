@@ -71,6 +71,16 @@ class WithRecordsCase(FeatureCase):
         self.records("index")
 
 
+class WhenPlanStepsSitUnderAHeadingTests(FeatureCase):
+    def test_indexing_warns_that_they_are_not_read(self):
+        write_record(self.root, "PLAN-1", "plan", "Headed", body="## Steps\n\n1. Piece one. Done: when it is.")
+        self.assertIn("warning: plan PLAN-1 has numbered steps under a '## ' heading", self.records("index"))
+
+    def test_indexing_stays_quiet_for_steps_under_the_title(self):
+        write_record(self.root, "PLAN-1", "plan", "Plain", body="1. Piece one. Done: when it is.")
+        self.assertNotIn("warning", self.records("index"))
+
+
 class ConcatenationTests(WithRecordsCase):
     def test_contents_list_the_current_records_in_body_order(self):
         self.assertEqual(
