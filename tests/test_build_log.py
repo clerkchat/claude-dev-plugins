@@ -101,6 +101,10 @@ class BuiltRefusalTests(FeatureRepoCase):
     def test_a_missing_plan_step(self):
         self.refuses("plan PLAN-4 has no step 9", "R4.9", "--commit", self.c1)
 
+    def test_a_plan_whose_steps_sit_under_a_heading_names_the_cause(self):
+        write_record(self.repo.path, "R9", "plan", "Headed plan", body="## Steps\n\n1. Piece one. Done: when it is.")
+        self.refuses("plan PLAN-9 has numbered steps under a '## ' heading", "R9.1", "--commit", self.c1)
+
     def test_a_step_of_a_record_that_is_not_a_plan(self):
         self.refuses("BRIEF-5 is not a plan record", "R5.1", "--commit", self.c1)
 

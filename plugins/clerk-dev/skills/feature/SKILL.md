@@ -27,7 +27,8 @@ keep the work safe. Prefer `/clear` at a natural boundary to compaction; the
 The records, their types, templates, and rules are in `records.md` next to this
 file; read it before writing the first record in a session. Files are managed
 only through `${CLAUDE_PLUGIN_ROOT}/scripts/records.py`; it prints the path of
-each new record, and you write the body there.
+each new record with its header (frontmatter) already written; append the body
+below the header with Edit, never replace the file, or the record loses its id.
 
 Records are the user's thinking, written down. Draft them from the conversation
 in the user's terms, keep them short, and show the user what you wrote in a line

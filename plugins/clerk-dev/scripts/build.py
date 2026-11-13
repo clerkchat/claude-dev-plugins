@@ -348,7 +348,7 @@ def plan_step_of(wt, ref):
     r, text = rc.plan_step(rc.hub(wt), ref)
     if not r: sys.exit(f"{p.record or p.n} is not a plan record in the hub")
     if r.get("status") != "active": sys.exit(f"plan {r['id']} is {r.get('status')}" + (f" (by {r['superseded_by']})" if r.get("superseded_by") else "") + "; use a step of the active plan")
-    if text is None: sys.exit(f"plan {r['id']} has no step {p.sub}")
+    if text is None: sys.exit(rc.misplaced_steps(r) or f"plan {r['id']} has no step {p.sub}")
     return ids.ref(r["id"], p.sub), text
 
 BUILDABLE = ("decision", "plan", "brief")
