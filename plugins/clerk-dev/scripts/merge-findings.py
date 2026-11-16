@@ -12,8 +12,11 @@ findings are unverified and lists the parts still pending.
 Findings are the list entries inside fenced blocks that open with ```findings.
 Each entry starts with "- lens:" and continues with "  key: value" lines; a value
 may wrap onto following lines that are indented deeper than the key. Two
-findings merge when they name the same file and their line ranges overlap or
-sit within 3 lines of each other. The merged entry keeps the highest severity
+findings merge when they name the same file, their line ranges overlap or sit
+within 3 lines of each other, and their titles share enough words to read as the
+same defect. A finding joins a merged entry only through one of its members' own
+ranges, never the entry's joined range, so findings along a long function do not
+chain into one entry. The merged entry keeps the highest severity
 and confidence, the union of lenses, slices, and evidence, and the claim of the
 highest-confidence source. Of the scope labels it keeps the origin closest to
 the branch (new, then worsened, then existing), the largest fix size, and every
@@ -33,6 +36,8 @@ ORIGIN_RANK = {"new": 3, "worsened": 2, "existing": 1}
 SIZE_RANK = {"trivial": 1, "small": 2, "medium": 3, "large": 4}
 DEBT_KINDS = ("cleanup", "simplify", "refactor")
 CREDIT_FIELDS = ("id", "lens", "slice", "confidence", "file", "line", "title", "claim", "context", "snippet", "evidence", "sources")
+STOP = set("the a an and or of to in on for is are be by with that this it as at from not no when so then than its into".split())
+SAME_DEFECT = 0.3
 
 def lens_set(text):
     return {l.strip() for l in re.split(r"[,/]", text) if l.strip()}
@@ -147,8 +152,21 @@ def same_lines(a, b, slack=3):
 def same_kind(a, b):
     return bool(a["debt"]) == bool(b["debt"]) and is_credit(a) == is_credit(b)
 
+def words(text):
+    return {w for w in re.findall(r"[a-z_][a-z0-9_]{2,}", text.lower()) if w not in STOP}
+
+def jaccard(a, b):
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+def same_defect(a, b):
+    topic = lambda e: words(e.get("title") or e.get("claim", ""))
+    return jaccard(topic(a), topic(b)) >= SAME_DEFECT
+
 def overlaps(a, b, slack=3):
-    return same_lines(a, b, slack) and same_kind(a, b)
+    return same_lines(a, b, slack) and same_kind(a, b) and same_defect(a, b)
+
+def new_card(e):
+    return {**e, "lenses": set(e["lenses"]), "slices": set(e["slices"]), "evidence_all": list(e["evidence_all"]), "sources": list(e["sources"]), "_members": [e]}
 
 def merge(into, e):
     if e["confidence"] > into["confidence"]:
@@ -162,8 +180,21 @@ def merge(into, e):
     if ORIGIN_RANK.get(e["origin"], 0) > ORIGIN_RANK.get(into["origin"], 0): into["origin"] = e["origin"]
     if SIZE_RANK.get(e["fix_size"], 0) > SIZE_RANK.get(into["fix_size"], 0): into["fix_size"] = e["fix_size"]
     into["saves"] = max(into["saves"], e["saves"])
+    into["_members"].append(e)
     if e["follow_up"] and e["follow_up"] not in into["follow_up"]:
         into["follow_up"] = "; ".join(x for x in (into["follow_up"], e["follow_up"]) if x)
+
+def merge_all(findings):
+    merged, merges_by_lens = [], defaultdict(int)
+    for e in sorted(findings, key=lambda x: (x["file"], x["line"] or 0)):
+        target = next((c for c in merged if any(overlaps(m, e) for m in c["_members"])), None)
+        if target:
+            merge(target, e)
+            for l in e["lenses"]: merges_by_lens[l] += 1
+        else:
+            merged.append(new_card(e))
+    merged.sort(key=lambda x: (-SEVERITY_RANK[x["severity"]], -x["confidence"], x["file"], x["line"] or 0))
+    return merged, merges_by_lens
 
 def render_readable(merged, title, pending, per_file):
     out=[f"# {title}", "", "Unverified. These are the reviewers' raw findings before the verification pass; some will be rejected or downgraded. An area with no findings may simply not have been reviewed yet.", ""]
@@ -210,15 +241,7 @@ def main():
             for e in parse_entries(block, name):
                 findings.append(norm(e)); n += 1
         per_file[name] = n
-    merged, merges_by_lens = [], defaultdict(int)
-    for e in sorted(findings, key=lambda x: (x["file"], x["line"] or 0)):
-        target = next((m for m in merged if overlaps(m, e)), None)
-        if target:
-            merge(target, e)
-            for l in e["lenses"]: merges_by_lens[l] += 1
-        else:
-            merged.append(e)
-    merged.sort(key=lambda x: (-SEVERITY_RANK[x["severity"]], -x["confidence"], x["file"], x["line"] or 0))
+    merged, merges_by_lens = merge_all(findings)
     out = []
     out.append(f"# Merged findings\n\nparsed: {len(findings)} findings from {sum(1 for v in per_file.values() if v)} of {len(per_file)} files; merged into {len(merged)}\n")
     out.append("per file: " + ", ".join(f"{k} {v}" for k,v in per_file.items()) + "\n")
