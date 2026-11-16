@@ -1037,7 +1037,9 @@ write the reply as it was returned.
 
 Agents are read-only by design; the orchestrator is the only writer. Then run
 `merge-findings.py <run>/raw -o <run>/merged.md`. It parses every `findings`
-block, merges entries on the same file with overlapping or adjacent line ranges,
+block, merges entries on the same file with overlapping or adjacent line ranges
+whose titles describe the same defect (a finding is compared with each merged
+finding's own range, so nearby findings do not chain along a long function),
 keeps the highest severity and confidence and the union of lenses, slices, and
 evidence, and reports how many findings it parsed per file. If a raw file shows
 zero findings but visibly contains a `findings` block, the agent broke the
