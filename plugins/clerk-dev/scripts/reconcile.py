@@ -40,7 +40,12 @@ copies each matched finding's posted.tsv row, posted/keep.tsv row, posted
 text (posted/<id>.md), and closing reply (posted/close-<id>.md) under its new
 id, unless the current run already has a posted.tsv row for it, and only across
 a judged match, a recheck, or a line match whose wording overlaps by at least
-0.5; it names the posted findings a looser match left behind. When a previous
+0.5; it names the posted findings a looser match left behind. It copies the
+text kept from each review still pending (posted/pending-<review id>.md) as
+it is, and that of a submitted one (posted/submitted-<review id>.md, or
+earlier-<review id>.md from a run before) as earlier-<review id>.md, which
+still marks the review as the user's but not as this run's, so a re-review
+after a submit opens a new review. When a previous
 finding posted as a thread on GitHub matched nothing, it prints "N posted
 findings not found again (...)": those threads come in as pull request
 comments on the next pr-comments.py fetch.
@@ -52,8 +57,6 @@ import run_files as rf
 
 mf = load_script("merge-findings.py")
 
-STOP = set("the a an and or of to in on for is are be by with that this it as at from not no when so then than its into".split())
-
 def load(run):
     titles, overrides = rf.read_titles(run), rf.read_overrides(run)
     out = {e["id"]: e for e in rf.read_merged(rf.merged_path(run))}
@@ -63,14 +66,10 @@ def load(run):
     return out
 
 def words(e):
-    t = (e.get("title", "") + " " + e.get("claim", "")).lower()
-    return {w for w in re.findall(r"[a-z_][a-z0-9_]{2,}", t) if w not in STOP}
+    return mf.words(e.get("title", "") + " " + e.get("claim", ""))
 
 def comparable(a, b):
     return mf.is_credit(a) == mf.is_credit(b)
-
-def jac(a, b):
-    return len(a & b) / len(a | b) if a and b else 0.0
 
 TEXT_MATCH = 0.5
 
@@ -113,7 +112,7 @@ def append_candidates(new, carried):
         nw = words(n); scored = []
         for cid, c in carried.items():
             if not comparable(n, c): continue
-            sim = jac(nw, words(c))
+            sim = mf.jaccard(nw, words(c))
             same = n["file"] == c["file"]
             near = same and n["line"] and c["line"] and abs(n["line"] - c["line"]) <= 15
             if (same and (near or sim >= 0.25)) or sim >= 0.5:
@@ -205,14 +204,15 @@ def append_mode(new_path, cur, judged=None, recheck=None):
     print(f"incremental: {len(new)} new findings: {counts['duplicate']} duplicates, {counts['regressed']} regressions, "
           f"{counts['stale']} already covered by a fix, {len(folded.appended)} appended", file=sys.stderr)
 
-Posting = namedtuple("Posting", "posted kept")
+Posting = namedtuple("Posting", "posted kept groups")
 
 def read_posting(run):
-    return Posting(rf.read_posted(run), rf.read_kept_open(run))
+    return Posting(rf.read_posted(run), rf.read_kept_open(run), rf.read_groups(run))
 
 def write_posting(run, posting):
     rf.write_posted(run, posting.posted)
     if posting.kept: rf.write_kept_open(run, posting.kept)
+    if posting.groups: rf.write_groups(run, posting.groups)
 
 def copy_new(src, dst):
     if os.path.exists(src) and not os.path.exists(dst):
@@ -225,18 +225,28 @@ def seed_posted(prev, cur, pid, cid, prev_posting, cur_posting):
     for path in (rf.posted_path, rf.close_text_path): copy_new(path(prev, pid), path(cur, cid))
     return True
 
+CARRIED_AS = {"pending": "pending", "submitted": "earlier", "earlier": "earlier"}
+
 def seed_reviews(prev, cur, rows):
-    review_ids = rf.review_ids(rows)
-    for rid in review_ids: copy_new(rf.kept_body_path(prev, rid), rf.kept_body_path(cur, rid))
-    if review_ids: copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
+    for state, into in CARRIED_AS.items():
+        for rid in rf.kept_body_ids(prev, (state,)): copy_new(rf.kept_body_path(prev, rid, state), rf.kept_body_path(cur, rid, into))
+    if rf.kept_body_ids(prev, ("pending",)) | rf.review_ids(rows): copy_new(rf.review_text_path(prev), rf.review_text_path(cur))
+
+def seed_groups(pid, carried, prev_posting, cur_posting):
+    row = prev_posting.groups[pid]
+    cid, lead = carried.get(pid), carried.get(rf.lead_of(prev_posting.groups, pid))
+    if cid is None or lead is None: return False
+    cur_posting.groups.setdefault(cid, {**row, "lead": str(lead)})
+    return True
 
 def seed_postings(prev, cur, pairs):
     prev_posting, cur_posting = read_posting(prev), read_posting(cur)
+    carried = dict(pairs)
     seeded = [cid for pid, cid in pairs if seed_posted(prev, cur, pid, cid, prev_posting, cur_posting)]
-    if seeded:
-        write_posting(cur, cur_posting)
-        seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
-    return len(seeded)
+    left_behind = [pid for pid in sorted(prev_posting.groups) if not seed_groups(pid, carried, prev_posting, cur_posting)]
+    if seeded or len(left_behind) < len(prev_posting.groups): write_posting(cur, cur_posting)
+    seed_reviews(prev, cur, {cid: cur_posting.posted[cid] for cid in seeded})
+    return len(seeded), left_behind
 
 def prev_name(pid, pnum):
     return f"finding {pnum[pid]}" if pid in pnum else f"#{pid}"
@@ -244,6 +254,10 @@ def prev_name(pid, pnum):
 def lost_line(lost, pnum):
     names = ", ".join(prev_name(pid, pnum) for pid in lost)
     return f"{len(lost)} posted findings not found again ({names}); their threads come in as pull request comments"
+
+def group_left_line(left_behind, groups, pnum):
+    names = ", ".join(f"{prev_name(pid, pnum)} under {prev_name(rf.lead_of(groups, pid), pnum)}" for pid in left_behind)
+    return f"{len(left_behind)} group{'s' if len(left_behind) > 1 else ''} left behind ({names})"
 
 def loose_line(loose, pnum):
     names = ", ".join(f"{prev_name(pid, pnum)} with #{cid}" for pid, cid in loose)
@@ -254,7 +268,7 @@ CARRIES_POSTINGS = ("judge", "recheck")
 
 def carries_postings(how, prev_finding, cur_finding):
     if how in CARRIES_POSTINGS: return True
-    return how == "line" and bool(prev_finding and cur_finding) and jac(words(cur_finding), words(prev_finding)) >= TEXT_MATCH
+    return how == "line" and bool(prev_finding and cur_finding) and mf.jaccard(words(cur_finding), words(prev_finding)) >= TEXT_MATCH
 
 def confident_pairs(prev, cur, pairs, matches):
     prev_found, cur_found = load(prev), load(cur)
@@ -277,13 +291,14 @@ def seed(prev, cur, label, pnum):
             st[cid] = {"status": m["prev_status"], "ref": m["prev_ref"], "date": ""}; carried += 1
         seed_resolution(prev, cur, pid, cid, label)
     confident = confident_pairs(prev, cur, pairs, matches)
-    seeded_posted = seed_postings(prev, cur, confident)
+    seeded_posted, left_behind = seed_postings(prev, cur, confident)
     rf.write_status(cur, st)
     matched, prev_posted = {pid for pid, _ in pairs}, rf.read_posted(prev)
     lost = [pid for pid, row in sorted(prev_posted.items()) if rf.has_thread(row) and pid not in matched]
     loose = [(pid, cid) for pid, cid in pairs if pid in prev_posted and (pid, cid) not in confident]
     print(f"seeded {carried} statuses" + (f" and {seeded_posted} posted findings" if seeded_posted else "") + f" from {label}"
-          + (f"; {lost_line(lost, pnum)}" if lost else "") + (f"; {loose_line(loose, pnum)}" if loose else ""), file=sys.stderr)
+          + (f"; {lost_line(lost, pnum)}" if lost else "") + (f"; {loose_line(loose, pnum)}" if loose else "")
+          + (f"; {group_left_line(left_behind, rf.read_groups(prev), pnum)}" if left_behind else ""), file=sys.stderr)
 
 def judged_same(path):
     pairs = []
@@ -306,7 +321,7 @@ def proposed_matches(prev, cur, pinfo):
         cw = words(c)
         for pid, p in prev.items():
             if not comparable(c, p): continue
-            sim = jac(cw, words(p))
+            sim = mf.jaccard(cw, words(p))
             same_file = c["file"] == p["file"]
             near = same_file and c["line"] and p["line"] and abs(c["line"] - p["line"]) <= 15
             if same_file and (near and sim >= 0.2 or sim >= TEXT_MATCH):

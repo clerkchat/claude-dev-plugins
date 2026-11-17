@@ -1,7 +1,16 @@
 ---
 name: deliberate
 description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine BL-4" / "refine Q-3"; and whenever a skill or the session has a recommendation the user may accept as is (a Discuss or Refine item, a design question, a stopped handoff, a pass or follow-up item, a fix, suggested marks for unmarked findings). It sizes the work itself, so trivial items cost one line. Not for an item marked Fix as recommended; that is decided.
-allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Grep, Glob, Agent
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Read
+  - Write
+  - Grep
+  - Glob
+  - Agent
 ---
 
 # Deliberate

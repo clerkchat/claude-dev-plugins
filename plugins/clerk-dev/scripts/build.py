@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a worktree's build log, <worktree>/.clerk-dev/build.md, and report
+"""Keep a worktree's build log (paths.py build-log) and report
 progress against the feature's briefs.
 
 The build log records each handoff, one delegation of implementation work: the
@@ -62,8 +62,8 @@ Entry format:
 """
 import argparse, datetime, os, re, sys
 from typing import NamedTuple
-from records import exclude, git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
-import ids
+from records import git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
+import ids, paths
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATES = ("handed-off", "stopped", "done", "abandoned", "dropped")
@@ -82,7 +82,6 @@ edit with care.
 ENTRY_RE = re.compile(rf"^- \[( |x)\] ({ids.pattern(ids.BUILD, ids.MILESTONE)})\. (.+)$")
 FIELD_RE = re.compile(r"^  - (" + "|".join(FIELDS + tuple(OLD_FIELDS)) + r"): ?(.*)$")
 
-def log_path(wt): return os.path.join(wt, ".clerk-dev", "build.md")
 
 class Log(NamedTuple):
     entries: list
@@ -90,7 +89,7 @@ class Log(NamedTuple):
     unlinked: list
 
 def log(wt):
-    entries = read(log_path(wt))
+    entries = read(paths.build_log(wt))
     return Log(entries, *refind(wt, entries))
 
 def log_entries(wt): return log(wt).entries
@@ -123,10 +122,6 @@ def off_branch(wt, full):
     base = branch_base(wt)
     if not base: return ""
     return "it is on the main branch, older than this branch's base" if is_ancestor(wt, full, base) else "it is a merge commit, which the branch's own commits leave out"
-
-def path(wt):
-    exclude(wt)
-    return log_path(wt)
 
 def read(p):
     if not os.path.exists(p): return []
@@ -202,11 +197,11 @@ def find(entries, bid):
     if not e: sys.exit(f"{bid} not found")
     return e
 
-def spec_requirements(hub_dir, spec_id):
+def spec_requirements(hub, spec_id):
     """{number: text} of a spec's top-level numbered Requirements, or None
     when the spec is not found."""
     rc = load_script("records.py")
-    r = next((r for r in rc.records(hub_dir) if ids.same(r["id"], spec_id)), None)
+    r = next((r for r in rc.records(hub) if ids.same(r["id"], spec_id)), None)
     if not r: return None, None
     _, body = rc.parse(r["path"])
     items, cur = {}, None
@@ -229,7 +224,7 @@ class SpecProgress(NamedTuple):
 
 def hub_records(wt):
     rc = load_script("records.py")
-    return rc.records(rc.fdir(wt))
+    return rc.records(rc.hub(wt))
 
 def resolver(wt): return load_script("records.py").resolver(hub_records(wt))
 
@@ -240,15 +235,15 @@ def spec_id(wt, text):
 
 def progress(wt, entries, spec=None):
     rc = load_script("records.py")
-    d = rc.fdir(wt)
+    h = rc.hub(wt)
     entries = handoffs(entries)
-    rs = rc.records(d)
+    rs = rc.records(h)
     canon, kinds = rc.resolver(rs), {r["id"]: r.get("type") for r in rs}
     tagged = [(spec_of(e, canon, kinds), e) for e in entries]
     specs = [spec_id(wt, spec)] if spec else sorted({s for s, _ in tagged if s}, key=ids.number)
     out = []
     for s in specs:
-        r, texts = spec_requirements(d, s)
+        r, texts = spec_requirements(h, s)
         texts = texts or {}
         mine = [e for t, e in tagged if t == s]
         gone = dropped_of(mine)
@@ -350,10 +345,10 @@ def plan_step_of(wt, ref):
     p = ids.read(ref, ids.REF)
     if not p: sys.exit(f"--step takes a plan step such as PLAN-8.2, not {ids.normalize(ref)!r}")
     rc = load_script("records.py")
-    r, text = rc.plan_step(rc.fdir(wt), ref)
+    r, text = rc.plan_step(rc.hub(wt), ref)
     if not r: sys.exit(f"{p.record or p.n} is not a plan record in the hub")
     if r.get("status") != "active": sys.exit(f"plan {r['id']} is {r.get('status')}" + (f" (by {r['superseded_by']})" if r.get("superseded_by") else "") + "; use a step of the active plan")
-    if text is None: sys.exit(f"plan {r['id']} has no step {p.sub}")
+    if text is None: sys.exit(rc.misplaced_steps(r) or f"plan {r['id']} has no step {p.sub}")
     return ids.ref(r["id"], p.sub), text
 
 BUILDABLE = ("decision", "plan", "brief")
@@ -383,7 +378,7 @@ def milestones(entries): return [e for e in entries if ids.kind_of(e["id"]) == i
 
 def pass_states(wt, spec):
     """{focus: latest pass entry} for passes on this spec in the pass log."""
-    p = os.path.join(wt, ".clerk-dev", "passes.md")
+    p = paths.passes(wt)
     if not os.path.exists(p): return {}
     out = {}
     for e in load_script("passes.py").read(p):
@@ -395,50 +390,57 @@ def pass_states(wt, spec):
 def open_findings(wt, e):
     """Open findings in a checked pass's run, or None when it cannot tell."""
     label = (e["f"].get("Check") or "").split(";")[0].strip()
-    run = os.path.join(wt, ".clerk-dev", label)
+    run = paths.run(wt, label)
     if not label or not os.path.exists(os.path.join(run, "merged.md")): return None
     sf = load_script("stale-findings.py")
     st, ins, num = sf.state(run)
     return sum(1 for m in sf.load_findings(run) if m in num and sf.is_open(m, st, ins))
 
+class MilestoneView(NamedTuple):
+    rows: list
+    next: str | None
+    ready: bool
+    stage: str | None
+
 def milestone_view(wt, m):
-    """(rows of (focus, word, required), next step or None, ready)."""
+    """Rows of (focus, word, required); the next step and the focus of the
+    first pass not through, or None for both; and whether it is ready."""
     plan = [x.strip() for x in m["f"].get("Passes", "").split(",") if x.strip()]
     req = {x.strip() for x in m["f"].get("Required", "").split(",") if x.strip()}
     skipped = {s.split(":", 1)[0].strip(): s.split(":", 1)[1].strip() if ":" in s else "" for s in m["multi"]["Skipped"]}
     states = pass_states(wt, m["f"].get("Brief"))
-    rows, nxt, ready = [], None, True
+    rows, waiting = [], []
     for f in plan:
         e = states.get(f)
         if f in skipped:
             rows.append((f, f"skipped: {skipped[f]}", f in req)); continue
         if not e or e["f"].get("Status") == "abandoned":
-            rows.append((f, "not run" if not e else "abandoned", f in req)); ready = False
-            nxt = nxt or (f"draft {m['title']}: start the happy-path pass and send its handoffs" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Brief')}" + (" (required)" if f in req else ""))
+            rows.append((f, "not run" if not e else "abandoned", f in req))
+            waiting.append((f, f"draft {m['title']}: start the happy-path pass and send its handoffs" if f == "happy-path" else f"run the {f} pass on {m['f'].get('Brief')}" + (" (required)" if f in req else "")))
             continue
         st = e["f"].get("Status")
         if st == "open":
-            rows.append((f, f"{e['id']} open", f in req)); ready = False
-            nxt = nxt or (f"finish the draft ({e['id']}), then end it" if f == "happy-path" else f"finish pass {e['id']} ({f}), then end it")
+            rows.append((f, f"{e['id']} open", f in req))
+            waiting.append((f, f"finish the draft ({e['id']}), then end it" if f == "happy-path" else f"finish pass {e['id']} ({f}), then end it"))
         elif st == "ended" and e["f"].get("Note") != "no commits":
-            rows.append((f, f"{e['id']} ended, not checked", f in req)); ready = False
-            nxt = nxt or f"check pass {e['id']} ({f})"
+            rows.append((f, f"{e['id']} ended, not checked", f in req))
+            waiting.append((f, f"check pass {e['id']} ({f})"))
         else:
             word = f"{e['id']} " + ("no changes" if e["f"].get("Note") == "no commits" and st == "ended" else "checked")
             n = open_findings(wt, e) if st == "checked" else 0
             if n: word += f", {n} open finding{'s' if n != 1 else ''}"
             if n and f in req:
-                ready = False
                 label = (e["f"].get("Check") or "").split(";")[0].strip()
-                nxt = nxt or f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""
+                waiting.append((f, f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""))
             rows.append((f, word, f in req))
-    return rows, nxt, ready
+    stage, nxt = waiting[0] if waiting else (None, None)
+    return MilestoneView(rows, nxt, not waiting, stage)
 
 def milestone_lines(wt, entries):
     out, steps = [], []
     for m in milestones(entries):
         if m["f"].get("Status") == "abandoned": continue
-        rows, nxt, ready = milestone_view(wt, m)
+        rows, nxt, ready, _ = milestone_view(wt, m)
         out.append(f"{m['id']} {m['title']} ({m['f'].get('Brief')}): " + ("complete" if ready else "in progress"))
         out.append("  " + "; ".join(f"{f}{' (required)' if r else ''}: {w}" for f, w, r in rows))
         if nxt: steps.append(f"{m['id']} {m['title']}: {nxt}.")
@@ -468,8 +470,7 @@ def main():
     sk = sp.add_parser("skip"); sk.add_argument("wt"); sk.add_argument("mid"); sk.add_argument("focus"); sk.add_argument("--why", required=True)
     mst = sp.add_parser("milestones"); mst.add_argument("wt")
     a = ap.parse_args()
-    load_script("records.py").guard(a.wt)
-    p = path(a.wt); found = log(a.wt); entries = found.entries; today = datetime.date.today().isoformat()
+    paths.ensure(a.wt); p = paths.build_log(a.wt); found = log(a.wt); entries = found.entries; today = datetime.date.today().isoformat()
 
     if a.cmd == "add":
         spec = spec_id(a.wt, a.brief)
@@ -510,7 +511,7 @@ def main():
     if a.cmd == "drop":
         spec = spec_id(a.wt, a.brief)
         nums = parse_reqs(spec, a.reqs)
-        _, items = spec_requirements(load_script("records.py").fdir(a.wt), spec)
+        _, items = spec_requirements(load_script("records.py").hub(a.wt), spec)
         if items is None: sys.exit(f"{spec} not found in the hub")
         unknown = [n for n in nums if n not in items]
         if unknown: sys.exit(f"{spec} has no requirement {', '.join(map(str, unknown))}")

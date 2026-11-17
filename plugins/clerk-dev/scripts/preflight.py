@@ -20,6 +20,8 @@ printed as missing rather than failing the call.
 """
 import argparse, os, re, subprocess
 from records import load_script
+import paths
+import run_files as rf
 
 rs = load_script("status.py")
 git = rs.git
@@ -40,27 +42,25 @@ def purpose_state(path):
     return "present, Purpose filled in" if rec.body_section(text, "Purpose") else "present, Purpose empty"
 
 def latest_run(wt, head):
-    run = os.path.realpath(os.path.join(wt, ".clerk-dev", "latest"))
+    run = os.path.realpath(paths.latest(wt))
     if not os.path.isdir(run): return "none"
-    label = os.path.basename(run)
-    if not os.path.exists(os.path.join(run, "target.txt")): return f"`.clerk-dev/{label}`, stopped before scoping finished"
-    target = open(os.path.join(run, "target.txt")).read().splitlines()
-    what = target[0] if target else "?"
-    at = target[2].strip() if len(target) > 2 else ""
+    name = paths.run_name(wt, run)
+    if not os.path.exists(os.path.join(run, "target.txt")): return f"`{name}`, stopped before scoping finished"
+    target = rf.read_target(run)
+    what, at = target.target or "?", target.head
     progress = os.path.join(run, "progress.md")
     unchecked = len(re.findall(r"^\s*- \[ \]", open(progress, encoding="utf-8").read(), re.M)) if os.path.exists(progress) else 0
     if os.path.exists(os.path.join(run, "report.md")) and not unchecked: state = "finished"
     elif unchecked: state = f"unfinished ({unchecked} unchecked progress items)"
     else: state = "unfinished (no report yet)"
     where = "at current HEAD" if at and at == head else (f"at `{at[:9]}`, HEAD has moved" if at else "HEAD unknown")
-    return f"`.clerk-dev/{label}` of {what}, {state}, {where}"
+    return f"`{name}` of {what}, {state}, {where}"
 
 def block(path, log_n):
     out = []
     wt = git(path, "rev-parse", "--show-toplevel")
     if not wt:
         return [f"## {path}", "", "Not a git worktree (or the path does not exist).", ""]
-    load_script("records.py").guard(wt)
     rows = rs.workspace_rows(wt)
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")
@@ -87,8 +87,7 @@ def block(path, log_n):
     else:
         out.append("- Merge base: unknown")
 
-    review = os.path.join(wt, ".clerk-dev")
-    out.append(f"- Branch notes: {purpose_state(os.path.join(review, 'branch-notes.md'))}")
+    out.append(f"- Branch notes: {purpose_state(paths.notes(wt))}")
     if rows:
         out.append("- Workspace: " + ", ".join(f"{n} `{p}`" + ("" if os.path.isdir(p) else " (missing)") for n, p in rows.items()))
     else:

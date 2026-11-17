@@ -2,6 +2,7 @@ import os
 import unittest
 
 from helpers import SCRIPTS, TempCase, git, init_repo, run_script
+import paths
 
 
 def write(path, text):
@@ -31,21 +32,6 @@ class RepoFilesCase(TempCase):
         return run_script("migrate-guidance", "repo-files", self.repo.path, *args)
 
 
-class GuardTests(RepoFilesCase):
-    def test_an_old_workspace_file_stops_status_with_the_migrate_hint(self):
-        write(os.path.join(self.repo.path, ".clerk-dev", "review-workspace.md"), "| Repo | Worktree |\n")
-        code, out = run_script("status", self.repo.path, "--no-mark")
-        self.assertNotEqual(code, 0)
-        self.assertIn("review-workspace.md", out)
-        self.assertIn("/clerk-dev:migrate", out)
-
-    def test_an_old_context_copy_stops_status(self):
-        self.old_context(self.repo.path, "## Slices\n")
-        code, out = run_script("status", self.repo.path, "--no-mark")
-        self.assertNotEqual(code, 0)
-        self.assertIn("/clerk-dev:migrate", out)
-
-
 @unittest.skipUnless(os.path.exists(os.path.join(SCRIPTS, "migrate-guidance.py")), "migrate-guidance.py is local to the plugin's own worktrees")
 class MigrateTests(RepoFilesCase):
     def test_identical_copies_become_one_repo_context_without_frontmatter(self):
@@ -72,11 +58,11 @@ class MigrateTests(RepoFilesCase):
 
     def test_setup_and_workspace_files_move_to_their_new_names(self):
         write(os.path.join(self.common, "review-setup"), "context: never 2026-10-01\n")
-        write(os.path.join(self.second, ".clerk-dev", "review-workspace.md"), "Hub: main\n")
+        write(os.path.join(paths.clerk_dev(self.second), "review-workspace.md"), "Hub: main\n")
         code, out = self.migrate()
         self.assertEqual(code, 0, out)
         self.assertEqual(read(os.path.join(self.common, "clerk-dev", "setup")), "context: never 2026-10-01\n")
-        self.assertEqual(read(os.path.join(self.second, ".clerk-dev", "workspace.md")), "Hub: main\n")
+        self.assertEqual(read(paths.workspace(self.second)), "Hub: main\n")
         self.assertFalse(os.path.exists(os.path.join(self.common, "review-setup")))
         code, out = run_script("status", self.second, "--no-mark")
         self.assertEqual(code, 0, out)

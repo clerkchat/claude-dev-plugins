@@ -4,7 +4,7 @@ description: Fix, address, or recheck a finding from a /clerk-dev:review report.
 argument-hint: "N[,M...] [as recommended | but <adjustment>] [run label]"
 allowed-tools:
   - Bash(git add *)
-  - Bash(git commit *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/commit.py *)
   - Bash(git diff *)
   - Bash(git rev-parse *)
   - Bash(git show *)
@@ -16,6 +16,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py *)
@@ -36,7 +37,7 @@ through the `building` skill's intake. The review run's files are the
 source of truth; see the `review` skill in this plugin for the run directory
 layout, the finding anchors, and `numbers.tsv`.
 
-Run directory: `.clerk-dev/latest` unless the user names a label. Scripts:
+Run directory: `<run>`, from `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> latest`, unless the user names a label (`paths.py <worktree> run <label>`). Scripts:
 `${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py` (re-render;
 `--set
 N=STATUS[:REF]` records a status) and
@@ -51,7 +52,7 @@ head, counts) plus
 This session may fix dozens of findings in a row (the triage skill runs its
 whole queue here), so what enters it per fix must stay small: the builder's
 report, the recheck verdict, and one line from each command. The agents read the
-run files; you pass them paths. Run commands quietly (`git commit -q`,
+run files; you pass them paths. Run commands quietly (`commit.py`,
 `git show <sha> > <file>`, the renderer's one-line summary only), and never
 print a run file, a patch, or a whole TSV.
 

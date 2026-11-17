@@ -94,14 +94,19 @@ out of scope" at most.
 4. **Duplication.**
    - Review: the same logic two or more times in the touched code, or the
      touched code repeating logic that exists elsewhere; name the one place it
-     should live.
+     should live. For the same rule in two places, first ask whether either
+     copy needs to exist, since one source may already hold the answer;
+     extracting a shared helper is the fallback, not the default
+     recommendation.
    - Design: Is there duplication in that area that the feature would make
      worse, or does the design repeat logic that exists elsewhere? Name the one
-     place it should live.
+     place it should live, after asking whether either copy needs to exist.
    - Survey: Where is there duplication in these files that the next change
-     here would make worse? Name the one place it should live.
+     here would make worse? Name the one place it should live, after asking
+     whether either copy needs to exist.
    - Pass: Fold duplicated code from this piece into one place, and do not add
-     a copy of logic that exists elsewhere.
+     a copy of logic that exists elsewhere; when the same rule sits in two
+     places, delete the copy nothing needs before extracting a helper.
 5. **Reimplemented library code.**
    - Review: touched code that does what the project's own shared libraries
      already do, in full or in large part. Find the libraries first: `###

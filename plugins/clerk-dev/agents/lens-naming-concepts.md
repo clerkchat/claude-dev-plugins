@@ -98,7 +98,11 @@ guidance.
 8. **Placement.**
    - Review: files or modules located away from the feature they belong to, so
      a reader looking in the obvious place will not find them; test files not
-     next to the code they test where the repo's convention is colocation.
+     next to the code they test where the repo's convention is colocation; a
+     new file that fits none of its sibling directories and role suffixes
+     (`*.query.ts`, `guards/`, `queries/`), or does the same job as one that
+     does (free functions at a module root beside a `queries/` directory), in
+     which case name the directory and suffix it belongs in.
    - Design: Where will the code live, and does that match where the feature
      lives?
    - Survey: Does the code live where the feature it serves lives?

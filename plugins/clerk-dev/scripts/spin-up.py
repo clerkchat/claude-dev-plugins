@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse, datetime, os, re, shlex, subprocess, sys
 from typing import NamedTuple
-import backlog, config, records
+import backlog, config, paths, records
 
 BRAINSTORM = "brainstorm"
 NONE = "none"
@@ -131,7 +131,7 @@ def from_the_item(g):
     return f"## From the item (quoted, not Purpose or Guidance)\n\n{text}\n" if text else ""
 
 def write_notes(wt, g):
-    p = records.notes_path(wt)
+    p = paths.notes(wt)
     extra = f"\n{from_the_item(g)}" if g.owed() else ""
     records.write_atomic(p, f"# Branch notes\n\n## Purpose\n{purpose(g)}\n\n## Guidance\n{extra}")
     return f"seeded: {p}"
@@ -158,7 +158,7 @@ def idea_files(wt, g):
     return [f"seeded: {feature}", f"seeded: {meta['id']} {path}"], meta["id"]
 
 def seed_files(wt, g):
-    records.exclude(wt)
+    paths.ensure(wt)
     notes = write_notes(wt, g)
     lines, brainstorm_id = idea_files(wt, g) if g.idea else ([], "")
     return [notes, *lines], brainstorm_id
@@ -182,7 +182,7 @@ def seed_item(wt, t, brainstorm_id, undo):
     return adopt(wt, t, brainstorm_id, undo) if is_idea(t.item) else seed_owed(wt, t, undo)
 
 def seed(wt, g, undo):
-    if records.branch_notes(wt)[0]: sys.exit(f"{records.notes_path(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
+    if records.branch_notes(wt)[0]: sys.exit(f"{paths.notes(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
     lines, brainstorm_id = seed_files(wt, g)
     changes = [*([g.idea] if g.idea else []), *g.owed()]
     return [*lines, *(line for t in changes for line in seed_item(wt, t, brainstorm_id, undo))]
@@ -251,7 +251,6 @@ def main():
     cr = sp.add_parser("create", help="create the worktree, seed it from the item, and run the after-create command")
     cr.add_argument("wt"); cr.add_argument("branch"); cr.add_argument("--item", required=True, action="append", help="BL-n, or <repo>:BL-n for an item another repository owns; repeat for several items from one repository")
     a = ap.parse_args()
-    records.guard(a.wt)
     if a.cmd == "where":
         p = plan(a.wt, a.branch, a.repo)
         refuse_taken(p)

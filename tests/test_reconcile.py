@@ -134,6 +134,27 @@ class SeedLooseLineMatchTest(SeedOtherFindingCase):
                       "their threads come in as pull request comments", self.out)
 
 
+class SeedGroupTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        write_file(os.path.join(self.cur, "merged.md"), merged_md(defect(1, "a.py"), defect(2, "b.py")))
+        write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
+                   "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\tjudge\t7\topen\t\n2\t8\tjudge\t8\topen\t\n")
+        run_files.write_groups(self.prev, {8: {"lead": "7", "date": "2026-11-10"}})
+
+    def test_re_keys_the_group_row_when_lead_and_member_are_carried(self):
+        self.seed()
+        self.assertEqual(run_files.read_groups(self.cur), {2: {"lead": "1", "date": "2026-11-10"}})
+
+    def test_leaves_the_group_behind_and_names_it_when_the_lead_is_not_carried(self):
+        self.match_as("text")
+        write_file(os.path.join(self.cur, "reconcile", "matches.tsv"),
+                   "cur_id\tprev_id\thow\tprev_number\tprev_status\tprev_ref\n1\t7\ttext\t7\topen\t\n2\t8\tjudge\t8\topen\t\n")
+        out = self.seed()
+        self.assertEqual(run_files.read_groups(self.cur), {})
+        self.assertIn("1 group left behind (finding 8 under finding 7)", out)
+
+
 class SeedJudgedMatchTest(SeedOtherFindingCase):
     def test_carries_the_posted_row(self):
         self.match_as("judge")
@@ -168,6 +189,58 @@ class SeedPendingReviewTest(SeedCase):
         write_file(os.path.join(self.cur, "posted", "review.md"), "Current body.\n")
         self.seed()
         self.assertEqual(self.cur_text("posted/review.md"), "Current body.\n")
+
+
+class SeedBodyOnlyPostTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/pending-55.md", "My summary.\n")
+        self.write("posted/review.md", "Nice work.\n")
+        self.seed()
+
+    def test_copies_the_text_kept_from_the_pending_review(self):
+        self.assertEqual(self.cur_text("posted/pending-55.md"), "My summary.\n")
+
+    def test_copies_the_review_body(self):
+        self.assertEqual(self.cur_text("posted/review.md"), "Nice work.\n")
+
+
+class SeedSubmittedBodyOnlyReviewTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.write("posted/submitted-55.md", "My summary.\n")
+        self.write("posted/review.md", "Nice work.\n")
+        self.seed()
+
+    def test_carries_its_kept_text_as_an_earlier_review(self):
+        self.assertEqual(self.cur_text("posted/earlier-55.md"), "My summary.\n")
+
+    def test_carries_it_as_no_review_of_this_run(self):
+        self.assertEqual(run_files.kept_body_ids(self.cur, run_files.RUN_STATES), set())
+
+    def test_copies_no_review_body(self):
+        self.assertFalse(os.path.exists(os.path.join(self.cur, "posted", "review.md")))
+
+
+class SeedPostingOnASubmittedReviewTest(SeedCase):
+    def setUp(self):
+        super().setUp()
+        self.post({7: {**posted_row(5), "review_id": "55"}})
+        self.write("posted/submitted-55.md", "My summary.\n")
+        self.seed()
+
+    def test_carries_the_posted_row(self):
+        self.assertEqual(run_files.read_posted(self.cur)[1]["review_id"], "55")
+
+    def test_carries_its_kept_text_as_an_earlier_review(self):
+        self.assertEqual(self.cur_text("posted/earlier-55.md"), "My summary.\n")
+
+
+class SeedEarlierReviewTest(SeedCase):
+    def test_carries_it_on_as_an_earlier_review(self):
+        self.write("posted/earlier-55.md", "My summary.\n")
+        self.seed()
+        self.assertEqual(self.cur_text("posted/earlier-55.md"), "My summary.\n")
 
 
 class SeedWithoutAReviewTest(SeedCase):

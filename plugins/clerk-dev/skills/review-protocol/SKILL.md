@@ -72,7 +72,7 @@ The orchestrator's prompt gives you:
   The guidance does not change the confidence rubric. If it tells you to skip
   something you believe is a blocker, report the blocker anyway and say that
   the guidance asked to skip this kind of finding.
-- `WORKSPACE`: path of `.clerk-dev/workspace.md`, or `none`. Its rows name
+- `WORKSPACE`: path of the workspace file, or `none`. Its rows name
   the other repositories and worktrees of this job; use them to say which
   repository a fix needs a follow-up in.
 - `BAR`: `final` on a final pass, else absent. See Final pass bar below.
@@ -166,12 +166,13 @@ Read your input once: the patch, the records, or the listed files. Open other
 code only to confirm or refute one specific suspicion or question, a few files
 per item at most, not to explore the repository. If your input is very large,
 work through it in order and record under Coverage where you stopped reading
-closely.
+closely, naming the changed files you did not reach on its `Not read:` line
+(see Finding format).
 
 ## Discovery fallback
 
 When `CONTEXT` is `none`, you still need to know the repo's instances. Read the
-repo's `AGENTS.md` or `CLAUDE.md` if present, then grep for the patterns your
+repo's `AGENTS.md` or `CLAUDE.md` and any `.claude/skills/*standards*` if present, then grep for the patterns your
 lens cares about. Spend at most a few searches on this; say in your output that
 no repo context was available.
 
@@ -296,20 +297,26 @@ per finding, fields in this order:
   origin: <new | worsened | existing; see Origin and fix scope>
   title: <a heading of at most ten words naming the defect in plain terms:
     "Upload route can exhaust the worker's memory". No file names, no code.>
-  claim: <one sentence: what is wrong>
+  claim: <one sentence that opens by naming the kind of problem ("one defect
+    with two consequences", "a race between two persist jobs"), not a cause
+    followed by every consequence>
   context: <one or two sentences of background a reader needs before the
     steps: the code involved and how it relates to this change. It may be code
     the diff added or altered, existing code the diff now relies on, or code
-    the diff should have updated and did not.>
-  steps: <how it goes wrong as a numbered sequence when it is a sequence of
-    events, one item per line, each starting with "1." "2." and so on; a single
-    sentence when it is one condition>
-  impact: <who is affected, how often, how bad. Separate from the mechanism.>
+    the diff should have updated and did not. Leave out what the snippet shows.>
+  steps: <how it goes wrong as a numbered sequence of events when it is a
+    sequence, one item per line, each starting with "1." "2." and so on; a
+    single sentence when it is one condition. Name the actors and use concrete
+    values ("calls A and B", "4 failed and 1 ok"), reusing the names across
+    items, not "for example X, or Y".>
+  impact: <who is affected, how often, how bad, one short line per reason, the
+    reason that points to the fix last. Separate from the mechanism.>
   uncertainty: <optional, one sentence: what the diff cannot show that the
-    impact depends on (deployment order, data volume, real data in this
-    path). Omit when nothing is uncertain.>
+    impact depends on (deployment order, data volume, real data in this path),
+    when it qualifies the finding as a whole. Omit when nothing is uncertain.>
   snippet: <optional, path:start-end of at most twelve lines at HEAD that make
-    the mechanism obvious when seen; omit when prose is enough>
+    the mechanism obvious when seen. Give it whenever the finding is about
+    specific code; omit when prose is enough>
   fix: <one or two sentences, or "none obvious". When there is more than one
     reasonable fix, label each alternative inline with (a), (b), and so on,
     so the user can pick one: "(a) Log at warn with `importId` and the
@@ -339,8 +346,10 @@ backticks (bare `__proto__` or `snake_case` is read as Markdown emphasis); no
 first person ("Reproduced with a copy of setPath" rather than "I reproduced");
 `steps` is a list with one event per item, in the order they happen, ending with
 the wrong outcome, with the items starting on the lines below `steps:` (no YAML
-`|` or `>` after the colon); `impact` says who is affected, how often, and how
-bad, and nothing about the mechanism.
+`|` or `>` after the colon), and no reason or description in an item; `impact`
+says who is affected, how often, and how bad, and nothing about the mechanism.
+Put each hedge on the point it qualifies ("probably", "if X"), and prefer a
+certain reason to a worst case.
 
 `title`, `context`, `steps`, and `impact` are what the author reads; `claim` is
 the one-sentence version the verifier and the merge step work from. Write all of
@@ -352,7 +361,12 @@ After the block, add at most three short sections:
 - `For other lenses`: one line per item, each starting with the lens name.
 - `Noticed, out of scope`: at most two lines.
 - `Coverage`: one or two sentences on what you checked and what you could not
-  (files too large, context missing, callers outside the repo).
+  (files too large, context missing, callers outside the repo). When a changed
+  file in your patch was not read closely (the reading budget ran out, you
+  skipped it, or you read only part of it), add one line, exactly
+  `Not read: <path>, <path>`, with repo-relative paths as git prints them. Leave
+  the line out when you read everything. The orchestrator re-runs your lens on
+  those files, so a file you leave off this line counts as reviewed.
 
 No preamble, no restating the diff, no praise (the credit lens is the one
 exception; its prompt names the fields a credit carries). If you found

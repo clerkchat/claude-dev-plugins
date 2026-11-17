@@ -69,9 +69,27 @@ in it.
 - A finding in Needs confirmation (section `confirm`), or one whose card or
   verifier's note leaves the outcome uncertain, is asked as a question ("Can
   `retry` run after the lock is released here?"), not stated.
-- When the fix is a small edit within the anchored lines, add a
-  ```` ```suggestion ```` block holding those lines as they should read. Never
-  for an edit outside them, or for a file or review-body comment.
+- Open each finding's comment with a short label naming its nature ("safety",
+  "minor cleanup", "tech debt"), chosen per comment; there is no fixed list.
+  The label stands in for "Suggestion:"; no comment opens with "Suggest".
+- Tone: describe, do not direct. Write "X would do Y", not "Suggest X". Use
+  firm words for facts ("insecure", "incorrect"), never for priority
+  ("blocking", "must fix", "worth fixing").
+- One topic per comment: no "Related" or "Separately" lines, no reference to
+  another comment, and a related item in the note is not pulled in as text.
+- For a cheap, certain fix, lead with the fix and its certain benefits and
+  leave out the worst case. Test: could the author make the fix without the
+  full reasoning?
+- When the card lists alternative fixes, keep each of them in the draft.
+- When the fix is not obvious from prose alone, show its shape in a short
+  snippet, not a full patch; skip it when one sentence already says the fix.
+- When the fix is a small edit within the anchored lines, the snippet is a
+  ```` ```suggestion ```` block holding exactly those lines as they should
+  read: no more and no fewer, and no trailing blank lines. Never for an edit
+  outside them, or for a file or review-body comment. Because the author can
+  apply it in one click, end the sentence before it with "(untested)" unless
+  the card says the code was compiled or run.
+- Any other snippet is an ordinary code block introduced with "for example".
 - One issue in several places: either one general comment that says it
   is one example of something that applies elsewhere, kept general, or a
   separate self-contained comment at each place. The drafter proposes which,
@@ -83,5 +101,7 @@ in it.
   general or per place. A placement in the note (`on <path>:<line>`,
   `on <path>`, `in the review body`) is the script's; the text does not mention
   it.
+- The guidance file's rules bind like these; where one conflicts with a rule
+  here, the guidance wins, and the Post note wins over both.
 - Write paragraphs as plain lines; the script joins wrapped lines before
   sending.

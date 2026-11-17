@@ -5,6 +5,7 @@ import unittest
 from unittest import mock
 
 from helpers import SCRIPTS, TempCase, add_backlog_item, add_cleanup, add_followup, add_idea, git, init_repo, run_ok, run_script, write_config, write_file
+import paths
 
 sys.path.insert(0, SCRIPTS)
 import backlog
@@ -33,11 +34,11 @@ class BacklogCase(TempCase):
 
     def link_workspace(self, hub_wt, hub, rows):
         text = workspace_md(hub, rows)
-        write_file(os.path.join(hub_wt, ".clerk-dev", "workspace.md"), text)
+        write_file(paths.workspace(hub_wt), text)
         for _, wt in rows:
             if wt != hub_wt:
-                os.makedirs(os.path.join(wt, ".clerk-dev"), exist_ok=True)
-                os.symlink(os.path.join(hub_wt, ".clerk-dev", "workspace.md"), os.path.join(wt, ".clerk-dev", "workspace.md"))
+                os.makedirs(paths.ledger(wt), exist_ok=True)
+                os.symlink(paths.workspace(hub_wt), paths.workspace(wt))
 
     def attempt(self, *args):
         return run_script("backlog", *args, env=self.env)
@@ -228,7 +229,7 @@ class SameIdInBothBacklogsTests(TwoRepositoryCase):
 class StaleWorkspaceRowTests(TwoRepositoryCase):
     def setUp(self):
         super().setUp()
-        write_file(os.path.join(self.feat, ".clerk-dev", "workspace.md"), workspace_md("api", [("api", self.feat), ("web", self.path("web/removed"))]))
+        write_file(paths.workspace(self.feat), workspace_md("api", [("api", self.feat), ("web", self.path("web/removed"))]))
 
     def test_repo_falls_through_to_the_registry(self):
         self.registry(("web", self.web.path, "main"))
@@ -509,7 +510,7 @@ class RegistryTests(TwoRepositoryCase):
         os.makedirs(self.path("plain"))
         self.registry(("worker", self.path("plain"), "main"))
         out = self.refused("add", self.feat, "x", "--kind", "followup", "--origin", "a b", "--repo", "worker")
-        self.assertEqual(out, f"repository worker is not in .clerk-dev/workspace.md or {self.path('local.md')}, and {self.path('plain')} is not a git checkout")
+        self.assertEqual(out, f"repository worker is not in the workspace manifest ({paths.workspace(self.feat)}) or {self.path('local.md')}, and {self.path('plain')} is not a git checkout")
 
 
 class HubWithRegistryTests(TwoRepositoryCase):

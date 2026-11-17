@@ -1,6 +1,6 @@
 import json, os, re, subprocess, sys
 from collections import namedtuple
-from records import load_script
+from records import load_script, section, table_rows
 
 mf = load_script("merge-findings.py")
 
@@ -41,27 +41,35 @@ def write_keyed(path, fields, rows, header="merged_id", order=sorted):
     write_rows(path, (header, *fields) if header else None, ([str(k)] + [rows[k].get(f, "") for f in fields] for k in order(rows)))
 
 FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+QUOTE_RE = re.compile(r"^>\s?")
 PROSE, FENCE_LINE, FENCE_BODY = "", "fence", "body"
+
+def quoted_rest(line):
+    m = QUOTE_RE.match(line)
+    return line[m.end():] if m else None
 
 def closes_fence(line, fence):
     s = line.rstrip()
     return len(s) >= len(fence) and s == fence[0] * len(s)
 
 def fenced_lines(lines):
-    fence = ""
+    fence, quoted = "", False
     for line in lines:
+        rest = quoted_rest(line)
+        if fence and quoted and rest is None: fence = ""
         if fence:
-            if closes_fence(line, fence): fence = ""; yield line, FENCE_LINE
+            if closes_fence(rest if quoted else line, fence): fence = ""; yield line, FENCE_LINE
             else: yield line, FENCE_BODY
             continue
-        m = FENCE_RE.match(line)
+        quoted = rest is not None
+        m = FENCE_RE.match(rest if quoted else line)
         if m: fence = m.group(1)
         yield line, FENCE_LINE if m else PROSE
 
 def open_fence(lines):
     fence = ""
     for line, kind in fenced_lines(lines):
-        if kind == FENCE_LINE: fence = "" if fence else FENCE_RE.match(line).group(1)
+        if kind == FENCE_LINE and quoted_rest(line) is None: fence = "" if fence else FENCE_RE.match(line).group(1)
     return fence
 
 def line_span(lo, hi):
@@ -254,9 +262,68 @@ def located(e, note):
 def same_commit(a, b):
     return bool(a and b) and (a.startswith(b) or b.startswith(a))
 
+Target = namedtuple("Target", "target base head")
+
+def read_target(run):
+    path = os.path.join(run, "target.txt")
+    lines = [line.strip() for line in open(path, encoding="utf-8").read().splitlines()] if os.path.exists(path) else []
+    return Target(*(lines + ["", "", ""])[:3])
+
 def reviewed_head(run):
-    target = read_text(os.path.join(run, "target.txt")).splitlines()
-    return target[2].strip() if len(target) >= 3 else ""
+    return read_target(run).head
+
+Slice = namedtuple("Slice", "label summary")
+Slices = namedtuple("Slices", "by_name order seams")
+Seam = namedtuple("Seam", "source target crosses")
+SLICE_NAME = re.compile(r"^- name:\s*(.+)$")
+SEAM = re.compile(r"^-\s*`?([^`\s]+?)`?\s*->\s*`?([^`\s:]+?)`?\s*:\s*(.+?)\s*$")
+SLICE_FIELD = re.compile(r"^(\w+):\s*(.*)$")
+
+def name_as_label(name):
+    return name.replace("-", " ").capitalize()
+
+def indent_of(line):
+    return len(line) - len(line.lstrip())
+
+def slice_fields(lines):
+    fields, cur, key, indent = {}, None, None, None
+    for line in lines:
+        m = SLICE_NAME.match(line)
+        if m: cur, key, indent = fields.setdefault(m.group(1).strip(), {}), None, None; continue
+        if line.startswith("#"): cur = None; continue
+        if cur is None or not line.strip(): continue
+        m = SLICE_FIELD.match(line.strip())
+        if m and (indent is None or indent_of(line) <= indent): key, indent = m.group(1), indent_of(line); cur[key] = m.group(2).strip()
+        elif key: cur[key] = f"{cur[key]} {line.strip()}".strip()
+    return fields
+
+def read_slices(run):
+    text = read_text(os.path.join(run, "slices.md"))
+    by_name = {name: Slice(f.get("label") or name_as_label(name), f.get("summary", "")) for name, f in slice_fields(text.splitlines()).items()}
+    order = [name for name in dict.fromkeys(re.split(r"[\s,`]+", section(text, "Order"))) if name in by_name]
+    return Slices(by_name, order, [Seam(*m.groups()) for m in map(SEAM.match, section(text, "Seams").splitlines()) if m])
+
+def label_of(slices, name):
+    return slices.by_name[name].label if name in slices.by_name else name_as_label(name)
+
+Instance = namedtuple("Instance", "lens scope raw")
+NotRun = namedtuple("NotRun", "lens cause")
+
+def plan_table(run, heading):
+    text = read_text(os.path.join(run, "plan.md"), None)
+    return None if text is None else table_rows(section(text, heading))
+
+def read_instances(run):
+    rows = plan_table(run, "Instances")
+    return None if rows is None else [Instance(r["lens"], r["scope"], r["raw file"]) for r in rows]
+
+def read_not_run(run):
+    return [NotRun(r.get("lens", "").strip("`"), r.get("cause", "")) for r in plan_table(run, "Not run") or []]
+
+def included_files(run):
+    lines = read_text(os.path.join(run, "files.tsv")).splitlines()
+    head = lines[0].split("\t") if lines else []
+    return [row["file"] for row in (dict(zip(head, line.split("\t"))) for line in lines[1:]) if not row.get("excluded", "").strip()]
 
 def drafted_for(e, note, commit):
     path, line, end = located(e, note) or ("", None, None)
@@ -273,8 +340,27 @@ def posted_path(run, mid):
 def review_text_path(run):
     return os.path.join(run, "posted", "review.md")
 
-def kept_body_path(run, review_id):
-    return os.path.join(run, "posted", f"pending-{review_id}.md")
+RUN_STATES = ("pending", "submitted")
+KEPT_STATES = (*RUN_STATES, "earlier")
+KEPT_BODY = re.compile(rf"^({'|'.join(KEPT_STATES)})-(\d+)\.md$")
+
+def kept_body_path(run, review_id, state="pending"):
+    return os.path.join(run, "posted", f"{state}-{review_id}.md")
+
+def kept_body_ids(run, states=KEPT_STATES):
+    folder = os.path.join(run, "posted")
+    return {m.group(2) for m in map(KEPT_BODY.match, os.listdir(folder) if os.path.isdir(folder) else []) if m and m.group(1) in states}
+
+def kept_body_text(run, review_id):
+    return next((t for t in (read_text(kept_body_path(run, review_id, s), None) for s in KEPT_STATES) if t is not None), "")
+
+def record_submitted(run, review_id):
+    pending, submitted = kept_body_path(run, review_id), kept_body_path(run, review_id, "submitted")
+    if os.path.exists(pending): os.replace(pending, submitted)
+    else: write_text(submitted, "\n")
+
+def own_reviews(run, rows):
+    return review_ids(rows) | kept_body_ids(run)
 
 def draft_path(run, mid):
     return os.path.join(run, "posted", f"draft-{mid}.md")
@@ -317,6 +403,17 @@ def read_threads(run):
 def write_threads(run, rows):
     write_keyed(threads_path(run), THREAD_FIELDS, {mid: {**row, "replies": replies_cell(row.get("replies", []))} for mid, row in rows.items()})
 
+APPROVAL_FIELDS = ("author", "date")
+
+def approvals_path(run):
+    return os.path.join(run, "pr", "approvals.tsv")
+
+def read_approvals(run):
+    return read_keyed(approvals_path(run), APPROVAL_FIELDS)
+
+def write_approvals(run, rows):
+    write_keyed(approvals_path(run), APPROVAL_FIELDS, rows, header="review_id", order=list)
+
 def posted_threads(run, posted):
     return {mid: row for mid, row in read_threads(run).items() if row["comment_id"] == posted.get(mid, {}).get("comment_id")}
 
@@ -331,18 +428,57 @@ def read_kept_open(run):
 def write_kept_open(run, rows):
     write_keyed(kept_open_path(run), KEPT_OPEN_FIELDS, rows)
 
+GROUP_FIELDS = ("lead", "date")
+
+def groups_path(run):
+    return os.path.join(run, "posted", "groups.tsv")
+
+def read_groups(run):
+    """groups.tsv: merged id of a covered member, the merged id of the lead whose comment covers it, date."""
+    return read_keyed(groups_path(run), GROUP_FIELDS)
+
+def write_groups(run, rows):
+    write_keyed(groups_path(run), GROUP_FIELDS, rows)
+
+def lead_of(groups, mid):
+    return merged_key(groups[mid]["lead"]) if mid in groups else None
+
+def number_of(mid, nums):
+    return nums.get(mid, f"#{mid}")
+
+def finding_word(number):
+    return f"finding {number}"
+
+def numbered(mid, nums):
+    return finding_word(number_of(mid, nums))
+
+def covered_refusal(groups, mid, nums):
+    lead = lead_of(groups, mid)
+    if lead is None: return None
+    return f"{numbered(mid, nums)} is covered by {numbered(lead, nums)}; draft it under {number_of(lead, nums)}"
+
+def members_of(groups):
+    leads = {}
+    for mid in sorted(groups):
+        lead = lead_of(groups, mid)
+        if lead is not None: leads.setdefault(lead, []).append(mid)
+    return leads
+
 Closable = namedtuple("Closable", "posted status thread")
 
 def is_open_and_ours(thread):
     return thread.get("state") == "open" and thread.get("by_viewer") == "1"
 
+def all_fixed(status, mids):
+    return all(status_of(status, mid) == "fixed" for mid in mids)
+
 def closable(run):
-    posted, status, kept = read_posted(run), read_status(run), read_kept_open(run)
+    posted, status, kept, members = read_posted(run), read_status(run), read_kept_open(run), members_of(read_groups(run))
     threads = posted_threads(run, posted)
     credits = credit_ids(read_findings(run))
     return {mid: Closable(row, status[mid], threads[mid]) for mid, row in sorted(posted.items())
             if has_thread(row) and mid not in credits and mid not in kept
-            and status_of(status, mid) == "fixed" and is_open_and_ours(threads.get(mid, {}))}
+            and all_fixed(status, [mid, *members.get(mid, [])]) and is_open_and_ours(threads.get(mid, {}))}
 
 NUMBER_FIELDS = ("merged_id", "section")
 

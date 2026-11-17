@@ -9,6 +9,7 @@ from helpers import (
     write_log,
     write_record,
 )
+import paths
 
 BRIEF_BODY = "## Requirements\n\n1. {a}.\n2. {b}.\n\n## Baseline\n\nClean.\n\n## Open items\n\n- [ ] {a} needs a name."
 
@@ -61,7 +62,7 @@ class RecordTypeTests(TempCase):
 
     def test_an_old_record_file_keeps_its_type(self):
         self.records("discard", "R2", "--note", "replaced")
-        meta = frontmatter(os.path.join(self.root, ".clerk-dev", "feature", "records", "R2.md"))
+        meta = frontmatter(os.path.join(paths.records_dir(self.root), "R2.md"))
         self.assertEqual(meta["type"], "spec")
 
     def test_the_digest_lists_open_items_of_old_briefs(self):
@@ -131,7 +132,7 @@ class NewWordsTests(BuildWordsCase):
         self.assertNotIn("Handoff notes", out)
 
     def test_the_overview_plan_reads_a_brief_column(self):
-        with open(os.path.join(self.repo.path, ".clerk-dev", "feature", "overview.md"), "w") as f:
+        with open(paths.overview(self.repo.path), "w") as f:
             f.write("# Overview\n\n## Plan\n\n| Piece | Brief | Built |\n|---|---|---|\n| 1 Piece one | BRIEF-3 | not started |\n| 2 Piece two | none | not started |\n")
         code, out = self.repo.status("--focus", "design")
         self.assertEqual(code, 0, out)

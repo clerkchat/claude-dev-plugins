@@ -35,6 +35,7 @@ instruction other than defer or ignore.
 """
 import argparse, datetime, os, re, subprocess, sys
 from records import load_script
+import paths
 import run_files as rf
 
 CLOSED_CHOICE = {"defer", "ignore"}
@@ -91,10 +92,10 @@ def followup_labels(repo):
 def narrow_covered(repo):
     """Commits read by narrow reviews of this branch."""
     covered = set()
-    root = os.path.join(repo, ".clerk-dev")
+    root = paths.runs_dir(repo)
     for d in sorted(os.listdir(root)) if os.path.isdir(root) else []:
         p = os.path.join(root, d, "narrow.txt")
-        if d in ("latest", "latest-feature") or d.endswith("-feature") or not os.path.exists(p): continue
+        if d.endswith("-feature") or not os.path.exists(p): continue
         lines = open(p).read().splitlines()
         if len(lines) < 3: continue
         base, head = lines[1].strip(), lines[2].split()[0].strip()
@@ -139,12 +140,15 @@ def classify_since(repo, run, reviewed, head):
         out.append((sha, kind, subj))
     return out
 
-def cmd_delta(a, run, repo):
-    target = open(os.path.join(run, "target.txt")).read().splitlines()
-    if len(target) < 3: sys.exit("target.txt has no HEAD line")
-    reviewed, head = target[2].strip(), git(repo, "rev-parse", "HEAD")
+def reviewed_since(run, repo, advice=""):
+    reviewed = rf.reviewed_head(run) or sys.exit("target.txt has no HEAD line")
+    head = git(repo, "rev-parse", "HEAD")
     if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", reviewed, head]).returncode != 0:
-        sys.exit(f"the reviewed commit {reviewed[:9]} is not an ancestor of HEAD (rebased?)")
+        sys.exit(f"the reviewed commit {reviewed[:9]} is not an ancestor of HEAD (rebased?){advice}")
+    return reviewed, head
+
+def cmd_delta(a, run, repo):
+    reviewed, head = reviewed_since(run, repo)
     rows = classify_since(repo, run, reviewed, head)
     print("sha\tkind\tfiles\tsubject")
     for sha, kind, subj in rows:
@@ -168,12 +172,7 @@ def candidates(run, repo, queued=False):
     ancestor of HEAD."""
     findings = load_findings(run)
     status, instr, numbers = state(run)
-    target = open(os.path.join(run, "target.txt")).read().splitlines()
-    if len(target) < 3: sys.exit("target.txt has no HEAD line")
-    reviewed = target[2].strip()
-    head = git(repo, "rev-parse", "HEAD")
-    if subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", reviewed, head]).returncode != 0:
-        sys.exit(f"the reviewed commit {reviewed[:9]} is not an ancestor of HEAD (rebased?); compare by hand or re-review")
+    reviewed, head = reviewed_since(run, repo, "; compare by hand or re-review")
     skip = fix_commits(repo, status, run)
     labels = followup_labels(repo)
     through = through_map(run)

@@ -3,7 +3,7 @@ import re
 import sys
 import unittest
 
-from helpers import PLUGIN, ROOT, SCRIPTS, plugin_text_files, run_ok, run_script
+from helpers import PLUGIN, ROOT, SCRIPTS, TempCase, plugin_text_files, run_ok, run_script, write_file
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -270,7 +270,10 @@ class RoutingCreditTest(unittest.TestCase):
         self.text = read(ROUTING)
 
     def test_plain_name_is_credits(self):
-        self.assertEqual(records.read_plain_names(ROUTING)["credit"], "credits")
+        self.assertEqual(records.read_plain_names(ROUTING)["credit"].phrase, "credits")
+
+    def test_plain_name_reads_its_description(self):
+        self.assertEqual(records.read_plain_names(ROUTING)["credit"].description, "what the change does well, worth telling the author")
 
     def test_triggers_on_any_category_in_every_mode(self):
         self.assertRegex(records.section(self.text, "Lens triggers"), r"\| `credit` +\| any +\| yes in every mode +\|")
@@ -280,6 +283,35 @@ class RoutingCreditTest(unittest.TestCase):
 
     def test_triage_never_drops_it(self):
         self.assertIn("credit,", records.section(self.text, "Triage questions").split("Lenses never dropped by triage:")[1])
+
+
+class PlainNamesTest(TempCase):
+    TABLE = "## Plain names\n\n| Lens | Say it as | Described as |\n| --- | --- | --- |\n| `security` | security | unsafe input |\n"
+
+    def names(self, text):
+        write_file(self.path("routing.md"), text)
+        return records.read_plain_names(self.path("routing.md"))
+
+    def test_reads_the_phrase_and_the_description(self):
+        self.assertEqual(self.names(self.TABLE)["security"], records.PlainName("security", "unsafe input"))
+
+    def test_reads_a_row_without_a_description(self):
+        self.assertEqual(self.names("## Plain names\n\n| Lens | Say it as |\n| --- | --- |\n| `security` | security |\n")["security"], records.PlainName("security", ""))
+
+    def test_reads_only_the_plain_names_section(self):
+        self.assertEqual(self.names("## Lens triggers\n\n| `rollout` | migrations | yes |\n\n" + self.TABLE).keys(), {"security"})
+
+    def test_says_the_phrase_of_a_named_lens(self):
+        self.assertEqual(records.phrases(self.names(self.TABLE), ["security", "unnamed"]), "security, unnamed")
+
+    def test_says_a_lens_without_a_row_with_spaces_for_hyphens(self):
+        self.assertEqual(records.phrases(self.names(self.TABLE), ["error-handling"]), "error handling")
+
+
+class EveryLensHasAPlainNameTest(unittest.TestCase):
+    def test_names_each_lens_agent_but_credit(self):
+        names = records.read_plain_names(ROUTING)
+        self.assertEqual([lens for lens in lens_mode.lenses() if lens != "credit" and lens not in names], [])
 
 
 if __name__ == "__main__":

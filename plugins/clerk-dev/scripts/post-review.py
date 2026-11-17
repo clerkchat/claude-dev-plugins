@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
 import argparse, datetime, json, os, re, shlex, subprocess, sys
+from typing import NamedTuple
 import gh_api, ids
 import run_files as rf
-from records import load_script
+from records import ROUTING, load_script, phrase_of, phrases, plugin_version, read_plain_names
 
 pc = load_script("pr-comments.py")
 
 VERDICTS = {"comment": "COMMENT", "request-changes": "REQUEST_CHANGES", "approve": "APPROVE"}
 CONFIRMED_VERDICTS = {"request-changes": "request changes", "approve": "approve"}
 DEFAULT_BODY = "Comments from my review of this pull request."
+HOW_REVIEWED = ("<!-- how reviewed: start -->", "<!-- how reviewed: end -->")
+SUMMARY_FOLD = ("<details><summary>How the change was reviewed</summary>", "</details>")
+RANGE_LINE = re.compile(r"^Reviewed (?:`[^`\n]+`|the \d+ commits? since the last review)")
+WHOLE_CHANGE = "**Whole change**: how the parts fit together, and what's left unfinished"
+NOT_RUN_CAUSES = {"quick": "quick review", "removed": "left out for this review"}
+NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 BLOCK_START = re.compile(r"^\s{0,3}(#|>|\||[-*+]\s|\d+[.)]\s)")
 SUGGESTION = re.compile(r"^(\s*(?:`{3,}|~{3,}))suggestion\b", re.M)
 LINE_KINDS = ("line", "range")
@@ -216,27 +223,21 @@ def row_anchor(row):
 def findings(run):
     return {e["id"]: e for e in rf.read_findings(run)}
 
-def number_of(mid, nums):
-    return nums.get(mid, f"#{mid}")
-
 def item_head(mid, nums, found, titles):
-    return {"id": mid, "number": number_of(mid, nums), "title": rf.title_of(found[mid], titles) if mid in found else "(not in merged.md)"}
+    return {"id": mid, "number": rf.number_of(mid, nums), "title": rf.title_of(found[mid], titles) if mid in found else "(not in merged.md)"}
 
 def in_number_order(mids, nums):
     return sorted(mids, key=lambda m: nums.get(m, 10 ** 6))
 
-def finding_word(number):
-    return f"finding {number}"
-
 def named(it):
-    return finding_word(it["number"])
+    return rf.finding_word(it["number"])
 
-def numbered(mid, nums):
-    return finding_word(number_of(mid, nums))
+def refuse_problems(outcome, problems):
+    blocked = [f"{name}: {problem}" for name, problem in problems if problem]
+    if blocked: sys.exit(f"{outcome}; " + "; ".join(blocked))
 
 def refuse_blocked(items):
-    blocked = [f"{named(it)}: {it['problem']}" for it in items if it["problem"]]
-    if blocked: sys.exit("nothing sent; " + "; ".join(blocked))
+    refuse_problems("nothing sent", ((named(it), it["problem"]) for it in items))
 
 def print_warnings(label, warnings):
     if warnings: print("\n".join([label, *warning_lines(warnings)]), file=sys.stderr)
@@ -245,6 +246,7 @@ def drafted_elsewhere(it, e, reviewed):
     return it["action"] == "new" and e is not None and rf.code_moved(it["row"], rf.drafted_for(e, it["note"], reviewed))
 
 SENDS = ("new", "update")
+RECORDS = (*SENDS, "adopt")
 
 def pending_id(ctx):
     return str(ctx["pending"]["id"]) if ctx["pending"] else ""
@@ -297,47 +299,83 @@ def lines_now_for(run, mid, note, repo, reviewed):
     found = reviewed if rf.placement(note) else rf.found_on(run, mid)
     return lambda path, line, end: found_lines(repo, found, reviewed, path, line, end)
 
+class Planning(NamedTuple):
+    run: str
+    ctx: dict
+    hunks: dict
+    reviewed: str
+    repo: str
+    ins: dict
+    rows: dict
+    nums: dict
+    found: dict
+    sections: dict
+    titles: dict
+    taken: set
+    groups: dict
+
+def place_item(p, mid, e, row, note, gone):
+    if row.get("kind") and not gone:
+        return row_anchor(row), None, None, "skip" if row["state"] == "posted" else "update"
+    if e is None:
+        return None, None, "it is not in merged.md", "new"
+    if rf.mf.is_credit(e) and p.sections.get(mid) != "credit":
+        return None, None, f"it is a credit the report no longer shows; clear its Post with --instruct #{mid}=none", "new"
+    where, fallback, problem = resolve(e, note, p.ctx["files"], p.hunks, lines_now_for(p.run, mid, note, p.repo, p.reviewed))
+    return where, fallback, problem, "new"
+
+def lead_problem(p, mid, lead):
+    row = p.rows.get(lead, {})
+    if rf.has_comment(row) and on_github(row, p.ctx): return None
+    named_lead = rf.numbered(lead, p.nums)
+    unmark = f"mark it Post or --ungroup {rf.number_of(mid, p.nums)}"
+    if p.ins.get(lead, {}).get("choice") != "post": return f"its lead, {named_lead}, is not marked Post; {unmark}"
+    if lead not in p.found: return f"its lead, {named_lead}, is not in merged.md; --ungroup {rf.number_of(mid, p.nums)}"
+    return None
+
+def covered_item(p, mid, lead):
+    return {**item_head(mid, p.nums, p.found, p.titles), "action": "covered", "lead": rf.number_of(lead, p.nums),
+            "problem": lead_problem(p, mid, lead), "warnings": [], "published": False, "existing": None}
+
+def plan_item(p, mid):
+    lead = rf.lead_of(p.groups, mid)
+    if lead is not None: return covered_item(p, mid, lead)
+    ctx = p.ctx
+    e, row, note = p.found.get(mid), p.rows.get(mid, {}), p.ins[mid].get("note", "")
+    it = {**item_head(mid, p.nums, p.found, p.titles), "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
+    if row.get("kind") and not on_github(row, ctx):
+        it["gone"] = f"its earlier comment is no longer on GitHub (review {row['review_id']}); --post posts it again"
+    it["anchor"], it["fallback"], it["problem"], it["action"] = place_item(p, mid, e, row, note, it["gone"])
+    raw = rf.posted_text(p.run, mid)
+    if not raw: it["problem"] = it["problem"] or "it has no posted text"
+    if it["action"] != "skip" and rf.stale_text(row, note):
+        it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
+    it["moved"] = drafted_elsewhere(it, e, p.reviewed)
+    plain = bool(it["fallback"]) or it["moved"] or (it["anchor"] or {}).get("kind") not in LINE_KINDS
+    it["text"], it["downgraded"] = outgoing(raw, plain)
+    problem, it["warnings"] = screen(it["text"], ctx["local"])
+    it["problem"] = it["problem"] or problem
+    it["published"] = published(it, ctx)
+    it["submitted"], it["existing"] = submitted_review(it), already_on_github(it, ctx, p.taken)
+    if it["existing"]: it["action"] = "adopt"; p.taken.add(str(it["existing"]["id"]))
+    return it
+
 def plan_items(run, ctx, hunks, reviewed, repo):
-    ins, rows, nums, found = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run), findings(run)
-    sections = rf.read_sections(run)
-    titles = rf.report_titles(run)
-    items, taken = [], recorded_comments(rows)
-    for mid in in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums):
-        e, row, note = found.get(mid), rows.get(mid, {}), ins[mid].get("note", "")
-        it = {**item_head(mid, nums, found, titles), "note": note, "row": row, "fallback": None, "problem": None, "gone": None}
-        if row.get("kind") and not on_github(row, ctx):
-            it["gone"] = f"its earlier comment is no longer on GitHub (review {row['review_id']}); --post posts it again"
-        if row.get("kind") and not it["gone"]:
-            it["anchor"], it["action"] = row_anchor(row), "skip" if row["state"] == "posted" else "update"
-        elif e is None:
-            it["anchor"], it["action"], it["problem"] = None, "new", "it is not in merged.md"
-        elif rf.mf.is_credit(e) and sections.get(mid) != "credit":
-            it["anchor"], it["action"], it["problem"] = None, "new", f"it is a credit the report no longer shows; clear its Post with --instruct #{mid}=none"
-        else:
-            it["anchor"], it["fallback"], it["problem"] = resolve(e, note, ctx["files"], hunks, lines_now_for(run, mid, note, repo, reviewed))
-            it["action"] = "new"
-        raw = rf.posted_text(run, mid)
-        if not raw: it["problem"] = it["problem"] or "it has no posted text"
-        if it["action"] != "skip" and rf.stale_text(row, note):
-            it["problem"] = it["problem"] or "its posted text is to be redrafted; the note changed"
-        it["moved"] = drafted_elsewhere(it, e, reviewed)
-        plain = bool(it["fallback"]) or it["moved"] or (it["anchor"] or {}).get("kind") not in LINE_KINDS
-        it["text"], it["downgraded"] = outgoing(raw, plain)
-        problem, it["warnings"] = screen(it["text"], ctx["local"])
-        it["problem"] = it["problem"] or problem
-        it["published"] = published(it, ctx)
-        it["submitted"], it["existing"] = submitted_review(it), already_on_github(it, ctx, taken)
-        if it["existing"]: it["action"] = "adopt"; taken.add(str(it["existing"]["id"]))
-        items.append(it)
-    return items
+    ins, rows, nums = rf.read_instructions(run), rf.read_posted(run), rf.read_numbers(run)
+    p = Planning(run=run, ctx=ctx, hunks=hunks, reviewed=reviewed, repo=repo, ins=ins, rows=rows, nums=nums,
+                 found=findings(run), sections=rf.read_sections(run), titles=rf.report_titles(run),
+                 taken=recorded_comments(rows), groups=rf.read_groups(run))
+    posting = in_number_order((m for m, i in ins.items() if i.get("choice") == "post"), nums)
+    return [plan_item(p, mid) for mid in posting]
 
 def review_head(run):
     head = rf.read_text(rf.review_text_path(run))
     return unwrap(head) if head else ""
 
 def our_texts(run):
-    posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post"]
-    return [DEFAULT_BODY, review_head(run), *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
+    groups = rf.read_groups(run)
+    posting = [mid for mid, i in rf.read_instructions(run).items() if i.get("choice") == "post" and mid not in groups]
+    return [DEFAULT_BODY, outside_block(review_head(run))[0], *(outgoing(rf.posted_text(run, mid), True)[0] for mid in posting)]
 
 def before_ours(body, ours):
     return body[:min((at for at in (body.find(t) for t in ours if t) if at >= 0), default=len(body))].strip()
@@ -345,11 +383,12 @@ def before_ours(body, ours):
 def kept_body(run, ctx):
     p = ctx["pending"]
     if not p: return ""
-    if os.path.exists(rf.kept_body_path(run, p["id"])): return rf.read_text(rf.kept_body_path(run, p["id"]))
-    return "" if str(p["id"]) in rf.review_ids(rf.read_posted(run)) else before_ours(p.get("body") or "", our_texts(run))
+    if str(p["id"]) in rf.own_reviews(run, rf.read_posted(run)): return rf.kept_body_text(run, p["id"])
+    return before_ours(outside_block(p.get("body") or "")[0], our_texts(run))
 
-def saved_body(run, review_id):
-    return rf.read_text(rf.kept_body_path(run, review_id))
+def holds_our_body(run, ctx, rows):
+    if ctx["pending"]: return str(ctx["pending"]["id"]) in rf.own_reviews(run, rows)
+    return bool(rf.kept_body_ids(run, rf.RUN_STATES) & ctx["review_ids"])
 
 def review_body(run, rows, review_id, kept):
     parts = [part for part in (kept, review_head(run)) if part] or [DEFAULT_BODY]
@@ -359,6 +398,104 @@ def review_body(run, rows, review_id, kept):
             text = outgoing(rf.posted_text(run, mid), True)[0]
             parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
     return "\n\n".join(parts)
+
+def plural(n, word, say=str):
+    return f"{say(n)} {word}" + ("" if n == 1 else "s")
+
+def spelled(n):
+    return NUMBER_WORDS[n] if n < len(NUMBER_WORDS) else str(n)
+
+def commits_between(repo, base, head):
+    r = subprocess.run(["git", "-C", repo, "rev-list", "--count", f"{base}..{head}"], capture_output=True, text=True)
+    return int(r.stdout) if r.returncode == 0 and r.stdout.strip().isdigit() else None
+
+def is_ancestor(repo, base, head):
+    return subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", base, head], capture_output=True).returncode == 0
+
+def commits_since_last_review(run, repo, target):
+    prev = rf.previous_run(run)
+    if not (prev and os.path.isdir(prev) and rf.same_commit(target.base, rf.reviewed_head(prev)) and is_ancestor(repo, target.base, target.head)): return None
+    return commits_between(repo, target.base, target.head)
+
+def range_line(run, repo, parts):
+    target = rf.read_target(run)
+    if not (target.base and target.head): sys.exit("nothing rendered; target.txt has no BASE and HEAD lines")
+    span, files = f"`{target.base[:7]}..{target.head[:7]}`", plural(len(rf.included_files(run)), "file")
+    since = commits_since_last_review(run, repo, target)
+    reviewed = f"Reviewed the {plural(since, 'commit')} since the last review ({span}, {files})" if since else f"Reviewed {span} ({files})"
+    return f"{reviewed}, " + (f"in {plural(len(parts), 'part', spelled)} plus a pass over the whole change." if parts else "as one piece.")
+
+def in_name_order(names, lenses):
+    rank = {lens: at for at, lens in enumerate(names)}
+    return sorted(dict.fromkeys(lens for lens in lenses if lens != "credit"), key=lambda lens: rank.get(lens, len(rank)))
+
+def entry(head, lines):
+    return "\n".join([head, *(f"- {line}" for line in lines if line)])
+
+def one_line(text):
+    return " ".join(text.split()).replace("<!--", "&lt;!--")
+
+def in_sentence(label):
+    return label if label[:2].isupper() else label[:1].lower() + label[1:]
+
+def part_label(slices, name):
+    return one_line(rf.label_of(slices, name))
+
+def seams_line(slices):
+    crossings = [f"{in_sentence(part_label(slices, s.source))} to {in_sentence(part_label(slices, s.target))} ({one_line(s.crosses)})" for s in slices.seams]
+    return "Checked between parts: " + ", ".join(crossings) if crossings else ""
+
+def part_entry(names, slices, instances, name):
+    summary = one_line(slices.by_name[name].summary)
+    head = f"**{part_label(slices, name)}**" + (f": {summary}" if summary else "")
+    return entry(head, [phrases(names, in_name_order(names, (i.lens for i in instances if i.scope == name)))])
+
+def whole_change_entry(names, slices, instances):
+    whole = in_name_order(names, (i.lens for i in instances if i.scope == "all" or not slices.order))
+    return entry(WHOLE_CHANGE, [phrases(names, whole), seams_line(slices)])
+
+def described(names, lens):
+    return ": ".join(filter(None, (phrase_of(names, lens), names[lens].description if lens in names else "")))
+
+def legend(names, instances):
+    ran = in_name_order(names, (i.lens for i in instances))
+    return entry("**Focuses**", [described(names, lens) for lens in ran]) if ran else ""
+
+def not_run_line(run, names):
+    cut = {n.lens: NOT_RUN_CAUSES[n.cause] for n in rf.read_not_run(run) if n.cause in NOT_RUN_CAUSES}
+    return "Not run: " + ", ".join(f"{phrase_of(names, lens)} ({cut[lens]})" for lens in in_name_order(names, cut)) + "." if cut else ""
+
+def assisted_by_line():
+    version = plugin_version()
+    return f"<sub>Review assisted by Matthias' clerk-dev{f' {version}' if version else ''}</sub>"
+
+def how_reviewed(run, names, slices):
+    instances = rf.read_instances(run)
+    if instances is None: sys.exit(f"nothing rendered; {run} has no plan.md")
+    entries = [*(part_entry(names, slices, instances, name) for name in slices.order), whole_change_entry(names, slices, instances)]
+    return "\n\n".join([HOW_REVIEWED[0], SUMMARY_FOLD[0], *entries,
+                        *filter(None, [legend(names, instances), not_run_line(run, names)]), SUMMARY_FOLD[1], assisted_by_line(), HOW_REVIEWED[1]])
+
+def without_fold(text):
+    _, closed, rest = text.partition(SUMMARY_FOLD[1])
+    return rest.strip() if closed and text.startswith(SUMMARY_FOLD[0]) else text
+
+def outside_block(text):
+    start = text.find(HOW_REVIEWED[0])
+    if start < 0: return text, ""
+    above, _, last = text[:start].rstrip().rpartition("\n\n")
+    above = (above if RANGE_LINE.match(last) else text[:start]).strip()
+    after = text[start + len(HOW_REVIEWED[0]):]
+    end = after.find(HOW_REVIEWED[1])
+    if end < 0: return "\n\n".join(filter(None, [above, without_fold(after.strip())])), ""
+    return above, after[end + len(HOW_REVIEWED[1]):].strip()
+
+def render_body(run, repo):
+    path, slices = rf.review_text_path(run), rf.read_slices(run)
+    above, below = outside_block(rf.read_text(path))
+    rendered = [range_line(run, repo, slices.order), how_reviewed(run, read_plain_names(ROUTING), slices)]
+    rf.write_text(path, "\n\n".join(filter(None, [above, *rendered, below])) + "\n")
+    print(f"wrote {path}", file=sys.stderr)
 
 def result_key(mid):
     return f"finding{mid}"
@@ -413,7 +550,7 @@ def submitted_label(review_id):
     return f"body of submitted review {review_id}"
 
 def submitted_body(run, rows, review_id):
-    return review_body(run, rows, review_id, saved_body(run, review_id))
+    return review_body(run, rows, review_id, rf.kept_body_text(run, review_id))
 
 def comment_updates(ctx, sending):
     return [update_call(ctx, it) for it in sending if it["action"] == "update" and it["anchor"]["kind"] != "body"]
@@ -543,7 +680,7 @@ def full_sha(commit, repo):
 
 def recorded_pr(run):
     number, url = (rf.read_text(os.path.join(run, "pr", "pr.txt")).split("\t") + [""])[:2]
-    target = (rf.read_text(os.path.join(run, "target.txt")).splitlines() or [""])[0].strip()
+    target = rf.read_target(run).target
     m = PULL_URL.search(url.strip()) or PULL_URL.search(target)
     if m: return int(m.group(3)), f"{m.group(1)}/{m.group(2)}"
     m = TARGET_PR.match(number.strip()) or TARGET_PR.match(target)
@@ -618,7 +755,7 @@ def checked_body(run, ctx, rows, review_id):
 
 def pending_comment_label(comment, rows, nums):
     mid = next((m for m, row in rows.items() if row.get("comment_id") == str(comment["id"])), None)
-    return f"comment of {numbered(mid, nums)}" if mid else f"draft of yours on {draft_place(comment)}"
+    return f"comment of {rf.numbered(mid, nums)}" if mid else f"draft of yours on {draft_place(comment)}"
 
 def pending_warnings(run, ctx, rows, body):
     nums = rf.read_numbers(run)
@@ -639,6 +776,8 @@ def update_line(it):
 
 def item_lines(it):
     out = [f"{named(it)}: {it['title']}"]
+    if it["action"] == "covered":
+        return out + [f"  covered by {rf.finding_word(it['lead'])}"] + ([f"  cannot post: {it['problem']}"] if it["problem"] else [])
     a = it["anchor"]
     if a: out.append(f"  anchor: " + ("review body" if a["kind"] == "body" else f"{a['path']}" + (f":{rf.line_span(a['line'], a['end_line'])}" if a["line"] else "")) + f" ({a['kind']})")
     if it["gone"]: out.append(f"  {it['gone']}")
@@ -670,7 +809,7 @@ def preview(run, ctx, items, reviewed):
     staged, held = [it for it in items if not it["published"]], published_items(items)
     out = [f"pull request: {ctx['owner']}/{ctx['name']}#{ctx['pr']}", *(line for it in staged for line in item_lines(it))]
     review_id = current_review(ctx)
-    sending = [it for it in staged if it["action"] != "skip" and not it["problem"]]
+    sending = [it for it in staged if it["action"] in RECORDS and not it["problem"]]
     rows = planned_rows(rf.read_posted(run), sending, review_id, "")
     out += body_lines("review body", review_body(run, rows, review_id, ctx["kept"]), ctx)
     if ctx["kept"]: out.append(f"  keeps the text already in pending review {ctx['pending']['id']} on GitHub, with this run's text below it")
@@ -690,11 +829,12 @@ def posted_lines(sending, results):
     out = [f"  review {review['id']} {review.get('html_url', '')}"] if review else []
     return out + [f"  {named(it)}: {posted_where(it, results.get(result_key(it['id'])) or it['row'])}" for it in sending]
 
-def posted_summary(items, sending, adopted, held, results):
-    new = sum(it["action"] == "new" for it in sending)
-    parts = [f"posted {new} comments and updated {len(sending) - new} on review {results['review']['id']}"] if sending else []
+def posted_summary(items, sending, adopted, held, results, sent_body):
+    new, review = sum(it["action"] == "new" for it in sending), results["review"]["id"] if sent_body else ""
+    parts = ([f"posted {new} comments and updated {len(sending) - new} on review {review}"] if sending else
+             [f"sent the review body to review {review}"] if sent_body else [])
     parts += [f"recorded {len(adopted)} already on GitHub"] if adopted else []
-    return "; ".join(parts + [f"skipped {len(items) - len(sending) - len(adopted) - len(held)} already posted"])
+    return "; ".join(parts + [f"skipped {sum(it['action'] == 'skip' for it in items)} already posted"])
 
 def held_line(held):
     return (f"not sent: {', '.join(map(named, held))} changed since posting, and GitHub already shows the comment; "
@@ -715,19 +855,21 @@ def post(a, ctx, items, reviewed):
     held = published_items(items)
     sending = [it for it in items if it["action"] in SENDS and not it["published"]]
     adopted = [it for it in items if it["action"] == "adopt"]
-    refuse_blocked(sending)
+    refuse_blocked(sending + [it for it in items if it["action"] == "covered"])
     if held: print(held_line(held), file=sys.stderr)
-    if not (sending or adopted): print("nothing to post: every Post-marked finding is already posted", file=sys.stderr); return
     review_id = current_review(ctx)
     rows = planned_rows(rf.read_posted(a.run), sending + adopted, review_id, today())
-    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed) if sending else []
-    if sending: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
+    sends_body = bool(sending) or not holds_our_body(a.run, ctx, rows)
+    if not (sends_body or adopted):
+        print("nothing to post: the review body and every Post-marked finding are already posted", file=sys.stderr); return
+    calls = post_calls(ctx, sending, checked_body(a.run, ctx, rows, review_id), reviewed) if sends_body else []
+    if sends_body: print(pending_line(ctx, reviewed, "this batch"), file=sys.stderr)
     if a.dry_run: write_payload(a.run, calls); return
     results = execute(calls, a.repo, ctx, items)
     if ctx["pending"]: results["review"] = ctx["pending"]
-    kept = ctx["kept"] and (rf.kept_body_path(a.run, ctx["pending"]["id"]), ctx["kept"] + "\n")
+    kept = sends_body and (rf.kept_body_path(a.run, results["review"]["id"]), ctx["kept"] + "\n")
     record_sent(a.run, rows, results, sending, kept)
-    print(posted_summary(items, sending, adopted, held, results), file=sys.stderr)
+    print(posted_summary(items, sending, adopted, held, results, sends_body), file=sys.stderr)
 
 def unpicked_siblings(held, picked):
     return {rid: [it for it in held if it["submitted"] == rid and it not in picked] for rid in submitted_ids(picked)}
@@ -740,7 +882,7 @@ def refuse_split_bodies(held, picked):
 def picked_published(run, spec, held):
     nums, by_id = rf.read_numbers(run), {it["id"]: it for it in held}
     picked = picked_ids(spec, nums, "--update-published")
-    refused = [numbered(mid, nums) for mid in sorted(picked) if mid not in by_id]
+    refused = [rf.numbered(mid, nums) for mid in sorted(picked) if mid not in by_id]
     if refused: sys.exit("nothing sent; not a published comment changed since posting: " + ", ".join(refused))
     return [it for it in held if it["id"] in picked]
 
@@ -787,7 +929,7 @@ def submit(a, ctx, verdict):
     p = ctx["pending"]
     if not p: sys.exit("no pending review on the pull request; run --post first")
     rows = rf.read_posted(a.run)
-    if str(p["id"]) not in rf.review_ids(rows):
+    if str(p["id"]) not in rf.own_reviews(a.run, rows):
         sys.exit(f"nothing sent; pending review {p['id']} holds nothing this run posted; run --post first, or submit it on GitHub")
     body = review_body(a.run, rows, p["id"], ctx["kept"])
     warned = pending_warnings(a.run, ctx, rows, body)
@@ -798,6 +940,7 @@ def submit(a, ctx, verdict):
     what = submit_confirmation(verdict, drafts, warned)
     if what: confirm(a, ctx, what, ["--submit", verdict])
     execute(calls, a.repo, ctx)
+    rf.record_submitted(a.run, p["id"])
     print(f"submitted review {p['id']} as {verdict}", file=sys.stderr)
 
 def close_text(run, mid, shas):
@@ -889,10 +1032,10 @@ def chosen(run, spec, items):
     nums, by_id = rf.read_numbers(run), {it["id"]: it for it in items}
     picked = picked_ids(spec, nums, "--close")
     settled = settled_threads(run, picked - by_id.keys())
-    refused = [numbered(mid, nums) for mid in sorted(picked) if mid not in by_id and mid not in settled]
+    refused = [rf.numbered(mid, nums) for mid in sorted(picked) if mid not in by_id and mid not in settled]
     if refused: sys.exit("nothing sent; not closable (a thread you posted, still open, marked fixed, not kept open): " + ", ".join(refused))
     refuse_blocked([by_id[mid] for mid in sorted(picked) if mid in by_id])
-    for mid in sorted(settled): print(f"{numbered(mid, nums)}: {settled[mid]}; skipped", file=sys.stderr)
+    for mid in sorted(settled): print(f"{rf.numbered(mid, nums)}: {settled[mid]}; skipped", file=sys.stderr)
     return [it for it in items if it["id"] in picked]
 
 def close_calls(it):
@@ -983,9 +1126,65 @@ def keep_open(run, spec):
     if not m: sys.exit(f"bad --keep-open {spec!r}; use N[:reason]")
     nums = rf.read_numbers(run)
     mid = rf.finding_id(m.group(1), nums)
-    if not rf.has_thread(rf.read_posted(run).get(mid, {})): sys.exit(f"{numbered(mid, nums)} has no posted thread to keep open")
+    if not rf.has_thread(rf.read_posted(run).get(mid, {})): sys.exit(f"{rf.numbered(mid, nums)} has no posted thread to keep open")
     record_kept(run, mid, m.group(2) or "")
-    print(f"{numbered(mid, nums)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
+    print(f"{rf.numbered(mid, nums)}: its thread is kept open; it is no longer offered for closing", file=sys.stderr)
+
+GROUP_SPEC = re.compile(r"^(#?\d+):(.+)$", re.S)
+
+class Grouping(NamedTuple):
+    nums: dict
+    ins: dict
+    rows: dict
+    groups: dict
+    leads: dict
+    credits: set
+
+def grouping(run):
+    groups = rf.read_groups(run)
+    return Grouping(nums=rf.read_numbers(run), ins=rf.read_instructions(run), rows=rf.read_posted(run), groups=groups,
+                    leads=rf.members_of(groups), credits=rf.credit_ids(rf.read_findings(run)))
+
+def group_problem(g, lead, mid):
+    covering = rf.lead_of(g.groups, mid)
+    if g.ins.get(mid, {}).get("choice") != "post": return "it is not marked Post"
+    if mid in g.credits: return "it is a credit"
+    if rf.has_comment(g.rows.get(mid, {})): return "it already has a comment on GitHub"
+    if covering is not None and (mid == lead or covering != lead): return f"it is covered by {rf.numbered(covering, g.nums)}"
+    if mid != lead and mid in g.leads: return "it leads a group of its own"
+    return None
+
+def member_problem(g, lead, mid):
+    return "it is the lead itself" if mid == lead else group_problem(g, lead, mid)
+
+def redraft_lead(run, g, lead):
+    state = g.rows.get(lead, {}).get("state")
+    if state == "edited":
+        print(f"{rf.numbered(lead, g.nums)}: its text is marked edited and stays, though the group changed under it", file=sys.stderr)
+    if state != "drafted": return
+    rf.write_posted(run, {mid: row for mid, row in g.rows.items() if mid != lead})
+    if os.path.exists(rf.posted_path(run, lead)): os.remove(rf.posted_path(run, lead))
+    print(f"{rf.numbered(lead, g.nums)}: its drafted text is dropped; draft it again with the findings it covers", file=sys.stderr)
+
+def group(run, spec):
+    m = GROUP_SPEC.match(spec.strip())
+    if not m: sys.exit(f"bad --group {spec!r}; use LEAD:M[,N]")
+    g = grouping(run)
+    lead, members = rf.finding_id(m.group(1), g.nums), in_number_order(picked_ids(m.group(2), g.nums, "--group"), g.nums)
+    refuse_problems("nothing recorded", [(rf.numbered(lead, g.nums), group_problem(g, lead, lead)),
+                                         *((rf.numbered(mid, g.nums), member_problem(g, lead, mid)) for mid in members)])
+    rf.write_groups(run, {**g.groups, **{mid: {"lead": str(lead), "date": today()} for mid in members}})
+    for mid in members: print(f"{rf.numbered(mid, g.nums)}: covered by {rf.numbered(lead, g.nums)}", file=sys.stderr)
+    redraft_lead(run, g, lead)
+
+def ungroup(run, spec):
+    nums, groups = rf.read_numbers(run), rf.read_groups(run)
+    picked, leads = picked_ids(spec, nums, "--ungroup"), rf.members_of(groups)
+    loose = [rf.numbered(mid, nums) for mid in sorted(picked) if mid not in groups and mid not in leads]
+    if loose: sys.exit("nothing removed; not in a group: " + ", ".join(loose))
+    freed = {member: rf.lead_of(groups, member) for mid in picked for member in leads.get(mid, [mid])}
+    rf.write_groups(run, {mid: row for mid, row in groups.items() if mid not in freed})
+    for mid in in_number_order(freed, nums): print(f"{rf.numbered(mid, nums)}: no longer covered by {rf.numbered(freed[mid], nums)}", file=sys.stderr)
 
 DRAFT_HEAD = re.compile(r"^## (#?\d+): (.+?)\s*$")
 DRAFT_FORM = re.compile(r"^(?:comment|question|suggestion)(?:, one general comment|, one per place)?$")
@@ -1022,11 +1221,12 @@ def answer_parts(text):
     return parts
 
 def checked_drafts(run, parts):
-    nums, ins, seen = rf.read_numbers(run), rf.read_instructions(run), set()
+    nums, ins, groups, seen = rf.read_numbers(run), rf.read_instructions(run), rf.read_groups(run), set()
     out = []
     for number, form, text in parts:
         mid = rf.finding_id(number, nums)
         if ins.get(mid, {}).get("choice") != "post": sys.exit(f"nothing saved; finding {number} is not marked Post")
+        if covered := rf.covered_refusal(groups, mid, nums): sys.exit(f"nothing saved; {covered}")
         if mid in seen: sys.exit(f"nothing saved; finding {number} is answered twice")
         seen.add(mid)
         out.append((number, mid, form, text))
@@ -1046,7 +1246,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Preview, post, and submit a run's Post-marked findings as a pending GitHub review.")
     ap.add_argument("run"); ap.add_argument("--repo", default="."); ap.add_argument("--pr", type=int)
     action = ap.add_mutually_exclusive_group()
-    action.add_argument("--post", action="store_true", help="send the previewed comments to the pending review")
+    action.add_argument("--post", action="store_true", help="send the previewed comments and the review body to the pending review")
     action.add_argument("--submit", choices=list(VERDICTS),
                         help="submit the pending review with this verdict; approve, request-changes, and comment on a pending review "
                              "that holds drafts of your own or text that drew a warning ask you to type the pull request number at a terminal, "
@@ -1058,6 +1258,11 @@ def main(argv=None):
                         help="send the changed text of these findings' comments that GitHub already shows (in a submitted review) "
                              "once you type the pull request number at a terminal; --post never changes them")
     action.add_argument("--keep-open", metavar="N[:REASON]", help="stop offering finding N's thread for closing")
+    action.add_argument("--group", metavar="LEAD:M[,N]",
+                        help="record that findings M and N are covered by the comment of finding LEAD, which is drafted and posted for them all")
+    action.add_argument("--ungroup", metavar="N[,M]", help="take these findings out of their groups; naming a lead dissolves its group")
+    action.add_argument("--render-body", action="store_true",
+                        help="write how the change was reviewed into posted/review.md below the text already there, replacing what an earlier run wrote")
     action.add_argument("--save-drafts", metavar="FILE",
                         help="save the post-drafter's answer in FILE as posted/draft-<merged id>.md, one per Post-marked finding; print N=<path> for each")
     ap.add_argument("--confirm", type=int, metavar="PR",
@@ -1067,7 +1272,10 @@ def main(argv=None):
     if a.dry_run and not (a.post or a.submit or a.close or a.update_published):
         ap.error("--dry-run goes with --post, --submit, --close N, or --update-published N")
     if a.keep_open is not None: return keep_open(a.run, a.keep_open)
+    if a.group: return group(a.run, a.group)
+    if a.ungroup: return ungroup(a.run, a.ungroup)
     if a.save_drafts: return save_drafts(a.run, a.save_drafts)
+    if a.render_body: return render_body(a.run, a.repo)
     reviewed = reviewed_commit(a.run, a.repo)
     ctx = {**fetch_pr(a.repo, a.run, a.pr, reviewed), "local": local_paths(a.run, a.repo)}
     ctx["kept"] = kept_body(a.run, ctx)

@@ -75,6 +75,9 @@ On any stop before editing, the report says `files: none` and
 3. Write or port the tests the handoff names, and add one for any behavior
    you added that nothing tests, extending the nearest existing test file,
    shaped as Tests in the writing-code skill says.
+   Keep existing names unless their meaning changed. Do not make a rename
+   that is worth making in this handoff; name it under `refactor:` so it gets
+   its own commit.
 4. Run the handoff's test command, and only that command's scope; tests in
    this repository may share databases and must not run in parallel with
    others. If tests fail because of your change, fix it, in at most two
@@ -109,7 +112,7 @@ decisions: <each decision applied and where, as "DEC-21: Target in harness/targe
 choices: <local choices the records did not settle, one line each; or "none">
 questions: <shape-setting choices stopped on, each with the options seen; or "none">
 deviations: <"departs: ..." for where the result departs from the handoff, its recommendation, the reference, or a test, and why; "not addressed: ..." for anything in the handoff left undone, and why; or "none">
-refactor: <a refactor outside the handoff that would have made it smaller; or "none">
+refactor: <a refactor outside the handoff that would have made it smaller, or a rename worth its own commit; or "none">
 rollout: <"none" when only code new in this branch changed; else one or two sentences on old and new code side by side, in-flight jobs, existing data, and clients not redeployed with this change>
 cleanups: <"none", or one line per feature gate, compatibility branch, or deprecated shim the change adds, as "<key>: remove when <condition>", the key being the identifier as it appears in the code>
 follow-ups: <one line per repository that owes work, as "<repo>: changed|wanted: <contract>; needs: <behavior>": the contract as it changed (old to new) or the shape wanted (and how it differs from today's), and the behavior that repository must now handle or that this one builds against; no change to make there and no size; or "none">

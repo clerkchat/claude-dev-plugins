@@ -74,7 +74,7 @@ What the user reads in place of a lens identifier. `Say it as` is the phrase;
 | `sql`                | schema, domain                                                  |                                    |
 | `data-privacy`       | domain, async, llm, interface                                   |                                    |
 | `naming-concepts`    | any non-test, non-config                                        | yes in standard and deep           |
-| `design`             | any non-test, non-config                                        | yes in standard and deep           |
+| `design`             | any non-config, tests included                                  | yes in standard and deep           |
 | `tests`              | tests, or any domain/interface/async change with no test change |                                    |
 | `spec-conformance`   | any                                                             | when a PR body or Spec file exists |
 | `performance`        | domain, async, ui                                               |                                    |

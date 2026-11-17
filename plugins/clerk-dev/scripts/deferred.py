@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-USAGE = """Manage a worktree's deferred list, <worktree>/.clerk-dev/deferred.md.
+USAGE = """Manage a worktree's deferred list (paths.py deferred).
 
 A deferred item is a known gap with a path chosen for now: marking a finding,
 question, follow-up, or pass item Defer adds one, and the source's outcome names
@@ -17,11 +17,10 @@ a handoff "BUILD-9", or "this session".
 """
 import argparse, datetime, os
 from records import load_script
-import ids
+import ids, paths
 
 items = load_script("items.py")
 
-FILENAME = "deferred.md"
 EXTRAS = ("Path", "Open", "Revisit")
 REQUIRED = ("Path", "Open")
 CLOSING_STATUSES = ("fixed", "wont-fix")
@@ -35,10 +34,6 @@ what is left (Open), and when to look again (Revisit). Close one as fixed with a
 commit, or wont-fix with a reason.
 
 """
-
-def path(wt):
-    load_script("records.py").exclude(wt)
-    return os.path.join(wt, ".clerk-dev", FILENAME)
 
 def read(p):
     its = items.read(p, list(FIELDS))
@@ -71,8 +66,7 @@ def main():
     if args.cmd == "add":
         for k in REQUIRED:
             if not getattr(args, k).strip(): a.error(f"--{k.lower()} must not be blank")
-    load_script("records.py").guard(args.wt)
-    p = path(args.wt); its = read(p)
+    paths.ensure(args.wt); p = paths.deferred(args.wt); its = read(p)
     if args.cmd == "add":
         iid = add(its, args.text, args.src, args.instruction, **{k: getattr(args, k) for k in EXTRAS})
         write(p, its); print(f"{iid} added to {p}")

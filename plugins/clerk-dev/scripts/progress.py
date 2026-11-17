@@ -18,24 +18,19 @@ times, so it survives a restart of this script; it is left out under a minute.
 
 --run watches one run directory (this session's run). --worktree watches the
 run each per-repository session writes in its worktree (feature mode): the
-target of <path>/.clerk-dev/latest once it was created after --since (default:
-when this script started). Progress per run is read from what the run writes:
-plan.md's instance list against raw/, merged.md, the verify/ files, and
-report.md. The "min in" total counts from --since, else from the run's plan.md,
-else from when this script started.
+target of <path>'s latest pointer (paths.py latest) once it was created after
+--since (default: when this script started). Progress per run is read from
+what the run writes: plan.md's instance list against raw/, merged.md, the
+verify/ files, and report.md. The "min in" total counts from --since, else
+from the run's plan.md, else from when this script started.
 
 --heartbeat-only prints nothing on step changes, for a run whose reviewers
 already report their own completion to the orchestrator. --once prints the
 current line and exits. The script exits when every watched run has its report.
 """
-import argparse, os, re, time
-
-INSTANCE_ROW = re.compile(r"^\|[^|\n]*\|\s*([^|\n]*?)\s*\|.*\|\s*(raw/[^|\s]+\.md)\s*\|", re.M)
-
-def instances(run):
-    p = os.path.join(run, "plan.md")
-    if not os.path.exists(p): return None
-    return INSTANCE_ROW.findall(open(p, encoding="utf-8").read())
+import argparse, os, time
+import paths
+from run_files import read_instances
 
 def mtime(path):
     return os.path.getmtime(path) if os.path.exists(path) else None
@@ -48,14 +43,14 @@ def state(run):
     checked = len([n for n in os.listdir(vdir) if n.endswith(".md")]) if os.path.isdir(vdir) else 0
     merged = mtime(os.path.join(run, "merged.md"))
     if checked: return ("verifying", f"{checked} checked", merged)
-    inst = instances(run)
-    raws = [m for m in (mtime(os.path.join(run, raw)) for _, raw in inst or []) if m]
+    inst = read_instances(run)
+    raws = [m for m in (mtime(os.path.join(run, i.raw)) for i in inst or []) if m]
     if merged: return ("merging", "", max(raws, default=None))
     if inst is None: return ("planning", "", None)
     return ("reviewing", f"{len(raws)}/{len(inst)}", mtime(os.path.join(run, "plan.md")))
 
 def child_run(path, since):
-    link = os.path.join(path, ".clerk-dev", "latest")
+    link = paths.latest(path)
     if not os.path.exists(link): return None
     run = os.path.realpath(link)
     return run if os.stat(run).st_mtime >= since or os.lstat(link).st_mtime >= since else None

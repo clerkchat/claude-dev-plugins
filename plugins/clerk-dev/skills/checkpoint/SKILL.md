@@ -1,7 +1,19 @@
 ---
 name: checkpoint
 description: Write down everything this conversation settled that is not yet in a file (decisions, guidance, ideas parked in the backlog, answers to design questions, built handoffs, follow-ups owed elsewhere filed in their repository's backlog, scope changes), then say whether it is safe to clear the conversation. Use when the user says "checkpoint", "wrap up", "save where we are", "before I clear", "is it safe to clear", "I'm going to clear", or similar.
-allowed-tools: Bash(python3 *), Bash(git *), Read, Write, Edit, Grep, Glob, Agent
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Read
+  - Write
+  - Edit
+  - Grep
+  - Glob
+  - Agent
 ---
 
 # Checkpoint
@@ -63,8 +75,7 @@ session.
   (`.clerk-dev/pr-description.md`, from the `pr-draft` skill) is named like an
   uncommitted file: it is the user's to post or keep editing. A change to it
   that the user asked for and that has no entry in
-  `.clerk-dev/pr-draft-notes.md` is logged there first, as that skill's
-  Refine step says.
+  draft notes is logged there first, as that skill's Refine step says.
 - Subagents still running (a builder, a review, a design check): clearing
   may lose their reports. Wait for them, or say which are running and what to
   do with their results in the next session.

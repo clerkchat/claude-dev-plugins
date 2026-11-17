@@ -2,6 +2,7 @@ import os
 import unittest
 
 from helpers import RunCase, init_repo
+import paths
 
 DRAFT_STEP = '"draft the PR description"'
 
@@ -12,7 +13,7 @@ class DraftStepCase(RunCase):
         self.repo = init_repo(self.path("work"))
         self.repo.git("checkout", "-q", "-b", "feat")
         self.repo.commit("feat: the change")
-        self.run_dir = os.path.join(self.repo.path, ".clerk-dev", "latest")
+        self.run_dir = paths.latest(self.repo.path)
 
     def write_run(self):
         self.write("merged.md", "")
@@ -28,10 +29,23 @@ class DraftStepCase(RunCase):
 
 
 class DraftStepTests(DraftStepCase):
-    def test_a_branch_never_reviewed_is_offered_the_draft(self):
+    def test_a_branch_never_reviewed_is_offered_a_review_not_the_draft(self):
         steps = self.next_steps()
         self.assertIn("Run a review", steps)
-        self.assertIn(DRAFT_STEP, steps)
+        self.assertNotIn(DRAFT_STEP, steps)
+
+    def test_a_fresh_branch_leads_with_its_purpose_not_the_review(self):
+        self.repo.git("reset", "-q", "--hard", "main")
+        os.makedirs(paths.clerk_dev(self.repo.path), exist_ok=True)
+        with open(paths.notes(self.repo.path), "w") as f:
+            f.write("# Branch notes\n\n## Purpose\nDrafted today.\n\nWhat this branch builds: the widget.\n")
+        code, out = self.repo.status()
+        self.assertEqual(code, 0, out)
+        self.assertIn("**Purpose:** the widget.", out)
+        self.assertNotIn("Review:", out)
+        self.assertNotIn("Run a review", out)
+        self.assertNotIn(DRAFT_STEP, out)
+        self.assertIn("start the work the Purpose describes", out)
 
     def test_a_review_without_a_final_pass_is_not_offered_the_draft(self):
         self.write_run()
@@ -66,6 +80,14 @@ class DraftStepTests(DraftStepCase):
         self.repo.commit("feat: more after the final pass")
         steps = self.next_steps()
         self.assertIn("unreviewed commit", steps)
+        self.assertNotIn(DRAFT_STEP, steps)
+
+    def test_a_branch_main_already_holds_is_fresh_while_origin_lags(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.git("merge", "-q", "--ff-only", "feat")
+        self.repo.git("checkout", "-q", "feat")
+        steps = self.next_steps()
+        self.assertNotIn("Run a review", steps)
         self.assertNotIn(DRAFT_STEP, steps)
 
 

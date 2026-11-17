@@ -95,5 +95,5 @@ After create:
   `<branch>`.
 - `After create:` an optional command run in each new worktree.
 
-The scan reads only git, `.clerk-dev/workspace.md` tables, and the existing
+The scan reads only git, workspace file tables, and the existing
 config; it never reads CLAUDE.md or other prose.

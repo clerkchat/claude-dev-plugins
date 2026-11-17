@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse, datetime, os, sys
-import config, records
+import config, paths, records
 
 DEPTH = 3
 WORKSPACE_SOURCE = "workspace.md"
@@ -57,7 +57,7 @@ class Scan:
         if not self.add(real(p)): self.notes.append(f"not a repository: {p}")
 
     def workspace(self, d):
-        ws = os.path.realpath(records.workspace_path(d))
+        ws = os.path.realpath(paths.workspace(d))
         if ws in self.read or not os.path.exists(ws): return
         self.read.add(ws)
         for name, p in records.workspace(d)[1].items():

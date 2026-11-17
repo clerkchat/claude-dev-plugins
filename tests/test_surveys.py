@@ -3,7 +3,8 @@ import re
 import sys
 import unittest
 
-from helpers import SCRIPTS, TempCase, init_repo, run_ok, run_script, write_feature_md, write_file, write_record
+from helpers import SCRIPTS, TempCase, feature_md_link, init_repo, read_feature_md, run_ok, run_script, write_feature_md, write_file, write_record
+import paths
 
 sys.path.insert(0, SCRIPTS)
 import records
@@ -41,7 +42,7 @@ class SurveyFileCase(TempCase):
         self.root = self.repo.path
         write_feature_md(self.root)
         write_record(self.root, "BRIEF-5", "brief", "Spec five", body=BRIEF_BODY)
-        self.survey = os.path.join(self.root, ".clerk-dev", "feature", "checks", "SURVEY-1.md")
+        self.survey = os.path.join(paths.checks_dir(self.root), "SURVEY-1.md")
         write_file(self.survey, SURVEY.format(target=self.target))
 
     def status(self, *args):
@@ -51,8 +52,10 @@ class SurveyFileCase(TempCase):
 
     def index(self):
         run_ok("records", "index", self.root)
-        with open(os.path.join(self.root, ".clerk-dev", "feature", "feature.md")) as f:
-            return f.read()
+        return read_feature_md(self.root)
+
+    def survey_row(self, cells):
+        return f"| [SURVEY-1]({feature_md_link(self.root, self.survey)}) | {cells} |"
 
 
 class SurveyHeaderTests(SurveyFileCase):
@@ -61,7 +64,7 @@ class SurveyHeaderTests(SurveyFileCase):
             self.assertEqual(records.check_header(f.read()), (records.SURVEY, ["BRIEF-5"]))
 
     def test_the_index_lists_the_survey_under_checks_with_its_record(self):
-        self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | BRIEF-5 | 2 | 0 |", self.index())
+        self.assertIn(self.survey_row("BRIEF-5 | 2 | 0"), self.index())
 
     def test_names_glosses_the_survey(self):
         self.assertEqual(run_ok("records", "names", self.root, "SURVEY-1"), "SURVEY-1: survey of src/export")
@@ -75,7 +78,7 @@ class SurveyForNoRecordTests(SurveyFileCase):
     target = "none"
 
     def test_the_index_lists_paths_as_its_records(self):
-        self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | paths | 2 | 0 |", self.index())
+        self.assertIn(self.survey_row("paths | 2 | 0"), self.index())
 
     def test_no_brief_counts_it_as_its_design_check(self):
         self.assertIn("- BRIEF-5 Spec five: not ready: no design check", self.status("--focus", "design"))
@@ -117,7 +120,7 @@ class SurveyWithoutSurveyedLineTests(SurveyFileCase):
         self.assertEqual(records.check_header("Surveyed on some day.\n", "SURVEY-1"), (records.SURVEY, []))
 
     def test_the_index_lists_it_as_a_survey_of_paths(self):
-        self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | paths | 0 | 0 |", self.index())
+        self.assertIn(self.survey_row("paths | 0 | 0"), self.index())
 
     def test_a_design_check_without_a_checked_line_stays_a_design_check(self):
         self.assertEqual(records.check_header("# Check\n", "BRIEF-5-1"), (records.DESIGN_CHECK, []))
@@ -159,7 +162,7 @@ class SurveyBoxCheckedButStatusOpenTests(SurveyFileCase):
         write_file(self.survey, text.replace("- [ ] Q-1.", "- [x] Q-1."))
 
     def test_the_index_counts_the_item_open(self):
-        self.assertIn("| [SURVEY-1](checks/SURVEY-1.md) | BRIEF-5 | 2 | 0 |", self.index())
+        self.assertIn(self.survey_row("BRIEF-5 | 2 | 0"), self.index())
 
     def test_the_feature_counts_the_item_open(self):
         self.assertIn("- survey items open in SURVEY-1 (survey of src/export): 2", self.status())
@@ -211,7 +214,7 @@ class ValidateSurveyItemsTests(SurveyFileCase):
 class ValidateDesignCheckWeightTests(SurveyFileCase):
     def setUp(self):
         super().setUp()
-        self.check = os.path.join(self.root, ".clerk-dev", "feature", "checks", "CHECK-1.md")
+        self.check = os.path.join(paths.checks_dir(self.root), "CHECK-1.md")
 
     def validate(self, weight):
         write_file(self.check, f"# Check\n\nChecked 2026-10-30: BRIEF-5.\n\n- [ ] Q-1. A question\n  - Weight: {weight}\n  - Status: open\n")

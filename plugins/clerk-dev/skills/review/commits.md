@@ -1,6 +1,7 @@
 # Commit messages
 
-Every commit a skill writes (review fixes, follow-ups, handoffs, passes) uses
+Every commit a skill writes (review fixes, follow-ups, handoffs, passes) goes
+through `scripts/commit.py`, which refuses a subject that is not
 Conventional Commits, `<type>(<area>): <what the change does>`, with the type
 saying what kind of change it is, so that pr-draft and reviews can sort
 commits by their messages. This holds in every repository, whatever style its
@@ -30,3 +31,11 @@ table, or check that callers rely on is removed or changed.
 - **A type is a claim.** Readers check it against the diff: a `refactor` or
   `chore` that changes behavior is live, and a commit with no type (the
   user's own) is sorted from its diff.
+
+## Attribution trailer
+
+Every commit a skill writes ends with the trailer
+`Assisted-by: Matthias' clerk-dev <version>`, the `version` in the plugin's
+`.claude-plugin/plugin.json` (`records.py`'s `plugin_version()` reads it).
+`commit.py` adds it, before any attribution lines the session adds, such as
+`Co-Authored-By`, and never twice. The user's own commits get none.

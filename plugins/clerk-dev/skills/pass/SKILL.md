@@ -2,7 +2,25 @@
 name: pass
 description: Write code in focused passes, one value at a time (edge cases, error handling, security, observability, DRY, and so on), each ended by a pass review with only that pass's lenses. Use when the user says "do an edge-cases pass", "make a security pass on this", "pass for observability", "what passes does this need", "guide me through a tests pass", "check the pass", "review the pass", "abandon the pass", or "how are the passes doing". Not for reviewing a whole branch (that is /clerk-dev:review) or fixing review findings (review-fix).
 argument-hint: "[<pass> [on BRIEF-<n> | on <paths>] [guide]] | suggest [BRIEF-<n>] | check PASS-<n> | abandon PASS-<n> | list | stats"
-allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Write, Grep, Glob
+allowed-tools:
+  - Bash(python3 *)
+  - Bash(git add *)
+  - Bash(git blame *)
+  - Bash(git check-ignore *)
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git merge-base *)
+  - Bash(git remote set-head origin --auto)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(git worktree list *)
+  - Bash(claude -p *)
+  - Read
+  - Edit
+  - Write
+  - Grep
+  - Glob
 ---
 
 # Passes
@@ -10,7 +28,7 @@ allowed-tools: Bash(python3 *), Bash(git *), Bash(claude -p *), Read, Edit, Writ
 When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 The catalogue of passes, their lenses, and how to suggest them for a piece is
-`passes.md` next to this file. The log is `.clerk-dev/passes.md`, managed only
+`passes.md` next to this file. The log is managed only
 through `${CLAUDE_PLUGIN_ROOT}/scripts/passes.py` (below, `passes.py`), which
 reads it strictly and refuses unsafe steps; when it refuses, say why in one line
 and ask, never edit the log around it. A lens's author-side text, its Pass

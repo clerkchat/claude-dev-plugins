@@ -2,7 +2,19 @@
 name: followups
 description: Work through this worktree's follow-ups (the repository backlog's follow-ups scoped to its branch), the work it owes because of changes in another repository, from a review or from coding there. Use when the user says "go through the follow-ups", "work the follow-ups", "do BL-4", "fix follow-up BL-2", or similar. Hands each item to the building skill's intake, one commit per item, and closes each item with its commit.
 argument-hint: "[BL-4[,BL-6...]]"
-allowed-tools: Bash(git *), Bash(gh pr view *), Bash(python3 *), Read, Grep, Glob, Agent, Write
+allowed-tools:
+  - Bash(git diff *)
+  - Bash(git log *)
+  - Bash(git rev-parse *)
+  - Bash(git show *)
+  - Bash(git status *)
+  - Bash(gh pr view *)
+  - Bash(python3 *)
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Write
 ---
 
 # Working follow-ups
@@ -28,7 +40,7 @@ compacted skill may be cut short, and the steps it drops are the ones that keep
 items separate and commits clean.
 
 Keep this session small: pass the builder paths rather than file contents, run
-commands quietly (`git commit -q`), and print one line per item. The builder's
+commands quietly (`commit.py`), and print one line per item. The builder's
 report is the only thing an item should add here.
 
 ## Before the first item
@@ -84,13 +96,13 @@ Open each item with a progress line: "Follow-up 3 of 9 (BL-4): 2 done, 7 left
    its title and body (the need), `Contract:` from `contract` (what the other
    side now sends or accepts, which the change must match), `From:` from
    `origin` (repository and commit), and `Finding:` from `finding`. Find the source repository's
-   worktree by its name in `.clerk-dev/workspace.md`, and pass its path
+   worktree by its name in the workspace file (`paths.py <worktree> workspace`), and pass its path
    and the commit so the builder can read the change with
    `git -C <path> show <sha>`. When the item names a
    finding, add the source run's `resolution/<merged id>.md` if it exists
    (resolve the number through that run's `numbers.tsv`). Point it at the
    guidance file, whose branch scope and rules the change follows. When this
-   worktree has a review run (`.clerk-dev/latest` with a `merged.md`), give the builder the command
+   worktree has a review run (`paths.py <worktree> latest` resolves to a run with a `merged.md`), give the builder the command
    to list the open findings in the files it will change:
    `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stale-findings.py <run> --repo
    <worktree> --open-in <files>`,

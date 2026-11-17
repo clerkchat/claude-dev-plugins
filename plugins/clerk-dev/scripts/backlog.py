@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse, datetime, os, re, sys
 from typing import NamedTuple
-import ids, records
+import ids, paths, records
 import config
 
 items = records.load_script("items.py")
@@ -60,7 +60,7 @@ def locate(wt, name):
     if not os.path.exists(config.path()): sys.exit(config.MISSING.format(config.path()))
     repo = config.by_name(config.load(), name)
     store = registry_store(repo) if repo else None
-    if not store: sys.exit(f"repository {name} is not in .clerk-dev/workspace.md or {config.path()}" + (f", and {repo.checkout} is not a git checkout" if repo else ""))
+    if not store: sys.exit(f"repository {name} is not in the workspace manifest ({paths.workspace(wt)}) or {config.path()}" + (f", and {repo.checkout} is not a git checkout" if repo else ""))
     return store
 
 def same_store(a, b): return os.path.realpath(a.dir) == os.path.realpath(b.dir)
@@ -355,7 +355,7 @@ def main():
     ad.add_argument("--body", help="a file holding the body, written under the heading")
     for kind, args in OWN_ARGS.items():
         for arg in args: ad.add_argument(f"--{arg}", help=f"{kind} only")
-    ad.add_argument("--repo", help="file into this repository's backlog, from workspace.md or the registry")
+    ad.add_argument("--repo", help="file into this repository's backlog, from the workspace manifest or the registry")
     li = sp.add_parser("list"); li.add_argument("wt"); li.add_argument("--kind", choices=KINDS); li.add_argument("--scope"); li.add_argument("--all", action="store_true"); li.add_argument("--repo")
     view = li.add_mutually_exclusive_group()
     view.add_argument("--owed", action="store_true", help="the follow-ups this branch owes: scoped to its branch, without new work or orphans")
@@ -367,7 +367,6 @@ def main():
     rs = sp.add_parser("rescope"); rs.add_argument("wt"); rs.add_argument("iid"); rs.add_argument("scope")
     ck = sp.add_parser("check"); ck.add_argument("wt"); ck.add_argument("iid", nargs="?")
     a = ap.parse_args()
-    records.guard(a.wt)
     if a.cmd == "add": print(add(a.wt, a))
     elif a.cmd == "list":
         if (a.owed or a.parked) and (a.kind or a.scope or a.repo): sys.exit("--owed and --parked take no --kind, --scope, or --repo")

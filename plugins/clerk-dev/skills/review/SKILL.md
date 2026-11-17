@@ -30,6 +30,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/progress.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/records.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/render-report.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/split-findings.py *)
@@ -51,7 +52,10 @@ allowed-tools:
 Orchestrate a lens-based review. You coordinate; the lens agents review. Do not
 review the code yourself, and never edit the project's code. The files you write
 are under the worktree's `.clerk-dev/` directory: the run directory, and the branch
-notes and follow-ups described in `tracking.md`.
+notes and follow-ups described in `tracking.md`. The report the user opens is
+`.clerk-dev/review.md`, which always shows the current run's `report.md`; name it
+that way to the user. The run directory is reached through
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> run <label>` or `latest`.
 
 Running the command is the user's go-ahead; there is no approval step. Cost
 discipline is in the choices instead: no agent, including you, reads the whole
@@ -85,7 +89,7 @@ question rather than guess.
 When the target is the whole branch and the words neither ask for the feature
 nor rule it out, ask one question before anything else: review the whole
 feature across repositories, or just this worktree? When
-`.clerk-dev/workspace.md` exists, name its other repositories in the
+the workspace file (`paths.py <worktree> workspace`) exists, name its other repositories in the
 feature option ("the whole feature: this worktree plus web and worker"). When it
 does not, say that the feature option first asks which repositories take part.
 The answer adds `--feature` or not; other flags from the words are kept. A
@@ -105,7 +109,7 @@ Then:
 
 Start every run with one call:
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...]`, giving this
-worktree and, when the request names them or `.clerk-dev/workspace.md`
+worktree and, when the request names them or the workspace file
 lists them, the other worktrees of the job. For each one it prints the
 repository's `setup` lines, the remote main or that `origin/HEAD` is
 missing, when the last fetch was, the merge base, the branch's commit messages,
@@ -258,6 +262,12 @@ its item in a few words.
 - [ ] Write report
 ```
 
+The tests lens's `tests-only` instance (Step 4) is a focus under "Whole
+change". When Step 6 re-runs lenses on files they left unread, add a
+top-level item for that wave, "Re-read skipped files", with its focuses under
+it, just before "Merge findings", which stays unchecked until the merge after
+the wave.
+
 After each wave, also refresh the interim view: run
 `merge-findings.py <run>/raw --readable <run>/so-far.md --title "Findings so
 far in <target>" --pending "<labels of parts not yet reviewed>"`.
@@ -273,7 +283,7 @@ focuses on one line beneath it, and one line pointing at the interim view:
 - [ ] HTTP endpoints
 - [ ] Whole change
 - [ ] Merge, verify, report
-Findings so far (unverified): .clerk-dev/<label>/so-far.md
+Findings so far (unverified): <run>/so-far.md
 ```
 
 The reviewers running inside a wave appear in the terminal's own task panel, so
@@ -347,9 +357,10 @@ see Step 6b):
 
 - `${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py [WORKTREE ...] [--log N]`: the
   state a run starts from, per worktree (see Preflight).
-- `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py RUN`: points `.clerk-dev/latest`
+- `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py RUN`: points the worktree's `latest`
   (or `latest-feature` for a `-feature` run) at a run directory of this
-  worktree (Step 0).
+  worktree (Step 0); `.clerk-dev/review.md` (`review-feature.md`) follows once
+  `render-report.py` writes that run's report.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/measure-patch.py PATCH [--exclude GLOB ...]
   --tsv files.tsv --md scope-table.md`:
   per-file bytes, lines, token estimate, and exclusion reasons.
@@ -402,9 +413,9 @@ need to read it unless debugging agent output.
   the whole branch fresh but reports only what would hold the merge. See Final
   pass.
 - `--standalone` (with a narrow target): a separate run, not added to the
-  branch's review, and `.clerk-dev/latest` is left where it is.
+  branch's review, and `latest` is left where it is.
 - `--pass PASS-<n>` (with a range target, `--standalone`, and `--lenses`): this run
-  is the pass review of pass PASS-<n> from `.clerk-dev/passes.md` (see the `pass`
+  is the pass review of pass PASS-<n> from the pass log (see the `pass`
   skill). The lenses are exactly those given: no routing, triage, or quick-mode
   cap adds or drops one. `DOCS` is only the pass's piece (its brief record), not
   every active record, and every lens prompt gets a `PASS:` line naming the
@@ -417,7 +428,7 @@ need to read it unless debugging agent output.
   at four, sonnet, a higher bar for minor findings. Deep: all routed lenses,
   deep tracing, fable verifier.
 - `--feature`: review the whole feature across the worktrees named in
-  `.clerk-dev/workspace.md`, each in its own headless session. See Feature
+  the workspace file, each in its own headless session. See Feature
   mode.
 - `--consolidate` (with `--feature`): start no reviews; use each worktree's
   latest finished run, run only the cross-repository lens, and write the feature
@@ -432,10 +443,10 @@ need to read it unless debugging agent output.
   reviewer; `--resume <label>` runs it later.
 - `--split` or `--walk`: force per-slice agent instances or single-walk agents.
 - `--fresh`: do not compare with an earlier review. By default a run is
-  reconciled with the most recent finished run under `.clerk-dev/` for the same
+  reconciled with the most recent finished run for the same
   target; `--previous <label>` names a different one.
 - `--resume [label]`: continue an unfinished run, by default the one
-  `.clerk-dev/latest` points at. See Resuming below.
+  `paths.py <worktree> latest` resolves to. See Resuming below.
 - `--render [label]`: re-render the report of a finished run from its
   merged findings and verdicts, without running any reviewer. Use it to iterate
   on the report after changing titles, the summary, or the template.
@@ -445,7 +456,7 @@ need to read it unless debugging agent output.
 - `--no-pr-comments`: skip the pull request's review comments, which are
   otherwise brought in by default (Step 7b).
 - `--pr-comments-only [label]`: bring the pull request's comments into an
-  existing finished run (default `.clerk-dev/latest`), fill in the sections of
+  existing finished run (default `latest`), fill in the sections of
   comment cards that lack them, and re-render, without running any reviewer.
 
 ## Incremental review
@@ -456,7 +467,7 @@ reviewers still read code blind; only the commits since the earlier review are
 new to them.
 
 Use the earlier run when all of these hold, else review in full and say why in
-one line: it is the most recent directory under `.clerk-dev/` with a `report.md`,
+one line: it is the most recent run directory with a `report.md`,
 the same branch, and a target that is the same as this run's or narrower (a path
 inside this run's target; the whole branch contains every path); `--full` and
 `--fresh` were not given; and its `HEAD` is an ancestor of the current `HEAD`
@@ -557,7 +568,7 @@ that change, typically one the user made by hand between fix cycles. Its
 findings join the branch's review, so triage, fixes, follow-ups, and the
 cross-check keep working on one run with one set of numbers.
 
-When the branch has a review to join (the most recent directory under `.clerk-dev/`
+When the branch has a review to join (the most recent run directory
 with a `report.md`, the same branch, a target that is the whole branch or a
 path, and a `HEAD` that is an ancestor of the current `HEAD`) and `--standalone`
 was not given, run it as an incremental run on that review, with these
@@ -585,11 +596,11 @@ differences:
    `stale-findings.py <run> --record #<id>=still:found in
    a narrow review --through HEAD`.
 
-`.clerk-dev/latest` moves to the new run as usual: it holds everything the earlier
+`latest` moves to the new run as usual: it holds everything the earlier
 run held, plus the new findings.
 
 With no review to join, or with `--standalone`, a narrow target is an ordinary
-run of its own. A standalone run leaves `.clerk-dev/latest` where it is; say in the
+run of its own. A standalone run leaves `latest` where it is; say in the
 final line that triage and fixes on it need its label.
 
 ## Final pass
@@ -667,7 +678,7 @@ each verifier writes `verify/<id>.md` on completion, and `plan.md` lists every
 instance the plan committed to. A missing file means not done; a present file
 means done. Nothing is half-written.
 
-With `--resume`, or when a bare invocation finds that `.clerk-dev/latest` points at
+With `--resume`, or when a bare invocation finds that `latest` points at
 a run whose `progress.md` has unchecked items, whose target matches, and whose
 `HEAD` still equals the current `HEAD` (for a narrow run, the `HEAD` line of its
 `narrow.txt`, and for `staged` also the staged patch's sha1):
@@ -687,8 +698,8 @@ a run whose `progress.md` has unchecked items, whose target matches, and whose
    <m> reviewers still to run, about <minutes> minutes."
 3. Launch only the missing reviewers, in waves, updating `progress.md` as
    before. Then continue from the first unchecked top-level item: merge (always
-   rerun, it is cheap and reads every raw file), verify only the unjudged
-   findings, report.
+   rerun, it is cheap and reads every raw file) with Step 6's check of
+   unread files, verify only the unjudged findings, report.
 
 If `HEAD` moved, the code changed under the review. Say so, name the old and new
 commits, and start a fresh run; do not mix raw files from two versions of the
@@ -702,16 +713,18 @@ reviewers left. Resume it, or start over?" Headless runs start over unless
 
 ## Step 0: run directory
 
-Create the run directory inside the repository, at `<repo>/.clerk-dev/<label>/`,
-where `<label>` is `<yyyymmdd-hhmm>-<target slug>` (`branch`, a path slug, a PR
+Create the run directory inside the repository: `<run>` is the output of
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py <worktree> run <label>`, after
+`paths.py ensure <worktree>` (see below), where `<label>` is `<yyyymmdd-hhmm>-<target slug>` (`branch`, a path slug, a PR
 number, or a range slug). If the directory exists, append `-2`, `-3`, and so on.
 Never overwrite or delete an earlier run. After creating it, run
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/link-latest.py <run>` from the worktree
-root, which points `<repo>/.clerk-dev/latest` at it, except for a
+root, which points `latest` at it, except for a
 `--standalone` narrow run (see Narrow review), which leaves it where it is and
 skips the script. For the coordinating session of feature mode, whose label
-ends in `-feature`, the same script points `<repo>/.clerk-dev/latest-feature`
-at its run instead. Do not link with `ln`; it is not pre-approved, and a
+ends in `-feature`, the same script points `latest-feature` at its run instead.
+Each `render-report.py` of the run `latest` (`latest-feature`) points at then
+links `.clerk-dev/review.md` (`review-feature.md`) to its `report.md`. Do not link with `ln`; it is not pre-approved, and a
 headless child cannot ask. `latest` always means this branch's own review:
 fixes, triage, status, resuming, and incremental review read it, and in
 feature mode the review of this repository runs in the same worktree at the
@@ -719,11 +732,11 @@ same time.
 
 A directory whose label ends in `-feature` is a feature run, not a review of
 this branch. Wherever this skill or another looks for the most recent or newest
-run under `.clerk-dev/`, it skips those directories and both links.
+run, it skips those directories and both links.
 
-Keep `.clerk-dev/` out of version control without touching tracked files: if
-`git check-ignore -q .clerk-dev` fails, append `.clerk-dev/` to `.git/info/exclude`.
-Say that you did so the first time.
+Keep `.clerk-dev/` out of version control without touching tracked files: run
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/paths.py ensure <worktree>`, which creates it and
+adds it to `.git/info/exclude`. Say that it did so the first time.
 
 `<run>` below means this directory. In feature mode it lives in the repo the
 command was run from.
@@ -868,6 +881,15 @@ can skip slices irrelevant to its lens. The unit of cost is tokens read, not
 price per token: a cheap model re-reading a large patch eleven times costs more
 than an expensive one reading each slice once.
 
+When the tests lens runs and the change touches test files (the included files
+of `files.tsv` that Step 1 classified as `tests`, by the repo context globs or
+the `tests` heuristic in `routing.md`), give it one more instance, whatever the
+size of the change, with `SCOPE: tests-only` and `DIFF` a patch of those files
+alone, written as Step 2 writes slice patches:
+`git diff BASE...HEAD -- <test files> > <run>/patch/tests-only.patch`. Its raw
+file is `raw/tests-tests-only.md`. It reads the test code on its own, where the
+other instances read it beside the production code it tests.
+
 Then size the plan. For each agent instance: input tokens are roughly the patch
 it reads plus 15,000 for context, protocol, and code it opens, times 1.5 for
 re-reads; output is small. To compare the weight of plans, multiply tokens by a
@@ -886,8 +908,9 @@ instance count, tokens, and relative weight, the triage decisions per slice,
 and the excluded files. That file is for anyone who wants to know why the run
 was as large as it was.
 
-End `plan.md` with the instance list, one line per reviewer that will run. This
-is the ground truth for resuming, so write it before launching anything:
+End `plan.md` with the instance list, one line per reviewer that will run, then
+the lenses a choice cut. This is the ground truth for resuming, so write it
+before launching anything:
 
 ```
 ## Instances
@@ -895,7 +918,19 @@ is the ground truth for resuming, so write it before launching anything:
 | --- | --- | --- | --- | --- | --- |
 | 1 | security | entities | patch/entities.patch | opus | raw/security-entities.md |
 | 2 | rollout | all | patch/whole.patch | opus | raw/rollout.md |
+| 3 | tests | tests-only | patch/tests-only.patch | sonnet | raw/tests-tests-only.md |
+
+## Not run
+| lens | cause |
+| --- | --- |
+| tenancy | quick |
 ```
+
+`## Not run` has one row per lens routing triggered that the quick-mode cap
+(cause `quick`) or a `--lenses` removal or replacement (cause `removed`) cut.
+Write it with no rows when none was cut, and always empty with `--pass`, whose
+lenses are the pass's by design. A lens routing never triggered, or one triage
+dropped, gets no row. The summary in the posted review body lists the rows.
 
 What you say to the user is the plan in plain words. Build it from the slice
 labels and summaries and from the "Say it as" and "Described as" columns in
@@ -947,7 +982,7 @@ DIFF: <path to the patch for this instance's scope>
 BASE: <ref>
 HEAD: <ref>
 SLICES: <path or none>
-SCOPE: <all or slice name>
+SCOPE: <all, slice name, or tests-only (the tests lens only; see Step 4)>
 TRIAGE: <path to this slice's triage answers, or none>
 CONTEXT: <path to repo-context.md or none>
 MODE: <quick | standard | deep>
@@ -955,7 +990,7 @@ REPO: <absolute repo root>
 PR: <title and body, or none>
 DOCS: <paths of selected work-tracking documents, or none>
 GUIDANCE: <path of <run>/guidance.md>
-WORKSPACE: <path of .clerk-dev/workspace.md, or none>
+WORKSPACE: <path of the workspace file, or none>
 ```
 
 plus `BAR: final` on a final pass, and `PASS: <focus>; piece <record id or none>`
@@ -1002,7 +1037,9 @@ write the reply as it was returned.
 
 Agents are read-only by design; the orchestrator is the only writer. Then run
 `merge-findings.py <run>/raw -o <run>/merged.md`. It parses every `findings`
-block, merges entries on the same file with overlapping or adjacent line ranges,
+block, merges entries on the same file with overlapping or adjacent line ranges
+whose titles describe the same defect (a finding is compared with each merged
+finding's own range, so nearby findings do not chain along a long function),
 keeps the highest severity and confidence and the union of lenses, slices, and
 evidence, and reports how many findings it parsed per file. If a raw file shows
 zero findings but visibly contains a `findings` block, the agent broke the
@@ -1021,6 +1058,23 @@ line as the lens wrote them; write nothing when there are none. An incremental
 or final run adds the lines whose key the file does not already hold and keeps
 the rest. The `review-triage` skill offers to file them ("Cleanups" in
 `skills/review/tracking.md`); a headless run only writes the file.
+
+Then read the `Coverage` section of every raw file. For each lens with a
+`Not read: <path>, <path>` line in any of its raw files, take the union of
+those paths that are included files of `files.tsv`, and run that lens once
+more on them alone: write
+`git diff BASE...HEAD -- <files> > <run>/patch/<lens>-reread.patch`, add the
+instance as a row to `## Instances` in `plan.md` (scope `all`, the lens's model
+in the plan, raw file `raw/<lens>-reread.md`), launch it with the Step 5
+prompt lines, `SCOPE: all` and `DIFF` the reread patch, write its raw file as
+this step writes any instance's, and run the merge and the `Cleanups owed`
+step again. A lens is re-run at most once per run, in headless runs as in
+interactive ones: one whose reread row `## Instances` already holds (a
+resumed run) is not re-run again. A run resumed at a moved `HEAD` re-runs
+nothing, since a new patch would show other code than its raw files read. A
+path still unread goes to `not-reviewed.md` (Step 8): one on a reread raw
+file's `Not read:` line, or, in a run that cannot re-run, one on any
+`Not read:` line.
 
 ## Step 6b: reconcile with the previous review
 
@@ -1140,7 +1194,14 @@ request for this branch; skipping its comments."), and when the reason is
 `gh`, add the one-time line under First runs in a repository. Otherwise:
 
 1. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pr-comments.py <run> --repo <repo>` (add `--pr N` when the branch's pull
-   request cannot be found from the branch). It adds each review thread, review
+   request cannot be found from the branch). It skips a conversation comment by
+   a noise bot (Linear, Vercel, Netlify, Codecov; review threads and summaries
+   are never skipped by author) and any comment, thread, or review whose whole
+   text is a short courtesy phrase (LGTM, thanks, a thumbs up), records each in
+   `pr/seen.tsv` with its reason so it never returns, and counts them in its
+   summary line. Every approving review goes to `pr/approvals.tsv`, which the
+   report's "Pull request comments" section opens with as "Approved by @a,
+   @b." It adds each other review thread, review
    summary with a body, and conversation comment as an entry in `merged.md` with
    `lens: pr-review`, the author, the link, the replies, and the GitHub state;
    known comments are refreshed, not duplicated. It writes a shortlist of up to
@@ -1216,10 +1277,13 @@ The renderer script produces the document; you supply three short inputs:
    merged id, a tab, a heading of at most ten words in plain terms.
 2. `<run>/summary.md`: three or four sentences on what the change does, where
    the risk concentrates, and the one or two things that must happen before
-   merge. Refer to findings by number.
+   merge. Refer to findings by number. Never claim coverage of a file
+   `not-reviewed.md` lists.
 3. `<run>/not-reviewed.md`: one line each for excluded files with size when it
-   matters, parts no lens looked at, focuses that did not run, and documents
-   dropped by the selection cap.
+   matters, parts no lens looked at, focuses that did not run, documents
+   dropped by the selection cap, and each file a lens left unread (Step 6), as
+   "`<path>`: not read by <lens phrase>", the phrase from the "Say it as"
+   column of `routing.md`.
 
 When `<run>/cleanups.md` exists, `summary.md` ends with one more sentence naming
 its keys and saying that triage offers to file their cleanups.
@@ -1259,8 +1323,8 @@ What the document contains, so you can check it:
   scope line (fix size, origin, and any follow-up in another
   repository, such as "Fix size: trivial · New on this branch"); a status
   checkbox line; the bare `path:line`; the one-sentence claim;
-  then subheadings: Why it matters, Context, How it goes wrong (a numbered list
-  when it is a sequence), an optional snippet pulled from HEAD, Recommendation
+  then subheadings: Context, How it goes wrong (a numbered list
+  when it is a sequence), an optional snippet pulled from HEAD, Why it matters, Recommendation
   (or What would confirm it), Second opinion only when the verifier left a note,
   and Resolution once a fix has been made. A finding appended after a fix may
   say which fix surfaced it.
@@ -1291,7 +1355,7 @@ with the current number, so cross-references never go stale. After the report,
 refer to findings only by number ("finding 2").
 
 When the user refers to a finding, by number or by a location in the report such
-as `.clerk-dev/<label>/report.md:92`:
+as `.clerk-dev/review.md:92`:
 
 1. For a location, read the report upward from that line to the nearest card
    heading (`#### N.`). The HTML comment right under it names the number, the
@@ -1345,7 +1409,8 @@ fixed. When a finding with a posted line, range, or file comment is marked
 comment, every render prints `posted
 finding N: marked fixed in <ref>; its thread on GitHub is still open`, and the
 card's Posted block says the same. The line stops once the thread is resolved,
-gone from the pull request, or kept open. Closing replies to the author and
+gone from the pull request, or kept open. A lead's thread is offered only
+once the lead and every finding it covers are marked `fixed`. Closing replies to the author and
 notifies them, so it is outward-facing like posting: the user is asked every
 time, and the user runs the close at a terminal, confirming it there. What
 holds: `post-review.py` asks at the terminal before it approves, requests
@@ -1450,9 +1515,9 @@ ticks one and writes notes in the report; the renderer imports them into
 and shows a Triage column and count in the glance section.
 
 A card marked Post also gets a `##### Posted` block after the checklist: the
-text that goes to the author, from `<run>/posted/<merged id>.md`, in a
-four-backtick fence; or "Posted text: not drafted yet."; or "Posted text: to be
-redrafted; the note changed." The user edits the fenced text in the report like
+text that goes to the author, from `<run>/posted/<merged id>.md`, as a `>`
+blockquote; or "Posted text: not drafted yet."; or "Posted text: to be
+redrafted; the note changed." The user edits the quoted text in the report like
 Notes: an edit is saved to `posted/<merged id>.md` at the next render and marks
 the text `edited` in `<run>/posted.tsv`. Agents set it with `--posted
 N=<file>`, never by editing the report. The Post note steers the text (tone,
@@ -1478,8 +1543,10 @@ render stamps the report with a generation number and keeps what it wrote under
 `.render/<generation>/`; a saved report is compared with the render it came
 from, so a buffer saved after a later render contributes only the lines the user
 changed. The stamp names what survives a render: the checkboxes, the Notes
-lines, and the Posted text. A Posted text whose fence the edit left open is not
-read: the render warns and shows the stored text again; relay that warning. The previous report is kept as `report.prev.md`.
+lines, and the Posted text. A Posted text with an unquoted line in the middle
+of its quote is not read: the render warns and shows the stored text again;
+relay that warning. A Posted text still in a fence, from a report rendered
+before blockquotes, is not read either. The previous report is kept as `report.prev.md`.
 Two ticked boxes use the first, and the card and the render's warning say so; relay that warning to
 the user. Edits anywhere else in the report are not kept. Agents set
 instructions with `--instruct N=<choice>[:note]` and add notes with
@@ -1512,7 +1579,7 @@ headless Claude Code session, so it loads that repository's CLAUDE.md, settings,
 skills, and repo context, and writes its run and report under that worktree's
 `.clerk-dev/`. This session coordinates and runs only the cross-repository lens.
 
-1. Discover: read `.clerk-dev/workspace.md` in this worktree. When it is
+1. Discover: read the workspace file in this worktree. When it is
    missing, set it up with the user as `workspace-manifest.md` describes (a
    headless session stops instead). Its rows are the repositories and
    worktrees of this job; nothing else is searched. Say in one line which
@@ -1598,8 +1665,8 @@ skills, and repo context, and writes its run and report under that worktree's
    findings are fixed and tracked in that repository's report.
 
 The run directory of the coordinating session is
-`<repo>/.clerk-dev/<label>-feature/`, linked from `<repo>/.clerk-dev/latest-feature`
-(see Step 0).
+`paths.py <worktree> run <label>-feature`, linked from `latest-feature` and
+`.clerk-dev/review-feature.md` (see Step 0).
 
 End the final message with every report's absolute path, one per line, the
 feature report first and then each repository's in the order of the workspace
@@ -1607,9 +1674,9 @@ rows:
 
 ```
 Reports:
-  feature  /Users/me/code/api/feat/x/.clerk-dev/20261015-1235-branch-feature/report.md
-  api      /Users/me/code/api/feat/x/.clerk-dev/20261015-1238-branch/report.md
-  clerkai  /Users/me/code/clerkai/feat/x/.clerk-dev/20261015-1236-branch/report.md
+  feature  /Users/me/code/api/feat/x/.clerk-dev/review-feature.md
+  api      /Users/me/code/api/feat/x/.clerk-dev/review.md
+  clerkai  /Users/me/code/clerkai/feat/x/.clerk-dev/review.md
 ```
 
 A repository whose session failed, or that was not reviewed at its current
@@ -1618,7 +1685,7 @@ commit, gets its row with the reason in place of the path.
 ### Consolidating separate reviews
 
 With `--feature --consolidate`, skip steps 2 to 4. After discovery, take each
-worktree's latest finished run (`.clerk-dev/latest`, or the newest run directory
+worktree's latest finished run (`paths.py <worktree> latest`, or the newest run directory
 with a `report.md`) and check it is current: its `HEAD` equals the worktree's
 `HEAD`. For a stale or missing run, say so in one line per repository ("web:
 last reviewed 3 commits ago" or "worker: no review") and continue with the
@@ -1629,10 +1696,13 @@ cross-repository check is starting and roughly how long it takes.
 ## Run directory contents
 
 `<run>` holds `target.txt`, `scope.md`, `files.tsv`, `slices.md`, `patch/`
-(`all.patch`, `whole.patch`, one per slice), `triage/`, `plan.md` (with the
-instance list), `progress.md`, `raw/<lens>[-<slice>].md`, `so-far.md` (interim,
-unverified), `merged.md` (and `merged-new.md` in incremental runs),
-`verify/<id>.md`, `guidance.md` (and `guidance-<repo>.md` in feature runs),
+(`all.patch`, `whole.patch`, one per slice, `tests-only.patch`, and
+`<lens>-reread.patch` per lens re-run on files it left unread), `triage/`,
+`plan.md` (with the instance list and the `## Not run` table), `progress.md`,
+`raw/<lens>[-<slice>].md` (`raw/tests-tests-only.md`,
+`raw/<lens>-reread.md`), `so-far.md` (interim, unverified), `merged.md` (and
+`merged-new.md` in incremental runs), `verify/<id>.md`, `guidance.md` (and
+`guidance-<repo>.md` in feature runs),
 `followups.md` (the follow-ups the branch owes, as `backlog.py list --owed
 --full` printed them; `followups-<repo>.md` per repository in feature runs),
 `reconcile/`, `pr/` (with `threads.tsv`, the posted findings' threads as step
@@ -1641,9 +1711,15 @@ unverified), `merged.md` (and `merged-new.md` in incremental runs),
 there are any), `numbers.tsv`, `status.tsv`, `instructions.tsv`,
 `notes/<id>.md`, `resolution/<id>.md`, `recheck/`, `posted/` (`<id>.md` posted
 texts, `draft-<id>.md` drafts saved by `--save-drafts`, `answer-<n>.md` the
-drafter's answers, `review.md` the review body, `pending-<review id>.md` the
-text the user had in a pending review, `close-<id>.md` a closing reply's own
-words, `keep.tsv` the threads kept open, `payload.json` from a dry run),
+drafter's answers, `review.md` the review body (the drafted sentence, then the
+range line and the how-reviewed block `--render-body` writes),
+`pending-<review id>.md` the text the user had in a pending review when this
+run first posted to it, empty when none, so it also records that this run
+posted to that review; `--submit` renames it `submitted-<review id>.md`, and
+a later run's seed carries a submitted one (or one it inherited) as
+`earlier-<review id>.md`, still the user's review but not that run's,
+`close-<id>.md` a closing reply's own
+words, `keep.tsv` the threads kept open, `groups.tsv` the findings merged under a lead, `payload.json` from a dry run),
 `posted.tsv` (per Post-marked finding: drafted, edited, or posted, the note
 followed, the anchor and commit the draft was written for, and once posted the
 comment's ids, URL, and anchor),
@@ -1652,10 +1728,9 @@ among them), `report.md`, `report.prev.md`, `stale.tsv`
 (cross-check judgments), `commits.tsv` (every commit a status named, kept when a
 later fix replaces the ref), `narrow.txt` (narrow runs), and `final/` (final
 passes: `verify/`, `kept.md`, `below.md`), with `final-review-report.md` (the
-final pass's verdict) next to `report.md`. Next to the run directories,
-`.clerk-dev/latest`, `.clerk-dev/latest-feature`, `.clerk-dev/branch-notes.md`,
-`.clerk-dev/workspace.md` (or a link to it), and `.clerk-dev/status-seen-backlog`
-belong to the worktree. Raw and verify files are written
+final pass's verdict) next to `report.md`. Beside the run directories, the
+`latest` and `latest-feature` links, the workspace file (or a link to it), and
+the status marker belong to the worktree, with `.clerk-dev/branch-notes.md`. Raw and verify files are written
 only on completion, which is what makes `--resume` safe. A run stopped after
 `--plan-only` has no `progress.md` items checked and no raw files;
 `--resume <label>` runs it while `HEAD` is unchanged, and otherwise a new run is

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep a worktree's pass log, <worktree>/.clerk-dev/passes.md.
+"""Keep a worktree's pass log (paths.py passes).
 
 A pass is a bounded stretch of writing with one focus on one piece of work,
 ending in commits and a pass review with only the pass's lenses over only the
@@ -39,8 +39,8 @@ Entry format:
     - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
 import argparse, datetime, json, os, re, subprocess, sys
-from records import load_script, write_atomic
-import ids
+from records import PLUGIN_ROOT, plugin_version, write_atomic
+import ids, paths
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -59,16 +59,6 @@ def git(wt, *args, check=True):
     r = subprocess.run(["git", "-C", wt, *args], capture_output=True, text=True)
     if check and r.returncode != 0: sys.exit(f"git {' '.join(args)} failed: {r.stderr.strip()}")
     return r.stdout.strip()
-
-def path(wt):
-    d = os.path.join(wt, ".clerk-dev"); os.makedirs(d, exist_ok=True)
-    if subprocess.run(["git", "-C", wt, "check-ignore", "-q", ".clerk-dev"]).returncode != 0:
-        common = git(wt, "rev-parse", "--git-common-dir", check=False)
-        if common:
-            exf = os.path.join(common if os.path.isabs(common) else os.path.join(wt, common), "info", "exclude")
-            os.makedirs(os.path.dirname(exf), exist_ok=True)
-            with open(exf, "a") as fh: fh.write(".clerk-dev/\n")
-    return os.path.join(d, "passes.md")
 
 def read(p):
     if not os.path.exists(p): return []
@@ -114,20 +104,15 @@ def dirty(wt, leave_out=()):
     files = [l[3:].split(" -> ")[-1] for l in lines]
     return [f for f in files if f not in leave_out]
 
-def plugin_version():
-    root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    sha = subprocess.run(["git", "-C", root, "log", "-1", "--format=%h", "--", "agents"], capture_output=True, text=True).stdout.strip()
-    if sha: return sha
-    try: return "v" + json.load(open(os.path.join(root, ".claude-plugin", "plugin.json")))["version"]
-    except Exception: return "unknown"
+def plugin_stamp():
+    sha = subprocess.run(["git", "-C", PLUGIN_ROOT, "log", "-1", "--format=%h", "--", "agents"], capture_output=True, text=True).stdout.strip()
+    version = plugin_version()
+    return sha or (f"v{version}" if version else "unknown")
 
 def counts(check):
     """{lens: findings} from a Check field, or None when it holds no counts."""
     m = re.search(r";\s*((?:[a-z-]+ \d+(?:, )?)+)\s*(?:;|$)", check or "")
     return {k: int(v) for k, v in re.findall(r"([a-z-]+) (\d+)", m.group(1))} if m else None
-
-def guard(wt):
-    load_script("records.py").guard(wt)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -147,8 +132,7 @@ def main():
     l = sp.add_parser("list"); l.add_argument("wt"); l.add_argument("--open", action="store_true")
     sp.add_parser("stats").add_argument("wt")
     a = ap.parse_args()
-    guard(a.wt)
-    p = path(a.wt); passes = read(p); today = datetime.date.today().isoformat()
+    paths.ensure(a.wt); p = paths.passes(a.wt); passes = read(p); today = datetime.date.today().isoformat()
 
     if a.cmd == "start":
         op = [e["id"] for e in passes if e["f"].get("Status") == "open"]
@@ -160,7 +144,7 @@ def main():
         title = f"{a.focus} on {a.piece}" if a.piece else a.focus
         passes.append({"id": pid, "title": title, "items": [], "f": {
             "Mode": a.mode, "Lenses": lenses, "Piece": a.piece or "", "Status": "open",
-            "Start": git(a.wt, "rev-parse", "--short", "HEAD"), "Plugin": plugin_version(),
+            "Start": git(a.wt, "rev-parse", "--short", "HEAD"), "Plugin": plugin_stamp(),
             "Left out": ", ".join(a.leave_out), "Started": today}})
         write(p, passes); print(f"{pid} started at {passes[-1]['f']['Start']}")
         return
