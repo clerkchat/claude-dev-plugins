@@ -816,7 +816,7 @@ def finding_groups(run, status, instr, numbers):
     unmarked, queue, discuss, inprog, new, by_section = {}, [], [], [], [], {}
     appended = rf.read_appended(run)
     post = post_queue(run, instr, numbers, findings, sections)
-    for mid in sf.unmarked(run):
+    for mid in sf.unmarked_findings(findings, status, instr, numbers, sections):
         unmarked.setdefault(sections[mid], []).append(numbers[mid])
     for mid in sf.open_findings(findings, status, instr, numbers):
         choice, st = sf.plain_choice(instr, mid), rf.status_of(status, mid)

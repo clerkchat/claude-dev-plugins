@@ -70,12 +70,13 @@ def open_findings(findings, status, instr, numbers):
 def open_count(run):
     return len(open_findings(load_findings(run), *state(run)))
 
-def unmarked(run):
+def unmarked_findings(findings, status, instr, numbers, sections):
     """Merged ids of open, numbered findings with no choice yet, in a report section to triage."""
-    status, instr, numbers = state(run)
-    sections = rf.read_sections(run)
-    return [mid for mid in open_findings(load_findings(run), status, instr, numbers)
+    return [mid for mid in open_findings(findings, status, instr, numbers)
             if not plain_choice(instr, mid) and sections.get(mid) in rf.TRIAGE_SECTIONS]
+
+def unmarked(run):
+    return unmarked_findings(load_findings(run), *state(run), rf.read_sections(run))
 
 def fix_commits(repo, status, run=None):
     """Every commit made to fix a finding. status.tsv keeps one ref per
