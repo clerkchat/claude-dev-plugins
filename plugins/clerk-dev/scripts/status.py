@@ -5,6 +5,9 @@ Usage: status.py [WORKTREE] [--run LABEL] [--no-mark] [--focus all|design|implem
        status.py [WORKTREE] --setup
        status.py [WORKTREE] --map
 
+Every view but --setup starts with the feature's lifecycle strip (lifecycle.py)
+as its first line, when the worktree has a feature.
+
 --focus design prints whether the feature is ready to build: readiness per
 piece of the overview's plan (brief, design check, settle-first questions,
 Baseline, how far built), each area's decisions and design, open questions by
@@ -81,7 +84,7 @@ import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
 from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, section, table_rows, this_repo, worktrees
 from ledgers import builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
-import ids, paths
+import ids, lifecycle, paths
 import run_files as rf
 
 sf = load_script("stale-findings.py")
@@ -95,7 +98,9 @@ def plural(x):
     n = x if isinstance(x, int) else len(x)
     return "" if n == 1 else "s"
 
-def emit(wt, text):
+def emit(wt, text, strip=""):
+    text = "\n".join(x for x in (strip, text) if x)
+    if not text: return
     try: text = load_script("records.py").gloss(wt, text)
     except SystemExit: pass
     print(text)
@@ -1035,7 +1040,7 @@ def next_lines(steps, empty=None):
     if steps: return ["", "**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)]
     return ["", f"**Next:** {empty}"] if empty else []
 
-def emit_view(wt, out): emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out)))
+def emit_view(wt, out, strip): emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out)), strip)
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1056,9 +1061,9 @@ def main():
     fresh = not have_run and unbuilt(wt)
     rows = workspace_rows(wt)
     mine = read_build(wt)
+    strip = "" if a.setup else lifecycle.strip(wt, a.run)
     if a.map:
-        lines = map_lines(wt, rows, mine, builder_logs(wt, rows))
-        if lines: emit(wt, "\n".join(lines))
+        emit(wt, "\n".join(map_lines(wt, rows, mine, builder_logs(wt, rows))), strip)
         return
     gaps = setup_gaps(wt, rows, mine.entries)
     if a.setup:
@@ -1071,12 +1076,12 @@ def main():
     if fresh and a.focus == "all": out += purpose_lead(wt)
     if a.focus == "blockers":
         out += next_lines(blockers_view(wt, out, [mine] + theirs, run, have_run))
-        emit_view(wt, out); return
+        emit_view(wt, out, strip); return
     if a.focus == "design" or a.area:
         logs = [mine] + theirs
         steps = area_view(wt, out, a.area, logs) if a.area else design_view(wt, out, logs)
         out += next_lines(list(dict.fromkeys(steps)), "nothing pending.")
-        emit_view(wt, out); return
+        emit_view(wt, out, strip); return
 
     review, steps = review_section(wt, run, have_run, head, out)
     reader = bl.Reader(wt)
@@ -1090,7 +1095,7 @@ def main():
         steps = implementation_view(wt, rows, out, review.unreviewed, pass_steps, passes, mine, theirs)
         out += notes
         out += next_lines(steps, "nothing pending in the building.")
-        emit_view(wt, out); return
+        emit_view(wt, out, strip); return
     out += notes
     if a.focus == "all":
         bfirst, blater, _ = build_block(wt, out, review.unreviewed, mine, theirs)
@@ -1099,7 +1104,7 @@ def main():
         steps = bfirst + pass_steps + first + steps + blater + later
     first, later = findings_section(wt, run, review, open_items, head, out) if have_run else ([], [])
     out += next_lines(first + steps + later, "start the work the Purpose describes; ask for it, and it goes through building." if fresh else "nothing pending.")
-    emit(wt, "\n".join(out))
+    emit(wt, "\n".join(out), strip)
 
 if __name__ == "__main__":
     main()
