@@ -106,6 +106,8 @@ def this_repo(wt, repos):
     common = common_dir(wt)
     return os.path.basename(os.path.dirname(common) if common else real)
 
+def branch_name(wt): return git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+
 def origin_head(wt): return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD").removeprefix("origin/")
 
 def remote_main(wt):

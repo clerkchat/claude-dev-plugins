@@ -19,7 +19,7 @@ Never fetches, writes nothing, and always exits 0: a missing piece is
 printed as missing rather than failing the call.
 """
 import argparse, os, re, subprocess
-from records import git, load_script
+from records import branch_name, git, load_script
 from ledgers import workspace_rows
 import paths
 import run_files as rf
@@ -60,7 +60,7 @@ def block(path, log_n):
     if not wt:
         return [f"## {path}", "", "Not a git worktree (or the path does not exist).", ""]
     rows = workspace_rows(wt)
-    branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+    branch = branch_name(wt)
     head = git(wt, "rev-parse", "HEAD")
     rec = load_script("records.py")
     common = rec.common_dir(wt)

@@ -79,8 +79,8 @@ here and no other worktrees. The default view shows the same map first.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
-from ledgers import branch_name, builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
+from ledgers import builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
 import ids, paths
 import run_files as rf
 

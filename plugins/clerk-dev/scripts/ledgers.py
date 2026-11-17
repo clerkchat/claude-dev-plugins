@@ -1,10 +1,10 @@
 import os
 from typing import NamedTuple
-from records import git, load_script, this_repo, worktrees
+from records import branch_name, hub, load_script, this_repo, workspace, worktrees
 import paths
 
 def workspace_rows(wt):
-    return {n: os.path.realpath(os.path.expanduser(p)) for n, p in load_script("records.py").workspace(wt)[1].items()}
+    return {n: os.path.realpath(os.path.expanduser(p)) for n, p in workspace(wt)[1].items()}
 
 def related_worktrees(wt, rows):
     real = os.path.realpath(wt)
@@ -14,20 +14,17 @@ def builders(wt, rows):
     """(name, path) of the other worktrees building this feature: the
     workspace's rows, and any worktree of this repository whose workspace
     file names this worktree's hub."""
-    rc = load_script("records.py")
-    try: hub = os.path.realpath(rc.hub(wt))
-    except SystemExit: hub = ""
+    try: mine = os.path.realpath(hub(wt))
+    except SystemExit: mine = ""
     out = list(related_worktrees(wt, rows))
     seen = {os.path.realpath(p) for _, p in out} | {os.path.realpath(wt)}
     for p in (w.path for w in worktrees(wt)):
         if p in seen or not os.path.isdir(p): continue
-        try: theirs = os.path.realpath(rc.hub(p))
+        try: theirs = os.path.realpath(hub(p))
         except SystemExit: continue
-        if hub and theirs == hub and p != hub:
+        if mine and theirs == mine and p != mine:
             out.append((f"{this_repo(p, {})} ({os.path.basename(p)})", p)); seen.add(p)
     return out
-
-def branch_name(wt): return git(wt, "rev-parse", "--abbrev-ref", "HEAD")
 
 class BuildLog(NamedTuple):
     name: str

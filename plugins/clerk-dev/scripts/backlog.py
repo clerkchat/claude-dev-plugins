@@ -34,7 +34,7 @@ class Store(NamedTuple):
 def backlog_dir(wt): return os.path.join(records.repo_dir(wt), "backlog") if records.common_dir(wt) else ""
 
 def branch_of(wt):
-    b = records.git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+    b = records.branch_name(wt)
     return "" if b == DETACHED else b
 
 def store_of(wt, name): return Store(name, os.path.abspath(wt), backlog_dir(wt))
@@ -239,7 +239,7 @@ def add(wt, a):
     store = target_store(wt, a, own, scope)
     meta = {"kind": a.kind, "title": title_of(a), "status": OPEN_STATUS if a.kind == IDEA else OWED, "scope": scope,
             "repos": ", ".join(r.strip() for r in (a.repos or "").split(",") if r.strip()), "area": records.slug(a.area) if a.area else "",
-            "repo": own.name, "branch": records.git(wt, "rev-parse", "--abbrev-ref", "HEAD"), "date": datetime.date.today().isoformat(), "from": a.src or DEFAULT_FROM,
+            "repo": own.name, "branch": records.branch_name(wt), "date": datetime.date.today().isoformat(), "from": a.src or DEFAULT_FROM,
             **{k: getattr(a, k) or "" for k in OWN_ARGS[CLEANUP] + OWN_ARGS[FOLLOWUP]}}
     iid, _ = create(store, meta, body_text(a))
     return qualify(store, own, iid)
