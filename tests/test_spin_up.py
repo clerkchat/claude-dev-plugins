@@ -327,6 +327,12 @@ class AnOwedItemScopedToABranchThatStillExists(SpinUpCase):
             self.assertEqual(spin_up.open_item(self.api.path, "BL-1").live_branch, "feat/z")
 
 
+class AnOwedItemScopedToTheMainBranch(SpinUpCase):
+    def test_is_not_reported_as_moved(self):
+        add_followup(self.api.path, "Handle exportId", "--scope", "main", env=self.env)
+        self.assertNotIn("moved from", self.create("feat/x", "BL-1"))
+
+
 class WhenItsBranchIsGone(WhenTheItemIsInProgress):
     def setUp(self):
         super().setUp()
