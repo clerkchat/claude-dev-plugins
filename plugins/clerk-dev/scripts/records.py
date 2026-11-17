@@ -269,6 +269,11 @@ def checks(h):
 
 def open_check_items(h, name): return items_mod().not_done(items_mod().read(check_path(h, name)))
 
+def open_questions(h, name):
+    qs = open_check_items(h, name)
+    first = items_mod().DESIGN_WEIGHTS[0]
+    return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith(first)]
+
 def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
 
 def check_order(f):

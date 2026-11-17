@@ -79,7 +79,7 @@ here and no other worktrees. The default view shows the same map first.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, section, table_rows, this_repo, worktrees
 from ledgers import builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
 import ids, paths
 import run_files as rf
@@ -314,10 +314,6 @@ def relink_lines(wt, log):
     if bd.linked(log.entries) and bd.merged(wt): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
     return lines, steps
 
-def open_questions(h, c):
-    qs = load_script("records.py").open_check_items(h, c["name"])
-    return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith("settle-first")]
-
 def is_design_check(c): return c["kind"] == DESIGN_CHECK
 
 def stopped_question(e, default=""): return e["multi"]["Question"][-1] if e["multi"]["Question"] else default
@@ -400,7 +396,7 @@ def feature_block(wt, rows, out):
     settle, open_q = [], 0
     for c in rc.checks(h):
         if not c["open"]: continue
-        qs, sf_ = open_questions(h, c)
+        qs, sf_ = open_questions(h, c["name"])
         if is_design_check(c): open_q += len(qs)
         ar = next((r.get("area") for r in recs if c["records"] and r["id"] == c["records"][0] and r.get("area")), "")
         out.append(f"- {OPEN_ITEMS[c['kind']]} open in {c['name']}{' (' + ar + ')' if ar else ''}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
@@ -567,7 +563,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     settle = []
     for c in rc.checks(h) if h else []:
         if not c["open"] or not (set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas): continue
-        qs, sfq = open_questions(h, c)
+        qs, sfq = open_questions(h, c["name"])
         out.append(f"- {OPEN_ITEMS[c['kind']].capitalize()} open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
         if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
     for r in specs:
@@ -629,7 +625,7 @@ def spec_facts(h, r, cs):
     mine = [c for c in cs if is_design_check(c) and r["id"] in c["records"]]
     settle = []
     for c in mine:
-        settle += [ids.in_check(c["name"], q) for q in open_questions(h, c)[1]]
+        settle += [ids.in_check(c["name"], q) for q in open_questions(h, c["name"])[1]]
     base = body_section(body, "Baseline")
     items = len(brief_open_items(body))
     missing = ([] if mine else ["no design check"]) + ([f"{len(settle)} settle-first open"] if settle else []) + ([] if base else ["no Baseline"])
@@ -704,7 +700,7 @@ def design_view(wt, out, logs):
     qlines, other = [], 0
     for c in cs:
         if not c["open"]: continue
-        qs, sfq = open_questions(h, c)
+        qs, sfq = open_questions(h, c["name"])
         if is_design_check(c): other += len(qs) - len(sfq)
         status_of = {r["id"]: r for r in recs}
         gone = [x for x in c["records"] if status_of.get(x, {}).get("status") == "superseded"]
@@ -771,7 +767,7 @@ def area_view(wt, out, name, logs):
     qs_lines = []
     for c in rc.checks(h):
         if not c["open"] or not set(c["records"]) & mine_ids: continue
-        qs, sfq = open_questions(h, c)
+        qs, sfq = open_questions(h, c["name"])
         qs_lines.append(f"- {c['name']}: {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else ""))
         settle += [ids.in_check(c["name"], q) for q in sfq]
     if qs_lines: out += ["", "**Open questions:**"] + qs_lines
@@ -841,7 +837,7 @@ def blockers_view(wt, out, logs, run, have_run):
     settle = []
     for c in rc.checks(h) if h else []:
         if not c["open"]: continue
-        sfq = open_questions(h, c)[1]
+        sfq = open_questions(h, c["name"])[1]
         if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
     open_items = bl.owed_followups(wt)
     hidden = detached(wt)
