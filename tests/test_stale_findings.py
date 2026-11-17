@@ -122,6 +122,14 @@ class OpenCountTests(RunCase):
         self.assertEqual(self.open_count(), 2)
 
 
+class OpenFindingsTests(RunCase):
+    def test_names_the_open_numbered_ids_from_the_state_it_is_given(self):
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"), defect(3, "c.py"))
+        self.write_numbers({1: "fix", 2: "look"})
+        self.write_status({1: ("fixed", "abc1234")})
+        self.assertEqual(sf.open_findings(sf.load_findings(self.run_dir), *sf.state(self.run_dir)), [2])
+
+
 class UnmarkedTests(RunCase):
     def setUp(self):
         super().setUp()

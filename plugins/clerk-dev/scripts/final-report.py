@@ -87,8 +87,8 @@ def analyze(run):
         kept.append((numbers[mid], mid, title(mid), cat or "category not stated"))
     reopened = [(numbers[int(r[1])], int(r[1]), title(int(r[1]))) for r in judged
                 if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and rf.status_of(status, int(r[1])) != "fixed"]
-    open_fix = [(numbers[m], m, title(m)) for m in findings
-                if m in numbers and sections.get(m) == "fix" and sf.is_open(m, status, instr) and m not in appended]
+    open_fix = [(numbers[m], m, title(m)) for m in sf.open_findings(findings, status, instr, numbers)
+                if sections.get(m) == "fix" and m not in appended]
     counts = {}
     for m in findings:
         if m not in numbers: continue

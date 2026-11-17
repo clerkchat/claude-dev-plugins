@@ -818,8 +818,7 @@ def finding_groups(run, status, instr, numbers):
     post = post_queue(run, instr, numbers, findings, sections)
     for mid in sf.unmarked(run):
         unmarked.setdefault(sections[mid], []).append(numbers[mid])
-    for mid in findings:
-        if mid not in numbers or not sf.is_open(mid, status, instr): continue
+    for mid in sf.open_findings(findings, status, instr, numbers):
         choice, st = sf.plain_choice(instr, mid), rf.status_of(status, mid)
         sec = sections.get(mid, "")
         if sec in SECTION_NAMES: by_section.setdefault(sec, []).append(numbers[mid])
@@ -983,8 +982,9 @@ def findings_section(wt, run, review, open_items, head, out):
     except SystemExit:
         moved = []
     numbered = sum(1 for m in findings if m in numbers)
+    open_numbered = len(sf.open_findings(findings, status, instr, numbers))
     out.append("")
-    out.append(f"**Findings:** {numbered} in the report, {numbered - sf.open_count(run)} closed (fixed, won't fix, deferred, ignored).")
+    out.append(f"**Findings:** {numbered} in the report, {numbered - open_numbered} closed (fixed, won't fix, deferred, ignored).")
     for sec, nums in unmarked.items():
         nums.sort(key=int)
         out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({number_list(nums)})")
