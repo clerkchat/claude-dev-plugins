@@ -816,6 +816,8 @@ def finding_groups(run, status, instr, numbers):
     unmarked, queue, discuss, inprog, new, by_section = {}, [], [], [], [], {}
     appended = rf.read_appended(run)
     post = post_queue(run, instr, numbers, findings, sections)
+    for mid in sf.unmarked(run):
+        unmarked.setdefault(sections[mid], []).append(numbers[mid])
     for mid in findings:
         if mid not in numbers or not sf.is_open(mid, status, instr): continue
         choice, st = sf.plain_choice(instr, mid), rf.status_of(status, mid)
@@ -824,7 +826,6 @@ def finding_groups(run, status, instr, numbers):
         if st == "in-progress": inprog.append(numbers[mid])
         if choice in ("fix", "noted"): queue.append(numbers[mid])
         elif choice == "discuss": discuss.append(numbers[mid])
-        elif not choice and sec in SECTION_NAMES: unmarked.setdefault(sec, []).append(numbers[mid])
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
     return unmarked, queue, discuss, post, inprog, new, by_section
 

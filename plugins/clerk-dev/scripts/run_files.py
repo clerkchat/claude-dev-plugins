@@ -491,6 +491,8 @@ def number_rows(run):
 def read_numbers(run):
     return {mid: n for n, mid, _ in number_rows(run)}
 
+TRIAGE_SECTIONS = ("fix", "look", "existing", "debt")
+
 def read_sections(run):
     return {mid: section for _, mid, section in number_rows(run)}
 

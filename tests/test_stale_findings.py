@@ -122,5 +122,30 @@ class OpenCountTests(RunCase):
         self.assertEqual(self.open_count(), 2)
 
 
+class UnmarkedTests(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"), defect(3, "c.py"))
+        self.write_numbers({1: "fix", 2: "look", 3: "credit"})
+
+    def unmarked(self):
+        return sf.unmarked(self.run_dir)
+
+    def test_lists_open_findings_with_no_choice_in_a_triage_section(self):
+        self.assertEqual(self.unmarked(), [1, 2])
+
+    def test_leaves_out_a_finding_with_a_choice(self):
+        self.write_instructions({1: ("fix", "")})
+        self.assertEqual(self.unmarked(), [2])
+
+    def test_leaves_out_a_closed_finding(self):
+        self.write_status({2: ("fixed", "abc1234")})
+        self.assertEqual(self.unmarked(), [1])
+
+    def test_leaves_out_a_finding_in_another_section(self):
+        self.write_numbers({1: "fix", 2: "credit", 3: "credit"})
+        self.assertEqual(self.unmarked(), [1])
+
+
 if __name__ == "__main__":
     unittest.main()

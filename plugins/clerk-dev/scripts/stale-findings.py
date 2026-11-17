@@ -67,6 +67,13 @@ def open_count(run):
     status, instr, numbers = state(run)
     return sum(1 for mid in load_findings(run) if mid in numbers and is_open(mid, status, instr))
 
+def unmarked(run):
+    """Merged ids of open, numbered findings with no choice yet, in a report section to triage."""
+    status, instr, numbers = state(run)
+    sections = rf.read_sections(run)
+    return [mid for mid in load_findings(run)
+            if mid in numbers and is_open(mid, status, instr) and not plain_choice(instr, mid) and sections.get(mid) in rf.TRIAGE_SECTIONS]
+
 def fix_commits(repo, status, run=None):
     """Every commit made to fix a finding. status.tsv keeps one ref per
     finding, so a fix that took two commits (a second attempt after a partial
