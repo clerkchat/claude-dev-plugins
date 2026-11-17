@@ -109,6 +109,16 @@ def plugin_stamp():
     version = plugin_version()
     return sha or (f"v{version}" if version else "unknown")
 
+def check_label(e):
+    """The review run a checked pass names: the first part of its Check field."""
+    return (e["f"].get("Check") or "").split(";")[0].strip()
+
+def check_run(wt, e):
+    """(label, run directory) of a checked pass's review run, or None when it has no label or no merged findings."""
+    label = check_label(e)
+    run = paths.run(wt, label)
+    return (label, run) if label and os.path.exists(os.path.join(run, "merged.md")) else None
+
 def counts(check):
     """{lens: findings} from a Check field, or None when it holds no counts."""
     m = re.search(r";\s*((?:[a-z-]+ \d+(?:, )?)+)\s*(?:;|$)", check or "")

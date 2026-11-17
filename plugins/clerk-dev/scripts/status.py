@@ -216,7 +216,7 @@ def pass_word(e):
     cs = load_script("passes.py").counts(check)
     if cs is None: return "checked, " + check.split(";")[-1].strip()
     n = sum(cs.values())
-    return "checked, clean" if n == 0 else f"checked, {n} finding{plural(n)} in `{check.split(';')[0].strip()}`"
+    return "checked, clean" if n == 0 else f"checked, {n} finding{plural(n)} in `{load_script('passes.py').check_label(e)}`"
 
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
@@ -964,10 +964,8 @@ def pass_step(wt, e):
     if st == "open": return f"Finish pass {e['id']} ({e['title']}), then \"end the pass\"."
     if st == "ended" and e["f"].get("Note") != "no commits": return f"Check pass {e['id']}: \"check the pass\"."
     if st != "checked": return None
-    label = (e["f"].get("Check") or "").split(";")[0].strip()
-    prun = paths.run(wt, label)
-    if not label or not os.path.exists(os.path.join(prun, "merged.md")): return None
-    left = sf.open_count(prun)
+    left = load_script("build.py").open_findings(wt, e)
+    label = load_script("passes.py").check_label(e)
     return f"Triage pass {e['id']}'s {left} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
 
 def passes_section(wt, out):
