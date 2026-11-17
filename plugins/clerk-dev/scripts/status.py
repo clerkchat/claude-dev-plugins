@@ -88,7 +88,7 @@ sf = load_script("stale-findings.py")
 bl = load_script("backlog.py")
 not_done = load_script("items.py").not_done
 
-SECTION_NAMES = {"fix": "Fix before merging", "look": "Worth a look", "existing": "Already on main", "debt": "Cleanup and refactoring"}
+SECTION_NAMES = dict(zip(rf.TRIAGE_SECTIONS, ("Fix before merging", "Worth a look", "Already on main", "Cleanup and refactoring"), strict=True))
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
 
 def plural(x):
