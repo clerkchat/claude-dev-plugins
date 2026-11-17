@@ -17,6 +17,7 @@ WORKTREE_PATHS = {
     "pr-generated": ".clerk-dev/.ledger/pr-description.generated.md",
     "pr-body": ".clerk-dev/.ledger/pr-body.md",
     "pr-notes": ".clerk-dev/.ledger/pr-draft-notes.md",
+    "pr-posted": ".clerk-dev/.ledger/pr-posted.tsv",
     "build-log": ".clerk-dev/.ledger/build.md",
     "passes": ".clerk-dev/.ledger/passes.md",
     "deferred": ".clerk-dev/.ledger/deferred.md",

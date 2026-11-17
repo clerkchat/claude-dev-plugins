@@ -382,6 +382,9 @@ for every repository of the unit that has a draft:
    without the host, any leading `/` or `:`, and a trailing `.git`. A
    repository that already has an open pull request keeps its body; only step
    4 touches it.
+   Record each pull request created, or found open, with `python3
+   ${CLAUDE_PLUGIN_ROOT}/scripts/pr-posted.py record <worktree> --number <number>
+   --url <url>`, so the lifecycle strip can say it was posted.
 4. **Link.** Once every pull request exists, for each one: read its body with
    `gh pr view --json body`, since the user may have edited it on GitHub;
    replace each sibling's branch name in the sibling list with its number and

@@ -33,6 +33,7 @@ def pr_description(wt): return os.path.join(clerk_dev(wt), "pr-description.md")
 def pr_generated(wt): return os.path.join(ledger(wt), "pr-description.generated.md")
 def pr_body(wt): return os.path.join(ledger(wt), "pr-body.md")
 def pr_notes(wt): return os.path.join(ledger(wt), "pr-draft-notes.md")
+def pr_posted(wt): return os.path.join(ledger(wt), "pr-posted.tsv")
 def build_log(wt): return os.path.join(ledger(wt), "build.md")
 def passes(wt): return os.path.join(ledger(wt), "passes.md")
 def deferred(wt): return os.path.join(ledger(wt), "deferred.md")
@@ -64,7 +65,7 @@ def ensure(wt):
     with open(exf, "a") as fh: fh.write(f"{CLERK_DEV}/\n")
 
 PRINTABLE = {f.__name__.replace("_", "-"): f for f in (
-    clerk_dev, ledger, runs_dir, run, latest, review_link, notes, pr_description, pr_generated, pr_body, pr_notes,
+    clerk_dev, ledger, runs_dir, run, latest, review_link, notes, pr_description, pr_generated, pr_body, pr_notes, pr_posted,
     build_log, passes, deferred, workspace, seen_backlog, feature_dir, feature_meta, records_dir, checks_dir, feature_md, overview)}
 
 def main(argv):
