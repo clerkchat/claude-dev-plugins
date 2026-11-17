@@ -80,6 +80,7 @@ here and no other worktrees. The default view shows the same map first.
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
 from records import DESIGN_CHECK, OPEN_ITEMS, body_section, brief_open_items, git, load_script, section, table_rows, this_repo, worktrees
+from ledgers import branch_name, builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
 import ids, paths
 import run_files as rf
 
@@ -104,9 +105,6 @@ def short(text, n=90):
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 def origin_repo(it): return re.split(r"[ @]", it.get("origin", ""))[0]
-
-def workspace_rows(wt):
-    return {n: os.path.realpath(os.path.expanduser(p)) for n, p in load_script("records.py").workspace(wt)[1].items()}
 
 def has_feature(p):
     return os.path.exists(paths.feature_meta(p))
@@ -208,30 +206,6 @@ def rerouted_lines(wt):
     in_notes = sum(1 for l in rf.read_text(paths.notes(wt)).splitlines() if REROUTED_RE.match(l))
     where = rerouted + ([f"{in_notes} in the branch notes"] if in_notes else [])
     return ["", f"**Rerouted:** {len(rerouted) + in_notes}: {', '.join(where)}."] if where else []
-
-def read_passes(wt):
-    """The pass log's entries, or None with the reason when it cannot be read."""
-    p = paths.passes(wt)
-    if not os.path.exists(p): return [], None
-    try: return load_script("passes.py").read(p), None
-    except SystemExit as e: return [], str(e)
-
-class BuildLog(NamedTuple):
-    name: str
-    path: str
-    entries: list
-    err: str | None
-    relinked: list
-    unlinked: list
-
-def read_build(wt, name=""):
-    try:
-        found = load_script("build.py").log(wt)
-        return BuildLog(name, wt, found.entries, None, found.relinked, found.unlinked)
-    except SystemExit as e: return BuildLog(name, wt, [], str(e), [], [])
-
-def builder_logs(wt, rows):
-    return [read_build(p, name) for name, p in builders(wt, rows)]
 
 def pass_word(e):
     """A pass's state in a few words: open, ended, or its check's result."""
@@ -455,23 +429,6 @@ def feature_block(wt, rows, out):
     if any(s.startswith("The overview") for s in rc.suggestions(h)):
         later.append("Refresh the feature overview: \"refresh the overview\".")
     return first, later
-
-def builders(wt, rows):
-    """(name, path) of the other worktrees building this feature: the
-    workspace's rows, and any worktree of this repository whose workspace
-    file names this worktree's hub."""
-    rc = load_script("records.py")
-    try: hub = os.path.realpath(rc.hub(wt))
-    except SystemExit: hub = ""
-    out = list(related_worktrees(wt, rows))
-    seen = {os.path.realpath(p) for _, p in out} | {os.path.realpath(wt)}
-    for p in (w.path for w in worktrees(wt)):
-        if p in seen or not os.path.isdir(p): continue
-        try: theirs = os.path.realpath(rc.hub(p))
-        except SystemExit: continue
-        if hub and theirs == hub and p != hub:
-            out.append((f"{this_repo(p, {})} ({os.path.basename(p)})", p)); seen.add(p)
-    return out
 
 class WorkItem(NamedTuple):
     words: str
@@ -909,16 +866,6 @@ def blockers_view(wt, out, logs, run, have_run):
     if not steps and not hidden: out += ["", "Nothing blocking."]
     return steps
 
-def final_pass_stands(run):
-    report, target = os.path.join(run, "final-review-report.md"), os.path.join(run, "target.txt")
-    if not os.path.exists(report): return False
-    with open(report, encoding="utf-8") as f: passed = f.readline().strip() == "# Final review: PASSED"
-    return passed and os.path.getmtime(report) >= os.path.getmtime(target)
-
-def related_worktrees(wt, rows):
-    real = os.path.realpath(wt)
-    return [(name, path) for name, path in rows.items() if path != real and os.path.isdir(path)]
-
 class Review(NamedTuple):
     status: dict
     instr: dict
@@ -1020,9 +967,8 @@ def pass_step(wt, e):
     label = (e["f"].get("Check") or "").split(";")[0].strip()
     prun = paths.run(wt, label)
     if not label or not os.path.exists(os.path.join(prun, "merged.md")): return None
-    pst, pin, pnum = sf.state(prun)
-    left = [m for m in sf.load_findings(prun) if m in pnum and sf.is_open(m, pst, pin)]
-    return f"Triage pass {e['id']}'s {len(left)} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
+    left = sf.open_count(prun)
+    return f"Triage pass {e['id']}'s {left} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
 
 def passes_section(wt, out):
     passes, perr = read_passes(wt)
@@ -1041,9 +987,9 @@ def findings_section(wt, run, review, open_items, head, out):
         _, moved = sf.candidates(run, wt)
     except SystemExit:
         moved = []
-    closed = sum(1 for m in findings if m in numbers and not sf.is_open(m, status, instr))
+    numbered = sum(1 for m in findings if m in numbers)
     out.append("")
-    out.append(f"**Findings:** {sum(1 for m in findings if m in numbers)} in the report, {closed} closed (fixed, won't fix, deferred, ignored).")
+    out.append(f"**Findings:** {numbered} in the report, {numbered - sf.open_count(run)} closed (fixed, won't fix, deferred, ignored).")
     for sec, nums in unmarked.items():
         nums.sort(key=int)
         out.append(f"- unmarked in {SECTION_NAMES[sec]}: {len(nums)} ({number_list(nums)})")
@@ -1093,8 +1039,6 @@ def purpose_lead(wt):
 def next_lines(steps, empty=None):
     if steps: return ["", "**Next:**"] + [f"{n}. {s}" for n, s in enumerate(steps, 1)]
     return ["", f"**Next:** {empty}"] if empty else []
-
-def branch_name(wt): return git(wt, "rev-parse", "--abbrev-ref", "HEAD")
 
 def emit_view(wt, out): emit(wt, re.sub(r"\n{3,}", "\n\n", "\n".join(out)))
 

@@ -392,9 +392,7 @@ def open_findings(wt, e):
     label = (e["f"].get("Check") or "").split(";")[0].strip()
     run = paths.run(wt, label)
     if not label or not os.path.exists(os.path.join(run, "merged.md")): return None
-    sf = load_script("stale-findings.py")
-    st, ins, num = sf.state(run)
-    return sum(1 for m in sf.load_findings(run) if m in num and sf.is_open(m, st, ins))
+    return load_script("stale-findings.py").open_count(run)
 
 class MilestoneView(NamedTuple):
     rows: list

@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, init_repo, records, run_ok, write_file
+from helpers import RunCase, add_backlog_item, defect, init_repo, records, run_ok, write_file
 import paths
 
 sf = records.load_script("stale-findings.py")
@@ -90,6 +90,36 @@ class DeltaTests(FollowUpCommitCase):
 
     def test_leaves_other_commits_unreviewed(self):
         self.assertEqual(self.delta_kinds()[self.full(self.later)], "unreviewed")
+
+
+class OpenCountTests(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"))
+        self.write_numbers({1: "fix", 2: "look"})
+
+    def open_count(self):
+        return sf.open_count(self.run_dir)
+
+    def test_counts_every_numbered_finding_left_unmarked(self):
+        self.assertEqual(self.open_count(), 2)
+
+    def test_leaves_out_a_finding_whose_status_closes_it(self):
+        self.write_status({1: ("fixed", "abc1234")})
+        self.assertEqual(self.open_count(), 1)
+
+    def test_leaves_out_a_finding_whose_instruction_closes_it(self):
+        self.write_instructions({2: ("defer", "")})
+        self.assertEqual(self.open_count(), 1)
+
+    def test_leaves_out_a_finding_with_no_number(self):
+        self.write_numbers({1: "fix"})
+        self.assertEqual(self.open_count(), 1)
+
+    def test_leaves_out_credits(self):
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"), defect(3, "c.py", lens="credit"))
+        self.write_numbers({1: "fix", 2: "look", 3: "credit"})
+        self.assertEqual(self.open_count(), 2)
 
 
 if __name__ == "__main__":

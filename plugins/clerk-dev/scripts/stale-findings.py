@@ -63,6 +63,10 @@ def plain_choice(instr, mid):
 def is_open(mid, status, instr):
     return rf.status_of(status, mid) not in rf.CLOSED_STATUSES and plain_choice(instr, mid) not in CLOSED_CHOICE
 
+def open_count(run):
+    status, instr, numbers = state(run)
+    return sum(1 for mid in load_findings(run) if mid in numbers and is_open(mid, status, instr))
+
 def fix_commits(repo, status, run=None):
     """Every commit made to fix a finding. status.tsv keeps one ref per
     finding, so a fix that took two commits (a second attempt after a partial

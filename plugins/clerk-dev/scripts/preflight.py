@@ -19,12 +19,10 @@ Never fetches, writes nothing, and always exits 0: a missing piece is
 printed as missing rather than failing the call.
 """
 import argparse, os, re, subprocess
-from records import load_script
+from records import git, load_script
+from ledgers import workspace_rows
 import paths
 import run_files as rf
-
-rs = load_script("status.py")
-git = rs.git
 
 def git_raw(repo, *args):
     """Like git(), but keeps leading whitespace, which aligns `--stat` and `status --short`."""
@@ -61,7 +59,7 @@ def block(path, log_n):
     wt = git(path, "rev-parse", "--show-toplevel")
     if not wt:
         return [f"## {path}", "", "Not a git worktree (or the path does not exist).", ""]
-    rows = rs.workspace_rows(wt)
+    rows = workspace_rows(wt)
     branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
     head = git(wt, "rev-parse", "HEAD")
     rec = load_script("records.py")
