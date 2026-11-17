@@ -678,7 +678,7 @@ def suggestions(h):
     return out
 
 def built_specs(rows):
-    return {r.spec for r in rows if (r.items or r.dropped) and all(r.state.get(n, ("",))[0] == "done" for n in r.items)}
+    return {r.spec for r in rows if (r.items or r.dropped) and r.done >= set(r.items)}
 
 class Built(NamedTuple):
     specs: set

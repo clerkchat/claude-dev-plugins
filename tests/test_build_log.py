@@ -13,6 +13,7 @@ from helpers import (
     write_record,
 )
 import paths
+import build
 
 
 def block_keys(repo, entry_id):
@@ -475,6 +476,13 @@ class NoteWordingTests(TempCase):
     def write_hub(self, repo):
         write_feature_md(repo.path)
         write_record(repo.path, "R1", "decision", "Decision one", body="## Decision\n\nOne.")
+
+
+class SpecProgressDoneTests(unittest.TestCase):
+    def test_done_is_the_requirements_whose_state_is_done(self):
+        state = {1: ("done", "", "B1"), 2: ("partial", "", "B2"), 3: ("done", "", "B3")}
+        row = build.SpecProgress("BRIEF-1", {}, {1: "a", 2: "b", 3: "c"}, state, [], {})
+        self.assertEqual(row.done, {1, 3})
 
 
 if __name__ == "__main__":

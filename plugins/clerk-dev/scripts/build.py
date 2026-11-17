@@ -222,6 +222,9 @@ class SpecProgress(NamedTuple):
     handoffs: list
     dropped: dict
 
+    @property
+    def done(self): return {n for n, (st, _, _) in self.state.items() if st == "done"}
+
 def hub_records(wt):
     rc = load_script("records.py")
     return rc.records(rc.hub(wt))
@@ -270,10 +273,11 @@ def requirement_states(mine, items):
 
 def progress_lines(rows):
     lines = []
-    for s, r, items, state, mine, dropped in rows:
+    for row in rows:
+        s, r, items, state, mine, dropped = row
+        done = row.done
         title = r.get("title", "") if r else "(not found in the hub)"
         total = len(items)
-        done = [n for n, (st, _, _) in state.items() if st == "done"]
         partial = [n for n, (st, _, _) in state.items() if st == "partial"]
         live = [e for e in mine if e["f"].get("Status") in OPEN]
         busy = {n for e in live for n, _, _ in reqs_of(e)}
@@ -306,12 +310,12 @@ def label(text, limit=72):
 
 def checklist_lines(rows):
     out = []
-    for s, r, items, state, mine, gone in rows:
+    for row in rows:
+        s, r, items, state, mine, gone = row
         title = r.get("title", "") if r else "(not found in the hub)"
         live = [e for e in mine if e["f"].get("Status") in OPEN]
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
-        done = sum(1 for v in state.values() if v[0] == "done")
-        out.append(f"{s} {title}: {done} of {len(items)} done")
+        out.append(f"{s} {title}: {len(row.done)} of {len(items)} done")
         for n in sorted(set(items) | set(gone)):
             if n in gone:
                 e, text = gone[n]
