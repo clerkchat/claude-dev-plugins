@@ -14,7 +14,7 @@ worktree building the feature; review and the pull request are read from the
 hub worktree, --run naming the hub's review run in place of latest (a
 worktree that is not the hub reads the hub's latest). Open design
 questions ride after the last segment once a later stage has begun. A build,
-pass, review, approvals, or landing check that cannot be read shows as
+pass, review, or approvals check that cannot be read shows as
 "build ?", "passes ?", "review ?", or "PR ?".
 
 Prints nothing when the worktree has no hub with a started feature. It reads
@@ -74,7 +74,11 @@ def build_segment(logs):
         current = [m for log in logs for m in under_way(log)]
     except SystemExit: return "build ?"
     entries = [e for log in logs for e in bd.handoffs(log.entries)]
-    done, counted = sum(len(r.done & set(r.items)) for r in rows), sum(len(r.items) for r in rows)
+    items, built = {}, {}
+    for r in rows:
+        items[r.spec] = set(r.items)
+        built[r.spec] = built.get(r.spec, set()) | r.built
+    done, counted = sum(map(len, built.values())), sum(map(len, items.values()))
     stopped = sum(1 for e in entries if e["f"].get("Status") == "stopped")
     busy = any(e["f"].get("Status") in bd.OPEN for e in entries)
     words = " ".join(x for x in (f"{done}/{counted}" if counted else "", f"(milestone {milestone_name(current[-1])})" if current else "") if x)
@@ -119,14 +123,13 @@ def review_text(run):
     stalled = ", not converging" if latest and latest >= before else ""
     return segment("review", not latest, f"round {len(chain)}", f"{before} → {left}{stalled}")
 
-def pr_segment(h, run, hub_log):
+def pr_segment(h, run):
     drafted = os.path.exists(paths.pr_description(h))
     posted = pr_posted.read(h) is not None
     try:
         approved = bool(run and rf.read_approvals(run))
-        landed = bd.landed(h, hub_log.entries, posted)
-    except (OSError, ValueError, SystemExit): return "PR ?"
-    states = (("merged", landed), ("approved", approved), ("posted", posted), ("drafted", drafted))
+    except (OSError, ValueError): return "PR ?"
+    states = (("approved", approved), ("posted", posted), ("drafted", drafted))
     return next((f"PR {word}" for word, on in states if on), None)
 
 def strip(wt, run=None):
@@ -136,8 +139,7 @@ def strip(wt, run=None):
     if not started(h): return ""
     logs = feature_logs(wt, h)
     review = rf.review_run(h, run if same_path(wt, h) else None)
-    hub_log = next(log for log in logs if same_path(log.path, h))
-    later = [s for s in (build_segment(logs), passes_segment(logs), review_segment(review), pr_segment(h, review, hub_log)) if s]
+    later = [s for s in (build_segment(logs), passes_segment(logs), review_segment(review), pr_segment(h, review)) if s]
     asked, settle = design_questions(h)
     design = []
     if has_design(h):

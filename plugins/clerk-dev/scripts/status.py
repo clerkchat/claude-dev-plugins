@@ -492,7 +492,7 @@ def worktree_progress(log, kind, marked):
     try: rows = bd.progress(log.path, log.entries) if log.entries else []
     except SystemExit: return "build log unreadable"
     total = sum(len(r.items) for r in rows)
-    return f"{sum(len(r.done) for r in rows)} of {total} requirements done" if total else "nothing built yet"
+    return f"{sum(len(r.built) for r in rows)} of {total} requirements done" if total else "nothing built yet"
 
 def counts_line(wt):
     owed, parked = len(bl.owed_followups(wt)), len(bl.feature_ideas(wt))
@@ -665,7 +665,7 @@ def design_view(wt, out, logs):
     for log in logs:
         try:
             for row in bd.progress(log.path, log.entries):
-                built[row.spec] = f"{len(row.done)} of {len(row.items)} built"
+                built[row.spec] = f"{len(row.built)} of {len(row.items)} built"
         except SystemExit: pass
     steps, settle_all, nospec = [], [], []
     out += ["", "**Readiness:**" + ("" if ov["plan"] else " (no Plan table in the overview; by brief)")]

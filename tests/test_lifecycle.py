@@ -1,6 +1,5 @@
 import os
 import unittest
-from unittest import mock
 
 from helpers import RunCase, TempCase, init_repo, records, run_files, run_ok, run_script, write_feature_md, write_file, write_record
 import lifecycle
@@ -208,6 +207,12 @@ class TwoWorktreesTests(LifecycleCase):
         self.web.build_ok("done", "BUILD-1", "--commit", self.web.commit("feat: render it"))
         self.assertEqual(self.strip(), "test · design ✓ · build 2/4")
 
+    def test_a_brief_logged_in_both_worktrees_is_counted_once(self):
+        self.landed("1")
+        self.web.build_ok("add", "Wire it too", "--brief", "R5", "--reqs", "1,2")
+        self.web.build_ok("done", "BUILD-1", "--commit", self.web.commit("feat: wire it too"))
+        self.assertEqual(self.strip(), "test · design ✓ · build ✓ 2/2")
+
     def test_an_unreadable_build_log_in_the_other_worktree_shows_a_question_mark(self):
         write_file(paths.build_log(self.web.path), "- junk\n")
         self.assertEqual(self.strip(), "test · design ✓ · build ?")
@@ -343,16 +348,6 @@ class PullRequestTests(LifecycleCase):
     def test_a_posted_pull_request_outranks_a_draft(self):
         pr_posted.record(self.repo.path, 42, "https://github.com/clerk/api/pull/42")
         self.assertEqual(self.strip(), "test · design ✓ · PR posted")
-
-    def test_a_landing_check_that_cannot_be_made_shows_a_question_mark(self):
-        with mock.patch.object(lifecycle.bd, "landed", side_effect=SystemExit("not a git repository")):
-            self.assertEqual(self.strip(), "test · design ✓ · PR ?")
-
-    def test_a_branch_merged_into_the_remote_main_says_merged(self):
-        self.landed("1,2")
-        self.repo.squash_merge()
-        self.repo.reset_to_origin()
-        self.assertEqual(self.strip(), "test · design ✓ · build ✓ 2/2 · PR merged")
 
 
 class StatusFirstLineTests(LifecycleCase):

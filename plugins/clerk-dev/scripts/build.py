@@ -225,6 +225,9 @@ class SpecProgress(NamedTuple):
     @property
     def done(self): return {n for n, (st, _, _) in self.state.items() if st == "done"}
 
+    @property
+    def built(self): return self.done & set(self.items)
+
 def hub_records(wt):
     rc = load_script("records.py")
     return rc.records(rc.hub(wt))
@@ -275,14 +278,13 @@ def progress_lines(rows):
     lines = []
     for row in rows:
         s, r, items, state, mine, dropped = row
-        done = row.done
         title = r.get("title", "") if r else "(not found in the hub)"
         total = len(items)
         partial = [n for n, (st, _, _) in state.items() if st == "partial"]
         live = [e for e in mine if e["f"].get("Status") in OPEN]
         busy = {n for e in live for n, _, _ in reqs_of(e)}
         left = [n for n in sorted(items) if n not in state and n not in busy]
-        head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the brief lists none)"
+        head = f"{s} {title}: {len(row.built)} of {total} requirements done" if total else f"{s} {title}: {len(row.done)} requirements done (the brief lists none)"
         if partial: head += f", {len(partial)} partial ({', '.join(ids.ref(s, n) for n in sorted(partial))})"
         if dropped: head += f", {len(dropped)} dropped"
         lines.append(head)
@@ -315,7 +317,7 @@ def checklist_lines(rows):
         title = r.get("title", "") if r else "(not found in the hub)"
         live = [e for e in mine if e["f"].get("Status") in OPEN]
         busy = {n: e for e in live for n, _, _ in reqs_of(e)}
-        out.append(f"{s} {title}: {len(row.done)} of {len(items)} done")
+        out.append(f"{s} {title}: {len(row.built)} of {len(items)} done")
         for n in sorted(set(items) | set(gone)):
             if n in gone:
                 e, text = gone[n]
