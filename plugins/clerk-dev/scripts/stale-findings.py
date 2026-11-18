@@ -67,6 +67,9 @@ def open_findings(findings, status, instr, numbers):
     """Merged ids of the numbered findings that are still open, in findings order."""
     return [mid for mid in findings if mid in numbers and is_open(mid, status, instr)]
 
+def open_by_number(findings, status, instr, numbers):
+    return sorted(open_findings(findings, status, instr, numbers), key=lambda m: int(numbers[m]))
+
 def open_count(run):
     return len(open_findings(load_findings(run), *state(run)))
 
@@ -192,7 +195,7 @@ def candidates(run, repo, queued=False):
     labels = followup_labels(repo)
     through = through_map(run)
     rows = []
-    for mid in sorted(open_findings(findings, status, instr, numbers), key=lambda m: int(numbers[m])):
+    for mid in open_by_number(findings, status, instr, numbers):
         choice = instr.get(mid, "")
         if queued and plain_choice(instr, mid) not in QUEUED_CHOICE: continue
         f = str(findings[mid].get("file", "")).strip()
@@ -218,7 +221,7 @@ def cmd_open_in(a, run, repo):
     status, instr, numbers = state(run)
     wanted = {os.path.normpath(p) for p in a.open_in}
     print("number\tmerged_id\tinstruction\tfile\tline\tclaim")
-    for mid in sorted(open_findings(findings, status, instr, numbers), key=lambda m: int(numbers[m])):
+    for mid in open_by_number(findings, status, instr, numbers):
         e = findings[mid]
         f = os.path.normpath(str(e.get("file", "")).strip() or ".")
         if f not in wanted: continue

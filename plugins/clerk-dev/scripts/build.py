@@ -393,11 +393,6 @@ def pass_states(wt, spec):
         out[e["title"].split(" on ")[0].strip()] = e
     return out
 
-def open_findings(wt, e):
-    """Open findings in a checked pass's run, or None when it cannot tell."""
-    found = load_script("passes.py").check_run(wt, e)
-    return load_script("stale-findings.py").open_count(found[1]) if found else None
-
 class MilestoneView(NamedTuple):
     rows: list
     next: str | None
@@ -429,10 +424,9 @@ def milestone_view(wt, m):
             waiting.append((f, f"check pass {e['id']} ({f})"))
         else:
             word = f"{e['id']} " + ("no changes" if e["f"].get("Note") == "no commits" and st == "ended" else "checked")
-            n = open_findings(wt, e) if st == "checked" else 0
+            label, n = (load_script("passes.py").check_findings(wt, e) or ("", 0)) if st == "checked" else ("", 0)
             if n: word += f", {plural(n, 'open finding')}"
             if n and f in req:
-                label = load_script("passes.py").check_label(e)
                 waiting.append((f, f"triage the {f} pass's {plural(n, 'open finding')} (required): \"work the queue {label}\""))
             rows.append((f, word, f in req))
     stage, nxt = waiting[0] if waiting else (None, None)

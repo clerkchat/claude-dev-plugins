@@ -27,14 +27,15 @@ import ids, paths
 import run_files as rf
 
 bd = load_script("build.py")
+pl = load_script("passes.py")
 sf = load_script("stale-findings.py")
 pr_posted = load_script("pr-posted.py")
 
 SEP = " · "
 
-def segment(name, done, words="", *after):
+def segment(name, done, words="", after=""):
     head = " ".join(x for x in (name, "✓" if done else "", words) if x)
-    return SEP.join([head, *(a for a in after if a)])
+    return SEP.join(x for x in (head, after) if x)
 
 def questions_open(asked, settle, word):
     return f"{plural(asked, word)} open" + (f" ({settle} settle-first)" if settle else "")
@@ -99,15 +100,8 @@ def passes_segment(logs):
     if unreadable: return "passes ?"
     if not counted: return None
     checked = [(wt, e) for wt, e in counted if e["f"].get("Status") == "checked"]
-    left = sum(bd.open_findings(wt, e) or 0 for wt, e in checked)
+    left = sum((pl.check_findings(wt, e) or ("", 0))[1] for wt, e in checked)
     return segment("passes", len(checked) == len(counted) and not left, f"{len(checked)}/{len(counted)} checked", f"{left} open" if left else "")
-
-def run_chain(run):
-    """The run and the runs it was seeded from, latest first."""
-    chain = [run]
-    while (prev := rf.previous_run(chain[-1])) and prev not in chain and os.path.exists(rf.merged_path(prev)):
-        chain.append(prev)
-    return chain
 
 def review_segment(run):
     if not run: return None
@@ -115,7 +109,7 @@ def review_segment(run):
     except (OSError, ValueError): return "review ?"
 
 def review_text(run):
-    chain = run_chain(run)
+    chain = rf.run_chain(run)
     latest, triage = sf.open_count(run), len(sf.unmarked(run))
     left = f"{latest} open" + (f" ({triage} to triage)" if triage else "")
     if len(chain) == 1: return segment("review", not latest, "", left if latest else "")

@@ -578,6 +578,13 @@ def previous_run(run):
     label = read_text(reconcile_path(run, "previous.txt"))
     return os.path.join(os.path.dirname(os.path.realpath(run)), label) if label else ""
 
+def run_chain(run):
+    """The run and the runs it was seeded from, latest first."""
+    chain = [run]
+    while (prev := previous_run(chain[-1])) and prev not in chain and os.path.exists(merged_path(prev)):
+        chain.append(prev)
+    return chain
+
 def found_on(run, mid):
     m = read_matches(run).get(mid)
     if not (m and m["how"] in CARRIED): return reviewed_head(run)

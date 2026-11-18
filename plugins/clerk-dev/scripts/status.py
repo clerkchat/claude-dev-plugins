@@ -82,7 +82,7 @@ here and no other worktrees. The default view shows the same map first.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, plural, plural_s, section, table_rows, this_repo, worktrees
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, plural, plural_s, section, started, table_rows, this_repo, worktrees
 from ledgers import builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
 import ids, lifecycle, paths
 import run_files as rf
@@ -107,9 +107,6 @@ def short(text, n=90):
 
 def origin_repo(it): return re.split(r"[ @]", it.get("origin", ""))[0]
 
-def has_feature(p):
-    return os.path.exists(paths.feature_meta(p))
-
 def hub_feature_elsewhere(wt, rows):
     """A worktree holding feature records that names this one in its review
     workspace, or that this one's workspace names: the hub it should point at."""
@@ -117,7 +114,7 @@ def hub_feature_elsewhere(wt, rows):
     near = [w.path for w in worktrees(wt)]
     mine = set(rows.values())
     for p in dict.fromkeys([*rows.values(), *near]):
-        if p != real and os.path.isdir(p) and has_feature(p) and (p in mine or real in workspace_rows(p).values()): return p
+        if p != real and os.path.isdir(p) and started(p) and (p in mine or real in workspace_rows(p).values()): return p
 
 def other_repos(wt, rows, h):
     """Repositories other than this one that its active records and open
@@ -217,7 +214,7 @@ def pass_word(e):
     cs = load_script("passes.py").counts(check)
     if cs is None: return "checked, " + check.split(";")[-1].strip()
     n = sum(cs.values())
-    return "checked, clean" if n == 0 else f"checked, {n} finding{plural_s(n)} in `{load_script('passes.py').check_label(e)}`"
+    return "checked, clean" if n == 0 else f"checked, {plural(n, 'finding')} in `{load_script('passes.py').check_label(e)}`"
 
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
@@ -261,7 +258,7 @@ def listed(its): return ", ".join(it["qualified"] for it in its)
 
 def kind_counts(its):
     counts = [(bl.NAMES[k], sum(1 for it in its if it.get("kind") == k)) for k in bl.KINDS]
-    return ", ".join(f"{n} {name}{plural_s(n)}" for name, n in counts if n)
+    return ", ".join(plural(n, name) for name, n in counts if n)
 
 def gone_line(it, main): return f"- gone: {item_line(it, it['removes'] + ' is gone from ' + main)}"
 
@@ -308,7 +305,7 @@ def relink_lines(wt, log):
     bd = load_script("build.py")
     lines, steps = [], []
     n = len(log.relinked)
-    if n: lines.append(f"- Build log: {n} entr{'y' if n == 1 else 'ies'} re-pointed after a rebase ({', '.join(log.relinked)})")
+    if n: lines.append(f"- Build log: {plural(n, 'entry', form='entries')} re-pointed after a rebase ({', '.join(log.relinked)})")
     for e in log.unlinked:
         lines.append(f"- Build log: {e['id']} unlinked, its commit {e['f']['Commit']} is not on the branch: {bd.unlinked_reason(e)}")
         steps.append(f"Re-link {e['id']} ({e['title']}) by hand to the commit that built it: \"re-link {e['id']} to <sha>\".")
@@ -360,7 +357,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     first += rsteps
     built = [e for e in entries if e["f"].get("Status") == "done" and any(bd.names_commit(e, s) for s, _ in unreviewed)]
     if built:
-        later.insert(0, f"Check the {len(built)} handoff{plural_s(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass review, or \"re-review the branch\".")
+        later.insert(0, f"Check the {plural(built, 'handoff')} built since the last review ({', '.join(e['id'] for e in built)}): a pass review, or \"re-review the branch\".")
     for s, r, items, state, mine, _ in rows:
         busy = {n for e in mine if e["f"].get("Status") in bd.OPEN for n, _, _ in bd.reqs_of(e)}
         left = [n for n in sorted(items) if n not in state and n not in busy]
@@ -368,7 +365,7 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
         if partial: later.append(f"Finish the partial requirement{plural_s(partial)} of {s}: {bd.compress(s, partial)}.")
         if left and not busy:
             nxt = "; ".join(f"{ids.ref(s, n)} {short(items[n], 70).rstrip('.')}" for n in left[:3])
-            later.append(f"Next handoff for {s}, from what is not started ({len(left)} requirement{plural_s(left)}; the plan and the brief's order decide): {nxt}.")
+            later.append(f"Next handoff for {s}, from what is not started ({plural(left, 'requirement')}; the plan and the brief's order decide): {nxt}.")
     return first, later, elsewhere
 
 def unsettled_brainstorms(recs):
@@ -391,9 +388,9 @@ def feature_block(wt, rows, out):
     where = "" if os.path.realpath(h) == os.path.realpath(wt) else f", records in {h}"
     out.append("")
     open_storms = unsettled_brainstorms(recs)
-    counts = [f'{active[k]} active {k}' + ('s' if active[k] != 1 and k != 'pieces' else '') for k in order if k in active] or ['none active']
-    if open_storms: counts.append(f"{len(open_storms)} open brainstorm{plural_s(open_storms)}")
-    out.append(f"**Feature:** {name}: {len(recs)} record{plural_s(recs)} ({', '.join(counts)}){where}.")
+    counts = [plural(active[k], f"active {k}", form=f"active {k}" if k == "pieces" else None) for k in order if k in active] or ['none active']
+    if open_storms: counts.append(plural(open_storms, "open brainstorm"))
+    out.append(f"**Feature:** {name}: {plural(recs, 'record')} ({', '.join(counts)}){where}.")
     settle, open_q = [], 0
     for c in rc.checks(h):
         if not c["open"]: continue
@@ -406,13 +403,13 @@ def feature_block(wt, rows, out):
         if r.get("type") == "brief" and r.get("status") == "active":
             body = open(r["path"], encoding="utf-8").read()
             n = len(brief_open_items(body))
-            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {n} open item{plural_s(n)}")
+            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {plural(n, 'open item')}")
     for r in open_storms:
         out.append(f"- brainstorm {r['id']} {r.get('title', '')}{' (' + r['area'] + ')' if r.get('area') else ''}, nothing settled from it yet: {rc.gist(r)}")
     if open_storms:
         (later if active else first).append(f"Pick up the brainstorm{plural_s(open_storms)} {', '.join(r['id'] + ' ' + r.get('title', '') for r in open_storms)}: work through the open questions and settle a design or decisions from it (\"let's work on the brainstorm\").")
     if settle: first.append(f"Settle the design questions marked settle-first before building on them: {'; '.join(settle)} (\"walk the design questions\").")
-    elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural_s(open_q)} when convenient (\"walk the design questions\").")
+    elif open_q: later.append(f"Decide or defer the {plural(open_q, 'open design question')} when convenient (\"walk the design questions\").")
     others = []
     for rname, other in related_worktrees(wt, rows):
         ps, err = read_passes(other)
@@ -487,7 +484,7 @@ def marks(log, items, repo, canon):
 
 def worktree_progress(log, kind, marked):
     if log.err: return "build log unreadable"
-    if marked: return f"{sum(1 for _, m, _ in marked if m == '[x]')} of {len(marked)} {kind}{plural_s(marked)} done"
+    if marked: return f"{sum(1 for _, m, _ in marked if m == '[x]')} of {plural(marked, kind)} done"
     bd = load_script("build.py")
     try: rows = bd.progress(log.path, log.entries) if log.entries else []
     except SystemExit: return "build log unreadable"
@@ -496,7 +493,7 @@ def worktree_progress(log, kind, marked):
 
 def counts_line(wt):
     owed, parked = len(bl.owed_followups(wt)), len(bl.feature_ideas(wt))
-    parts = ([f"owed here: {owed} follow-up{plural_s(owed)}"] if owed else []) + ([f"parked: {parked} idea{plural_s(parked)}"] if parked else [])
+    parts = ([f"owed here: {plural(owed, 'follow-up')}"] if owed else []) + ([f"parked: {plural(parked, 'idea')}"] if parked else [])
     return [f"  {' · '.join(parts)}"] if parts else []
 
 def map_lines(wt, rows, mine, theirs):
@@ -576,7 +573,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     steps = first + pass_steps
     if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
     if unlogged and any(r.get("type") in bd.BUILDABLE and r.get("status") == "active" for r in recs):
-        steps.append(f"Log the {len(unlogged)} commit{plural_s(unlogged)} already built, each against the requirements it covers or the record it built, so progress is counted: \"log the built work\".")
+        steps.append(f"Log the {plural(unlogged, 'commit')} already built, each against the requirements it covers or the record it built, so progress is counted: \"log the built work\".")
         later = [s for s in later if not s.startswith("Next handoff")]
     steps += later
     if builds_elsewhere:
@@ -642,7 +639,7 @@ def area_states(recs):
         if des:
             newest = max(des, key=lambda x: ids.number(x["id"]))
             later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"])]
-            note = f"design {newest['id']}" + (f", older than {len(later)} decision{plural_s(later)}" if later else ", current")
+            note = f"design {newest['id']}" + (f", older than {plural(later, 'decision')}" if later else ", current")
         else: note = "no design"
         out.append((a or "feature-wide", decs, note))
     return out
@@ -696,7 +693,7 @@ def design_view(wt, out, logs):
         steps.insert(0, f"Write the brief for {nospec[0]}, next in the plan without one" + (f" ({len(nospec) - 1} more after it)." if len(nospec) > 1 else "."))
     out += ["", "**Areas:**"]
     for a, decs, note in area_states(recs):
-        out.append(f"- {a}: {len(decs)} active decision{plural_s(decs)}, {note}")
+        out.append(f"- {a}: {plural(decs, 'active decision')}, {note}")
     area_of = {r["id"]: r.get("area") or "feature-wide" for r in recs}
     qlines, other = [], 0
     for c in cs:
@@ -720,7 +717,7 @@ def design_view(wt, out, logs):
     else:
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(h))]
     gl = rc.rules(h)
-    if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural_s(gl)}; say \"what guidance have I given\" to list them."]
+    if gl: out += ["", f"**Guidance:** {plural(gl, 'active rule')}; say \"what guidance have I given\" to list them."]
     parked = bl.feature_ideas(wt)
     if parked:
         by = {}
@@ -732,7 +729,7 @@ def design_view(wt, out, logs):
         n = len(ov["disagreements"]) + len(mixed)
         first.append(f"Resolve the {n} {'disagreements' if not mixed else 'gaps and disagreements'} the overview lists, each with a new or superseding record, then refresh it.")
     rolls = [s for s in rc.suggestions(h) if not s.startswith("The overview")]
-    tail = rolls + ([f"Decide or defer the {other} other open design question{plural_s(other)}."] if other else [])
+    tail = rolls + ([f"Decide or defer the {plural(other, 'other open design question')}."] if other else [])
     if any(s.startswith("The overview") for s in rc.suggestions(h)): tail.append("Refresh the overview: \"refresh the overview\".")
     return first + list(dict.fromkeys(steps)) + tail
 
@@ -793,7 +790,7 @@ def area_view(wt, out, name, logs):
         out += ["", "**Build:**"] + (prog or [f"- {x['id']}: nothing logged as built" for x in specs])
     if pas: out += ["", "**Passes:**"] + pas
     if settle: steps.insert(0, f"Settle {', '.join(settle)} (\"walk the design questions\").")
-    if dis: steps.append(f"Resolve the {len(dis)} disagreement{plural_s(dis)} touching it, each with a new or superseding record.")
+    if dis: steps.append(f"Resolve the {plural(dis, 'disagreement')} touching it, each with a new or superseding record.")
     for x in specs:
         f = spec_facts(h, x, rc.checks(h))
         if "no design check" in f["missing"]: steps.append(f"Design-check {x['id']}.")
@@ -961,9 +958,8 @@ def pass_step(wt, e):
     if st == "open": return f"Finish pass {e['id']} ({e['title']}), then \"end the pass\"."
     if st == "ended" and e["f"].get("Note") != "no commits": return f"Check pass {e['id']}: \"check the pass\"."
     if st != "checked": return None
-    left = load_script("build.py").open_findings(wt, e)
-    label = load_script("passes.py").check_label(e)
-    return f"Triage pass {e['id']}'s {left} open finding{plural_s(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
+    label, left = load_script("passes.py").check_findings(wt, e) or ("", 0)
+    return f"Triage pass {e['id']}'s {plural(left, 'open finding')}: \"work the queue {label}\", or `fix N {label}`." if left else None
 
 def passes_section(wt, out):
     passes, perr = read_passes(wt)
@@ -1020,7 +1016,7 @@ def findings_section(wt, run, review, open_items, head, out):
     triage_left = sum(len(v) for v in unmarked.values()) + len(queue) + len(discuss) + len(post) + len(inprog)
     settled = not triage_left and not unreviewed and not open_items and not detached(wt)
     if review.fixes and settled:
-        steps.append(f"Triage is done and {review.fixes} fix{'es' if review.fixes != 1 else ''} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")
+        steps.append(f"Triage is done and {plural(review.fixes, 'fix', form='fixes')} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")
     elif settled and final_pass_stands(run):
         steps.append(DRAFT_PR_STEP)
     return first, steps

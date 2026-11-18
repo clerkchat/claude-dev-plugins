@@ -16,6 +16,11 @@ class PrPostedCase(TempCase):
         self.wt = self.path("wt")
         os.makedirs(self.wt)
 
+    def write_raw(self, text):
+        os.makedirs(paths.ledger(self.wt))
+        with open(paths.pr_posted(self.wt), "w") as f:
+            f.write(text)
+
 
 class PrPostedTest(PrPostedCase):
     def test_nothing_is_read_before_a_pull_request_is_recorded(self):
@@ -31,15 +36,11 @@ class PrPostedTest(PrPostedCase):
         self.assertEqual(pr_posted.read(self.wt), (42, URL))
 
     def test_a_file_that_is_not_a_number_and_link_reads_as_nothing(self):
-        os.makedirs(paths.ledger(self.wt))
-        with open(paths.pr_posted(self.wt), "w") as f:
-            f.write("garbage\n")
+        self.write_raw("garbage\n")
         self.assertIsNone(pr_posted.read(self.wt))
 
     def test_a_number_of_non_decimal_digits_reads_as_nothing(self):
-        os.makedirs(paths.ledger(self.wt))
-        with open(paths.pr_posted(self.wt), "w") as f:
-            f.write(f"\u00b2\t{URL}\n")
+        self.write_raw(f"\u00b2\t{URL}\n")
         self.assertIsNone(pr_posted.read(self.wt))
 
 

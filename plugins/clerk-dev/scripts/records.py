@@ -84,12 +84,15 @@ def workspace(wt):
     if m: hub = repos.get(m.group(1), m.group(1))
     return hub, repos
 
-def plural_s(x):
-    n = x if isinstance(x, int) else len(x)
-    return "" if n == 1 else "s"
+def count_of(x): return x if isinstance(x, int) else len(x)
 
-def plural(n, word, say=str):
-    return f"{say(n)} {word}{plural_s(n)}"
+def plural_s(x):
+    return "" if count_of(x) == 1 else "s"
+
+def plural(x, word, say=str, form=None):
+    """'3 words' for a count or a sized value; form is the irregular plural."""
+    n = count_of(x)
+    return f"{say(n)} {word if n == 1 else form or word + 's'}"
 
 def table_cells(line): return [c.strip() for c in line.strip().strip("|").split("|")]
 

@@ -1,6 +1,6 @@
 import os
 from typing import NamedTuple
-from records import branch_name, hub, load_script, this_repo, workspace, worktrees
+from records import hub, load_script, this_repo, workspace, worktrees
 import paths
 import run_files as rf
 

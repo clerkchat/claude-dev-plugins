@@ -21,17 +21,17 @@ class CheckRunTests(TempCase):
     def test_label_is_empty_without_a_check(self):
         self.assertEqual(passes.check_label({"f": {}}), "")
 
-    def test_run_is_none_without_merged_findings(self):
-        self.assertIsNone(passes.check_run(self.path("wt"), checked()))
+    def test_findings_are_none_without_merged_findings(self):
+        self.assertIsNone(passes.check_findings(self.path("wt"), checked()))
 
-    def test_run_is_none_without_a_label(self):
-        self.assertIsNone(passes.check_run(self.path("wt"), checked("")))
+    def test_findings_are_none_without_a_label(self):
+        self.assertIsNone(passes.check_findings(self.path("wt"), checked("")))
 
-    def test_run_is_the_label_and_its_directory_once_merged(self):
+    def test_findings_are_the_label_and_the_open_count_once_merged(self):
         wt = self.path("wt")
         run = paths.run(wt, "pass-p3-1016")
         write_file(os.path.join(run, "merged.md"), "")
-        self.assertEqual(passes.check_run(wt, checked()), ("pass-p3-1016", run))
+        self.assertEqual(passes.check_findings(wt, checked()), ("pass-p3-1016", 0))
 
 
 if __name__ == "__main__":

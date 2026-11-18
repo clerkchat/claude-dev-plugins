@@ -24,7 +24,7 @@ final/verify/<new id>.md (the `bar:` line), final/below.md, raw/, report.md,
 summary.md.
 """
 import argparse, datetime, os, re
-from records import ROUTING, load_script, phrases, read_plain_names
+from records import ROUTING, load_script, phrases, plural, read_plain_names
 import run_files as rf
 
 sf = load_script("stale-findings.py")
@@ -107,8 +107,8 @@ def analyze(run):
 def verdict_line(a):
     if a["passed"]: return "PASSED"
     parts = []
-    if a["kept"]: parts.append(f"{len(a['kept'])} new finding{'s' if len(a['kept']) != 1 else ''} would hold the merge")
-    if a["reopened"]: parts.append(f"{len(a['reopened'])} fixed finding{'s' if len(a['reopened']) != 1 else ''} reopened")
+    if a["kept"]: parts.append(f"{plural(a['kept'], 'new finding')} would hold the merge")
+    if a["reopened"]: parts.append(f"{plural(a['reopened'], 'fixed finding')} reopened")
     if a["open_fix"]: parts.append(f"{len(a['open_fix'])} still open in Fix before merging")
     return "NOT PASSED: " + "; ".join(parts)
 
