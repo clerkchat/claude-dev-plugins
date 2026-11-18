@@ -424,9 +424,8 @@ class Seeding(SpinUpCase):
         self.create("feat/x", "BL-1")
 
     def test_refuses_a_worktree_that_already_has_a_purpose(self):
-        run_ok("backlog", "set", self.api.path, "BL-1", "open", env=self.env)
         with mock.patch.dict(os.environ, self.env, clear=True), self.assertRaises(SystemExit) as refused:
-            spin_up.seed(self.wt, spin_up.take(self.api.path, ["BL-1"]), [])
+            spin_up.refuse_seeded(self.wt)
         self.assertIn("already has a Purpose", str(refused.exception))
 
 

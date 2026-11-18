@@ -176,8 +176,11 @@ def seed_owed(wt, t, undo):
     undo.append(("rescope", t.qualified, it.get("scope", "")))
     return lines
 
-def seed(wt, g, undo):
+def refuse_seeded(wt):
     if records.branch_notes(wt)[0]: sys.exit(f"{paths.notes(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
+
+def seed(wt, g, undo):
+    refuse_seeded(wt)
     lines, brainstorm_id = seed_files(wt, g)
     adopted = adopt(wt, g.idea, brainstorm_id, undo) if g.idea else []
     return [*lines, *adopted, *(line for t in g.owed() for line in seed_owed(wt, t, undo))]
