@@ -106,9 +106,8 @@ class SpinUpCase(TempCase):
     def run_undo(self, err):
         subprocess.run(self.undo(err), shell=True, check=True, env=self.env, capture_output=True)
 
-    def record_body(self, wt):
-        _, body = records.parse(os.path.join(paths.records_dir(wt), "001-brainstorm-phone-digits.md"))
-        return body
+    def brainstorm(self, wt):
+        return records.parse(os.path.join(paths.records_dir(wt), "001-brainstorm-phone-digits.md"))
 
     def refused_creating_nothing(self, *items):
         before = self.worktrees()
@@ -148,11 +147,11 @@ class WhenAnIdeaIsSpunUp(SpinUpCase):
             self.assertIn("## Summary\n\n> faster lookups.\n", f.read())
 
     def test_writes_the_first_brainstorm_from_the_item(self):
-        meta, _ = records.parse(os.path.join(paths.records_dir(self.wt), "001-brainstorm-phone-digits.md"))
+        meta, _ = self.brainstorm(self.wt)
         self.assertEqual((meta["id"], meta["from"]), ("STORM-1", "BL-1"))
 
     def test_the_brainstorm_carries_the_item_and_its_provenance_as_context(self):
-        self.assertIn("## Context\n\n### From the item (quoted)\n\n> ## Why\n>\n> faster lookups\n>\n> ## When\n>\n> after launch\n\nFiled", self.record_body(self.wt))
+        self.assertIn("## Context\n\n### From the item (quoted)\n\n> ## Why\n>\n> faster lookups\n>\n> ## When\n>\n> after launch\n\nFiled", self.brainstorm(self.wt)[1])
 
     def test_marks_the_item_adopted_as_the_brainstorm(self):
         it = self.item("BL-1", self.wt)
@@ -520,7 +519,6 @@ class WithSeveralItems(SpinUpCase):
         self.followup("Drop the legacy route")
 
 
-
 class WhenTwoFollowUpsAreSpunUp(WithSeveralItems):
     def setUp(self):
         super().setUp()
@@ -561,7 +559,7 @@ class WhenAnIdeaIsSpunUpWithAFollowUp(WithSeveralItems):
         self.create("feat/x", "BL-1", "BL-2")
 
     def test_the_brainstorm_lists_the_follow_up_between_the_idea_and_the_provenance(self):
-        body = self.record_body(self.wt)
+        _, body = self.brainstorm(self.wt)
         self.assertRegex(body, r"> after launch\n\nAlso taken up in this worktree:\n\n- BL-2 Handle exportId\n\nFiled")
 
     def test_adopts_the_idea(self):
