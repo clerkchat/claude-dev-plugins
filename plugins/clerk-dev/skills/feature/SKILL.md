@@ -132,7 +132,7 @@ Areas are not declared up front.
   port by path, and the output path `records.py new` gave; ask it to write the
   body and list anything it could not settle from the records as open items.
   Then read it, settle what you can with the user, and edit it in this
-  session.
+  session. After writing the brief, show the lifecycle strip (`skills/review/tracking.md`).
 
 Survey items are the walked items of a survey (see Running a survey in the
 `design-check` skill) that the next design or brief must honor. Before writing
@@ -214,7 +214,8 @@ guidance <worktree> [--area <area>]`.
 When the last open question of a set put to the user is settled (a brief's or
 plan's open questions, or any other skill's discussion), look back over the
 whole discussion as "Lessons from a discussion" in `skills/review/tracking.md`
-describes, before the next step starts.
+describes, before the next step starts. When it was a design check's last open
+question, also show the lifecycle strip (`skills/review/tracking.md`).
 
 ## Parked ideas
 

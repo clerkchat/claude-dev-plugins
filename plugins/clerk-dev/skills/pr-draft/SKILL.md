@@ -303,6 +303,8 @@ pull request.
 
 ## 9. Report
 
+After writing the draft, show the lifecycle strip (`skills/review/tracking.md`).
+
 Per repository, in a few lines:
 
 - the draft's absolute path and its title;
@@ -382,6 +384,9 @@ for every repository of the unit that has a draft:
    without the host, any leading `/` or `:`, and a trailing `.git`. A
    repository that already has an open pull request keeps its body; only step
    4 touches it.
+   Record each pull request created, or found open, with `python3
+   ${CLAUDE_PLUGIN_ROOT}/scripts/pr-posted.py record <worktree> --number <number>
+   --url <url>`, so the lifecycle strip can say it was posted.
 4. **Link.** Once every pull request exists, for each one: read its body with
    `gh pr view --json body`, since the user may have edited it on GitHub;
    replace each sibling's branch name in the sibling list with its number and
@@ -389,6 +394,6 @@ for every repository of the unit that has a draft:
    <number> -R <owner>/<repo> --body-file <pr-body>`.
    Write the same body back to `.clerk-dev/pr-description.md`, under its
    Title section, and to the generated copy.
-5. **Report**: each pull request's number, link, and whether it is a draft,
+5. **Report**: first show the lifecycle strip (`skills/review/tracking.md`). Then each pull request's number, link, and whether it is a draft,
    and any repository not posted with why. A single repository has no
    sibling list, and step 4 is skipped.

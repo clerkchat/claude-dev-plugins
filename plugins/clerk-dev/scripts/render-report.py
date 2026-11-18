@@ -70,7 +70,7 @@ links review.md (review-feature.md) to its report, as link-latest.py does.
 import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from records import ROUTING, joined, load_script, phrase_of, phrases, read_plain_names
+from records import ROUTING, joined, load_script, phrase_of, phrases, plural, read_plain_names
 from run_files import (CLOSED_STATUSES, covered_refusal, numbered as finding_named, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
                        finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
@@ -134,9 +134,6 @@ def debt_intro(entries):
 
 def existing_intro(entries):
     return "Defects that are already on the remote main branch: this branch did not introduce them or make them worse, so they do not hold the merge. Each recommendation is a fix in its own pull request. Fix as recommended records the finding as deferred to that pull request; to fix one on this branch anyway, choose Fix as noted."
-
-def plural(n, word):
-    return f"{n} {word}" + ("" if n == 1 else "s")
 
 def credit_intro(entries):
     marked = sum(1 for e in entries if choice_of(e["id"]) == "post")

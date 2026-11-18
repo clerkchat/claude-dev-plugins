@@ -13,6 +13,7 @@ from helpers import (
     write_record,
 )
 import paths
+import build
 
 
 def block_keys(repo, entry_id):
@@ -475,6 +476,47 @@ class NoteWordingTests(TempCase):
     def write_hub(self, repo):
         write_feature_md(repo.path)
         write_record(repo.path, "R1", "decision", "Decision one", body="## Decision\n\nOne.")
+
+
+class SpecProgressDoneTests(unittest.TestCase):
+    def test_done_is_the_requirements_whose_state_is_done(self):
+        state = {1: ("done", "", "B1"), 2: ("partial", "", "B2"), 3: ("done", "", "B3")}
+        row = build.SpecProgress("BRIEF-1", {}, {1: "a", 2: "b", 3: "c"}, state, [], {})
+        self.assertEqual(row.done, {1, 3})
+
+
+def spec_row(state=None, handoffs=(), record=None):
+    return build.SpecProgress("BRIEF-1", record, {1: "a", 2: "b", 3: "c"}, state or {}, list(handoffs), {})
+
+
+def handoff(status, reqs):
+    return {"id": "BUILD-9", "f": {"Status": status, "Requirements": reqs}}
+
+
+class SpecProgressTests(unittest.TestCase):
+    def test_title_is_the_briefs_title(self):
+        self.assertEqual(spec_row(record={"title": "The brief"}).title, "The brief")
+
+    def test_title_says_when_the_brief_is_not_in_the_hub(self):
+        self.assertEqual(spec_row().title, "(not found in the hub)")
+
+    def test_partial_lists_the_partial_requirements_in_order(self):
+        row = spec_row({3: ("partial", "", "B3"), 1: ("partial", "", "B1"), 2: ("done", "", "B2")})
+        self.assertEqual(row.partial, [1, 3])
+
+    def test_busy_maps_each_requirement_to_its_open_handoff(self):
+        stopped = handoff("stopped", "2")
+        self.assertEqual(spec_row(handoffs=[stopped, handoff("done", "3")]).busy, {2: stopped})
+
+    def test_not_started_leaves_out_done_and_busy_requirements(self):
+        row = spec_row({1: ("done", "", "B1")}, [handoff("handed-off", "2")])
+        self.assertEqual(row.not_started, [3])
+
+
+class TotalsTests(unittest.TestCase):
+    def test_counts_a_brief_two_logs_report_once(self):
+        rows = [spec_row({1: ("done", "", "B1")}), spec_row({2: ("done", "", "B2")})]
+        self.assertEqual(build.totals(rows), (2, 3))
 
 
 if __name__ == "__main__":

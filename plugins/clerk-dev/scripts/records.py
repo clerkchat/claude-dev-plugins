@@ -84,6 +84,16 @@ def workspace(wt):
     if m: hub = repos.get(m.group(1), m.group(1))
     return hub, repos
 
+def count_of(x): return x if isinstance(x, int) else len(x)
+
+def plural_s(x):
+    return "" if count_of(x) == 1 else "s"
+
+def plural(x, word, say=str, form=None):
+    """'3 words' for a count or a sized value; form is the irregular plural."""
+    n = count_of(x)
+    return f"{say(n)} {word if n == 1 else form or word + 's'}"
+
 def table_cells(line): return [c.strip() for c in line.strip().strip("|").split("|")]
 
 def table_separator(cells): return all(set(c) <= set("-: ") for c in cells)
@@ -105,6 +115,8 @@ def this_repo(wt, repos):
     if url: return re.sub(r"\.git$", "", url.rstrip("/").split("/")[-1].split(":")[-1])
     common = common_dir(wt)
     return os.path.basename(os.path.dirname(common) if common else real)
+
+def branch_name(wt): return git(wt, "rev-parse", "--abbrev-ref", "HEAD")
 
 def origin_head(wt): return git(wt, "rev-parse", "--abbrev-ref", "origin/HEAD").removeprefix("origin/")
 
@@ -266,6 +278,20 @@ def checks(h):
 
 
 def open_check_items(h, name): return items_mod().not_done(items_mod().read(check_path(h, name)))
+
+def open_questions(h, name):
+    qs = open_check_items(h, name)
+    first = items_mod().DESIGN_WEIGHTS[0]
+    return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith(first)]
+
+def open_checks(h, keep=None):
+    """(check, open items, settle-first question ids) for each check with open
+    items that keep, when given, accepts."""
+    for c in checks(h):
+        if c["open"] and (keep is None or keep(c)):
+            yield (c, *open_questions(h, c["name"]))
+
+def settle_refs(check, question_ids): return [ids.in_check(check["name"], q) for q in question_ids]
 
 def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
 
@@ -679,7 +705,7 @@ def suggestions(h):
     return out
 
 def built_specs(rows):
-    return {r.spec for r in rows if (r.items or r.dropped) and all(r.state.get(n, ("",))[0] == "done" for n in r.items)}
+    return {r.spec for r in rows if (r.items or r.dropped) and r.done >= set(r.items)}
 
 class Built(NamedTuple):
     specs: set
@@ -915,7 +941,7 @@ def main():
             k = r.get("area") or "(feature-wide)"
             s = by.setdefault(k, {"n": 0, "active": 0, "last": ""})
             s["n"] += 1; s["active"] += r.get("status") == "active"; s["last"] = max(s["last"], r.get("date", ""))
-        for k, s in by.items(): print(f"{k}\t{s['n']} record{'s' if s['n'] != 1 else ''}, {s['active']} active, last {s['last']}")
+        for k, s in by.items(): print(f"{k}\t{plural(s['n'], 'record')}, {s['active']} active, last {s['last']}")
     elif a.cmd == "tag":
         r = find(h, a.rid); set_fields(r, area=slug(a.area) if a.area else None); concatenate(h, a.wt)
         print(f"{r['id']} " + (f"area {slug(a.area)}" if a.area else "feature-wide"))

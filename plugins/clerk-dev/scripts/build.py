@@ -62,7 +62,7 @@ Entry format:
 """
 import argparse, datetime, os, re, sys
 from typing import NamedTuple
-from records import git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
+from records import git, git_failure, git_run, load_script, plural, record_id, remote_main, write_atomic
 import ids, paths
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -222,6 +222,40 @@ class SpecProgress(NamedTuple):
     handoffs: list
     dropped: dict
 
+    @property
+    def done(self): return {n for n, (st, _, _) in self.state.items() if st == "done"}
+
+    @property
+    def built(self): return self.done & set(self.items)
+
+    @property
+    def title(self): return self.record.get("title", "") if self.record else "(not found in the hub)"
+
+    @property
+    def partial(self): return sorted(n for n, (st, _, _) in self.state.items() if st == "partial")
+
+    @property
+    def live(self): return [e for e in self.handoffs if e["f"].get("Status") in OPEN]
+
+    @property
+    def busy(self):
+        """{requirement: the open handoff working on it}."""
+        return {n: e for e in self.live for n, _, _ in reqs_of(e)}
+
+    @property
+    def not_started(self):
+        busy = self.busy
+        return [n for n in sorted(self.items) if n not in self.state and n not in busy]
+
+def totals(rows):
+    """(requirements built, requirements counted) over rows, each brief counted
+    once however many build logs report it."""
+    items, built = {}, {}
+    for r in rows:
+        items[r.spec] = set(r.items)
+        built[r.spec] = built.get(r.spec, set()) | r.built
+    return sum(map(len, built.values())), sum(map(len, items.values()))
+
 def hub_records(wt):
     rc = load_script("records.py")
     return rc.records(rc.hub(wt))
@@ -270,21 +304,16 @@ def requirement_states(mine, items):
 
 def progress_lines(rows):
     lines = []
-    for s, r, items, state, mine, dropped in rows:
-        title = r.get("title", "") if r else "(not found in the hub)"
-        total = len(items)
-        done = [n for n, (st, _, _) in state.items() if st == "done"]
-        partial = [n for n, (st, _, _) in state.items() if st == "partial"]
-        live = [e for e in mine if e["f"].get("Status") in OPEN]
-        busy = {n for e in live for n, _, _ in reqs_of(e)}
-        left = [n for n in sorted(items) if n not in state and n not in busy]
-        head = f"{s} {title}: {len(done)} of {total} requirements done" if total else f"{s} {title}: {len(done)} requirements done (the brief lists none)"
-        if partial: head += f", {len(partial)} partial ({', '.join(ids.ref(s, n) for n in sorted(partial))})"
-        if dropped: head += f", {len(dropped)} dropped"
+    for row in rows:
+        s, total, partial, left = row.spec, len(row.items), row.partial, row.not_started
+        head = f"{s} {row.title}: {len(row.built)} of {total} requirements done" if total else f"{s} {row.title}: {len(row.done)} requirements done (the brief lists none)"
+        if partial: head += f", {len(partial)} partial ({', '.join(ids.ref(s, n) for n in partial)})"
+        if row.dropped: head += f", {len(row.dropped)} dropped"
         lines.append(head)
-        if busy - set(state): lines.append(f"  in progress: {compress(s, sorted(busy - set(state)))}")
+        in_progress = sorted(row.busy.keys() - row.state.keys())
+        if in_progress: lines.append(f"  in progress: {compress(s, in_progress)}")
         if left: lines.append(f"  not started: {compress(s, left)}")
-        for e in live:
+        for e in row.live:
             q = e["multi"]["Question"][-1] if e["multi"]["Question"] else ""
             lines.append(f"  {e['id']} {e['title']}: {e['f'].get('Status')}" + (f", on: {q}" if e["f"].get("Status") == "stopped" and q else ""))
     return lines
@@ -306,12 +335,9 @@ def label(text, limit=72):
 
 def checklist_lines(rows):
     out = []
-    for s, r, items, state, mine, gone in rows:
-        title = r.get("title", "") if r else "(not found in the hub)"
-        live = [e for e in mine if e["f"].get("Status") in OPEN]
-        busy = {n: e for e in live for n, _, _ in reqs_of(e)}
-        done = sum(1 for v in state.values() if v[0] == "done")
-        out.append(f"{s} {title}: {done} of {len(items)} done")
+    for row in rows:
+        items, state, gone, busy = row.items, row.state, row.dropped, row.busy
+        out.append(f"{row.spec} {row.title}: {len(row.built)} of {len(items)} done")
         for n in sorted(set(items) | set(gone)):
             if n in gone:
                 e, text = gone[n]
@@ -387,15 +413,6 @@ def pass_states(wt, spec):
         out[e["title"].split(" on ")[0].strip()] = e
     return out
 
-def open_findings(wt, e):
-    """Open findings in a checked pass's run, or None when it cannot tell."""
-    label = (e["f"].get("Check") or "").split(";")[0].strip()
-    run = paths.run(wt, label)
-    if not label or not os.path.exists(os.path.join(run, "merged.md")): return None
-    sf = load_script("stale-findings.py")
-    st, ins, num = sf.state(run)
-    return sum(1 for m in sf.load_findings(run) if m in num and sf.is_open(m, st, ins))
-
 class MilestoneView(NamedTuple):
     rows: list
     next: str | None
@@ -427,11 +444,10 @@ def milestone_view(wt, m):
             waiting.append((f, f"check pass {e['id']} ({f})"))
         else:
             word = f"{e['id']} " + ("no changes" if e["f"].get("Note") == "no commits" and st == "ended" else "checked")
-            n = open_findings(wt, e) if st == "checked" else 0
-            if n: word += f", {n} open finding{'s' if n != 1 else ''}"
+            label, n = (load_script("passes.py").check_findings(wt, e) or ("", 0)) if st == "checked" else ("", 0)
+            if n: word += f", {plural(n, 'open finding')}"
             if n and f in req:
-                label = (e["f"].get("Check") or "").split(";")[0].strip()
-                waiting.append((f, f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""))
+                waiting.append((f, f"triage the {f} pass's {plural(n, 'open finding')} (required): \"work the queue {label}\""))
             rows.append((f, word, f in req))
     stage, nxt = waiting[0] if waiting else (None, None)
     return MilestoneView(rows, nxt, not waiting, stage)
@@ -618,6 +634,9 @@ def branch_commits(wt):
     return [(sha, subject.strip()) for sha, _, subject in (line.partition("\t") for line in out.split("\n") if line)]
 
 def merged(wt): return bool(branch_base(wt)) and not branch_commits(wt)
+
+# A branch with no commits past main also reads as merged, so landing needs a sign it had commits: a linked entry.
+def landed(wt, entries): return bool(linked(entries)) and merged(wt)
 
 def commit_of(e): return e["f"].get("Commit") or "no commit logged"
 

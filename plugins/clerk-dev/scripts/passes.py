@@ -39,8 +39,9 @@ Entry format:
     - Note: log item 3 once the timeout test passes   (the next-step note of an open pass; status shows it)
 """
 import argparse, datetime, json, os, re, subprocess, sys
-from records import PLUGIN_ROOT, plugin_version, write_atomic
+from records import PLUGIN_ROOT, load_script, plugin_version, write_atomic
 import ids, paths
+import run_files as rf
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -108,6 +109,17 @@ def plugin_stamp():
     sha = subprocess.run(["git", "-C", PLUGIN_ROOT, "log", "-1", "--format=%h", "--", "agents"], capture_output=True, text=True).stdout.strip()
     version = plugin_version()
     return sha or (f"v{version}" if version else "unknown")
+
+def check_label(e):
+    """The review run a checked pass names: the first part of its Check field."""
+    return (e["f"].get("Check") or "").split(";")[0].strip()
+
+def check_findings(wt, e):
+    """(label, open findings) of a checked pass's review run, or None when it has no label or no merged findings."""
+    label = check_label(e)
+    run = paths.run(wt, label)
+    if not label or not os.path.exists(rf.merged_path(run)): return None
+    return label, load_script("stale-findings.py").open_count(run)
 
 def counts(check):
     """{lens: findings} from a Check field, or None when it holds no counts."""

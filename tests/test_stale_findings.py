@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from helpers import RunCase, add_backlog_item, init_repo, records, run_ok, write_file
+from helpers import RunCase, add_backlog_item, defect, init_repo, records, run_ok, write_file
 import paths
 
 sf = records.load_script("stale-findings.py")
@@ -90,6 +90,69 @@ class DeltaTests(FollowUpCommitCase):
 
     def test_leaves_other_commits_unreviewed(self):
         self.assertEqual(self.delta_kinds()[self.full(self.later)], "unreviewed")
+
+
+class OpenCountTests(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"))
+        self.write_numbers({1: "fix", 2: "look"})
+
+    def open_count(self):
+        return sf.open_count(self.run_dir)
+
+    def test_counts_every_numbered_finding_left_unmarked(self):
+        self.assertEqual(self.open_count(), 2)
+
+    def test_leaves_out_a_finding_whose_status_closes_it(self):
+        self.write_status({1: ("fixed", "abc1234")})
+        self.assertEqual(self.open_count(), 1)
+
+    def test_leaves_out_a_finding_whose_instruction_closes_it(self):
+        self.write_instructions({2: ("defer", "")})
+        self.assertEqual(self.open_count(), 1)
+
+    def test_leaves_out_a_finding_with_no_number(self):
+        self.write_numbers({1: "fix"})
+        self.assertEqual(self.open_count(), 1)
+
+    def test_leaves_out_credits(self):
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"), defect(3, "c.py", lens="credit"))
+        self.write_numbers({1: "fix", 2: "look", 3: "credit"})
+        self.assertEqual(self.open_count(), 2)
+
+
+class OpenFindingsTests(RunCase):
+    def test_names_the_open_numbered_ids_from_the_state_it_is_given(self):
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"), defect(3, "c.py"))
+        self.write_numbers({1: "fix", 2: "look"})
+        self.write_status({1: ("fixed", "abc1234")})
+        self.assertEqual(sf.open_findings(sf.load_findings(self.run_dir), *sf.state(self.run_dir)), [2])
+
+
+class UnmarkedTests(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_merged(defect(1, "a.py"), defect(2, "b.py"), defect(3, "c.py"))
+        self.write_numbers({1: "fix", 2: "look", 3: "credit"})
+
+    def unmarked(self):
+        return sf.unmarked(self.run_dir)
+
+    def test_lists_open_findings_with_no_choice_in_a_triage_section(self):
+        self.assertEqual(self.unmarked(), [1, 2])
+
+    def test_leaves_out_a_finding_with_a_choice(self):
+        self.write_instructions({1: ("fix", "")})
+        self.assertEqual(self.unmarked(), [2])
+
+    def test_leaves_out_a_closed_finding(self):
+        self.write_status({2: ("fixed", "abc1234")})
+        self.assertEqual(self.unmarked(), [1])
+
+    def test_leaves_out_a_finding_in_another_section(self):
+        self.write_numbers({1: "fix", 2: "credit", 3: "credit"})
+        self.assertEqual(self.unmarked(), [1])
 
 
 if __name__ == "__main__":

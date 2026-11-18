@@ -31,7 +31,7 @@ class MapCase(TempCase):
     def map(self):
         code, out = self.repo.status("--map")
         self.assertEqual(code, 0, out)
-        return out.splitlines()
+        return out.splitlines()[1:]
 
     def everything(self):
         code, out = self.repo.status()
@@ -62,7 +62,7 @@ class WhenThePlanHasStepsTests(MapCase):
 
     def test_the_default_status_shows_the_same_map_right_after_its_heading(self):
         lines = self.map()
-        self.assertEqual(self.everything().splitlines()[2 : 4 + len(lines)], ["```", *lines, "```"])
+        self.assertEqual(self.everything().splitlines()[3 : 5 + len(lines)], ["```", *lines, "```"])
 
 
 class WhenTheFeatureHasAnotherWorktreeTests(MapCase):

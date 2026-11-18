@@ -111,7 +111,7 @@ commit rules below.
    per lens from `merged.md` (`grep -c "lens: <lens>"`), and record the result:
    `passes.py check <worktree> PASS-<n> --run <label> --ran <lenses that ran>
    --findings <lens>=<n>,...` (or `--result empty|error`). It exits non-zero
-   when a requested lens did not run; say which.
+   when a requested lens did not run; say which. Then show the lifecycle strip (`skills/review/tracking.md`).
 6. **Report** in a few lines: the commits, items done and not applicable, and
    the pass review's findings by lens with the run label. The pass ends here.
    Findings are fixed through `review-fix` with the run label ("fix 3

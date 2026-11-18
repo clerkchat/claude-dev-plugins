@@ -23,6 +23,7 @@ repository and kept by `scripts/backlog.py` (Follow-ups below).
 | `.clerk-dev/review.md` | the current review's report: a link to the newest review run's `report.md`, there once the report exists | `render-report.py`, for the run `latest` points at | the user |
 | `.clerk-dev/review-feature.md` | the same for the newest feature run's report | `render-report.py`, for the run `latest-feature` points at | the user |
 | `.clerk-dev/pr-description.md` | the pull request description draft, for the user to read and edit | the `pr-draft` skill, the user | the `pr-draft` skill, the user |
+| the posted pull request record | the pull request posted for this worktree's branch: one line, `number<TAB>url` | `pr-posted.py record`, from the `pr-draft` skill's Post step | `lifecycle.py` (the strip's `PR posted`) |
 | `.clerk-dev/feature.md` | every active record of the feature in one readable file; only in the hub worktree | `records.py`, regenerated after each change; never edited | the user |
 | `.clerk-dev/overview.md` | the feature's current state in one read, generated from the active records; only in the hub worktree | the `feature` skill; never edited | the user |
 | the status marker | one `<repo> <n>` line per backlog: the highest `BL-n` of the follow-ups owed here that status showed from it; never written on a detached HEAD | the `status` skill                                                                                                                                                                                                                     | the `status` skill (marks newer items as new)                                                                                                                  |
@@ -412,7 +413,7 @@ inventory stays out of it unless they ask.
 When the work moves to a new place in the plan, the message that says so
 shows where the work now sits in the whole feature. Print it with
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --map` and show
-its output as it is: a header line naming the feature, the repository, and
+its output as it is: the lifecycle strip, then a header line naming the feature, the repository, and
 the worktree; this worktree's plan steps (or pieces, with no plan) in the
 feature's own words and without ids, each marked done `[x]`, current `[>]`
 with what is happening on it, or not started `[ ]`; one line for each other
@@ -420,6 +421,7 @@ worktree of the feature; and a last line counting the follow-ups owed here
 and the feature's parked ideas.
 
 ```
+where-the-work-sits · design ✓ · build 2/4 (milestone 2)
 where-the-work-sits · claude-dev-plugins (feat/where-the-work-sits)
   [x] map draws from the feature's worktrees
   [>] skills cite the map at their moves  <- building and status
@@ -439,6 +441,18 @@ When the script prints nothing, there is no map. The moves that show it:
 
 Everything else, passes and review triage included, keeps its one-line
 updates with no map.
+
+### The lifecycle strip
+
+One line of where the feature stands across its stages, each with its own
+count. Print it with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py
+<worktree>` and show its line as it is; add `--run <label>` when the user named
+a review run. When it prints nothing, show nothing. The map above opens with
+the strip, so a message that shows the map does not run this too. Skills say
+where it shows: after a brief or plan is written, a design check settles, a
+brief's first handoff is read, a milestone starts or the last one completes, a
+pass review ends, review and triage finish, and a pull request draft or
+posting.
 
 ### Diagrams
 

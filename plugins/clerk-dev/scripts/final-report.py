@@ -24,7 +24,7 @@ final/verify/<new id>.md (the `bar:` line), final/below.md, raw/, report.md,
 summary.md.
 """
 import argparse, datetime, os, re
-from records import ROUTING, load_script, phrases, read_plain_names
+from records import ROUTING, load_script, phrases, plural, read_plain_names
 import run_files as rf
 
 sf = load_script("stale-findings.py")
@@ -44,6 +44,7 @@ CATEGORIES = [
 ]
 FINAL_LENSES = ["security", "tenancy", "data-privacy", "side-effects", "rollout", "sql", "scaling",
                 "capacity", "concurrency", "contracts", "error-handling", "llm-agent", "completeness"]
+PASSED = "PASSED"
 BELOW_LENSES = ["design", "naming-concepts", "user-facing-text", "tests", "performance",
                 "observability-cost", "spec-conformance", "credit"]
 
@@ -87,8 +88,8 @@ def analyze(run):
         kept.append((numbers[mid], mid, title(mid), cat or "category not stated"))
     reopened = [(numbers[int(r[1])], int(r[1]), title(int(r[1]))) for r in judged
                 if r[2] == "regressed" and r[1].isdigit() and int(r[1]) in numbers and rf.status_of(status, int(r[1])) != "fixed"]
-    open_fix = [(numbers[m], m, title(m)) for m in findings
-                if m in numbers and sections.get(m) == "fix" and sf.is_open(m, status, instr) and m not in appended]
+    open_fix = [(numbers[m], m, title(m)) for m in sf.open_findings(findings, status, instr, numbers)
+                if sections.get(m) == "fix" and m not in appended]
     counts = {}
     for m in findings:
         if m not in numbers: continue
@@ -105,10 +106,10 @@ def analyze(run):
                 lenses=lenses, passed=passed, target=rf.read_target(run))
 
 def verdict_line(a):
-    if a["passed"]: return "PASSED"
+    if a["passed"]: return PASSED
     parts = []
-    if a["kept"]: parts.append(f"{len(a['kept'])} new finding{'s' if len(a['kept']) != 1 else ''} would hold the merge")
-    if a["reopened"]: parts.append(f"{len(a['reopened'])} fixed finding{'s' if len(a['reopened']) != 1 else ''} reopened")
+    if a["kept"]: parts.append(f"{plural(a['kept'], 'new finding')} would hold the merge")
+    if a["reopened"]: parts.append(f"{plural(a['reopened'], 'fixed finding')} reopened")
     if a["open_fix"]: parts.append(f"{len(a['open_fix'])} still open in Fix before merging")
     return "NOT PASSED: " + "; ".join(parts)
 
@@ -156,10 +157,19 @@ def scope_line(a):
         return f"Whole branch `{t.base[:9]}...{t.head[:9]}`, read fresh on {a['when']}."
     return ""
 
+def heading(verdict): return f"# Final review: {verdict}"
+
 def write(run, lines):
-    p = os.path.join(run, "final-review-report.md")
+    p = rf.final_report_path(run)
     open(p, "w", encoding="utf-8").write("\n".join(lines).rstrip() + "\n")
     return p
+
+def stands(run):
+    """Whether run's final pass passed and no review has been run on it since."""
+    report = rf.final_report_path(run)
+    if not os.path.exists(report): return False
+    with open(report, encoding="utf-8") as f: passed = f.readline().strip() == heading(PASSED)
+    return passed and os.path.getmtime(report) >= os.path.getmtime(rf.target_path(run))
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -171,7 +181,7 @@ def main():
     run = os.path.realpath(a.run)
     res = analyze(run)
     if not a.child:
-        p = write(run, [f"# Final review: {verdict_line(res)}", "", scope_line(res), ""] + body(run, res, names))
+        p = write(run, [heading(verdict_line(res)), "", scope_line(res), ""] + body(run, res, names))
         print(f"{verdict_line(res)}: {p}")
         return
     kids, all_pass = [], res["passed"]
@@ -179,13 +189,13 @@ def main():
         name, _, crun = spec_.partition("=")
         crun = os.path.realpath(crun)
         cres = analyze(crun)
-        write(crun, [f"# Final review: {verdict_line(cres)}", "", scope_line(cres), ""] + body(crun, cres, names))
+        write(crun, [heading(verdict_line(cres)), "", scope_line(cres), ""] + body(crun, cres, names))
         all_pass = all_pass and cres["passed"]
         kids.append((name, crun, cres))
-    head = "PASSED" if all_pass else "NOT PASSED"
+    head = PASSED if all_pass else "NOT PASSED"
     out = [f"# Final review of the feature: {head}", "", "| Repository | Verdict | Report |", "| --- | --- | --- |"]
     for name, crun, cres in kids:
-        out.append(f"| {name} | {verdict_line(cres)} | `{os.path.join(crun, 'final-review-report.md')}` |")
+        out.append(f"| {name} | {verdict_line(cres)} | `{rf.final_report_path(crun)}` |")
     out.append(f"| cross-repository check | {verdict_line(res)} | below |")
     out += ["", "Each repository's file lists what was checked there; findings are triaged in that repository's `report.md`.", ""]
     out += body(run, res, names)

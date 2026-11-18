@@ -19,12 +19,10 @@ Never fetches, writes nothing, and always exits 0: a missing piece is
 printed as missing rather than failing the call.
 """
 import argparse, os, re, subprocess
-from records import load_script
+from records import branch_name, git, load_script, plural
+from ledgers import workspace_rows
 import paths
 import run_files as rf
-
-rs = load_script("status.py")
-git = rs.git
 
 def git_raw(repo, *args):
     """Like git(), but keeps leading whitespace, which aligns `--stat` and `status --short`."""
@@ -45,7 +43,7 @@ def latest_run(wt, head):
     run = os.path.realpath(paths.latest(wt))
     if not os.path.isdir(run): return "none"
     name = paths.run_name(wt, run)
-    if not os.path.exists(os.path.join(run, "target.txt")): return f"`{name}`, stopped before scoping finished"
+    if not os.path.exists(rf.target_path(run)): return f"`{name}`, stopped before scoping finished"
     target = rf.read_target(run)
     what, at = target.target or "?", target.head
     progress = os.path.join(run, "progress.md")
@@ -61,8 +59,8 @@ def block(path, log_n):
     wt = git(path, "rev-parse", "--show-toplevel")
     if not wt:
         return [f"## {path}", "", "Not a git worktree (or the path does not exist).", ""]
-    rows = rs.workspace_rows(wt)
-    branch = git(wt, "rev-parse", "--abbrev-ref", "HEAD")
+    rows = workspace_rows(wt)
+    branch = branch_name(wt)
     head = git(wt, "rev-parse", "HEAD")
     rec = load_script("records.py")
     common = rec.common_dir(wt)
@@ -83,7 +81,7 @@ def block(path, log_n):
     base = git(wt, "merge-base", "HEAD", main) if main else ""
     if base:
         count = git(wt, "rev-list", "--count", f"{base}..HEAD")
-        out.append(f"- Merge base: `{base[:9]}` ({count} commit{'' if count == '1' else 's'} on the branch)")
+        out.append(f"- Merge base: `{base[:9]}` ({plural(int(count), 'commit')} on the branch)")
     else:
         out.append("- Merge base: unknown")
 

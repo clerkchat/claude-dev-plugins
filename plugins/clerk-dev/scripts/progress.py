@@ -30,6 +30,7 @@ current line and exits. The script exits when every watched run has its report.
 """
 import argparse, os, time
 import paths
+import run_files as rf
 from run_files import read_instances
 
 def mtime(path):
@@ -41,7 +42,7 @@ def state(run):
     if os.path.exists(os.path.join(run, "report.md")): return ("done", "", None)
     vdir = os.path.join(run, "verify")
     checked = len([n for n in os.listdir(vdir) if n.endswith(".md")]) if os.path.isdir(vdir) else 0
-    merged = mtime(os.path.join(run, "merged.md"))
+    merged = mtime(rf.merged_path(run))
     if checked: return ("verifying", f"{checked} checked", merged)
     inst = read_instances(run)
     raws = [m for m in (mtime(os.path.join(run, i.raw)) for i in inst or []) if m]

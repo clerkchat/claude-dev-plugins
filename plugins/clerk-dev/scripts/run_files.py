@@ -1,5 +1,6 @@
 import json, os, re, subprocess, sys
 from collections import namedtuple
+import paths
 from records import load_script, section, table_rows
 
 mf = load_script("merge-findings.py")
@@ -75,8 +76,19 @@ def open_fence(lines):
 def line_span(lo, hi):
     return f"{lo}" + (f"-{hi}" if hi and hi != lo else "")
 
+def review_run(wt, label=None):
+    """The review run (--run LABEL or the latest) when it has a merged report and a target, else None."""
+    run = os.path.realpath(paths.run(wt, label) if label else paths.latest(wt))
+    return run if os.path.exists(merged_path(run)) and os.path.exists(target_path(run)) else None
+
 def merged_path(run):
     return os.path.join(run, "merged.md")
+
+def target_path(run):
+    return os.path.join(run, "target.txt")
+
+def final_report_path(run):
+    return os.path.join(run, "final-review-report.md")
 
 def entry_id(e):
     digits = re.sub(r"\D", "", str(e.get("id", "")))
@@ -265,7 +277,7 @@ def same_commit(a, b):
 Target = namedtuple("Target", "target base head")
 
 def read_target(run):
-    path = os.path.join(run, "target.txt")
+    path = target_path(run)
     lines = [line.strip() for line in open(path, encoding="utf-8").read().splitlines()] if os.path.exists(path) else []
     return Target(*(lines + ["", "", ""])[:3])
 
@@ -491,6 +503,8 @@ def number_rows(run):
 def read_numbers(run):
     return {mid: n for n, mid, _ in number_rows(run)}
 
+TRIAGE_SECTIONS = ("fix", "look", "existing", "debt")
+
 def read_sections(run):
     return {mid: section for _, mid, section in number_rows(run)}
 
@@ -566,6 +580,13 @@ CARRIED = ("carried", "reopened", "recheck")
 def previous_run(run):
     label = read_text(reconcile_path(run, "previous.txt"))
     return os.path.join(os.path.dirname(os.path.realpath(run)), label) if label else ""
+
+def run_chain(run):
+    """The run and the runs it was seeded from, latest first."""
+    chain = [run]
+    while (prev := previous_run(chain[-1])) and prev not in chain and os.path.exists(merged_path(prev)):
+        chain.append(prev)
+    return chain
 
 def found_on(run, mid):
     m = read_matches(run).get(mid)
