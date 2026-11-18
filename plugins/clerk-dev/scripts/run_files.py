@@ -87,6 +87,9 @@ def merged_path(run):
 def target_path(run):
     return os.path.join(run, "target.txt")
 
+def final_report_path(run):
+    return os.path.join(run, "final-review-report.md")
+
 def entry_id(e):
     digits = re.sub(r"\D", "", str(e.get("id", "")))
     return int(digits) if digits else None

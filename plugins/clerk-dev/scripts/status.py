@@ -82,8 +82,8 @@ here and no other worktrees. The default view shows the same map first.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, plural, plural_s, section, started, table_rows, this_repo, worktrees
-from ledgers import builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_checks, open_questions, plural, plural_s, section, settle_refs, started, table_rows, this_repo, worktrees
+from ledgers import builder_logs, read_build, read_passes, related_worktrees, workspace_rows
 import ids, lifecycle, paths
 import run_files as rf
 
@@ -358,13 +358,11 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     built = [e for e in entries if e["f"].get("Status") == "done" and any(bd.names_commit(e, s) for s, _ in unreviewed)]
     if built:
         later.insert(0, f"Check the {plural(built, 'handoff')} built since the last review ({', '.join(e['id'] for e in built)}): a pass review, or \"re-review the branch\".")
-    for s, r, items, state, mine, _ in rows:
-        busy = {n for e in mine if e["f"].get("Status") in bd.OPEN for n, _, _ in bd.reqs_of(e)}
-        left = [n for n in sorted(items) if n not in state and n not in busy]
-        partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
+    for row in rows:
+        s, partial, left = row.spec, row.partial, row.not_started
         if partial: later.append(f"Finish the partial requirement{plural_s(partial)} of {s}: {bd.compress(s, partial)}.")
-        if left and not busy:
-            nxt = "; ".join(f"{ids.ref(s, n)} {short(items[n], 70).rstrip('.')}" for n in left[:3])
+        if left and not row.busy:
+            nxt = "; ".join(f"{ids.ref(s, n)} {short(row.items[n], 70).rstrip('.')}" for n in left[:3])
             later.append(f"Next handoff for {s}, from what is not started ({plural(left, 'requirement')}; the plan and the brief's order decide): {nxt}.")
     return first, later, elsewhere
 
@@ -392,9 +390,7 @@ def feature_block(wt, rows, out):
     if open_storms: counts.append(plural(open_storms, "open brainstorm"))
     out.append(f"**Feature:** {name}: {plural(recs, 'record')} ({', '.join(counts)}){where}.")
     settle, open_q = [], 0
-    for c in rc.checks(h):
-        if not c["open"]: continue
-        qs, sf_ = open_questions(h, c["name"])
+    for c, qs, sf_ in open_checks(h):
         if is_design_check(c): open_q += len(qs)
         ar = next((r.get("area") for r in recs if c["records"] and r["id"] == c["records"][0] and r.get("area")), "")
         out.append(f"- {OPEN_ITEMS[c['kind']]} open in {c['name']}{' (' + ar + ')' if ar else ''}: {len(qs)}" + (f", settle-first: {', '.join(sf_)}" if sf_ else ""))
@@ -488,8 +484,8 @@ def worktree_progress(log, kind, marked):
     bd = load_script("build.py")
     try: rows = bd.progress(log.path, log.entries) if log.entries else []
     except SystemExit: return "build log unreadable"
-    total = sum(len(r.items) for r in rows)
-    return f"{sum(len(r.built) for r in rows)} of {total} requirements done" if total else "nothing built yet"
+    done, total = bd.totals(rows)
+    return f"{done} of {total} requirements done" if total else "nothing built yet"
 
 def counts_line(wt):
     owed, parked = len(bl.owed_followups(wt)), len(bl.feature_ideas(wt))
@@ -559,9 +555,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     areas = {r.get("area") for r in specs if r.get("area")}
     area_of = {r["id"]: r.get("area") for r in recs}
     settle = []
-    for c in rc.checks(h) if h else []:
-        if not c["open"] or not (set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas): continue
-        qs, sfq = open_questions(h, c["name"])
+    for c, qs, sfq in open_checks(h, lambda c: set(c["records"]) & spec_ids or {area_of.get(x) for x in c["records"]} & areas) if h else []:
         out.append(f"- {OPEN_ITEMS[c['kind']].capitalize()} open in {c['name']}: {len(qs)}" + (f", settle-first: {', '.join(sfq)}" if sfq else ""))
         if sfq: settle.append(f"{c['name']} ({', '.join(sfq)})")
     for r in specs:
@@ -621,9 +615,7 @@ def spec_facts(h, r, cs):
     rc = load_script("records.py")
     body = open(r["path"], encoding="utf-8").read()
     mine = [c for c in cs if is_design_check(c) and r["id"] in c["records"]]
-    settle = []
-    for c in mine:
-        settle += [ids.in_check(c["name"], q) for q in open_questions(h, c["name"])[1]]
+    settle = [ref for c in mine for ref in settle_refs(c, open_questions(h, c["name"])[1])]
     base = body_section(body, "Baseline")
     items = len(brief_open_items(body))
     missing = ([] if mine else ["no design check"]) + ([f"{len(settle)} settle-first open"] if settle else []) + ([] if base else ["no Baseline"])
@@ -696,15 +688,13 @@ def design_view(wt, out, logs):
         out.append(f"- {a}: {plural(decs, 'active decision')}, {note}")
     area_of = {r["id"]: r.get("area") or "feature-wide" for r in recs}
     qlines, other = [], 0
-    for c in cs:
-        if not c["open"]: continue
-        qs, sfq = open_questions(h, c["name"])
+    for c, qs, sfq in open_checks(h):
         if is_design_check(c): other += len(qs) - len(sfq)
         status_of = {r["id"]: r for r in recs}
         gone = [x for x in c["records"] if status_of.get(x, {}).get("status") == "superseded"]
         note = "; on " + ", ".join(f"superseded {x} (now {status_of[x].get('superseded_by')})" for x in gone) if gone else ""
         qlines.append(f"- {area_of.get(c['records'][0], '?') if c['records'] else '?'}: {c['name']}, {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else "") + note)
-        settle_all += [ids.in_check(c["name"], q) for q in sfq]
+        settle_all += settle_refs(c, sfq)
     if qlines: out += ["", "**Open questions:**"] + qlines
     mixed = ov.get("mixed", [])
     if ov["gaps"] or ov["disagreements"] or mixed:
@@ -763,11 +753,9 @@ def area_view(wt, out, name, logs):
     if decs: out.append(f"- decisions: {', '.join(r['id'] for r in decs)}")
     steps, settle = [], []
     qs_lines = []
-    for c in rc.checks(h):
-        if not c["open"] or not set(c["records"]) & mine_ids: continue
-        qs, sfq = open_questions(h, c["name"])
+    for c, qs, sfq in open_checks(h, lambda c: set(c["records"]) & mine_ids):
         qs_lines.append(f"- {c['name']}: {len(qs)} open" + (f" (settle-first: {', '.join(sfq)})" if sfq else ""))
-        settle += [ids.in_check(c["name"], q) for q in sfq]
+        settle += settle_refs(c, sfq)
     if qs_lines: out += ["", "**Open questions:**"] + qs_lines
     dis = [x for x in ov["disagreements"] + ov.get("mixed", []) if set(map(canon, ids.records_in(x))) & mine_ids]
     if dis: out += ["", f"**Disagreements touching it:** {len(dis)}"] + [f"- {short(x, 110)}" for x in dis]
@@ -832,11 +820,7 @@ def blockers_view(wt, out, logs, run):
                for log in logs for e in log.entries if e["f"].get("Status") == "stopped"]
     try: h = rc.hub(wt)
     except SystemExit: h = None
-    settle = []
-    for c in rc.checks(h) if h else []:
-        if not c["open"]: continue
-        sfq = open_questions(h, c["name"])[1]
-        if sfq: settle.append((c["name"], [ids.in_check(c["name"], q) for q in sfq]))
+    settle = [(c["name"], settle_refs(c, sfq)) for c, _, sfq in (open_checks(h) if h else []) if sfq]
     open_items = bl.owed_followups(wt)
     hidden = detached(wt)
     fix = []
@@ -1017,7 +1001,7 @@ def findings_section(wt, run, review, open_items, head, out):
     settled = not triage_left and not unreviewed and not open_items and not detached(wt)
     if review.fixes and settled:
         steps.append(f"Triage is done and {plural(review.fixes, 'fix', form='fixes')} landed since the review: \"do a final review pass\" reads the branch once more at the merge bar.")
-    elif settled and final_pass_stands(run):
+    elif settled and load_script("final-report.py").stands(run):
         steps.append(DRAFT_PR_STEP)
     return first, steps
 

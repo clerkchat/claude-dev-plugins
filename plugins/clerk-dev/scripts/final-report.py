@@ -44,6 +44,7 @@ CATEGORIES = [
 ]
 FINAL_LENSES = ["security", "tenancy", "data-privacy", "side-effects", "rollout", "sql", "scaling",
                 "capacity", "concurrency", "contracts", "error-handling", "llm-agent", "completeness"]
+PASSED = "PASSED"
 BELOW_LENSES = ["design", "naming-concepts", "user-facing-text", "tests", "performance",
                 "observability-cost", "spec-conformance", "credit"]
 
@@ -105,7 +106,7 @@ def analyze(run):
                 lenses=lenses, passed=passed, target=rf.read_target(run))
 
 def verdict_line(a):
-    if a["passed"]: return "PASSED"
+    if a["passed"]: return PASSED
     parts = []
     if a["kept"]: parts.append(f"{plural(a['kept'], 'new finding')} would hold the merge")
     if a["reopened"]: parts.append(f"{plural(a['reopened'], 'fixed finding')} reopened")
@@ -156,10 +157,19 @@ def scope_line(a):
         return f"Whole branch `{t.base[:9]}...{t.head[:9]}`, read fresh on {a['when']}."
     return ""
 
+def heading(verdict): return f"# Final review: {verdict}"
+
 def write(run, lines):
-    p = os.path.join(run, "final-review-report.md")
+    p = rf.final_report_path(run)
     open(p, "w", encoding="utf-8").write("\n".join(lines).rstrip() + "\n")
     return p
+
+def stands(run):
+    """Whether run's final pass passed and no review has been run on it since."""
+    report = rf.final_report_path(run)
+    if not os.path.exists(report): return False
+    with open(report, encoding="utf-8") as f: passed = f.readline().strip() == heading(PASSED)
+    return passed and os.path.getmtime(report) >= os.path.getmtime(rf.target_path(run))
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -171,7 +181,7 @@ def main():
     run = os.path.realpath(a.run)
     res = analyze(run)
     if not a.child:
-        p = write(run, [f"# Final review: {verdict_line(res)}", "", scope_line(res), ""] + body(run, res, names))
+        p = write(run, [heading(verdict_line(res)), "", scope_line(res), ""] + body(run, res, names))
         print(f"{verdict_line(res)}: {p}")
         return
     kids, all_pass = [], res["passed"]
@@ -179,13 +189,13 @@ def main():
         name, _, crun = spec_.partition("=")
         crun = os.path.realpath(crun)
         cres = analyze(crun)
-        write(crun, [f"# Final review: {verdict_line(cres)}", "", scope_line(cres), ""] + body(crun, cres, names))
+        write(crun, [heading(verdict_line(cres)), "", scope_line(cres), ""] + body(crun, cres, names))
         all_pass = all_pass and cres["passed"]
         kids.append((name, crun, cres))
-    head = "PASSED" if all_pass else "NOT PASSED"
+    head = PASSED if all_pass else "NOT PASSED"
     out = [f"# Final review of the feature: {head}", "", "| Repository | Verdict | Report |", "| --- | --- | --- |"]
     for name, crun, cres in kids:
-        out.append(f"| {name} | {verdict_line(cres)} | `{os.path.join(crun, 'final-review-report.md')}` |")
+        out.append(f"| {name} | {verdict_line(cres)} | `{rf.final_report_path(crun)}` |")
     out.append(f"| cross-repository check | {verdict_line(res)} | below |")
     out += ["", "Each repository's file lists what was checked there; findings are triaged in that repository's `report.md`.", ""]
     out += body(run, res, names)

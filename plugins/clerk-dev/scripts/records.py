@@ -284,6 +284,15 @@ def open_questions(h, name):
     first = items_mod().DESIGN_WEIGHTS[0]
     return qs, [q["id"] for q in qs if q["fields"].get("Weight", "").startswith(first)]
 
+def open_checks(h, keep=None):
+    """(check, open items, settle-first question ids) for each check with open
+    items that keep, when given, accepts."""
+    for c in checks(h):
+        if c["open"] and (keep is None or keep(c)):
+            yield (c, *open_questions(h, c["name"]))
+
+def settle_refs(check, question_ids): return [ids.in_check(check["name"], q) for q in question_ids]
+
 def check_files(cd): return [f for f in os.listdir(cd) if ids.check_from_file(f) is not None] if os.path.isdir(cd) else []
 
 def check_order(f):

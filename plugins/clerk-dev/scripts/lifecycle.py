@@ -21,7 +21,7 @@ Prints nothing when the worktree has no hub with a started feature. It reads
 files and git only, starts nothing, writes nothing, and exits 0.
 """
 import argparse, os
-from records import DESIGN_CHECK, checks, feature_name, git, hub, load_script, open_questions, plural, records, started
+from records import DESIGN_CHECK, checks, feature_name, git, hub, load_script, open_checks, plural, records, started
 from ledgers import builder_logs, read_build, read_passes, workspace_rows
 import ids, paths
 import run_files as rf
@@ -42,12 +42,8 @@ def questions_open(asked, settle, word):
 
 def design_questions(h):
     """(open, settle-first) questions across the hub's design checks."""
-    asked = settle = 0
-    for c in checks(h):
-        if c["kind"] != DESIGN_CHECK or not c["open"]: continue
-        qs, first = open_questions(h, c["name"])
-        asked += len(qs); settle += len(first)
-    return asked, settle
+    found = list(open_checks(h, lambda c: c["kind"] == DESIGN_CHECK))
+    return sum(len(qs) for _, qs, _ in found), sum(len(first) for _, _, first in found)
 
 def has_design(h):
     return bool(records(h)) or any(c["kind"] == DESIGN_CHECK for c in checks(h))
@@ -75,11 +71,7 @@ def build_segment(logs):
         current = [m for log in logs for m in under_way(log)]
     except SystemExit: return "build ?"
     entries = [e for log in logs for e in bd.handoffs(log.entries)]
-    items, built = {}, {}
-    for r in rows:
-        items[r.spec] = set(r.items)
-        built[r.spec] = built.get(r.spec, set()) | r.built
-    done, counted = sum(map(len, built.values())), sum(map(len, items.values()))
+    done, counted = bd.totals(rows)
     stopped = sum(1 for e in entries if e["f"].get("Status") == "stopped")
     busy = any(e["f"].get("Status") in bd.OPEN for e in entries)
     words = " ".join(x for x in (f"{done}/{counted}" if counted else "", f"(milestone {milestone_name(current[-1])})" if current else "") if x)

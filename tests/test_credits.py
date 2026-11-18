@@ -11,6 +11,7 @@ import records
 import run_files
 
 sf = records.load_script("stale-findings.py")
+final_report = records.load_script("final-report.py")
 
 def credit(mid, path, line=20):
     return (
@@ -634,6 +635,23 @@ class FinalReportTest(RunCase):
         self.write("reconcile/appended.tsv", "merged_id\n12\n")
         run_ok("final-report", self.run_dir)
         self.assertIn("merged 12", self.read("final-review-report.md"))
+
+
+class FinalVerdictTest(RunCase):
+    def setUp(self):
+        super().setUp()
+        self.write_target("branch", "a" * 40, "b" * 40)
+
+    def test_a_passing_report_stands(self):
+        self.write_merged()
+        run_ok("final-report", self.run_dir)
+        self.assertTrue(final_report.stands(self.run_dir))
+
+    def test_a_report_that_did_not_pass_does_not_stand(self):
+        self.write_merged(defect(7, "a.py"))
+        self.write_numbers({7: "fix"})
+        run_ok("final-report", self.run_dir)
+        self.assertFalse(final_report.stands(self.run_dir))
 
 
 if __name__ == "__main__":
