@@ -220,6 +220,28 @@ class ReviewTests(LifecycleCase):
         self.review("r2", queued=2)
         self.assertEqual(self.strip(), "test · design ✓ · review · 2 open")
 
+    def test_an_unreadable_merged_report_shows_a_question_mark(self):
+        self.review("r1", queued=1)
+        with open(os.path.join(self.run_dir, "merged.md"), "wb") as f:
+            f.write(b"\xff\xfe")
+        self.assertEqual(self.strip(), "test · design ✓ · review ?")
+
+    def test_an_unreadable_report_in_the_chain_shows_a_question_mark(self):
+        self.write_run("r1", queued=1)
+        with open(os.path.join(self.run_dir, "merged.md"), "wb") as f:
+            f.write(b"\xff\xfe")
+        self.review("r2", queued=1, previous="r1")
+        self.assertEqual(self.strip(), "test · design ✓ · review ?")
+
+    def test_a_chain_that_loops_stops_at_the_first_repeat(self):
+        self.write_run("r1", queued=2)
+        self.review("r2", queued=1, previous="r2")
+        self.assertEqual(self.strip(), "test · design ✓ · review · 1 open")
+
+    def test_a_chain_whose_earlier_run_was_deleted_stops_there(self):
+        self.review("r2", queued=1, previous="r1")
+        self.assertEqual(self.strip(), "test · design ✓ · review · 1 open")
+
 
 class PullRequestTests(LifecycleCase):
     def setUp(self):

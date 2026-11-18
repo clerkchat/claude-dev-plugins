@@ -12,8 +12,9 @@ Each segment carries its own count and never a rolled-up number; a stage with
 nothing open shows ✓ after its name. Build and passes are summed over every
 worktree building the feature; review and the pull request are read from the
 hub worktree, --run naming the review run in place of latest. Open design
-questions ride after the last segment once a later stage has begun. A build
-or pass log that cannot be read shows as "build ?" or "passes ?".
+questions ride after the last segment once a later stage has begun. A build,
+pass, or review file that cannot be read shows as "build ?", "passes ?", or
+"review ?".
 
 Prints nothing when the worktree has no hub with a started feature. It reads
 files and git only, starts nothing, writes nothing, and exits 0.
@@ -101,6 +102,10 @@ def rounds(run):
 
 def review_segment(run):
     if not run: return None
+    try: return review_rounds(run)
+    except (OSError, ValueError): return "review ?"
+
+def review_rounds(run):
     chain = rounds(run)
     latest, triage = sf.open_count(run), len(sf.unmarked(run))
     left = f"{latest} open" + (f" ({triage} to triage)" if triage else "")

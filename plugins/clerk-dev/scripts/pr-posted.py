@@ -15,7 +15,7 @@ def read(wt):
     try:
         with open(paths.pr_posted(wt)) as f: number, url = f.read().rstrip("\n").split("\t")
     except (OSError, ValueError): return None
-    return (int(number), url) if number.isdigit() else None
+    return (int(number), url) if number.isdecimal() else None
 
 def record(wt, number, url):
     os.makedirs(paths.ledger(wt), exist_ok=True)

@@ -36,6 +36,12 @@ class PrPostedTest(PrPostedCase):
             f.write("garbage\n")
         self.assertIsNone(pr_posted.read(self.wt))
 
+    def test_a_number_of_non_decimal_digits_reads_as_nothing(self):
+        os.makedirs(paths.ledger(self.wt))
+        with open(paths.pr_posted(self.wt), "w") as f:
+            f.write(f"\u00b2\t{URL}\n")
+        self.assertIsNone(pr_posted.read(self.wt))
+
 
 class PrPostedCommandTest(PrPostedCase):
     def test_record_then_show_prints_the_number_and_link(self):
