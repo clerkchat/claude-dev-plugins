@@ -536,6 +536,9 @@ def phrase_of(names, lens):
 def phrases(names, lenses):
     return ", ".join(phrase_of(names, lens) for lens in lenses)
 
+def joined(words):
+    return " and ".join(words) if len(words) < 3 else ", ".join(words[:-1]) + ", and " + words[-1]
+
 def branch_scope_rule():
     return body_section(open(TRACKING, encoding="utf-8").read(), "Branch scope")
 

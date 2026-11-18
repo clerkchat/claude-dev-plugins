@@ -57,8 +57,6 @@ import run_files as rf
 
 mf = load_script("merge-findings.py")
 
-STOP = set("the a an and or of to in on for is are be by with that this it as at from not no when so then than its into".split())
-
 def load(run):
     titles, overrides = rf.read_titles(run), rf.read_overrides(run)
     out = {e["id"]: e for e in rf.read_merged(rf.merged_path(run))}
@@ -68,14 +66,10 @@ def load(run):
     return out
 
 def words(e):
-    t = (e.get("title", "") + " " + e.get("claim", "")).lower()
-    return {w for w in re.findall(r"[a-z_][a-z0-9_]{2,}", t) if w not in STOP}
+    return mf.words(e.get("title", "") + " " + e.get("claim", ""))
 
 def comparable(a, b):
     return mf.is_credit(a) == mf.is_credit(b)
-
-def jac(a, b):
-    return len(a & b) / len(a | b) if a and b else 0.0
 
 TEXT_MATCH = 0.5
 
@@ -118,7 +112,7 @@ def append_candidates(new, carried):
         nw = words(n); scored = []
         for cid, c in carried.items():
             if not comparable(n, c): continue
-            sim = jac(nw, words(c))
+            sim = mf.jaccard(nw, words(c))
             same = n["file"] == c["file"]
             near = same and n["line"] and c["line"] and abs(n["line"] - c["line"]) <= 15
             if (same and (near or sim >= 0.25)) or sim >= 0.5:
@@ -274,7 +268,7 @@ CARRIES_POSTINGS = ("judge", "recheck")
 
 def carries_postings(how, prev_finding, cur_finding):
     if how in CARRIES_POSTINGS: return True
-    return how == "line" and bool(prev_finding and cur_finding) and jac(words(cur_finding), words(prev_finding)) >= TEXT_MATCH
+    return how == "line" and bool(prev_finding and cur_finding) and mf.jaccard(words(cur_finding), words(prev_finding)) >= TEXT_MATCH
 
 def confident_pairs(prev, cur, pairs, matches):
     prev_found, cur_found = load(prev), load(cur)
@@ -327,7 +321,7 @@ def proposed_matches(prev, cur, pinfo):
         cw = words(c)
         for pid, p in prev.items():
             if not comparable(c, p): continue
-            sim = jac(cw, words(p))
+            sim = mf.jaccard(cw, words(p))
             same_file = c["file"] == p["file"]
             near = same_file and c["line"] and p["line"] and abs(c["line"] - p["line"]) <= 15
             if same_file and (near and sim >= 0.2 or sim >= TEXT_MATCH):

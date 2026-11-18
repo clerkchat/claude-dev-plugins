@@ -3,7 +3,7 @@ import argparse, datetime, json, os, re, shlex, subprocess, sys
 from typing import NamedTuple
 import gh_api, ids
 import run_files as rf
-from records import ROUTING, load_script, phrase_of, phrases, plugin_version, plural, read_plain_names
+from records import ROUTING, joined, load_script, phrase_of, phrases, plugin_version, plural, read_plain_names
 
 pc = load_script("pr-comments.py")
 
@@ -959,7 +959,7 @@ UNFETCHED_NEXT = "fetch {it} if {one}, or reword the status or keep the thread o
 def unfetched(tokens):
     if not tokens: return None
     if len(tokens) == 1: return f"its status names {tokens[0]}, which is not a commit in this clone; {UNFETCHED_NEXT.format(it='it', one='it is one')}"
-    names = ", ".join(tokens[:-1]) + f" and {tokens[-1]}"
+    names = joined(tokens)
     return f"its status names {names}, which are not commits in this clone; {UNFETCHED_NEXT.format(it='them', one='they are')}"
 
 def fix_check(ctx, shas, unknown, repo):

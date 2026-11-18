@@ -308,6 +308,17 @@ class PlainNamesTest(TempCase):
         self.assertEqual(records.phrases(self.names(self.TABLE), ["error-handling"]), "error handling")
 
 
+class JoinedTest(unittest.TestCase):
+    def test_says_one_word_alone(self):
+        self.assertEqual(records.joined(["a"]), "a")
+
+    def test_joins_two_words_with_and(self):
+        self.assertEqual(records.joined(["a", "b"]), "a and b")
+
+    def test_joins_three_words_with_a_serial_comma(self):
+        self.assertEqual(records.joined(["a", "b", "c"]), "a, b, and c")
+
+
 class EveryLensHasAPlainNameTest(unittest.TestCase):
     def test_names_each_lens_agent_but_credit(self):
         names = records.read_plain_names(ROUTING)

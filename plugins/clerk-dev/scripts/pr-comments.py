@@ -51,7 +51,7 @@ def words(e):
     (TestScenario, test_scenario, and testScenario all give test, scenario)."""
     t = e.get("title", "") + " " + e.get("claim", "")
     t = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", t).replace("_", " ")
-    return {w for w in re.findall(r"[a-z][a-z0-9]{2,}", t.lower()) if w not in rc.STOP}
+    return {w for w in re.findall(r"[a-z][a-z0-9]{2,}", t.lower()) if w not in mf.STOP}
 
 def one_line(text, n=300):
     t = re.sub(r"<img[^>]*>", "[image]", text)
@@ -285,7 +285,7 @@ def shortlist(run, new_ids):
         c = allm[mid]; cw = words(c); scored = []
         cdir = os.path.dirname(c["file"])
         for fid, f in agents.items():
-            sim = rc.jac(cw, words(f))
+            sim = mf.jaccard(cw, words(f))
             score = sim + (0.3 if f["file"] == c["file"] else 0) + (0.1 if cdir and os.path.dirname(f["file"]) == cdir else 0) + (0.05 if fid in reported else 0)
             scored.append((score, fid))
         ranked = sorted(scored, reverse=True)

@@ -70,7 +70,7 @@ links review.md (review-feature.md) to its report, as link-latest.py does.
 import argparse, os, re, shutil, subprocess, sys, textwrap
 from collections import namedtuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from records import ROUTING, load_script, phrase_of, phrases, plural, read_plain_names
+from records import ROUTING, joined, load_script, phrase_of, phrases, plural, read_plain_names
 from run_files import (CLOSED_STATUSES, covered_refusal, numbered as finding_named, PROSE, closable, code_moved, credit_ids, drafted_for, fenced_lines,
                        finding_id, has_comment, joined_replies, label_of, log_commits, open_fence, read_appended, read_findings, lead_of, read_groups, read_instructions, read_kept_open,
                        read_numbers, read_posted, read_reconcile, read_slices, read_status, read_text, report_titles, reviewed_head, posted_path, posted_text,
@@ -1152,8 +1152,7 @@ def about_lines(merged, verdicts, unverified, rejected, hidden_minor, numbered, 
 
 def sort_number_list(m):
     nums = sorted({int(x) for x in re.findall(r"\d+", m.group(2))})
-    if len(nums) == 1: return m.group(1) + str(nums[0])
-    return m.group(1) + ", ".join(str(x) for x in nums[:-1]) + (", and " if len(nums) > 2 else " and ") + str(nums[-1])
+    return m.group(1) + joined([str(x) for x in nums])
 
 def finish_text(text, wrap):
     # {#<merged id>} in any text resolves to that finding's current number, so

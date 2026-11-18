@@ -11,8 +11,8 @@ import records
 mf = records.load_script("merge-findings.py")
 
 
-def entry(line, end_line=None, file="a.py", debt="", lens="correctness"):
-    return mf.norm({"_source": "t", "lens": lens, "file": file, "line": str(line), "end_line": str(end_line or line), "debt": debt})
+def entry(line, end_line=None, file="a.py", debt="", lens="correctness", title="Retries the request twice"):
+    return mf.norm({"_source": "t", "lens": lens, "file": file, "line": str(line), "end_line": str(end_line or line), "debt": debt, "title": title})
 
 
 def credit(line):
@@ -60,6 +60,46 @@ class OverlapsTest(unittest.TestCase):
 
     def test_joins_two_credits_on_the_same_lines(self):
         self.assertTrue(mf.overlaps(credit(10), credit(12)))
+
+    def test_keeps_different_defects_on_the_same_lines_apart(self):
+        self.assertFalse(mf.overlaps(entry(10), entry(10, title="Logs the user's email address")))
+
+
+class SameDefectTest(unittest.TestCase):
+    def test_matches_titles_worded_differently(self):
+        self.assertTrue(mf.same_defect(entry(10), entry(10, title="Request retried twice on timeout")))
+
+    def test_refuses_titles_that_share_only_a_symbol(self):
+        self.assertFalse(mf.same_defect(entry(10, title="`charge` retries twice"), entry(10, title="`charge` logs the card number")))
+
+    def test_falls_back_to_the_claim_without_a_title(self):
+        self.assertTrue(mf.same_defect(mf.norm({"_source": "t", "claim": "Retries the request twice."}), entry(10)))
+
+
+class MergeAllTest(unittest.TestCase):
+    def cards(self, *findings):
+        return mf.merge_all(list(findings))[0]
+
+    def test_joins_the_same_defect_on_nearby_lines(self):
+        self.assertEqual(len(self.cards(entry(10), entry(12, title="Request retried twice on timeout"))), 1)
+
+    def test_keeps_the_joined_range_on_the_card(self):
+        [card] = self.cards(entry(10), entry(12))
+        self.assertEqual((card["line"], card["end_line"]), (10, 12))
+
+    def test_keeps_different_defects_on_the_same_lines_apart(self):
+        self.assertEqual(len(self.cards(entry(10), entry(10, title="Logs the user's email address"))), 2)
+
+    def test_does_not_join_through_the_cards_joined_range(self):
+        cards = self.cards(entry(10), entry(12, title="Request retried twice on timeout"), entry(15, title="Retries the call twice"))
+        self.assertEqual(len(cards), 2)
+
+    def test_keeps_distinct_findings_along_a_long_function_apart(self):
+        topics = ["Logs the user's email", "Retries without backoff", "Swallows the timeout error", "Reads the config twice",
+                  "Leaks the file handle", "Skips the null check", "Builds SQL from input", "Holds the lock across IO",
+                  "Ignores the cancel signal", "Drops the trailing batch", "Counts deleted rows as kept"]
+        findings = [entry(10 + 6 * i, 13 + 6 * i, title=t) for i, t in enumerate(topics)]
+        self.assertEqual(len(self.cards(*findings)), len(topics))
 
 
 class IsCreditTest(unittest.TestCase):
