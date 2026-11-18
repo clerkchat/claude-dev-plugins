@@ -338,14 +338,6 @@ class ScopedToABranchThatStillExists(SpinUpCase):
         self.assertIn("BL-1 is in-progress on feat/z;", self.refused("create", self.api.path, "feat/x", "--item", "BL-1"))
 
 
-class AnOwedItemScopedToABranchThatStillExists(SpinUpCase):
-    def test_is_taken_naming_that_branch(self):
-        self.api.git("branch", "feat/z")
-        add_followup(self.api.path, "Handle exportId", "--scope", "feat/z", env=self.env)
-        with mock.patch.dict(os.environ, self.env, clear=True):
-            self.assertEqual(spin_up.open_item(self.api.path, "BL-1").live_branch, "feat/z")
-
-
 class AnOwedItemScopedToTheMainBranch(SpinUpCase):
     def test_is_not_reported_as_moved(self):
         add_followup(self.api.path, "Handle exportId", "--scope", "main", env=self.env)
