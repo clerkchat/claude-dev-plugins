@@ -96,6 +96,27 @@ class SpinUpCase(TempCase):
                 pass
         return out.getvalue().splitlines(), err.getvalue().splitlines()
 
+    def create_with_failing_rescope(self, *items):
+        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
+            return self.create_here("feat/x", *items)
+
+    def undo(self, err):
+        return re.search(r"to retry, run: (.*), then run spin-up.py create again$", err[-1]).group(1)
+
+    def run_undo(self, err):
+        subprocess.run(self.undo(err), shell=True, check=True, env=self.env, capture_output=True)
+
+    def record_body(self, wt):
+        _, body = records.parse(os.path.join(paths.records_dir(wt), "001-brainstorm-phone-digits.md"))
+        return body
+
+    def refused_creating_nothing(self, *items):
+        before = self.worktrees()
+        message = self.refused("create", self.api.path, "feat/x", *item_args(items))
+        self.assertEqual(self.worktrees(), before)
+        self.assertFalse(self.has_branch("feat/x"))
+        return message
+
 
 class WhenAnIdeaIsSpunUp(SpinUpCase):
     def setUp(self):
@@ -131,8 +152,7 @@ class WhenAnIdeaIsSpunUp(SpinUpCase):
         self.assertEqual((meta["id"], meta["from"]), ("STORM-1", "BL-1"))
 
     def test_the_brainstorm_carries_the_item_and_its_provenance_as_context(self):
-        _, body = records.parse(os.path.join(paths.records_dir(self.wt), "001-brainstorm-phone-digits.md"))
-        self.assertIn("## Context\n\n### From the item (quoted)\n\n> ## Why\n>\n> faster lookups\n>\n> ## When\n>\n> after launch\n\nFiled", body)
+        self.assertIn("## Context\n\n### From the item (quoted)\n\n> ## Why\n>\n> faster lookups\n>\n> ## When\n>\n> after launch\n\nFiled", self.record_body(self.wt))
 
     def test_marks_the_item_adopted_as_the_brainstorm(self):
         it = self.item("BL-1", self.wt)
@@ -382,11 +402,7 @@ class WhenSeedingFails(SpinUpCase):
         super().setUp()
         self.followup()
         self.wt = self.path("api/feat/x")
-        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
-            self.out, self.err = self.create_here("feat/x", "BL-1")
-
-    def undo(self):
-        return re.search(r"to retry, run: (.*), then run spin-up.py create again$", self.err[-1]).group(1)
+        self.out, self.err = self.create_with_failing_rescope("BL-1")
 
     def test_names_the_new_worktree_and_branch_first(self):
         self.assertEqual(self.out[:2], [f"worktree: {self.wt}", "branch: feat/x"])
@@ -395,7 +411,7 @@ class WhenSeedingFails(SpinUpCase):
         self.assertEqual(self.item("BL-1")["scope"], "new")
 
     def test_the_printed_step_lets_create_run_again(self):
-        subprocess.run(self.undo(), shell=True, check=True, env=self.env, capture_output=True)
+        self.run_undo(self.err)
         self.create("feat/x", "BL-1")
         self.assertEqual(self.item("BL-1", self.wt)["scope"], "feat/x")
 
@@ -498,16 +514,6 @@ class WithSeveralItems(SpinUpCase):
         self.followup("Handle exportId")
         self.followup("Drop the legacy route")
 
-    def record_body(self, wt):
-        _, body = records.parse(os.path.join(paths.records_dir(wt), "001-brainstorm-phone-digits.md"))
-        return body
-
-    def undo(self, err):
-        return re.search(r"to retry, run: (.*), then run spin-up.py create again$", err[-1]).group(1)
-
-    def assertNothingCreated(self, before):
-        self.assertEqual(self.worktrees(), before)
-        self.assertFalse(self.has_branch("feat/x"))
 
 
 class WhenTwoFollowUpsAreSpunUp(WithSeveralItems):
@@ -547,7 +553,6 @@ class WhenAnIdeaIsSpunUpWithAFollowUp(WithSeveralItems):
         super().setUp()
         self.idea()
         self.followup()
-        self.wt = self.path("api/feat/x")
         self.create("feat/x", "BL-1", "BL-2")
 
     def test_the_brainstorm_lists_the_follow_up_between_the_idea_and_the_provenance(self):
@@ -572,18 +577,14 @@ class WhenAnIdeaIsSpunUpWithAFollowUp(WithSeveralItems):
 class WhenAnItemIsGivenTwice(WithSeveralItems):
     def test_refuses_naming_the_duplicate(self):
         self.followups()
-        before = self.worktrees()
-        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "BL-2", "--item", "BL-1"), "BL-1 given more than once")
-        self.assertNothingCreated(before)
+        self.assertEqual(self.refused_creating_nothing("BL-1", "BL-2", "BL-1"), "BL-1 given more than once")
 
 
 class WhenTwoIdeasAreGiven(WithSeveralItems):
     def test_refuses_naming_both(self):
         self.idea("One")
         self.idea("Two")
-        before = self.worktrees()
-        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "BL-2"), "BL-1, BL-2 are ideas; a worktree takes at most one idea")
-        self.assertNothingCreated(before)
+        self.assertEqual(self.refused_creating_nothing("BL-1", "BL-2"), "BL-1, BL-2 are ideas; a worktree takes at most one idea")
 
 
 class WhenItemsAreFromTwoRepositories(WithSeveralItems):
@@ -592,18 +593,14 @@ class WhenItemsAreFromTwoRepositories(WithSeveralItems):
         self.configure(repos=[("api", self.api.path), ("web", web.path)])
         self.followup()
         add_followup(web.path, "Web side", "--scope", "new", env=self.env)
-        before = self.worktrees()
-        self.assertEqual(self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "web:BL-1"), "web:BL-1 not in the same repository's backlog as BL-1")
-        self.assertNothingCreated(before)
+        self.assertEqual(self.refused_creating_nothing("BL-1", "web:BL-1"), "web:BL-1 not in the same repository's backlog as BL-1")
 
 
 class WhenOneItemOfAGroupIsClosed(WithSeveralItems):
     def test_refuses_and_changes_no_item(self):
         self.followups()
         run_ok("backlog", "set", self.api.path, "BL-2", "dropped", "--ref", "not needed", env=self.env)
-        before = self.worktrees()
-        self.assertIn("BL-2 is dropped;", self.refused("create", self.api.path, "feat/x", "--item", "BL-1", "--item", "BL-2"))
-        self.assertNothingCreated(before)
+        self.assertIn("BL-2 is dropped;", self.refused_creating_nothing("BL-1", "BL-2"))
         self.assertEqual(self.item("BL-1")["scope"], "new")
 
 
@@ -645,7 +642,7 @@ class WhenSeedingFailsAfterOneBacklogChange(WithSeveralItems):
         self.assertNotIn("BL-2", self.undo(self.err))
 
     def test_the_printed_commands_let_create_run_again(self):
-        subprocess.run(self.undo(self.err), shell=True, check=True, env=self.env, capture_output=True)
+        self.run_undo(self.err)
         self.create("feat/x", "BL-1", "BL-2")
         self.assertEqual([self.item(i, self.wt)["scope"] for i in ("BL-1", "BL-2")], ["feat/x", "feat/x"])
 
@@ -654,9 +651,8 @@ class WhenSeedingAnInProgressItemFails(WithSeveralItems):
     def test_the_printed_commands_put_it_back_in_progress(self):
         self.followup()
         run_ok("backlog", "set", self.api.path, "BL-1", "in-progress", "--ref", "feat/y", env=self.env)
-        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
-            _, err = self.create_here("feat/x", "BL-1")
-        subprocess.run(self.undo(err), shell=True, check=True, env=self.env, capture_output=True)
+        _, err = self.create_with_failing_rescope("BL-1")
+        self.run_undo(err)
         it = self.item("BL-1")
         self.assertEqual((it["status"], it["ref"], it["scope"]), ("in-progress", "feat/y", "new"))
 
@@ -665,9 +661,8 @@ class WhenAnAdoptedIdeaMustBeReversed(WithSeveralItems):
     def test_the_printed_commands_reopen_it(self):
         self.idea()
         self.followup()
-        with mock.patch.object(backlog, "rescope", side_effect=SystemExit("disk full")):
-            _, err = self.create_here("feat/x", "BL-1", "BL-2")
-        subprocess.run(self.undo(err), shell=True, check=True, env=self.env, capture_output=True)
+        _, err = self.create_with_failing_rescope("BL-1", "BL-2")
+        self.run_undo(err)
         self.assertEqual(self.item("BL-1")["status"], "open")
         self.create("feat/x", "BL-1", "BL-2")
 
