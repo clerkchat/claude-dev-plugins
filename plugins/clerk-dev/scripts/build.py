@@ -635,8 +635,8 @@ def branch_commits(wt):
 
 def merged(wt): return bool(branch_base(wt)) and not branch_commits(wt)
 
-# A branch with no commits past main also reads as merged, so landing needs a sign it had commits: a linked entry or a posted pull request.
-def landed(wt, entries, posted=False): return (posted or bool(linked(entries))) and merged(wt)
+# A branch with no commits past main also reads as merged, so landing needs a sign it had commits: a linked entry.
+def landed(wt, entries): return bool(linked(entries)) and merged(wt)
 
 def commit_of(e): return e["f"].get("Commit") or "no commit logged"
 
