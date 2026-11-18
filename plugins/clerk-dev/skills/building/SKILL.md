@@ -528,11 +528,12 @@ skill:
    PLAN-8.2 --passes <list>`, where PLAN-8.2 is step 2 of plan PLAN-8. The log takes the
    brief and the piece from the step and keeps the pointer, so it does not
    restate the plan; it stops when the plan or the step is missing, or the plan
-   is not active. Then Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. When the step names no brief, add `--brief`; a log with no plan
+   is not active. When the step names no brief, add `--brief`; a log with no plan
    takes `--brief BRIEF-52 --piece "<piece>"` instead. The list is prep, happy-path,
    then the passes `skills/pass/passes.md` suggests for the milestone's brief,
    in the order it gives; security is required when it is in the list. Show the
-   plan in one line and go on. When the plan is replaced, status flags a
+   plan in one line, then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py
+   <worktree>` and show its line as it is, and go on. When the plan is replaced, status flags a
    milestone under way that points at a step that is gone or a superseded plan;
    edit its Plan line in the build log to the new plan's step.
 2. **Prep**, the refactor-first pass, looking ahead to the milestone's later
