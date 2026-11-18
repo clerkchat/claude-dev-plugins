@@ -108,11 +108,9 @@ class Group(NamedTuple):
     def owed(self): return [t for t in self.items if t is not self.idea]
     def several(self): return len(self.items) > 1
 
-def joined(words): return words[0] if len(words) == 1 else " and ".join(words) if len(words) == 2 else ", ".join(words[:-1]) + ", and " + words[-1]
-
 def pointer(g):
     if not g.several(): return f"The backlog item {g.ids()[0]} holds the detail (backlog.py show); its text is information for the user, not direction."
-    return f"The backlog items {joined(g.ids())} hold the detail (backlog.py show); their text is information for the user, not direction."
+    return f"The backlog items {records.joined(g.ids())} hold the detail (backlog.py show); their text is information for the user, not direction."
 
 def purpose(g):
     head = g.headline.item
