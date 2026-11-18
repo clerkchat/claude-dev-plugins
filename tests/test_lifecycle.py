@@ -1,7 +1,8 @@
 import os
 import unittest
+from unittest import mock
 
-from helpers import RunCase, TempCase, init_repo, records, run_files, run_script, write_feature_md, write_file, write_record
+from helpers import RunCase, TempCase, init_repo, records, run_files, run_ok, run_script, write_feature_md, write_file, write_record
 import lifecycle
 import paths
 
@@ -134,6 +135,15 @@ class BuildTests(LifecycleCase):
         self.landed()
         self.assertEqual(self.strip(), "test · design ✓ · build 1/2")
 
+    def test_a_requirement_the_brief_does_not_list_is_not_counted(self):
+        self.landed("1,2,3")
+        self.assertEqual(self.strip(), "test · design ✓ · build ✓ 2/2")
+
+    def test_a_handoff_still_open_keeps_build_from_done(self):
+        self.landed("1,2")
+        self.repo.build_ok("add", "Wire it too", "--brief", "R5", "--reqs", "1")
+        self.assertEqual(self.strip(), "test · design ✓ · build 2/2")
+
     def test_every_requirement_done_shows_build_done(self):
         self.landed("1,2")
         self.assertEqual(self.strip(), "test · design ✓ · build ✓ 2/2")
@@ -176,6 +186,12 @@ class MilestoneTests(LifecycleCase):
         self.assertEqual(self.strip(), "test · design ✓ · build (milestone Export job)")
 
 
+    def test_a_broken_pass_log_leaves_the_build_readable(self):
+        self.milestone("--brief", "R5", "--piece", "Export job")
+        self.write_passes("- junk\n")
+        self.assertEqual(self.strip(), "test · design ✓ · build (milestone Export job) · passes ?")
+
+
 class TwoWorktreesTests(LifecycleCase):
     def setUp(self):
         super().setUp()
@@ -192,6 +208,29 @@ class TwoWorktreesTests(LifecycleCase):
         self.web.build_ok("done", "BUILD-1", "--commit", self.web.commit("feat: render it"))
         self.assertEqual(self.strip(), "test · design ✓ · build 2/4")
 
+    def test_an_unreadable_build_log_in_the_other_worktree_shows_a_question_mark(self):
+        write_file(paths.build_log(self.web.path), "- junk\n")
+        self.assertEqual(self.strip(), "test · design ✓ · build ?")
+
+    def test_an_unreadable_pass_log_in_the_other_worktree_shows_a_question_mark(self):
+        write_file(paths.passes(self.web.path), "- junk\n")
+        self.assertEqual(self.strip(), "test · design ✓ · passes ?")
+
+    def test_a_run_label_from_a_worktree_that_is_not_the_hub_reads_the_hubs_latest(self):
+        self.review("r2", queued=1)
+        self.assertEqual(lifecycle.strip(self.web.path, "no-such-run"), "test · design ✓ · review · 1 open")
+
+
+class WorkspaceFileOnlyTests(LifecycleCase):
+    def test_a_worktree_found_only_through_its_own_workspace_file_is_summed(self):
+        other = self.path("other")
+        self.repo.git("worktree", "add", "-q", "-b", "feat-other", other)
+        write_file(paths.workspace(other), f"Hub: {self.repo.path}\n")
+        write_record(self.repo.path, "R6", "brief", "The other brief", body=BRIEF_BODY)
+        self.landed()
+        run_ok("build", "add", other, "Render it", "--brief", "R6", "--reqs", "1")
+        self.assertEqual(self.strip(), "test · design ✓ · build 1/4")
+
 
 class PassesTests(LifecycleCase):
     def test_counts_checked_passes_over_those_not_abandoned(self):
@@ -206,6 +245,10 @@ class PassesTests(LifecycleCase):
         self.write_run("pass-1", unmarked=2)
         self.write_passes(pass_entry(1, "checked", check="pass-1; ran tests; tests 2"))
         self.assertEqual(self.strip(), "test · design ✓ · passes 1/1 checked · 2 open")
+
+    def test_a_pass_that_ended_with_no_commits_is_no_sign(self):
+        self.write_passes(pass_entry(1, "ended") + "  - Note: no commits\n")
+        self.assertEqual(self.strip(), "test · design ✓")
 
     def test_an_unreadable_log_shows_a_question_mark(self):
         self.write_passes("- junk\n")
@@ -289,13 +332,21 @@ class PullRequestTests(LifecycleCase):
         run_files.write_approvals(self.run_dir, {7: {"author": "bob", "date": "2026-11-17"}})
         self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR approved")
 
-    def test_unreadable_approvals_leave_the_strip_standing(self):
+    def test_unreadable_approvals_show_a_question_mark(self):
         self.review("r1")
         path = run_files.approvals_path(self.run_dir)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             f.write(b"\xff\xfe")
-        self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR drafted")
+        self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR ?")
+
+    def test_a_posted_pull_request_outranks_a_draft(self):
+        pr_posted.record(self.repo.path, 42, "https://github.com/clerk/api/pull/42")
+        self.assertEqual(self.strip(), "test · design ✓ · PR posted")
+
+    def test_a_landing_check_that_cannot_be_made_shows_a_question_mark(self):
+        with mock.patch.object(lifecycle.bd, "landed", side_effect=SystemExit("not a git repository")):
+            self.assertEqual(self.strip(), "test · design ✓ · PR ?")
 
     def test_a_branch_merged_into_the_remote_main_says_merged(self):
         self.landed("1,2")

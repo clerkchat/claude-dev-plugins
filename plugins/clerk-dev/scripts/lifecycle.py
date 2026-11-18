@@ -11,10 +11,11 @@ of, in the order design, build, passes, review, PR, joined by " · ":
 Each segment carries its own count and never a rolled-up number; a stage with
 nothing open shows ✓ after its name. Build and passes are summed over every
 worktree building the feature; review and the pull request are read from the
-hub worktree, --run naming the review run in place of latest. Open design
+hub worktree, --run naming the hub's review run in place of latest (a
+worktree that is not the hub reads the hub's latest). Open design
 questions ride after the last segment once a later stage has begun. A build,
-pass, or review file that cannot be read shows as "build ?", "passes ?", or
-"review ?".
+pass, review, approvals, or landing check that cannot be read shows as
+"build ?", "passes ?", "review ?", or "PR ?".
 
 Prints nothing when the worktree has no hub with a started feature. It reads
 files and git only, starts nothing, writes nothing, and exits 0.
@@ -61,7 +62,9 @@ def milestone_name(m):
     return str(step.sub) if step else m["title"]
 
 def under_way(log):
-    return [m for m in bd.milestones(log.entries) if m["f"].get("Status") != "abandoned" and not bd.milestone_view(log.path, m).ready]
+    """The milestones not yet through; all of them when the pass log cannot be read, which "passes ?" reports."""
+    _, passes_err = read_passes(log.path)
+    return [m for m in bd.milestones(log.entries) if m["f"].get("Status") != "abandoned" and (passes_err or not bd.milestone_view(log.path, m).ready)]
 
 def build_segment(logs):
     if not any(log.err or bd.handoffs(log.entries) or bd.milestones(log.entries) for log in logs): return None
@@ -71,15 +74,17 @@ def build_segment(logs):
         current = [m for log in logs for m in under_way(log)]
     except SystemExit: return "build ?"
     entries = [e for log in logs for e in bd.handoffs(log.entries)]
-    done, counted = sum(len(r.done) for r in rows), sum(len(r.items) for r in rows)
+    done, counted = sum(len(r.done & set(r.items)) for r in rows), sum(len(r.items) for r in rows)
     stopped = sum(1 for e in entries if e["f"].get("Status") == "stopped")
     busy = any(e["f"].get("Status") in bd.OPEN for e in entries)
     words = " ".join(x for x in (f"{done}/{counted}" if counted else "", f"(milestone {milestone_name(current[-1])})" if current else "") if x)
     return segment("build", done == counted and not current and not busy, words, f"{plural(stopped, 'handoff')} stopped" if stopped else "")
 
+def changed_nothing(e): return e["f"].get("Status") == "ended" and e["f"].get("Note") == "no commits"
+
 def outside_milestones(passes, entries):
     briefs = [m["f"].get("Brief") or "" for m in bd.milestones(entries)]
-    return [e for e in passes if e["f"].get("Status") != "abandoned" and not any(ids.same(e["f"].get("Piece") or "", b) for b in briefs)]
+    return [e for e in passes if e["f"].get("Status") != "abandoned" and not changed_nothing(e) and not any(ids.same(e["f"].get("Piece") or "", b) for b in briefs)]
 
 def passes_segment(logs):
     counted, unreadable = [], False
@@ -93,7 +98,7 @@ def passes_segment(logs):
     left = sum(bd.open_findings(wt, e) or 0 for wt, e in checked)
     return segment("passes", len(checked) == len(counted) and not left, f"{len(checked)}/{len(counted)} checked", f"{left} open" if left else "")
 
-def rounds(run):
+def run_chain(run):
     """The run and the runs it was seeded from, latest first."""
     chain = [run]
     while (prev := rf.previous_run(chain[-1])) and prev not in chain and os.path.exists(rf.merged_path(prev)):
@@ -102,11 +107,11 @@ def rounds(run):
 
 def review_segment(run):
     if not run: return None
-    try: return review_rounds(run)
+    try: return review_text(run)
     except (OSError, ValueError): return "review ?"
 
-def review_rounds(run):
-    chain = rounds(run)
+def review_text(run):
+    chain = run_chain(run)
     latest, triage = sf.open_count(run), len(sf.unmarked(run))
     left = f"{latest} open" + (f" ({triage} to triage)" if triage else "")
     if len(chain) == 1: return segment("review", not latest, "", left if latest else "")
@@ -114,19 +119,14 @@ def review_rounds(run):
     stalled = ", not converging" if latest and latest >= before else ""
     return segment("review", not latest, f"round {len(chain)}", f"{before} → {left}{stalled}")
 
-def branch_landed(h, entries, posted):
-    try: return bd.landed(h, entries, posted)
-    except SystemExit: return False
-
-def approvals(run):
-    try: return rf.read_approvals(run)
-    except (OSError, ValueError): return {}
-
 def pr_segment(h, run, hub_log):
     drafted = os.path.exists(paths.pr_description(h))
     posted = pr_posted.read(h) is not None
-    approved = bool(run and approvals(run))
-    states = (("merged", branch_landed(h, hub_log.entries, posted)), ("approved", approved), ("posted", posted), ("drafted", drafted))
+    try:
+        approved = bool(run and rf.read_approvals(run))
+        landed = bd.landed(h, hub_log.entries, posted)
+    except (OSError, ValueError, SystemExit): return "PR ?"
+    states = (("merged", landed), ("approved", approved), ("posted", posted), ("drafted", drafted))
     return next((f"PR {word}" for word, on in states if on), None)
 
 def strip(wt, run=None):
@@ -135,7 +135,7 @@ def strip(wt, run=None):
     except SystemExit: return ""
     if not started(h): return ""
     logs = feature_logs(wt, h)
-    review = rf.review_run(h, run)
+    review = rf.review_run(h, run if same_path(wt, h) else None)
     hub_log = next(log for log in logs if same_path(log.path, h))
     later = [s for s in (build_segment(logs), passes_segment(logs), review_segment(review), pr_segment(h, review, hub_log)) if s]
     asked, settle = design_questions(h)
