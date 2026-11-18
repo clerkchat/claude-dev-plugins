@@ -176,14 +176,11 @@ def seed_owed(wt, t, undo):
     undo.append(("rescope", t.qualified, it.get("scope", "")))
     return lines
 
-def seed_item(wt, t, brainstorm_id, undo):
-    return adopt(wt, t, brainstorm_id, undo) if is_idea(t.item) else seed_owed(wt, t, undo)
-
 def seed(wt, g, undo):
     if records.branch_notes(wt)[0]: sys.exit(f"{paths.notes(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
     lines, brainstorm_id = seed_files(wt, g)
-    changes = [*([g.idea] if g.idea else []), *g.owed()]
-    return [*lines, *(line for t in changes for line in seed_item(wt, t, brainstorm_id, undo))]
+    adopted = adopt(wt, g.idea, brainstorm_id, undo) if g.idea else []
+    return [*lines, *adopted, *(line for t in g.owed() for line in seed_owed(wt, t, undo))]
 
 def live_branch(store, it):
     named = [b for b in (it.get("ref", ""), it.get("scope", "")) if b and b != backlog.NEW]
