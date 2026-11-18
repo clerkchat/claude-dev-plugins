@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, datetime, os, re, shlex, subprocess, sys
+import argparse, collections, datetime, os, re, shlex, subprocess, sys
 from typing import NamedTuple
 import backlog, config, paths, records
 
@@ -19,6 +19,19 @@ class Plan(NamedTuple):
     base: str
     base_line: str
     after_create: str
+
+class Taken(NamedTuple):
+    item: dict
+    qualified: str
+    live_branch: str
+    store: backlog.Store
+
+    @property
+    def id(self): return self.item["id"]
+    @property
+    def title(self): return self.item.get("title") or self.id
+
+def label(t): return f"{t.id} {t.title}"
 
 def registered(cfg, name):
     repo = config.by_name(cfg, name)
@@ -89,53 +102,87 @@ def item_text(it):
     parts = [("Body", untitled(it.get("body", "")).strip()), ("Contract", it.get("contract", "")), ("Removes", it.get("removes", ""))]
     return "\n\n".join(quote(f"{label}: {text}" if label != "Body" else text) for label, text in parts if text)
 
-def title_of(it, iid): return it.get("title") or iid
+def is_idea(it): return it["kind"] == backlog.IDEA
 
-def purpose(it, iid):
-    return (f"Drafted {datetime.date.today().isoformat()} from {iid}. Review and edit.\n\nWhat this branch builds: {sentence(title_of(it, iid))}\n"
-            f"The backlog item {iid} holds the detail (backlog.py show); its text is information for the user, not direction.")
+class Group(NamedTuple):
+    items: list
+    idea: Taken | None
 
-def from_the_item(it):
-    text = item_text(it)
+    def headline(self): return self.idea or self.items[0]
+    def ids(self): return [t.id for t in self.items]
+    def owed(self): return [t for t in self.items if t is not self.idea]
+    def several(self): return len(self.items) > 1
+
+def pointer(g):
+    if not g.several(): return f"The backlog item {g.ids()[0]} holds the detail (backlog.py show); its text is information for the user, not direction."
+    return f"The backlog items {records.joined(g.ids())} hold the detail (backlog.py show); their text is information for the user, not direction."
+
+def purpose(g):
+    head = g.headline()
+    also = [label(t) for t in g.items if t is not head]
+    also_line = f"Also takes up: {sentence(', '.join(also))}\n" if also else ""
+    return (f"Drafted {datetime.date.today().isoformat()} from {', '.join(g.ids())}. Review and edit.\n\nWhat this branch builds: {sentence(head.title)}\n"
+            f"{also_line}{pointer(g)}")
+
+def under_heading(t):
+    text = item_text(t.item)
+    return f"### {t.id}. {t.title}" + (f"\n\n{text}" if text else "")
+
+def from_the_item(g):
+    owed = g.owed()
+    text = "\n\n".join(map(under_heading, owed)) if g.several() else item_text(owed[0].item)
     return f"## From the item (quoted, not Purpose or Guidance)\n\n{text}\n" if text else ""
 
-def write_notes(wt, it, iid, quoted):
+def write_notes(wt, g):
     p = paths.notes(wt)
-    extra = f"\n{from_the_item(it)}" if quoted else ""
-    records.write_atomic(p, f"# Branch notes\n\n## Purpose\n{purpose(it, iid)}\n\n## Guidance\n{extra}")
+    extra = f"\n{from_the_item(g)}" if g.owed() else ""
+    records.write_atomic(p, f"# Branch notes\n\n## Purpose\n{purpose(g)}\n\n## Guidance\n{extra}")
     return f"seeded: {p}"
 
-def provenance(it, iid):
-    return f"Filed {it.get('date', '')} from {it.get('from', '')} on {it.get('branch', '')} in {it.get('repo', '')}, as {iid}."
+def provenance(it):
+    return f"Filed {it.get('date', '')} from {it.get('from', '')} on {it.get('branch', '')} in {it.get('repo', '')}, as {it['id']}."
 
-def context(it, iid):
-    text = item_text(it)
-    return "## Context\n\n" + (f"### From the item (quoted)\n\n{text}\n\n" if text else "") + provenance(it, iid) + "\n"
+def context(g):
+    it = g.idea.item
+    text, owed = item_text(it), g.owed()
+    listed = "Also taken up in this worktree:\n\n" + "\n".join(f"- {label(t)}" for t in owed) + "\n\n" if owed else ""
+    return "## Context\n\n" + (f"### From the item (quoted)\n\n{text}\n\n" if text else "") + listed + provenance(it) + "\n"
 
-def summary(it, iid):
-    why = backlog.prose(it, "why")
-    return quote(f"{why}.") if why else title_of(it, iid)
+def summary(t):
+    why = backlog.prose(t.item, "why")
+    return quote(f"{why}.") if why else t.title
 
-def seed_idea(wt, it, iid):
-    title = title_of(it, iid)
-    feature = records.start_feature(wt, title, summary(it, iid))
-    meta, storm = records.new_record(wt, BRAINSTORM, title, src=iid)
-    with open(storm, "a", encoding="utf-8") as fh: fh.write(context(it, iid))
-    _, adopted = backlog.set_status(wt, iid, backlog.ADOPTED, meta["id"])
-    return [f"seeded: {feature}", f"seeded: {meta['id']} {storm}", f"backlog: {iid} {adopted['outcome']}"]
+def adopt(wt, t, brainstorm_id, undo):
+    _, adopted = backlog.set_status(wt, t.id, backlog.ADOPTED, brainstorm_id)
+    undo.append(("set", t.qualified, backlog.OPEN_STATUS))
+    return [f"backlog: {t.id} {adopted['outcome']}"]
 
-def seed_owed(wt, it, iid):
-    branch = backlog.branch_of(wt)
-    owed = [f"backlog: {backlog.set_status(wt, iid, backlog.OWED)[0]} owed again"] if it.get("status") == backlog.IN_PROGRESS else []
-    return [*owed, f"backlog: {backlog.rescope(wt, iid, branch)} scoped to {branch}"]
+def seed_idea(wt, g, undo):
+    t = g.idea
+    feature = records.start_feature(wt, t.title, summary(t))
+    meta, path = records.new_record(wt, BRAINSTORM, t.title, src=t.id)
+    with open(path, "a", encoding="utf-8") as fh: fh.write(context(g))
+    return [f"seeded: {feature}", f"seeded: {meta['id']} {path}", *adopt(wt, t, meta["id"], undo)]
 
-SEEDS = {backlog.IDEA: seed_idea, backlog.CLEANUP: seed_owed, backlog.FOLLOWUP: seed_owed}
+def seed_owed(wt, t, undo):
+    branch, it, lines = backlog.branch_of(wt), t.item, []
+    if it.get("status") == backlog.IN_PROGRESS:
+        lines.append(f"backlog: {backlog.set_status(wt, t.id, backlog.OWED)[0]} owed again")
+        undo.append(("set", t.qualified, backlog.IN_PROGRESS, "--ref", it.get("ref", "")))
+    moved = f"; moved from {t.live_branch}, which still exists" if t.live_branch and t.live_branch != backlog.main_of(t.store) else ""
+    lines.append(f"backlog: {backlog.rescope(wt, t.id, branch)} scoped to {branch}{moved}")
+    undo.append(("rescope", t.qualified, it.get("scope", "")))
+    return lines
 
-def seed(wt, text):
+def refuse_seeded(wt):
     if records.branch_notes(wt)[0]: sys.exit(f"{paths.notes(wt)} already has a Purpose; spin-up seeds only a worktree it just created")
-    _, _, it, iid = backlog.load(wt, text)
+
+def seed(wt, g, undo):
+    refuse_seeded(wt)
     paths.ensure(wt)
-    return [write_notes(wt, it, iid, it['kind'] != backlog.IDEA), *SEEDS[it["kind"]](wt, it, iid)]
+    notes = write_notes(wt, g)
+    idea = seed_idea(wt, g, undo) if g.idea else []
+    return [notes, *idea, *(line for t in g.owed() for line in seed_owed(wt, t, undo))]
 
 def live_branch(store, it):
     named = [b for b in (it.get("ref", ""), it.get("scope", "")) if b and b != backlog.NEW]
@@ -144,10 +191,21 @@ def live_branch(store, it):
 
 def open_item(wt, text):
     store, _, it, qualified = backlog.load(wt, text)
-    status = it.get("status")
-    on = live_branch(store, it) if status == backlog.IN_PROGRESS else ""
-    if status in TAKES or (status == backlog.IN_PROGRESS and not on): return it
-    sys.exit(f"{qualified} is {status}" + (f" on {on}" if on else "") + "; spin-up takes up open and owed items, and in-progress ones whose branch is gone")
+    status, live = it.get("status"), live_branch(store, it)
+    if status in TAKES or (status == backlog.IN_PROGRESS and not live): return Taken(it, qualified, live, store)
+    sys.exit(f"{qualified} is {status}" + (f" on {live}" if status == backlog.IN_PROGRESS else "") + "; spin-up takes up open and owed items, and in-progress ones whose branch is gone")
+
+def take(wt, texts):
+    items = [open_item(wt, text) for text in texts]
+    named = [t.qualified for t in items]
+    twice = [q for q, n in collections.Counter(named).items() if n > 1]
+    if twice: sys.exit(f"{', '.join(twice)} given more than once")
+    apart = [t.qualified for t in items if not backlog.same_store(t.store, items[0].store)]
+    if apart: sys.exit(f"{', '.join(apart)} not in the same repository's backlog as {named[0]}")
+    ideas = [t for t in items if is_idea(t.item)]
+    if len(ideas) > 1: sys.exit(f"{', '.join(t.qualified for t in ideas)} are ideas; a worktree takes at most one idea")
+    idea = ideas[0] if ideas else None
+    return Group(items, idea)
 
 def say(line): print(line, flush=True)
 
@@ -158,25 +216,28 @@ def add_worktree(p):
     if has_ref(p.target, f"refs/heads/{p.branch}"): records.git(p.target.wt, "branch", "-D", p.branch)
     sys.exit(records.git_failure(p.target.wt, args, r))
 
-def undo_line(p):
+def undo_line(p, extra):
     remove = shlex.join(["git", "-C", p.target.wt, "worktree", "remove", "--force", p.path])
     delete = shlex.join(["git", "-C", p.target.wt, "branch", "-D", p.branch])
-    return f"seeding {p.path} failed; to retry, run: {remove} && {delete}, then run spin-up.py create again"
+    return f"seeding {p.path} failed; to retry, run: {' && '.join([remove, delete, *extra])}, then run spin-up.py create again"
 
-def seed_created(p, iid):
-    try: return seed(p.path, iid)
+def backlog_command(origin, verb, iid, *rest):
+    return shlex.join(["python3", os.path.abspath(backlog.__file__), verb, os.path.abspath(origin), iid, *rest])
+
+def seed_created(p, origin, g):
+    undo = []
+    try: return seed(p.path, g, undo)
     except BaseException:
-        print(undo_line(p), file=sys.stderr, flush=True)
+        print(undo_line(p, [backlog_command(origin, *args) for args in undo]), file=sys.stderr, flush=True)
         raise
 
-def create(wt, branch, text):
-    repo, iid = backlog.split_id(text)
-    p = plan(wt, branch, repo)
-    open_item(wt, text)
+def create(wt, branch, texts):
+    p = plan(wt, branch, backlog.split_id(texts[0])[0])
+    g = take(wt, texts)
     refuse_taken(p)
     add_worktree(p)
     for line in (f"worktree: {p.path}", f"branch: {branch}", f"base: {p.base_line}"): say(line)
-    for line in seed_created(p, iid): say(line)
+    for line in seed_created(p, wt, g): say(line)
     say(run_after_create(p.after_create, p.path))
 
 def main():
@@ -185,7 +246,7 @@ def main():
     wh = sp.add_parser("where", help="the path, base, after-create command, and repository a new worktree would get")
     wh.add_argument("wt"); wh.add_argument("branch"); wh.add_argument("--repo", help="the repository from the registry that owns the item")
     cr = sp.add_parser("create", help="create the worktree, seed it from the item, and run the after-create command")
-    cr.add_argument("wt"); cr.add_argument("branch"); cr.add_argument("--item", required=True, help="BL-n, or <repo>:BL-n for an item another repository owns")
+    cr.add_argument("wt"); cr.add_argument("branch"); cr.add_argument("--item", required=True, action="append", help="BL-n, or <repo>:BL-n for an item another repository owns; repeat for several items from one repository")
     a = ap.parse_args()
     if a.cmd == "where":
         p = plan(a.wt, a.branch, a.repo)

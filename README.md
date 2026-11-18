@@ -76,7 +76,7 @@ At any step:
 | "where are we?"     | What is done, and what to say next                                                                                                                                            |
 | "help me decide"    | The options for one choice, weighed, with a recommendation                                                                                                                    |
 | "checkpoint"        | Saves what the conversation settled, so you can `/clear` safely                                                                                                               |
-| "spin up"           | Takes up a parked idea or follow-up in a new worktree off main, ready to start                                                                                                |
+| "spin up"           | Takes up one or more backlog items (at most one an idea) in a new worktree off main, ready to start                                                                           |
 | "grab the PR comments" | Brings the reviewers' comments into the latest review, to fix like findings                                                                                                    |
 | "set up the config" | Writes the optional `~/.claude/clerk-dev/local.md`: your repositories, worktree path pattern, and after-create command, which let spin-up and filing reach other repositories |
 
