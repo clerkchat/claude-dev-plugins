@@ -152,23 +152,17 @@ def summary(t):
     why = backlog.prose(t.item, "why")
     return quote(f"{why}.") if why else t.title
 
-def idea_files(wt, g):
-    t = g.idea
-    feature = records.start_feature(wt, t.title, summary(t))
-    meta, path = records.new_record(wt, BRAINSTORM, t.title, src=t.id)
-    with open(path, "a", encoding="utf-8") as fh: fh.write(context(g))
-    return [f"seeded: {feature}", f"seeded: {meta['id']} {path}"], meta["id"]
-
-def seed_files(wt, g):
-    paths.ensure(wt)
-    notes = write_notes(wt, g)
-    lines, brainstorm_id = idea_files(wt, g) if g.idea else ([], "")
-    return [notes, *lines], brainstorm_id
-
 def adopt(wt, t, brainstorm_id, undo):
     _, adopted = backlog.set_status(wt, t.id, backlog.ADOPTED, brainstorm_id)
     undo.append(("set", t.qualified, backlog.OPEN_STATUS))
     return [f"backlog: {t.id} {adopted['outcome']}"]
+
+def seed_idea(wt, g, undo):
+    t = g.idea
+    feature = records.start_feature(wt, t.title, summary(t))
+    meta, path = records.new_record(wt, BRAINSTORM, t.title, src=t.id)
+    with open(path, "a", encoding="utf-8") as fh: fh.write(context(g))
+    return [f"seeded: {feature}", f"seeded: {meta['id']} {path}", *adopt(wt, t, meta["id"], undo)]
 
 def seed_owed(wt, t, undo):
     branch, it, lines = backlog.branch_of(wt), t.item, []
@@ -185,9 +179,10 @@ def refuse_seeded(wt):
 
 def seed(wt, g, undo):
     refuse_seeded(wt)
-    lines, brainstorm_id = seed_files(wt, g)
-    adopted = adopt(wt, g.idea, brainstorm_id, undo) if g.idea else []
-    return [*lines, *adopted, *(line for t in g.owed() for line in seed_owed(wt, t, undo))]
+    paths.ensure(wt)
+    notes = write_notes(wt, g)
+    idea = seed_idea(wt, g, undo) if g.idea else []
+    return [notes, *idea, *(line for t in g.owed() for line in seed_owed(wt, t, undo))]
 
 def live_branch(store, it):
     named = [b for b in (it.get("ref", ""), it.get("scope", "")) if b and b != backlog.NEW]
