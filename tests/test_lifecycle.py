@@ -136,7 +136,7 @@ class BuildTests(LifecycleCase):
     def test_a_stopped_handoff_rides_after_the_build_segment(self):
         self.handoff()
         self.repo.build_ok("stop", "BUILD-1", "--question", "Which store?")
-        self.assertEqual(self.strip(), "test · design ✓ · build 0/2 · 1 stopped")
+        self.assertEqual(self.strip(), "test · design ✓ · build 0/2 · 1 handoff stopped")
 
     def test_an_unreadable_log_shows_a_question_mark_and_exits_zero(self):
         write_file(paths.build_log(self.repo.path), "- junk\n")

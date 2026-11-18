@@ -175,7 +175,7 @@ continue. Never retry a fix in a loop.
 
 When the queue is done, render once and say: how many were fixed, how many
 partly, how many moved to discuss and why in a few words each, and the progress
-line, and run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. When that render says a posted finding's thread is still open, follow
+line. Then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. When that render says a posted finding's thread is still open, follow
 Closing posted threads in the `review` skill before going on. When Pass 2 follows, go straight on: in the same message, start Pass 2
 and present its first discussion, without waiting to be asked. When the queue
 held more than about ten fixes, put one line before that discussion: "The

@@ -75,7 +75,7 @@ def build_segment(logs):
     stopped = sum(1 for e in entries if e["f"].get("Status") == "stopped")
     busy = any(e["f"].get("Status") in bd.OPEN for e in entries)
     words = " ".join(x for x in (f"{done}/{counted}" if counted else "", f"(milestone {milestone_name(current[-1])})" if current else "") if x)
-    return segment("build", done == counted and not current and not busy, words, f"{stopped} stopped" if stopped else "")
+    return segment("build", done == counted and not current and not busy, words, f"{plural(stopped, 'handoff')} stopped" if stopped else "")
 
 def outside_milestones(passes, entries):
     briefs = [m["f"].get("Brief") or "" for m in bd.milestones(entries)]
