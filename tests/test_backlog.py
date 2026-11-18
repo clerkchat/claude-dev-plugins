@@ -21,6 +21,7 @@ class BacklogCase(TempCase):
         super().setUp()
         self.env = {**os.environ, config.ENV: self.path("absent.md")}
         self.api = init_repo(self.path("api/api-main"), with_origin=False)
+        self.api.commit("EXPORT_V2_FLAG = true", "flags.txt")
         self.feat = self.worktree(self.api, "api/feat", "feat/x")
 
     def worktree(self, repo, name, branch):
@@ -124,6 +125,21 @@ class AddTests(BacklogCase):
         m = self.meta("BL-1")
         self.assertEqual((m["removes"], m["trigger"]), ("EXPORT_V2_FLAG", "flag at 100%"))
 
+    def test_a_matched_removes_records_the_head_it_matched_in(self):
+        self.cleanup()
+        self.assertEqual(self.meta("BL-1")["matched"], git(self.feat, "rev-parse", "--short", "HEAD"))
+
+    def test_a_key_only_on_the_branch_still_matches(self):
+        write_file(os.path.join(self.feat, "new.txt"), "BRANCH_ONLY_KEY\n")
+        git(self.feat, "add", "new.txt")
+        git(self.feat, "commit", "-qm", "branch code")
+        self.cleanup("Remove it", "--removes", "BRANCH_ONLY_KEY")
+        self.assertTrue(self.meta("BL-1")["matched"])
+
+    def test_a_trigger_only_cleanup_has_no_matched(self):
+        self.add("cleanup", "Drop v1", self.feat, "--trigger", "all clients on v2")
+        self.assertEqual(self.meta("BL-1").get("matched", ""), "")
+
     def test_the_follow_up_fields_are_kept(self):
         self.followup("Handle exportId", "--contract", "changed: x", "--finding", "web 8")
         m = self.meta("BL-1")
@@ -147,6 +163,11 @@ class AddRefusalTests(BacklogCase):
     def test_another_kinds_fields_are_refused(self):
         out = self.refused("add", self.feat, "x", "--kind", "idea", "--removes", "y", "--origin", "a b")
         self.assertEqual(out, "--removes, --origin: not a field of an idea")
+
+    def test_a_removes_key_missing_from_head_is_refused(self):
+        out = self.refused("add", self.feat, "x", "--kind", "cleanup", "--removes", "NO_SUCH_KEY")
+        self.assertIn("NO_SUCH_KEY is not in", out)
+        self.assertIn("--trigger only", out)
 
     def test_a_cleanup_needs_a_trigger_or_what_it_removes(self):
         self.assertIn("--trigger or --removes", self.refused("add", self.feat, "x", "--kind", "cleanup"))
@@ -530,9 +551,9 @@ class CheckCase(TempCase):
         self.env = {**os.environ, config.ENV: self.path("absent.md")}
         self.api = init_repo(self.path("api/api-main"))
         self.feat = self.path("api/feat")
-        git(self.api.path, "worktree", "add", "-q", "-b", "feat/x", self.feat)
         self.api.commit("EXPORT_V2_FLAG = true", "flags.txt")
         self.api.git("push", "-q", "origin", "main")
+        git(self.api.path, "worktree", "add", "-q", "-b", "feat/x", self.feat)
         self.iid = run_ok("backlog", "add", self.feat, "Remove EXPORT_V2_FLAG", "--kind", "cleanup", "--scope", "new", "--removes", "EXPORT_V2_FLAG", env=self.env)
 
     def check(self, *args):
@@ -564,6 +585,17 @@ class CheckTests(CheckCase):
     def test_a_done_cleanup_is_not_checked(self):
         run_ok("backlog", "set", self.feat, "BL-1", "done", "--ref", "1a2b3c4", env=self.env)
         self.assertEqual(len(self.check()), 1)
+
+    def test_an_unmatched_removes_is_not_checkable_and_never_gone(self):
+        path = run_ok("backlog", "path", self.feat, "BL-1", env=self.env)
+        write_file(path, open(path).read().replace("matched:", "unused:"))
+        self.remove_the_flag()
+        self.assertEqual(self.check()[0], "BL-1 Remove EXPORT_V2_FLAG: trigger: none, 0 days old, EXPORT_V2_FLAG not checkable")
+        self.assertEqual(backlog.gone_cleanups(backlog.Reader(self.feat))[1], [])
+
+    def test_a_matched_key_gone_from_origin_main_is_in_gone_cleanups(self):
+        self.remove_the_flag()
+        self.assertEqual([it["id"] for it in backlog.gone_cleanups(backlog.Reader(self.feat))[1]], ["BL-1"])
 
     def test_a_trigger_only_cleanup_shows_its_trigger_and_age(self):
         run_ok("backlog", "add", self.feat, "Drop v1", "--kind", "cleanup", "--scope", "new", "--trigger", "all clients on v2", env=self.env)

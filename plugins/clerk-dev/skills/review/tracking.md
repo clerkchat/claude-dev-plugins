@@ -240,10 +240,13 @@ Readers:
 
 A cleanup is an item of kind `cleanup` in the backlog: code a change added that
 is meant to go away, such as a feature gate, a compatibility branch, or a
-deprecated shim. `removes` names the code the way it appears in the source (a
+deprecated shim. `removes` is a literal key the way it appears in the source (a
 flag key, an enum member, a function or module name), which `backlog.py check`
-searches for with `git grep -F`; `trigger` is the condition for removing it
-that the plugin cannot check ("once every client sends exportId").
+searches for with `git grep -F`; `add` refuses a key that is not in the
+worktree's HEAD and records `matched` when it is, and `check` greps only items
+with `matched`, showing the rest by their trigger as not checkable. `trigger`
+is the condition for removing it that the plugin cannot check ("once every
+client sends exportId").
 
 When a review's rollout lens or a builder's report says a change adds one, offer
 in one line: "file a cleanup to remove `<key>` when <condition>?" On yes, file
@@ -562,9 +565,9 @@ done as written):
     with `overrides/<merged id>.md` laid over it, to
     `<run>/backlog-<merged id>.md`, then `backlog.py add <worktree> "<the
     finding's title>" --kind idea|cleanup --scope new --from "<run> N" --body
-    <that file>`. For a cleanup add `--removes <the code the finding names>`
-    (asked for in one line when it names none) and `--trigger "<condition>"`
-    when the discussion named one. Then one render with `--instruct
+    <that file>`. For a cleanup add `--removes <a literal key as it appears in
+    the source>` (asked for in one line when the finding names none) and
+    `--trigger "<condition>"` when the discussion named one. Then one render with `--instruct
     N=defer:<item id>`, which also sets the status to `deferred` with the item
     id as the outcome; never `--set` it too. Leave `--scope` out when the user
     names the feature, so it defaults to the hub's branch. Pass `--repo NAME`
