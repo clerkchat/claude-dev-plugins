@@ -84,8 +84,12 @@ def workspace(wt):
     if m: hub = repos.get(m.group(1), m.group(1))
     return hub, repos
 
+def plural_s(x):
+    n = x if isinstance(x, int) else len(x)
+    return "" if n == 1 else "s"
+
 def plural(n, word, say=str):
-    return f"{say(n)} {word}" + ("" if n == 1 else "s")
+    return f"{say(n)} {word}{plural_s(n)}"
 
 def table_cells(line): return [c.strip() for c in line.strip().strip("|").split("|")]
 
@@ -922,7 +926,7 @@ def main():
             k = r.get("area") or "(feature-wide)"
             s = by.setdefault(k, {"n": 0, "active": 0, "last": ""})
             s["n"] += 1; s["active"] += r.get("status") == "active"; s["last"] = max(s["last"], r.get("date", ""))
-        for k, s in by.items(): print(f"{k}\t{s['n']} record{'s' if s['n'] != 1 else ''}, {s['active']} active, last {s['last']}")
+        for k, s in by.items(): print(f"{k}\t{plural(s['n'], 'record')}, {s['active']} active, last {s['last']}")
     elif a.cmd == "tag":
         r = find(h, a.rid); set_fields(r, area=slug(a.area) if a.area else None); concatenate(h, a.wt)
         print(f"{r['id']} " + (f"area {slug(a.area)}" if a.area else "feature-wide"))

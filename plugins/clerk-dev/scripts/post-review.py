@@ -891,7 +891,7 @@ def update_published(a, ctx, items):
     rows = planned_rows(rf.read_posted(a.run), picked, "", today())
     calls = published_calls(a.run, ctx, picked, rows)
     if a.dry_run: write_payload(a.run, calls); return
-    confirm(a, ctx, f"change {len(picked)} published comment" + ("" if len(picked) == 1 else "s") + " on GitHub now",
+    confirm(a, ctx, f"change {plural(len(picked), 'published comment')} on GitHub now",
             ["--update-published", a.update_published])
     results = execute(calls, a.repo, ctx, items)
     record_sent(a.run, rows, results, picked)
@@ -919,7 +919,7 @@ def confirmed_by_flag(a, ctx):
 
 def submit_confirmation(verdict, drafts, warned):
     if not (drafts or warned or verdict in CONFIRMED_VERDICTS): return None
-    also = f", publishing {len(drafts)} draft" + ("" if len(drafts) == 1 else "s") + " of your own with it" if drafts else ""
+    also = f", publishing {plural(len(drafts), 'draft')} of your own with it" if drafts else ""
     return CONFIRMED_VERDICTS.get(verdict, "submit as comment") + also + (", despite the warnings above" if warned else "")
 
 def submit(a, ctx, verdict):
@@ -1106,7 +1106,7 @@ def close(a, ctx):
     for it in sending: print_warnings(f"{named(it)}:", it["warnings"])
     calls = [call for it in sending for call in close_calls(it)]
     if a.dry_run: write_payload(a.run, calls); return
-    confirm(a, ctx, f"reply and resolve {len(sending)} thread" + ("" if len(sending) == 1 else "s"), ["--close", a.close])
+    confirm(a, ctx, f"reply and resolve {plural(len(sending), 'thread')}", ["--close", a.close])
     close_threads(a.run, sending, a.repo)
 
 CANNOT_RESOLVE = "replied that it looks fixed; you cannot resolve the thread"

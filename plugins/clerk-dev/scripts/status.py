@@ -82,7 +82,7 @@ here and no other worktrees. The default view shows the same map first.
 """
 import argparse, datetime, os, re, subprocess, sys
 from typing import NamedTuple
-from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, section, table_rows, this_repo, worktrees
+from records import DESIGN_CHECK, OPEN_ITEMS, body_section, branch_name, brief_open_items, git, load_script, open_questions, plural, plural_s, section, table_rows, this_repo, worktrees
 from ledgers import builder_logs, final_pass_stands, read_build, read_passes, related_worktrees, workspace_rows
 import ids, lifecycle, paths
 import run_files as rf
@@ -93,10 +93,6 @@ not_done = load_script("items.py").not_done
 
 SECTION_NAMES = dict(zip(rf.TRIAGE_SECTIONS, ("Fix before merging", "Worth a look", "Already on main", "Cleanup and refactoring"), strict=True))
 DRAFT_PR_STEP = "Draft the pull request description: \"draft the PR description\" writes one per repository for you to post."
-
-def plural(x):
-    n = x if isinstance(x, int) else len(x)
-    return "" if n == 1 else "s"
 
 def emit(wt, text, strip=""):
     text = "\n".join(x for x in (strip, text) if x)
@@ -141,7 +137,7 @@ def plan_gaps(h):
         steps = rc.plan_steps(r)
         if not steps: out.append(f"plan {r['id']} has no numbered steps: add the milestones in a new plan superseding it (the feature skill)"); continue
         bare = [str(n) for n, t in steps.items() if not re.search(r"\bdone\b", t, re.I)]
-        if bare: out.append(f"plan {r['id']} has no done line on step{plural(bare)} {', '.join(bare)}: supersede it with a plan that gives each step one (the feature skill)")
+        if bare: out.append(f"plan {r['id']} has no done line on step{plural_s(bare)} {', '.join(bare)}: supersede it with a plan that gives each step one (the feature skill)")
     return out
 
 def milestone_drift(wt, h, entries):
@@ -221,7 +217,7 @@ def pass_word(e):
     cs = load_script("passes.py").counts(check)
     if cs is None: return "checked, " + check.split(";")[-1].strip()
     n = sum(cs.values())
-    return "checked, clean" if n == 0 else f"checked, {n} finding{plural(n)} in `{load_script('passes.py').check_label(e)}`"
+    return "checked, clean" if n == 0 else f"checked, {n} finding{plural_s(n)} in `{load_script('passes.py').check_label(e)}`"
 
 def pass_line(e):
     return f"{e['id']} {e['title']} {pass_word(e)}"
@@ -246,7 +242,7 @@ DETACHED_NOTE = "HEAD is detached; follow-ups owed here not shown."
 
 def detached(wt): return not bl.branch_of(wt)
 
-def followups_step(open_items): return f"Work the open follow-up{plural(open_items)} ({len(open_items)}): \"go through the follow-ups\"."
+def followups_step(open_items): return f"Work the open follow-up{plural_s(open_items)} ({len(open_items)}): \"go through the follow-ups\"."
 
 def followup_lines(open_items, seen):
     new = [i for i in open_items if is_new(i, seen)]
@@ -265,7 +261,7 @@ def listed(its): return ", ".join(it["qualified"] for it in its)
 
 def kind_counts(its):
     counts = [(bl.NAMES[k], sum(1 for it in its if it.get("kind") == k)) for k in bl.KINDS]
-    return ", ".join(f"{n} {name}{plural(n)}" for name, n in counts if n)
+    return ", ".join(f"{n} {name}{plural_s(n)}" for name, n in counts if n)
 
 def gone_line(it, main): return f"- gone: {item_line(it, it['removes'] + ' is gone from ' + main)}"
 
@@ -275,7 +271,7 @@ def cleanup_lines(reader):
     if not gone: return [], []
     main = bl.remote_ref(main)
     lines = [gone_line(it, main) for it in gone] + [f"- {bl.fetch_line(reader.own)}"]
-    return lines, [f"Mark the cleanup{plural(gone)} {listed(gone)} done: {'its' if len(gone) == 1 else 'their'} code is gone from {main}."]
+    return lines, [f"Mark the cleanup{plural_s(gone)} {listed(gone)} done: {'its' if len(gone) == 1 else 'their'} code is gone from {main}."]
 
 def oldest(its): return sorted(its, key=lambda it: (it.get("date", ""), ids.number(it["id"])))[:3]
 
@@ -289,13 +285,13 @@ def backlog_section(wt, reader, own, out):
     lines += [f"- oldest: {item_line(it, 'since ' + (it.get('date') or 'an unknown date'))}" for it in oldest(its)]
     orphans = [it for it in its if it["orphaned"]]
     lines += [f"- orphaned: {item_line(it, 'from ' + it['scope'] + ', branch gone')}" for it in orphans]
-    steps = [f"Rescope the orphaned item{plural(orphans)} {listed(orphans)} to new work, or drop {them(orphans)} with a reason."] if orphans else []
+    steps = [f"Rescope the orphaned item{plural_s(orphans)} {listed(orphans)} to new work, or drop {them(orphans)} with a reason."] if orphans else []
     clines, csteps = cleanup_lines(reader)
     lines += clines; steps += csteps
     branch = bl.branch_of(wt)
     up = takeable(its) if branch else []
     lines += [f"- could take up here: {item_line(it, 'new work' if it.get('scope') == bl.NEW else 'orphaned', it.get('origin') or 'source unknown')}" for it in up]
-    if up: steps.append(f"Take up the follow-up{plural(up)} {listed(up)} on this branch by rescoping {them(up)} to {branch}, or leave {them(up)} for later.")
+    if up: steps.append(f"Take up the follow-up{plural_s(up)} {listed(up)} on this branch by rescoping {them(up)} to {branch}, or leave {them(up)} for later.")
     out += [""] + lines
     return steps
 
@@ -364,15 +360,15 @@ def build_block(wt, out, unreviewed, mine, theirs, render=progress_list):
     first += rsteps
     built = [e for e in entries if e["f"].get("Status") == "done" and any(bd.names_commit(e, s) for s, _ in unreviewed)]
     if built:
-        later.insert(0, f"Check the {len(built)} handoff{plural(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass review, or \"re-review the branch\".")
+        later.insert(0, f"Check the {len(built)} handoff{plural_s(built)} built since the last review ({', '.join(e['id'] for e in built)}): a pass review, or \"re-review the branch\".")
     for s, r, items, state, mine, _ in rows:
         busy = {n for e in mine if e["f"].get("Status") in bd.OPEN for n, _, _ in bd.reqs_of(e)}
         left = [n for n in sorted(items) if n not in state and n not in busy]
         partial = sorted(n for n, (st, _, _) in state.items() if st == "partial")
-        if partial: later.append(f"Finish the partial requirement{plural(partial)} of {s}: {bd.compress(s, partial)}.")
+        if partial: later.append(f"Finish the partial requirement{plural_s(partial)} of {s}: {bd.compress(s, partial)}.")
         if left and not busy:
             nxt = "; ".join(f"{ids.ref(s, n)} {short(items[n], 70).rstrip('.')}" for n in left[:3])
-            later.append(f"Next handoff for {s}, from what is not started ({len(left)} requirement{plural(left)}; the plan and the brief's order decide): {nxt}.")
+            later.append(f"Next handoff for {s}, from what is not started ({len(left)} requirement{plural_s(left)}; the plan and the brief's order decide): {nxt}.")
     return first, later, elsewhere
 
 def unsettled_brainstorms(recs):
@@ -396,8 +392,8 @@ def feature_block(wt, rows, out):
     out.append("")
     open_storms = unsettled_brainstorms(recs)
     counts = [f'{active[k]} active {k}' + ('s' if active[k] != 1 and k != 'pieces' else '') for k in order if k in active] or ['none active']
-    if open_storms: counts.append(f"{len(open_storms)} open brainstorm{plural(open_storms)}")
-    out.append(f"**Feature:** {name}: {len(recs)} record{plural(recs)} ({', '.join(counts)}){where}.")
+    if open_storms: counts.append(f"{len(open_storms)} open brainstorm{plural_s(open_storms)}")
+    out.append(f"**Feature:** {name}: {len(recs)} record{plural_s(recs)} ({', '.join(counts)}){where}.")
     settle, open_q = [], 0
     for c in rc.checks(h):
         if not c["open"]: continue
@@ -410,13 +406,13 @@ def feature_block(wt, rows, out):
         if r.get("type") == "brief" and r.get("status") == "active":
             body = open(r["path"], encoding="utf-8").read()
             n = len(brief_open_items(body))
-            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {n} open item{plural(n)}")
+            if n: out.append(f"- {r['id']} {short(r.get('title', ''), 50)}{' (' + r['area'] + ')' if r.get('area') else ''}: {n} open item{plural_s(n)}")
     for r in open_storms:
         out.append(f"- brainstorm {r['id']} {r.get('title', '')}{' (' + r['area'] + ')' if r.get('area') else ''}, nothing settled from it yet: {rc.gist(r)}")
     if open_storms:
-        (later if active else first).append(f"Pick up the brainstorm{plural(open_storms)} {', '.join(r['id'] + ' ' + r.get('title', '') for r in open_storms)}: work through the open questions and settle a design or decisions from it (\"let's work on the brainstorm\").")
+        (later if active else first).append(f"Pick up the brainstorm{plural_s(open_storms)} {', '.join(r['id'] + ' ' + r.get('title', '') for r in open_storms)}: work through the open questions and settle a design or decisions from it (\"let's work on the brainstorm\").")
     if settle: first.append(f"Settle the design questions marked settle-first before building on them: {'; '.join(settle)} (\"walk the design questions\").")
-    elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural(open_q)} when convenient (\"walk the design questions\").")
+    elif open_q: later.append(f"Decide or defer the {open_q} open design question{plural_s(open_q)} when convenient (\"walk the design questions\").")
     others = []
     for rname, other in related_worktrees(wt, rows):
         ps, err = read_passes(other)
@@ -491,7 +487,7 @@ def marks(log, items, repo, canon):
 
 def worktree_progress(log, kind, marked):
     if log.err: return "build log unreadable"
-    if marked: return f"{sum(1 for _, m, _ in marked if m == '[x]')} of {len(marked)} {kind}{plural(marked)} done"
+    if marked: return f"{sum(1 for _, m, _ in marked if m == '[x]')} of {len(marked)} {kind}{plural_s(marked)} done"
     bd = load_script("build.py")
     try: rows = bd.progress(log.path, log.entries) if log.entries else []
     except SystemExit: return "build log unreadable"
@@ -500,7 +496,7 @@ def worktree_progress(log, kind, marked):
 
 def counts_line(wt):
     owed, parked = len(bl.owed_followups(wt)), len(bl.feature_ideas(wt))
-    parts = ([f"owed here: {owed} follow-up{plural(owed)}"] if owed else []) + ([f"parked: {parked} idea{plural(parked)}"] if parked else [])
+    parts = ([f"owed here: {owed} follow-up{plural_s(owed)}"] if owed else []) + ([f"parked: {parked} idea{plural_s(parked)}"] if parked else [])
     return [f"  {' · '.join(parts)}"] if parts else []
 
 def map_lines(wt, rows, mine, theirs):
@@ -580,7 +576,7 @@ def implementation_view(wt, rows, out, unreviewed, pass_steps, passes, mine, the
     steps = first + pass_steps
     if settle: steps.append(f"Settle the design questions marked settle-first that bear on what is being built: {'; '.join(settle)} (\"walk the design questions\").")
     if unlogged and any(r.get("type") in bd.BUILDABLE and r.get("status") == "active" for r in recs):
-        steps.append(f"Log the {len(unlogged)} commit{plural(unlogged)} already built, each against the requirements it covers or the record it built, so progress is counted: \"log the built work\".")
+        steps.append(f"Log the {len(unlogged)} commit{plural_s(unlogged)} already built, each against the requirements it covers or the record it built, so progress is counted: \"log the built work\".")
         later = [s for s in later if not s.startswith("Next handoff")]
     steps += later
     if builds_elsewhere:
@@ -646,7 +642,7 @@ def area_states(recs):
         if des:
             newest = max(des, key=lambda x: ids.number(x["id"]))
             later = [x["id"] for x in decs if ids.number(x["id"]) > ids.number(newest["id"])]
-            note = f"design {newest['id']}" + (f", older than {len(later)} decision{plural(later)}" if later else ", current")
+            note = f"design {newest['id']}" + (f", older than {len(later)} decision{plural_s(later)}" if later else ", current")
         else: note = "no design"
         out.append((a or "feature-wide", decs, note))
     return out
@@ -700,7 +696,7 @@ def design_view(wt, out, logs):
         steps.insert(0, f"Write the brief for {nospec[0]}, next in the plan without one" + (f" ({len(nospec) - 1} more after it)." if len(nospec) > 1 else "."))
     out += ["", "**Areas:**"]
     for a, decs, note in area_states(recs):
-        out.append(f"- {a}: {len(decs)} active decision{plural(decs)}, {note}")
+        out.append(f"- {a}: {len(decs)} active decision{plural_s(decs)}, {note}")
     area_of = {r["id"]: r.get("area") or "feature-wide" for r in recs}
     qlines, other = [], 0
     for c in cs:
@@ -724,7 +720,7 @@ def design_view(wt, out, logs):
     else:
         out += ["", "- " + re.sub(r"\[overview.md\]\(overview.md\)", "`overview.md`", rc.overview_line(h))]
     gl = rc.rules(h)
-    if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural(gl)}; say \"what guidance have I given\" to list them."]
+    if gl: out += ["", f"**Guidance:** {len(gl)} active rule{plural_s(gl)}; say \"what guidance have I given\" to list them."]
     parked = bl.feature_ideas(wt)
     if parked:
         by = {}
@@ -736,7 +732,7 @@ def design_view(wt, out, logs):
         n = len(ov["disagreements"]) + len(mixed)
         first.append(f"Resolve the {n} {'disagreements' if not mixed else 'gaps and disagreements'} the overview lists, each with a new or superseding record, then refresh it.")
     rolls = [s for s in rc.suggestions(h) if not s.startswith("The overview")]
-    tail = rolls + ([f"Decide or defer the {other} other open design question{plural(other)}."] if other else [])
+    tail = rolls + ([f"Decide or defer the {other} other open design question{plural_s(other)}."] if other else [])
     if any(s.startswith("The overview") for s in rc.suggestions(h)): tail.append("Refresh the overview: \"refresh the overview\".")
     return first + list(dict.fromkeys(steps)) + tail
 
@@ -762,7 +758,7 @@ def area_view(wt, out, name, logs):
     if summ: out += [summ, ""]
     live = [r for r in mine if r.get("status") == "active"]
     counts_by_type = {k: sum(1 for r in live if r.get("type") == k) for k in ("design", "brief", "plan", "decision")}
-    type_counts = ", ".join(f"{counts_by_type[k]} {k}{'s' if counts_by_type[k] != 1 else ''}" for k in ("design", "brief", "plan", "decision") if any(r.get("type") == k for r in live))
+    type_counts = ", ".join(plural(counts_by_type[k], k) for k in ("design", "brief", "plan", "decision") if any(r.get("type") == k for r in live))
     out.append(f"**Records:** {len(live)} active ({type_counts}), {len(mine) - len(live)} history.")
     for r in rc.ordered([r for r in live if r.get("type") != "decision"]):
         out.append(f"- {r['id']} {r['type']}: {short(r.get('title', ''), 70)}")
@@ -797,7 +793,7 @@ def area_view(wt, out, name, logs):
         out += ["", "**Build:**"] + (prog or [f"- {x['id']}: nothing logged as built" for x in specs])
     if pas: out += ["", "**Passes:**"] + pas
     if settle: steps.insert(0, f"Settle {', '.join(settle)} (\"walk the design questions\").")
-    if dis: steps.append(f"Resolve the {len(dis)} disagreement{plural(dis)} touching it, each with a new or superseding record.")
+    if dis: steps.append(f"Resolve the {len(dis)} disagreement{plural_s(dis)} touching it, each with a new or superseding record.")
     for x in specs:
         f = spec_facts(h, x, rc.checks(h))
         if "no design check" in f["missing"]: steps.append(f"Design-check {x['id']}.")
@@ -833,7 +829,7 @@ def finding_groups(run, status, instr, numbers):
         if not choice and st == "open" and mid in appended: new.append(numbers[mid])
     return unmarked, queue, discuss, post, inprog, new, by_section
 
-def blockers_view(wt, out, logs, run, have_run):
+def blockers_view(wt, out, logs, run):
     rc = load_script("records.py")
     stopped = [f"- {e['id']} ({e['title']}){f' ({log.name})' if log.name else ''}: {stopped_question(e, 'its question')}"
                for log in logs for e in log.entries if e["f"].get("Status") == "stopped"]
@@ -847,13 +843,13 @@ def blockers_view(wt, out, logs, run, have_run):
     open_items = bl.owed_followups(wt)
     hidden = detached(wt)
     fix = []
-    if have_run:
+    if run:
         status, instr, numbers = sf.state(run)
         fix = sorted(finding_groups(run, status, instr, numbers)[6].get("fix", []), key=int)
     steps = []
     if stopped:
         out += ["", "**Handoffs stopped on a question:**"] + stopped
-        steps.append(f"Answer the question{plural(stopped)} of the stopped handoff{plural(stopped)}, record the answer, then resend {'it' if len(stopped) == 1 else 'them'}.")
+        steps.append(f"Answer the question{plural_s(stopped)} of the stopped handoff{plural_s(stopped)}, record the answer, then resend {them(stopped)}.")
     if settle:
         out += ["", "**Settle-first design questions:**"] + [f"- {name}: {', '.join(qs)}" for name, qs in settle]
         steps.append(f"Settle {', '.join(q for _, qs in settle for q in qs)} (\"walk the design questions\").")
@@ -863,7 +859,7 @@ def blockers_view(wt, out, logs, run, have_run):
         steps.append(followups_step(open_items))
     if fix:
         out += ["", f"**Findings to fix before merging:** {len(fix)} ({number_list(fix)})"]
-        steps.append(f"Mark the finding{plural(fix)} in {SECTION_NAMES['fix']} in `{paths.run_name(wt, run)}`, then fix {'it' if len(fix) == 1 else 'them'}: \"work the queue\".")
+        steps.append(f"Mark the finding{plural_s(fix)} in {SECTION_NAMES['fix']} in `{paths.run_name(wt, run)}`, then fix {them(fix)}: \"work the queue\".")
     if not steps and not hidden: out += ["", "Nothing blocking."]
     return steps
 
@@ -905,11 +901,11 @@ def unbuilt(wt):
     except SystemExit: return False
     return subprocess.run(["git", "-C", wt, "merge-base", "--is-ancestor", "HEAD", main], capture_output=True).returncode == 0
 
-def review_section(wt, run, have_run, head, out):
+def review_section(wt, run, head, out):
     steps = []
     status = instr = numbers = {}
     reviewed = ""
-    if have_run:
+    if run:
         target = rf.read_target(run)
         reviewed = target.head
         status, instr, numbers = sf.state(run)
@@ -967,7 +963,7 @@ def pass_step(wt, e):
     if st != "checked": return None
     left = load_script("build.py").open_findings(wt, e)
     label = load_script("passes.py").check_label(e)
-    return f"Triage pass {e['id']}'s {left} open finding{plural(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
+    return f"Triage pass {e['id']}'s {left} open finding{plural_s(left)}: \"work the queue {label}\", or `fix N {label}`." if left else None
 
 def passes_section(wt, out):
     passes, perr = read_passes(wt)
@@ -1007,17 +1003,17 @@ def findings_section(wt, run, review, open_items, head, out):
     if review.staged: steps.append("Review the staged changes before committing: \"review the staged changes\".")
     if unreviewed and len(unreviewed) <= 3:
         cmds = ", ".join(f"`/clerk-dev:review {'HEAD' if sha == head else sha[:9]}`" for sha, _ in unreviewed)
-        steps.append(f"Review the unreviewed commit{plural(unreviewed)}, each added to this review: {cmds}.")
+        steps.append(f"Review the unreviewed commit{plural_s(unreviewed)}, each added to this review: {cmds}.")
     elif unreviewed:
         steps.append(f"Review the {len(unreviewed)} unreviewed commits with an incremental review of the branch: \"re-review the branch\".")
-    if moved: steps.append(f"Cross-check the finding{plural(moved)} whose code moved ({len(moved)}): \"cross-check the findings\".")
+    if moved: steps.append(f"Cross-check the finding{plural_s(moved)} whose code moved ({len(moved)}): \"cross-check the findings\".")
     n_unmarked = sum(len(v) for v in unmarked.values())
-    if n_unmarked: steps.append(f"Mark the unmarked finding{plural(n_unmarked)} ({n_unmarked}) in `{paths.run_name(wt, run)}`.")
-    if queue: steps.append(f"Fix the finding{plural(queue)} marked to fix ({len(queue)}): \"work the queue\".")
-    if discuss: steps.append(f"Decide the finding{plural(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
-    if post: steps.append(f"Post the finding{plural(post)} marked to post ({len(post)}): \"post the review\".")
+    if n_unmarked: steps.append(f"Mark the unmarked finding{plural_s(n_unmarked)} ({n_unmarked}) in `{paths.run_name(wt, run)}`.")
+    if queue: steps.append(f"Fix the finding{plural_s(queue)} marked to fix ({len(queue)}): \"work the queue\".")
+    if discuss: steps.append(f"Decide the finding{plural_s(discuss)} marked for discussion ({len(discuss)}): \"go through the discussions\".")
+    if post: steps.append(f"Post the finding{plural_s(post)} marked to post ({len(post)}): \"post the review\".")
     closable = sorted((numbers[m] for m in rf.closable(run) if m in numbers), key=int)
-    if closable: steps.append(f"Close the posted thread{plural(closable)} of finding{plural(closable)} {number_list(closable)}; see Closing posted threads in the `review` skill.")
+    if closable: steps.append(f"Close the posted thread{plural_s(closable)} of finding{plural_s(closable)} {number_list(closable)}; see Closing posted threads in the `review` skill.")
     if inprog: steps.append(f"Look at the fixes left in progress: {', '.join(sorted(inprog, key=int))}.")
     # Fixes are rechecked one finding at a time, never re-reviewed as a
     # branch; once triage is done, the final pass reads them all together.
@@ -1053,12 +1049,11 @@ def main():
     ap.add_argument("--map", action="store_true", help="only where the work sits across the feature")
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
-    run = os.path.realpath(paths.run(wt, a.run) if a.run else paths.latest(wt))
-    have_run = rf.review_run(wt, a.run) is not None
+    run = rf.review_run(wt, a.run)
     branch = branch_name(wt)
     head = git(wt, "rev-parse", "HEAD")
     out = []
-    fresh = not have_run and unbuilt(wt)
+    fresh = not run and unbuilt(wt)
     rows = workspace_rows(wt)
     mine = read_build(wt)
     strip = "" if a.setup else lifecycle.strip(wt, a.run)
@@ -1075,7 +1070,7 @@ def main():
     out += setup_lines(gaps)
     if fresh and a.focus == "all": out += purpose_lead(wt)
     if a.focus == "blockers":
-        out += next_lines(blockers_view(wt, out, [mine] + theirs, run, have_run))
+        out += next_lines(blockers_view(wt, out, [mine] + theirs, run))
         emit_view(wt, out, strip); return
     if a.focus == "design" or a.area:
         logs = [mine] + theirs
@@ -1083,7 +1078,7 @@ def main():
         out += next_lines(list(dict.fromkeys(steps)), "nothing pending.")
         emit_view(wt, out, strip); return
 
-    review, steps = review_section(wt, run, have_run, head, out)
+    review, steps = review_section(wt, run, head, out)
     reader = bl.Reader(wt)
     own = reader.items(reader.own)
     open_items = followups_section(wt, rows, reader, own, not a.no_mark, out)
@@ -1102,7 +1097,7 @@ def main():
         first, later = feature_block(wt, rows, out)
         out += rerouted_lines(wt)
         steps = bfirst + pass_steps + first + steps + blater + later
-    first, later = findings_section(wt, run, review, open_items, head, out) if have_run else ([], [])
+    first, later = findings_section(wt, run, review, open_items, head, out) if run else ([], [])
     out += next_lines(first + steps + later, "start the work the Purpose describes; ask for it, and it goes through building." if fresh else "nothing pending.")
     emit(wt, "\n".join(out), strip)
 

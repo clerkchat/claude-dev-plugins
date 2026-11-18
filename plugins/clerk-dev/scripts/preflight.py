@@ -43,7 +43,7 @@ def latest_run(wt, head):
     run = os.path.realpath(paths.latest(wt))
     if not os.path.isdir(run): return "none"
     name = paths.run_name(wt, run)
-    if not os.path.exists(os.path.join(run, "target.txt")): return f"`{name}`, stopped before scoping finished"
+    if not os.path.exists(rf.target_path(run)): return f"`{name}`, stopped before scoping finished"
     target = rf.read_target(run)
     what, at = target.target or "?", target.head
     progress = os.path.join(run, "progress.md")

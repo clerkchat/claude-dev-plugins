@@ -2,6 +2,7 @@ import os
 from typing import NamedTuple
 from records import branch_name, hub, load_script, this_repo, workspace, worktrees
 import paths
+import run_files as rf
 
 def workspace_rows(wt):
     return {n: os.path.realpath(os.path.expanduser(p)) for n, p in workspace(wt)[1].items()}
@@ -51,7 +52,7 @@ def read_passes(wt):
     except SystemExit as e: return [], str(e)
 
 def final_pass_stands(run):
-    report, target = os.path.join(run, "final-review-report.md"), os.path.join(run, "target.txt")
+    report, target = os.path.join(run, "final-review-report.md"), rf.target_path(run)
     if not os.path.exists(report): return False
     with open(report, encoding="utf-8") as f: passed = f.readline().strip() == "# Final review: PASSED"
     return passed and os.path.getmtime(report) >= os.path.getmtime(target)

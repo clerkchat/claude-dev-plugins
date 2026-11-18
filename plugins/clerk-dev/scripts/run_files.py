@@ -79,10 +79,13 @@ def line_span(lo, hi):
 def review_run(wt, label=None):
     """The review run (--run LABEL or the latest) when it has a merged report and a target, else None."""
     run = os.path.realpath(paths.run(wt, label) if label else paths.latest(wt))
-    return run if all(os.path.exists(os.path.join(run, f)) for f in ("merged.md", "target.txt")) else None
+    return run if os.path.exists(merged_path(run)) and os.path.exists(target_path(run)) else None
 
 def merged_path(run):
     return os.path.join(run, "merged.md")
+
+def target_path(run):
+    return os.path.join(run, "target.txt")
 
 def entry_id(e):
     digits = re.sub(r"\D", "", str(e.get("id", "")))
@@ -271,7 +274,7 @@ def same_commit(a, b):
 Target = namedtuple("Target", "target base head")
 
 def read_target(run):
-    path = os.path.join(run, "target.txt")
+    path = target_path(run)
     lines = [line.strip() for line in open(path, encoding="utf-8").read().splitlines()] if os.path.exists(path) else []
     return Target(*(lines + ["", "", ""])[:3])
 

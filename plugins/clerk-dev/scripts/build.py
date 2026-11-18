@@ -62,7 +62,7 @@ Entry format:
 """
 import argparse, datetime, os, re, sys
 from typing import NamedTuple
-from records import git, git_failure, git_run, load_script, record_id, remote_main, write_atomic
+from records import git, git_failure, git_run, load_script, plural, record_id, remote_main, write_atomic
 import ids, paths
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -428,10 +428,10 @@ def milestone_view(wt, m):
         else:
             word = f"{e['id']} " + ("no changes" if e["f"].get("Note") == "no commits" and st == "ended" else "checked")
             n = open_findings(wt, e) if st == "checked" else 0
-            if n: word += f", {n} open finding{'s' if n != 1 else ''}"
+            if n: word += f", {plural(n, 'open finding')}"
             if n and f in req:
                 label = load_script("passes.py").check_label(e)
-                waiting.append((f, f"triage the {f} pass's {n} open finding{'s' if n != 1 else ''} (required): \"work the queue {label}\""))
+                waiting.append((f, f"triage the {f} pass's {plural(n, 'open finding')} (required): \"work the queue {label}\""))
             rows.append((f, word, f in req))
     stage, nxt = waiting[0] if waiting else (None, None)
     return MilestoneView(rows, nxt, not waiting, stage)
@@ -619,8 +619,8 @@ def branch_commits(wt):
 
 def merged(wt): return bool(branch_base(wt)) and not branch_commits(wt)
 
-# A branch with no commits past main also reads as merged, so landing needs a linked entry showing it had commits.
-def landed(wt, entries): return bool(linked(entries)) and merged(wt)
+# A branch with no commits past main also reads as merged, so landing needs a sign it had commits: a linked entry or a posted pull request.
+def landed(wt, entries, posted=False): return (posted or bool(linked(entries))) and merged(wt)
 
 def commit_of(e): return e["f"].get("Commit") or "no commit logged"
 

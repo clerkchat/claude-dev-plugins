@@ -110,7 +110,7 @@ def review_segment(run):
     return segment("review", not latest, f"round {len(chain)}", f"{before} → {left}{stalled}")
 
 def branch_landed(h, entries, posted):
-    try: return bd.merged(h) if posted else bd.landed(h, entries)
+    try: return bd.landed(h, entries, posted)
     except SystemExit: return False
 
 def pr_segment(h, run, hub_log):
