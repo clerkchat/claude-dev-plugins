@@ -118,10 +118,14 @@ def branch_landed(h, entries, posted):
     try: return bd.landed(h, entries, posted)
     except SystemExit: return False
 
+def approvals(run):
+    try: return rf.read_approvals(run)
+    except (OSError, ValueError): return {}
+
 def pr_segment(h, run, hub_log):
     drafted = os.path.exists(paths.pr_description(h))
     posted = pr_posted.read(h) is not None
-    approved = bool(run and rf.read_approvals(run))
+    approved = bool(run and approvals(run))
     states = (("merged", branch_landed(h, hub_log.entries, posted)), ("approved", approved), ("posted", posted), ("drafted", drafted))
     return next((f"PR {word}" for word, on in states if on), None)
 

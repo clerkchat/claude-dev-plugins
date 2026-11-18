@@ -258,6 +258,14 @@ class PullRequestTests(LifecycleCase):
         run_files.write_approvals(self.run_dir, {7: {"author": "bob", "date": "2026-11-17"}})
         self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR approved")
 
+    def test_unreadable_approvals_leave_the_strip_standing(self):
+        self.review("r1")
+        path = run_files.approvals_path(self.run_dir)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(b"\xff\xfe")
+        self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR drafted")
+
     def test_a_branch_merged_into_the_remote_main_says_merged(self):
         self.landed("1,2")
         self.repo.squash_merge()
