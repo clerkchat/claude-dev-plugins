@@ -1342,7 +1342,7 @@ fixes go in `<run>/overrides/<merged id>.md` as `key: value` lines (`title`,
 `context`, `steps`, `impact`, `snippet`, `fix`); the renderer overlays them on
 the merged entry. Never edit `merged.md` by hand; the merge step regenerates it.
 
-Show the report as your final message, without a preamble, and run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
+Show the report as your final message, without a preamble, and show the lifecycle strip (`skills/review/tracking.md`).
 
 ## Finding numbers
 

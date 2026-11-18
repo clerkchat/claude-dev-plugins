@@ -387,7 +387,7 @@ status lives only here; the brief is not edited for it.
 
 ## After each handoff
 
-After the first handoff of a brief is sent, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
+When the report of a brief's first handoff (none logged for it before) is read, show the lifecycle strip (`skills/review/tracking.md`).
 
 1. **Read the report.** Read it by its `status`, `size`, `scope`, `files:`,
    `requirements:`, `questions:`, `deviations:`, `rollout:`, `cleanups:`,
@@ -532,8 +532,7 @@ skill:
    takes `--brief BRIEF-52 --piece "<piece>"` instead. The list is prep, happy-path,
    then the passes `skills/pass/passes.md` suggests for the milestone's brief,
    in the order it gives; security is required when it is in the list. Show the
-   plan in one line, then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py
-   <worktree>` and show its line as it is, and go on. When the plan is replaced, status flags a
+   plan in one line, then show the lifecycle strip (`skills/review/tracking.md`), and go on. When the plan is replaced, status flags a
    milestone under way that points at a step that is gone or a superseded plan;
    edit its Plan line in the build log to the new plan's step.
 2. **Prep**, the refactor-first pass, looking ahead to the milestone's later
@@ -548,7 +547,7 @@ skill:
    and the required passes' findings are triaged. `build.py milestones` and
    status say where each milestone stands and what runs next; a complete
    milestone leads to the next one, and the message that starts it shows the
-   map of where the work sits (`skills/review/tracking.md`). When a milestone completes, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. Then run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
+   map of where the work sits (`skills/review/tracking.md`). When the last milestone completes, show the lifecycle strip (`skills/review/tracking.md`). Then run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 Run the sequence without pausing between passes. Stop and bring to the user:
 a question a builder stopped on, a check that found anything rated major

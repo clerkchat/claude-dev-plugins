@@ -303,7 +303,7 @@ pull request.
 
 ## 9. Report
 
-After writing the draft, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
+After writing the draft, show the lifecycle strip (`skills/review/tracking.md`).
 
 Per repository, in a few lines:
 
@@ -394,6 +394,6 @@ for every repository of the unit that has a draft:
    <number> -R <owner>/<repo> --body-file <pr-body>`.
    Write the same body back to `.clerk-dev/pr-description.md`, under its
    Title section, and to the generated copy.
-5. **Report**: first run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. Then each pull request's number, link, and whether it is a draft,
+5. **Report**: first show the lifecycle strip (`skills/review/tracking.md`). Then each pull request's number, link, and whether it is a draft,
    and any repository not posted with why. A single repository has no
    sibling list, and step 4 is skipped.

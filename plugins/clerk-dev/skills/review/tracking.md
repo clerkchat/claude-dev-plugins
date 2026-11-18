@@ -412,7 +412,7 @@ inventory stays out of it unless they ask.
 When the work moves to a new place in the plan, the message that says so
 shows where the work now sits in the whole feature. Print it with
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/status.py <worktree> --map` and show
-its output as it is: a header line naming the feature, the repository, and
+its output as it is: the lifecycle strip, then a header line naming the feature, the repository, and
 the worktree; this worktree's plan steps (or pieces, with no plan) in the
 feature's own words and without ids, each marked done `[x]`, current `[>]`
 with what is happening on it, or not started `[ ]`; one line for each other
@@ -420,6 +420,7 @@ worktree of the feature; and a last line counting the follow-ups owed here
 and the feature's parked ideas.
 
 ```
+where-the-work-sits · design ✓ · build 2/4 (milestone 2)
 where-the-work-sits · claude-dev-plugins (feat/where-the-work-sits)
   [x] map draws from the feature's worktrees
   [>] skills cite the map at their moves  <- building and status
@@ -439,6 +440,18 @@ When the script prints nothing, there is no map. The moves that show it:
 
 Everything else, passes and review triage included, keeps its one-line
 updates with no map.
+
+### The lifecycle strip
+
+One line of where the feature stands across its stages, each with its own
+count. Print it with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py
+<worktree>` and show its line as it is; add `--run <label>` when the user named
+a review run. When it prints nothing, show nothing. The map above opens with
+the strip, so a message that shows the map does not run this too. Skills say
+where it shows: after a brief or plan is written, a design check settles, a
+brief's first handoff is read, a milestone starts or the last one completes, a
+pass review ends, review and triage finish, and a pull request draft or
+posting.
 
 ### Diagrams
 
