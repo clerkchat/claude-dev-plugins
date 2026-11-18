@@ -371,12 +371,18 @@ class WhenItsBranchIsGone(WhenTheItemIsInProgress):
 
 
 class WhenTheItemHasNoTitle(SpinUpCase):
-    def test_drafts_the_purpose_from_its_id(self):
+    def setUp(self):
+        super().setUp()
         self.idea()
         drop_backlog_title(self.api.path, "BL-1", env=self.env)
-        wt = self.path("api/feat/x")
+        self.wt = self.path("api/feat/x")
         self.create("feat/x", "BL-1")
-        self.assertEqual(self.purpose(wt).splitlines()[2], "What this branch builds: BL-1.")
+
+    def test_drafts_the_purpose_from_its_id(self):
+        self.assertEqual(self.purpose(self.wt).splitlines()[2], "What this branch builds: BL-1.")
+
+    def test_titles_the_brainstorm_by_its_id(self):
+        self.assertTrue(os.path.exists(os.path.join(paths.records_dir(self.wt), "001-brainstorm-bl-1.md")))
 
 
 class WhenGitWorktreeAddFails(SpinUpCase):

@@ -102,8 +102,6 @@ def item_text(it):
     parts = [("Body", untitled(it.get("body", "")).strip()), ("Contract", it.get("contract", "")), ("Removes", it.get("removes", ""))]
     return "\n\n".join(quote(f"{label}: {text}" if label != "Body" else text) for label, text in parts if text)
 
-def title_of(it): return it.get("title") or it["id"]
-
 def is_idea(it): return it["kind"] == backlog.IDEA
 
 class Group(NamedTuple):
@@ -150,15 +148,14 @@ def context(g):
     listed = "Also taken up in this worktree:\n\n" + "\n".join(f"- {label(t)}" for t in owed) + "\n\n" if owed else ""
     return "## Context\n\n" + (f"### From the item (quoted)\n\n{text}\n\n" if text else "") + listed + provenance(it) + "\n"
 
-def summary(it):
-    why = backlog.prose(it, "why")
-    return quote(f"{why}.") if why else title_of(it)
+def summary(t):
+    why = backlog.prose(t.item, "why")
+    return quote(f"{why}.") if why else t.title
 
 def idea_files(wt, g):
-    it = g.idea.item
-    title = title_of(it)
-    feature = records.start_feature(wt, title, summary(it))
-    meta, path = records.new_record(wt, BRAINSTORM, title, src=it["id"])
+    t = g.idea
+    feature = records.start_feature(wt, t.title, summary(t))
+    meta, path = records.new_record(wt, BRAINSTORM, t.title, src=t.id)
     with open(path, "a", encoding="utf-8") as fh: fh.write(context(g))
     return [f"seeded: {feature}", f"seeded: {meta['id']} {path}"], meta["id"]
 
