@@ -16,7 +16,7 @@ OUTCOMES = {ADOPTED: "adopted as {}", DONE: "done in {}", DROPPED: "dropped: {}"
 NAMES = {IDEA: "idea", CLEANUP: "cleanup", FOLLOWUP: "follow-up"}
 WORDS = {kind: ("an " if name[0] in "aeiou" else "a ") + name for kind, name in NAMES.items()}
 FIELDS = ("id", "kind", "title", "status", "scope", "repos", "area", "repo", "branch", "date", "from",
-          "trigger", "removes", "origin", "contract", "finding", "instruction", "ref", "outcome")
+          "trigger", "removes", "matched", "origin", "contract", "finding", "instruction", "ref", "outcome")
 PROVENANCE = ("repo", "branch", "date", "from")
 OWN_ARGS = {IDEA: ("why", "when"), CLEANUP: ("trigger", "removes"), FOLLOWUP: ("origin", "contract", "finding")}
 SECTIONS = (("why", "Why"), ("when", "When"))
@@ -231,6 +231,11 @@ def create(store, meta, body):
             fh.write(records.render(meta, f"\n# {meta['id']}. {meta['title']}\n{body}", FIELDS))
         return meta["id"], path
 
+def matched_ref(store, key):
+    if not key: return ""
+    if not present(store, key, "HEAD"): sys.exit(f"{key} is not in {store.wt}'s HEAD; give --removes a literal key as it appears in the source, or file with --trigger only")
+    return records.git(store.wt, "rev-parse", "--short", "HEAD", check=True)
+
 def add(wt, a):
     check_add(a)
     own = own_store(wt)
@@ -240,7 +245,7 @@ def add(wt, a):
     meta = {"kind": a.kind, "title": title_of(a), "status": OPEN_STATUS if a.kind == IDEA else OWED, "scope": scope,
             "repos": ", ".join(r.strip() for r in (a.repos or "").split(",") if r.strip()), "area": records.slug(a.area) if a.area else "",
             "repo": own.name, "branch": records.branch_name(wt), "date": datetime.date.today().isoformat(), "from": a.src or DEFAULT_FROM,
-            **{k: getattr(a, k) or "" for k in OWN_ARGS[CLEANUP] + OWN_ARGS[FOLLOWUP]}}
+            **{k: getattr(a, k) or "" for k in OWN_ARGS[CLEANUP] + OWN_ARGS[FOLLOWUP]}, "matched": matched_ref(store, a.removes)}
     iid, _ = create(store, meta, body_text(a))
     return qualify(store, own, iid)
 
@@ -284,11 +289,15 @@ def main_of(store):
 
 def remote_ref(main): return REMOTE + main
 
-def removed(store, main, it):
-    ref = remote_ref(main)
-    r = records.git_run(store.wt, "grep", "-F", "-q", "-e", it["removes"], ref)
-    if r.returncode > 1: sys.exit(records.git_failure(store.wt, ("grep", "-F", "-q", "-e", it["removes"], ref), r))
-    return r.returncode == 1
+def present(store, key, ref):
+    args = ("grep", "-F", "-q", "-e", key, ref)
+    r = records.git_run(store.wt, *args)
+    if r.returncode > 1: sys.exit(records.git_failure(store.wt, args, r))
+    return r.returncode == 0
+
+def removed(store, main, it): return not present(store, it["removes"], remote_ref(main))
+
+def checkable(it): return bool(it.get("removes") and it.get("matched"))
 
 def grep_line(store, main, it):
     state = f"gone from {remote_ref(main)}" if removed(store, main, it) else f"still present on {remote_ref(main)}"
@@ -298,7 +307,8 @@ def grep_line(store, main, it):
 def trigger_line(it):
     age = days_old(it)
     aged = f", {age} day{'' if age == 1 else 's'} old" if age is not None else ""
-    return f"{it['qualified']} {it.get('title', '')}: trigger: {it['trigger']}{aged}"
+    unchecked = f", {it['removes']} not checkable" if it.get("removes") else ""
+    return f"{it['qualified']} {it.get('title', '')}: trigger: {it.get('trigger') or 'none'}{aged}{unchecked}"
 
 def fetch_line(store):
     fetched = records.last_fetch(records.common_dir(store.wt))
@@ -308,7 +318,7 @@ def owed_cleanups(reader, store):
     return [it for it in reader.items(store) if it.get("kind") == CLEANUP and is_open(it)]
 
 def gone_cleanups(reader):
-    greppable = [it for it in owed_cleanups(reader, reader.own) if it.get("removes")]
+    greppable = [it for it in owed_cleanups(reader, reader.own) if checkable(it)]
     main = main_of(reader.own) if greppable else ""
     return main, [it for it in greppable if removed(reader.own, main, it)]
 
@@ -321,8 +331,8 @@ def check(wt, text=None):
     else:
         store = reader.own
         cleanups = owed_cleanups(reader, store)
-    main = main_of(store) if any(it.get("removes") for it in cleanups) else ""
-    lines = [grep_line(store, main, it) if it.get("removes") else trigger_line(it) for it in cleanups]
+    main = main_of(store) if any(map(checkable, cleanups)) else ""
+    lines = [grep_line(store, main, it) if checkable(it) else trigger_line(it) for it in cleanups]
     return lines + [fetch_line(store)]
 
 def source(it): return it.get("origin") if it.get("kind") == FOLLOWUP else it.get("from")

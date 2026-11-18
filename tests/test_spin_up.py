@@ -49,6 +49,7 @@ class SpinUpCase(TempCase):
         return add_followup(self.api.path, title, "--scope", "new", "--contract", "changed: GET /x: now requires exportId", env=self.env)
 
     def cleanup(self, title="Remove the export flag"):
+        self.api.commit("EXPORT_V2_FLAG = true", "flags.txt")
         return add_cleanup(self.api.path, title, "--scope", "new", env=self.env)
 
     def attempt(self, *args):

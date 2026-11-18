@@ -387,6 +387,7 @@ class WithAnOrphanTests(BacklogStatusCase):
 class WithACleanupWhoseCodeIsGoneTests(BacklogStatusCase):
     def setUp(self):
         super().setUp()
+        self.repo.commit("EXPORT_V2_FLAG = true", "flags.txt")
         self.add("cleanup", "Remove the flag", "--scope", "new", "--removes", "EXPORT_V2_FLAG")
 
     def test_names_it_as_gone_from_origin_main(self):
@@ -419,6 +420,7 @@ class WithACleanupAndNoRemoteMainTests(BacklogStatusCase):
     def setUp(self):
         super().setUp()
         self.repo.git("remote", "remove", "origin")
+        self.repo.commit("EXPORT_V2_FLAG = true", "flags.txt")
         self.add("cleanup", "Remove the flag", "--scope", "new", "--removes", "EXPORT_V2_FLAG")
 
     def test_status_still_succeeds(self):
