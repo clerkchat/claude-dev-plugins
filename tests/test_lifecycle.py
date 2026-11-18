@@ -19,6 +19,7 @@ Checked 2026-11-17: R5.
 - [ ] Q-2. What is the name?
   - Weight: minor
 """
+ONE_QUESTION_CHECK = "# Design check: R5 The brief\n\nChecked 2026-11-17: R5.\n\n- [ ] Q-1. Which store holds it?\n"
 SETTLED_CHECK = "# Design check: R5 The brief\n\nChecked 2026-11-17: R5.\n\n- [x] Q-1. Which store holds it?\n"
 
 
@@ -118,6 +119,10 @@ class DesignTests(LifecycleCase):
         self.write_check()
         self.assertEqual(self.strip(), "test · design · 2 questions open (1 settle-first)")
 
+    def test_one_open_question_is_singular(self):
+        self.write_check(ONE_QUESTION_CHECK)
+        self.assertEqual(self.strip(), "test · design · 1 question open")
+
     def test_open_questions_ride_on_the_current_stage(self):
         self.write_check()
         self.handoff()
@@ -137,6 +142,13 @@ class BuildTests(LifecycleCase):
         self.handoff()
         self.repo.build_ok("stop", "BUILD-1", "--question", "Which store?")
         self.assertEqual(self.strip(), "test · design ✓ · build 0/2 · 1 handoff stopped")
+
+    def test_handoffs_stopped_are_counted_in_the_plural(self):
+        for title in ("Wire it", "Wire it too"):
+            self.repo.build_ok("add", title, "--brief", "R5", "--reqs", "1")
+        for build in ("BUILD-1", "BUILD-2"):
+            self.repo.build_ok("stop", build, "--question", "Which store?")
+        self.assertEqual(self.strip(), "test · design ✓ · build 0/2 · 2 handoffs stopped")
 
     def test_an_unreadable_log_shows_a_question_mark_and_exits_zero(self):
         write_file(paths.build_log(self.repo.path), "- junk\n")
@@ -215,6 +227,19 @@ class ReviewTests(LifecycleCase):
         self.review("r2", queued=4, previous="r1")
         self.assertEqual(self.strip(), "test · design ✓ · review round 2 · 4 → 4 open, not converging")
 
+    def test_a_round_with_nothing_left_open_shows_review_done(self):
+        self.write_run("r1", queued=4)
+        self.review("r2", previous="r1")
+        self.assertEqual(self.strip(), "test · design ✓ · review ✓ round 2 · 4 → 0 open")
+
+    def test_a_run_named_by_label_is_read_in_place_of_latest(self):
+        self.write_run("r1", queued=3)
+        self.assertEqual(lifecycle.strip(self.repo.path, "r1"), "test · design ✓ · review · 3 open")
+
+    def test_the_command_takes_the_run_label(self):
+        self.write_run("r1", queued=3)
+        self.assertEqual(run_script("lifecycle", self.repo.path, "--run", "r1"), (0, "test · design ✓ · review · 3 open"))
+
     def test_a_run_not_chained_is_a_round_of_its_own(self):
         self.write_run("r1", queued=6)
         self.review("r2", queued=2)
@@ -255,6 +280,12 @@ class PullRequestTests(LifecycleCase):
 
     def test_imported_approvals_say_approved(self):
         self.review("r1")
+        run_files.write_approvals(self.run_dir, {7: {"author": "bob", "date": "2026-11-17"}})
+        self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR approved")
+
+    def test_approvals_outrank_a_posted_pull_request(self):
+        self.review("r1")
+        pr_posted.record(self.repo.path, 42, "https://github.com/clerk/api/pull/42")
         run_files.write_approvals(self.run_dir, {7: {"author": "bob", "date": "2026-11-17"}})
         self.assertEqual(self.strip(), "test · design ✓ · review ✓ · PR approved")
 
