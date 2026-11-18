@@ -387,6 +387,8 @@ status lives only here; the brief is not edited for it.
 
 ## After each handoff
 
+After the first handoff of a brief is sent, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
+
 1. **Read the report.** Read it by its `status`, `size`, `scope`, `files:`,
    `requirements:`, `questions:`, `deviations:`, `rollout:`, `cleanups:`,
    `follow-ups:`, and `contract:` lines. A report that is empty, misses a line of the
@@ -526,7 +528,7 @@ skill:
    PLAN-8.2 --passes <list>`, where PLAN-8.2 is step 2 of plan PLAN-8. The log takes the
    brief and the piece from the step and keeps the pointer, so it does not
    restate the plan; it stops when the plan or the step is missing, or the plan
-   is not active. When the step names no brief, add `--brief`; a log with no plan
+   is not active. Then Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. When the step names no brief, add `--brief`; a log with no plan
    takes `--brief BRIEF-52 --piece "<piece>"` instead. The list is prep, happy-path,
    then the passes `skills/pass/passes.md` suggests for the milestone's brief,
    in the order it gives; security is required when it is in the list. Show the
@@ -545,7 +547,7 @@ skill:
    and the required passes' findings are triaged. `build.py milestones` and
    status say where each milestone stands and what runs next; a complete
    milestone leads to the next one, and the message that starts it shows the
-   map of where the work sits (`skills/review/tracking.md`). When a milestone completes, run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
+   map of where the work sits (`skills/review/tracking.md`). When a milestone completes, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. Then run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
 
 Run the sequence without pausing between passes. Stop and bring to the user:
 a question a builder stopped on, a check that found anything rated major

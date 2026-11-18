@@ -110,7 +110,7 @@ Areas are not declared up front.
   where it is done (what works, and what a review can check). Building works
   milestone by milestone, so a plan without them is not finished. Replanning is
   a new plan with `--supersedes`. After writing a plan, show the map of where
-  the work sits (`skills/review/tracking.md`).
+  the work sits (`skills/review/tracking.md`), then run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
 - **brief**: one per piece, `--repo` the repository it is built in, `--from` the
   pieces or design record. Before writing Approach, read the code the
   piece will touch: the patterns to follow, the helpers to reuse or extend,
@@ -132,7 +132,7 @@ Areas are not declared up front.
   port by path, and the output path `records.py new` gave; ask it to write the
   body and list anything it could not settle from the records as open items.
   Then read it, settle what you can with the user, and edit it in this
-  session.
+  session. After writing the brief, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
 
 Survey items are the walked items of a survey (see Running a survey in the
 `design-check` skill) that the next design or brief must honor. Before writing
@@ -214,7 +214,8 @@ guidance <worktree> [--area <area>]`.
 When the last open question of a set put to the user is settled (a brief's or
 plan's open questions, or any other skill's discussion), look back over the
 whole discussion as "Lessons from a discussion" in `skills/review/tracking.md`
-describes, before the next step starts.
+describes, before the next step starts. When it was a design check's last open
+question, also run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is.
 
 ## Parked ideas
 

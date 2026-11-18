@@ -14,6 +14,7 @@ allowed-tools:
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/backlog.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/items.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lens-mode.py *)
+  - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/merge-findings.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/post-review.py *)
   - Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/reconcile.py *)
@@ -174,7 +175,7 @@ continue. Never retry a fix in a loop.
 
 When the queue is done, render once and say: how many were fixed, how many
 partly, how many moved to discuss and why in a few words each, and the progress
-line. When that render says a posted finding's thread is still open, follow
+line, and run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. When that render says a posted finding's thread is still open, follow
 Closing posted threads in the `review` skill before going on. When Pass 2 follows, go straight on: in the same message, start Pass 2
 and present its first discussion, without waiting to be asked. When the queue
 held more than about ten fixes, put one line before that discussion: "The
@@ -226,7 +227,7 @@ with the next one unless the user clears.
 If the user stops partway, everything is in the files; the next invocation
 resumes with whatever is still marked.
 
-When the last discussion is decided, look back over the pass as "Lessons
+When the last discussion is decided, run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/lifecycle.py <worktree>` and show its line as it is. Then look back over the pass as "Lessons
 from a discussion" in `skills/review/tracking.md` describes, from the decisions
 recorded in the report when the conversation was cleared partway. Then
 run a closing checkpoint, as "Closing checkpoint" in the `checkpoint` skill describes.
