@@ -3,7 +3,7 @@ import argparse, datetime, json, os, re, shlex, subprocess, sys
 from typing import NamedTuple
 import gh_api, ids
 import run_files as rf
-from records import ROUTING, load_script, phrase_of, phrases, plugin_version, read_plain_names
+from records import ROUTING, load_script, phrase_of, phrases, plugin_version, plural, read_plain_names
 
 pc = load_script("pr-comments.py")
 
@@ -398,9 +398,6 @@ def review_body(run, rows, review_id, kept):
             text = outgoing(rf.posted_text(run, mid), True)[0]
             parts.append((f"**`{row['path']}`**\n\n" if row.get("path") else "") + text)
     return "\n\n".join(parts)
-
-def plural(n, word, say=str):
-    return f"{say(n)} {word}" + ("" if n == 1 else "s")
 
 def spelled(n):
     return NUMBER_WORDS[n] if n < len(NUMBER_WORDS) else str(n)

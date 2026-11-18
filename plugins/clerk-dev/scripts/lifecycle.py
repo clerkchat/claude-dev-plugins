@@ -19,7 +19,7 @@ Prints nothing when the worktree has no hub with a started feature. It reads
 files and git only, starts nothing, writes nothing, and exits 0.
 """
 import argparse, os
-from records import DESIGN_CHECK, checks, feature_name, git, hub, load_script, open_questions, records, started
+from records import DESIGN_CHECK, checks, feature_name, git, hub, load_script, open_questions, plural, records, started
 from ledgers import builder_logs, read_build, read_passes, workspace_rows
 import ids, paths
 import run_files as rf
@@ -29,8 +29,6 @@ sf = load_script("stale-findings.py")
 pr_posted = load_script("pr-posted.py")
 
 SEP = " · "
-
-def plural(n, word): return f"{n} {word}{'' if n == 1 else 's'}"
 
 def segment(name, done, words="", *after):
     head = " ".join(x for x in (name, "✓" if done else "", words) if x)
@@ -94,11 +92,6 @@ def passes_segment(logs):
     left = sum(bd.open_findings(wt, e) or 0 for wt, e in checked)
     return segment("passes", len(checked) == len(counted) and not left, f"{len(checked)}/{len(counted)} checked", f"{left} open" if left else "")
 
-def review_run(h, label=None):
-    """The review run status.py would read in the hub, or None."""
-    run = os.path.realpath(paths.run(h, label) if label else paths.latest(h))
-    return run if all(os.path.exists(os.path.join(run, f)) for f in ("merged.md", "target.txt")) else None
-
 def rounds(run):
     """The run and the runs it was seeded from, latest first."""
     chain = [run]
@@ -116,17 +109,15 @@ def review_segment(run):
     stalled = ", not converging" if latest and latest >= before else ""
     return segment("review", not latest, f"round {len(chain)}", f"{before} → {left}{stalled}")
 
-def branch_merged(h):
-    try: return bd.merged(h)
+def branch_landed(h, entries, posted):
+    try: return bd.merged(h) if posted else bd.landed(h, entries)
     except SystemExit: return False
 
 def pr_segment(h, run, hub_log):
     drafted = os.path.exists(paths.pr_description(h))
     posted = pr_posted.read(h) is not None
     approved = bool(run and rf.read_approvals(run))
-    # A branch with no commits past main also reads as merged, so merged needs a sign that it had commits.
-    landed = posted or bool(bd.linked(hub_log.entries))
-    states = (("merged", landed and branch_merged(h)), ("approved", approved), ("posted", posted), ("drafted", drafted))
+    states = (("merged", branch_landed(h, hub_log.entries, posted)), ("approved", approved), ("posted", posted), ("drafted", drafted))
     return next((f"PR {word}" for word, on in states if on), None)
 
 def strip(wt, run=None):
@@ -135,7 +126,7 @@ def strip(wt, run=None):
     except SystemExit: return ""
     if not started(h): return ""
     logs = feature_logs(wt, h)
-    review = review_run(h, run)
+    review = rf.review_run(h, run)
     hub_log = next(log for log in logs if same_path(log.path, h))
     later = [s for s in (build_segment(logs), passes_segment(logs), review_segment(review), pr_segment(h, review, hub_log)) if s]
     asked, settle = design_questions(h)

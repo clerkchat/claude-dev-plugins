@@ -1,5 +1,6 @@
 import json, os, re, subprocess, sys
 from collections import namedtuple
+import paths
 from records import load_script, section, table_rows
 
 mf = load_script("merge-findings.py")
@@ -74,6 +75,11 @@ def open_fence(lines):
 
 def line_span(lo, hi):
     return f"{lo}" + (f"-{hi}" if hi and hi != lo else "")
+
+def review_run(wt, label=None):
+    """The review run (--run LABEL or the latest) when it has a merged report and a target, else None."""
+    run = os.path.realpath(paths.run(wt, label) if label else paths.latest(wt))
+    return run if all(os.path.exists(os.path.join(run, f)) for f in ("merged.md", "target.txt")) else None
 
 def merged_path(run):
     return os.path.join(run, "merged.md")

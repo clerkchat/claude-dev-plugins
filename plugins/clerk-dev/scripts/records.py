@@ -84,6 +84,9 @@ def workspace(wt):
     if m: hub = repos.get(m.group(1), m.group(1))
     return hub, repos
 
+def plural(n, word, say=str):
+    return f"{say(n)} {word}" + ("" if n == 1 else "s")
+
 def table_cells(line): return [c.strip() for c in line.strip().strip("|").split("|")]
 
 def table_separator(cells): return all(set(c) <= set("-: ") for c in cells)

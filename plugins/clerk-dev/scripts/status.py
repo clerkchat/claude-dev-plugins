@@ -316,7 +316,7 @@ def relink_lines(wt, log):
     for e in log.unlinked:
         lines.append(f"- Build log: {e['id']} unlinked, its commit {e['f']['Commit']} is not on the branch: {bd.unlinked_reason(e)}")
         steps.append(f"Re-link {e['id']} ({e['title']}) by hand to the commit that built it: \"re-link {e['id']} to <sha>\".")
-    if bd.linked(log.entries) and bd.merged(wt): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
+    if bd.landed(wt, log.entries): lines.append("- Build log: the branch is merged; its log is history and is no longer re-pointed.")
     return lines, steps
 
 def is_design_check(c): return c["kind"] == DESIGN_CHECK
@@ -1054,7 +1054,7 @@ def main():
     a = ap.parse_args()
     wt = git(a.worktree, "rev-parse", "--show-toplevel") or os.path.realpath(a.worktree)
     run = os.path.realpath(paths.run(wt, a.run) if a.run else paths.latest(wt))
-    have_run = os.path.exists(os.path.join(run, "merged.md")) and os.path.exists(os.path.join(run, "target.txt"))
+    have_run = rf.review_run(wt, a.run) is not None
     branch = branch_name(wt)
     head = git(wt, "rev-parse", "HEAD")
     out = []
