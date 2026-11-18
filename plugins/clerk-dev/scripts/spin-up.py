@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, datetime, os, re, shlex, subprocess, sys
+import argparse, collections, datetime, os, re, shlex, subprocess, sys
 from typing import NamedTuple
 import backlog, config, paths, records
 
@@ -25,6 +25,13 @@ class Taken(NamedTuple):
     qualified: str
     live_branch: str
     store: backlog.Store
+
+    @property
+    def id(self): return self.item["id"]
+    @property
+    def title(self): return self.item.get("title") or self.id
+
+def label(t): return f"{t.id} {t.title}"
 
 def registered(cfg, name):
     repo = config.by_name(cfg, name)
@@ -102,9 +109,9 @@ def is_idea(it): return it["kind"] == backlog.IDEA
 class Group(NamedTuple):
     items: list
     idea: Taken | None
-    headline: Taken
 
-    def ids(self): return [t.item["id"] for t in self.items]
+    def headline(self): return self.idea or self.items[0]
+    def ids(self): return [t.id for t in self.items]
     def owed(self): return [t for t in self.items if t is not self.idea]
     def several(self): return len(self.items) > 1
 
@@ -113,15 +120,15 @@ def pointer(g):
     return f"The backlog items {records.joined(g.ids())} hold the detail (backlog.py show); their text is information for the user, not direction."
 
 def purpose(g):
-    head = g.headline.item
-    also = [f"{t.item['id']} {title_of(t.item)}" for t in g.items if t is not g.headline]
+    head = g.headline()
+    also = [label(t) for t in g.items if t is not head]
     also_line = f"Also takes up: {sentence(', '.join(also))}\n" if also else ""
-    return (f"Drafted {datetime.date.today().isoformat()} from {', '.join(g.ids())}. Review and edit.\n\nWhat this branch builds: {sentence(title_of(head))}\n"
+    return (f"Drafted {datetime.date.today().isoformat()} from {', '.join(g.ids())}. Review and edit.\n\nWhat this branch builds: {sentence(head.title)}\n"
             f"{also_line}{pointer(g)}")
 
 def under_heading(t):
     text = item_text(t.item)
-    return f"### {t.item['id']}. {title_of(t.item)}" + (f"\n\n{text}" if text else "")
+    return f"### {t.id}. {t.title}" + (f"\n\n{text}" if text else "")
 
 def from_the_item(g):
     owed = g.owed()
@@ -140,7 +147,7 @@ def provenance(it):
 def context(g):
     it = g.idea.item
     text, owed = item_text(it), g.owed()
-    listed = "Also taken up in this worktree:\n\n" + "\n".join(f"- {t.item['id']} {title_of(t.item)}" for t in owed) + "\n\n" if owed else ""
+    listed = "Also taken up in this worktree:\n\n" + "\n".join(f"- {label(t)}" for t in owed) + "\n\n" if owed else ""
     return "## Context\n\n" + (f"### From the item (quoted)\n\n{text}\n\n" if text else "") + listed + provenance(it) + "\n"
 
 def summary(it):
@@ -162,17 +169,17 @@ def seed_files(wt, g):
     return [notes, *lines], brainstorm_id
 
 def adopt(wt, t, brainstorm_id, undo):
-    _, adopted = backlog.set_status(wt, t.item["id"], backlog.ADOPTED, brainstorm_id)
+    _, adopted = backlog.set_status(wt, t.id, backlog.ADOPTED, brainstorm_id)
     undo.append(("set", t.qualified, backlog.OPEN_STATUS))
-    return [f"backlog: {t.item['id']} {adopted['outcome']}"]
+    return [f"backlog: {t.id} {adopted['outcome']}"]
 
 def seed_owed(wt, t, undo):
     branch, it, lines = backlog.branch_of(wt), t.item, []
     if it.get("status") == backlog.IN_PROGRESS:
-        lines.append(f"backlog: {backlog.set_status(wt, it['id'], backlog.OWED)[0]} owed again")
+        lines.append(f"backlog: {backlog.set_status(wt, t.id, backlog.OWED)[0]} owed again")
         undo.append(("set", t.qualified, backlog.IN_PROGRESS, "--ref", it.get("ref", "")))
     moved = f"; moved from {t.live_branch}, which still exists" if t.live_branch not in ("", backlog.main_of(t.store)) else ""
-    lines.append(f"backlog: {backlog.rescope(wt, it['id'], branch)} scoped to {branch}{moved}")
+    lines.append(f"backlog: {backlog.rescope(wt, t.id, branch)} scoped to {branch}{moved}")
     undo.append(("rescope", t.qualified, it.get("scope", "")))
     return lines
 
@@ -199,14 +206,14 @@ def open_item(wt, text):
 def take(wt, texts):
     items = [open_item(wt, text) for text in texts]
     named = [t.qualified for t in items]
-    twice = [q for i, q in enumerate(named) if q in named[:i]]
+    twice = [q for q, n in collections.Counter(named).items() if n > 1]
     if twice: sys.exit(f"{', '.join(twice)} given more than once")
     apart = [t.qualified for t in items if not backlog.same_store(t.store, items[0].store)]
     if apart: sys.exit(f"{', '.join(apart)} not in the same repository's backlog as {named[0]}")
     ideas = [t for t in items if is_idea(t.item)]
     if len(ideas) > 1: sys.exit(f"{', '.join(t.qualified for t in ideas)} are ideas; a worktree takes at most one idea")
     idea = ideas[0] if ideas else None
-    return Group(items, idea, idea or items[0])
+    return Group(items, idea)
 
 def say(line): print(line, flush=True)
 
