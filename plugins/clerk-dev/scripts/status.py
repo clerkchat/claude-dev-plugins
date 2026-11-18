@@ -181,7 +181,7 @@ def setup_gaps(wt, rows, built):
     if named:
         have = set(rows)
         if not rows: gaps.append(f"records or follow-ups name {', '.join(named)} but there is no review workspace; set one up as skills/review/workspace-manifest.md describes")
-        elif set(named) - have: gaps.append(f"records or follow-ups name {', '.join(sorted(set(named) - have))} but the review workspace has no row for {'it' if len(set(named) - have) == 1 else 'them'}; add {'one' if len(set(named) - have) == 1 else 'rows'}")
+        elif missing := sorted(set(named) - have): gaps.append(f"records or follow-ups name {', '.join(missing)} but the review workspace has no row for {them(missing)}; add {'one' if len(missing) == 1 else 'rows'}")
     if featured: gaps += plan_gaps(h) + milestone_drift(wt, h, built)
     return gaps
 

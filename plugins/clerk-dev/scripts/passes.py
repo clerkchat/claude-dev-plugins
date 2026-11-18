@@ -41,6 +41,7 @@ Entry format:
 import argparse, datetime, json, os, re, subprocess, sys
 from records import PLUGIN_ROOT, plugin_version, write_atomic
 import ids, paths
+import run_files as rf
 
 STATES = ("open", "ended", "checked", "abandoned")
 FIELDS = ("Mode", "Lenses", "Piece", "Status", "Start", "End", "Plugin", "Left out", "Started", "Check", "Note")
@@ -117,7 +118,7 @@ def check_run(wt, e):
     """(label, run directory) of a checked pass's review run, or None when it has no label or no merged findings."""
     label = check_label(e)
     run = paths.run(wt, label)
-    return (label, run) if label and os.path.exists(os.path.join(run, "merged.md")) else None
+    return (label, run) if label and os.path.exists(rf.merged_path(run)) else None
 
 def counts(check):
     """{lens: findings} from a Check field, or None when it holds no counts."""
