@@ -175,7 +175,7 @@ def seed_owed(wt, t, undo):
     if it.get("status") == backlog.IN_PROGRESS:
         lines.append(f"backlog: {backlog.set_status(wt, t.id, backlog.OWED)[0]} owed again")
         undo.append(("set", t.qualified, backlog.IN_PROGRESS, "--ref", it.get("ref", "")))
-    moved = f"; moved from {t.live_branch}, which still exists" if t.live_branch not in ("", backlog.main_of(t.store)) else ""
+    moved = f"; moved from {t.live_branch}, which still exists" if t.live_branch and t.live_branch != backlog.main_of(t.store) else ""
     lines.append(f"backlog: {backlog.rescope(wt, t.id, branch)} scoped to {branch}{moved}")
     undo.append(("rescope", t.qualified, it.get("scope", "")))
     return lines
