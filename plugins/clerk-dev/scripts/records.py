@@ -511,7 +511,7 @@ def phrases(names, lenses):
     return ", ".join(phrase_of(names, lens) for lens in lenses)
 
 def joined(words):
-    return words[0] if len(words) == 1 else " and ".join(words) if len(words) == 2 else ", ".join(words[:-1]) + ", and " + words[-1]
+    return " and ".join(words) if len(words) < 3 else ", ".join(words[:-1]) + ", and " + words[-1]
 
 def branch_scope_rule():
     return body_section(open(TRACKING, encoding="utf-8").read(), "Branch scope")
