@@ -410,6 +410,18 @@ inventory stays out of it unless they ask.
 - Short and in prose. No tables or headings for a short answer; a list only
   for things the user will pick from or tick off, or for the map of where the
   work sits below.
+- A choice put to the user (from a finding, design work, a plan, a brief, a
+  stopped handoff, anywhere) opens with its situation and a worked example,
+  and "short and in prose" does not apply to it. By the time a choice comes
+  up you have worked through steps the user has not followed, so without
+  these the question arrives in your working terms and the user has to ask
+  for both. The situation says what this part does today, why the question
+  came up now, and names things in plain words rather than your working
+  names; a code snippet or the runtime context goes in when it shows what
+  words would not. The example is one concrete case played through each
+  option, so the user sees what each option does to it, not only an example
+  of the problem. A trivial choice, settled in one line, gets one sentence of
+  situation and no example.
 
 ### Where the work sits
 
