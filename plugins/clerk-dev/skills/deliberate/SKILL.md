@@ -1,6 +1,6 @@
 ---
 name: deliberate
-description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine BL-4" / "refine Q-3"; and whenever a skill or the session has a recommendation the user may accept as is (a Discuss or Refine item, a design question, a stopped handoff, a pass or follow-up item, a fix, suggested marks for unmarked findings). It sizes the work itself, so trivial items cost one line. Not for an item marked Fix as recommended; that is decided.
+description: Weigh the options for one choice with the user and recommend one - what is decided, the questions that would reorder the options, the priority profile, each option in its smallest form, the facts checked, a ranking and what would flip it. Use when the user says "deliberate on", "weigh the options", "help me decide", "what should we do about", or "refine BL-4" / "refine Q-3"; and whenever a skill or the session has a recommendation the user may accept as is (a Discuss or Refine item, a design question, a stopped handoff, a pass or follow-up item, a fix, suggested marks for unmarked findings). It sizes the work itself, so a trivial item costs a sentence of situation and one line. Not for an item marked Fix as recommended; that is decided.
 allowed-tools:
   - Bash(python3 *)
   - Bash(git log *)
@@ -15,7 +15,7 @@ allowed-tools:
 
 # Deliberate
 
-When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
+When talking to the user, follow "Talking to the user" in `skills/review/tracking.md`: the feature first, the bookkeeping last or not at all, a choice opening with its situation and a worked example, and ids named: every id (DEC-19, BUILD-15, MILE-1, BL-4, Q-3, PASS-3, finding numbers) gets a gloss of what it is on its first mention in each message, including in relayed subagent reports, list items, and labels; get the glosses with `records.py names`.
 
 If this conversation was compacted, re-read this file before going on: a
 compacted skill may be cut short, and the steps it drops are the ones that
@@ -53,13 +53,18 @@ Fix as recommended never runs it: the user has already chosen.
 
 0. **Size.** Before anything else, decide how much the item needs:
    - trivial: one realistic option, a record or guidance rule already settles
-     it, or a wrong pick costs minutes to undo. Say so in one line, with the
-     recommendation and the facts you checked, and go to step 7;
+     it, or a wrong pick costs minutes to undo. Give its situation as
+     "Talking to the user" in `skills/review/tracking.md` says for a trivial
+     choice, then one line with the recommendation and the facts you
+     checked, and go to step 7;
    - several items at once: sort them as "Several items waiting" describes;
    - a single real choice: steps 1 to 7.
-1. **Frame.** Say in one sentence what is decided, and what a wrong choice
-   costs: rework, a migration, a contract another repository depends on,
-   behavior users see.
+1. **Situation and frame.** Write the situation as "Talking to the user" in
+   `skills/review/tracking.md` describes. Then write the frame: in one
+   sentence what is decided, and what a wrong choice costs: rework, a
+   migration, a contract another repository depends on, behavior users see.
+   Pick the worked example, one real input or row or call to play through
+   the options.
 2. **Decisive questions.** Ask only the ones whose answers would reorder the
    options: is the code deployed or new on this branch, is it in the branch's
    scope, does the codebase have a precedent, is it on a hot path, does it
@@ -83,6 +88,8 @@ Fix as recommended never runs it: the user has already chosen.
    option's benefit. For live code, find it as "Changing live code"
    describes. Judged in the abstract, the right fix often looks riskier than
    its smallest form is, so never weigh a full form against a workaround.
+   Play the worked example through each option: what happens to it under
+   that option.
 5. **Verify.** Check each fact the ranking rests on: a caller count, a
    precedent, whether anything else reads a column. When a fact needs more
    than a few files read, ask one quick `Explore` agent and keep only its
@@ -99,21 +106,31 @@ Fix as recommended never runs it: the user has already chosen.
 
 ## The decision summary
 
-What the user sees after step 6, in about fifteen lines: what is decided, the
-decisive questions with their answers and sources, the profile, the options in
-smallest form, and the ranking with what would flip it. Quote code only when
-it settles a question.
+What the user sees after step 6, in about thirty lines: the situation, the
+frame, the worked example, the decisive questions with their answers and
+sources, the profile, the options in smallest form with the worked example
+played through each, and the ranking with what would flip it. Quote code when it
+shows the situation or settles a question.
 
 ```
+Today the contact importer gives every imported contact a generated id and
+drops the id the source system sent. This came up because the merge work
+needs to match a re-imported contact to the one already stored, and the
+generated id changes on every import.
 Deciding: where the importer keeps the source system's contact id.
 A wrong choice costs: a backfill of deployed contact rows.
+Worked example: HubSpot sends contact 8812 (Ana Ruiz) on Monday and again on
+Tuesday after her phone number changed.
 - Deployed? Yes: contacts.external_id is on main (git log).
 - In scope? Yes: Purpose lists the importer as changed on purpose.
 - Precedent? The CSV exporter already reads external_id (exporter.ts:88).
 Profile: changing live code.
 (a) Set external_id only when the source sends one; other rows unchanged.
+    Tuesday's import finds external_id 8812 and updates Ana's row.
 (b) A new import_source_id column, read only by the importer.
+    Same match, through a migration, and the exporter still sees no id.
 (c) Defer: keep generated ids until the merge feature.
+    Tuesday's import creates a second Ana Ruiz.
 Recommend (a): it adds to what external_id already means and needs no
 migration. Would flip it: a reader of external_id that assumes imports
 never set it.
@@ -127,15 +144,17 @@ first, then prepare only the borderline ones:
 
 1. Sort in one pass. Gather the facts the items share (the files the next
    handoff touches, the branch's scope, the guidance file) once, and judge each
-   item against them as step 0 does. Settle the obvious ones in a line each,
-   with the recommendation and its reason, and take them through step 7 with
+   item against them as step 0 does. Settle the obvious ones as step 0 settles
+   a trivial item, and take them through step 7 with
    the user together. The rest are borderline.
 2. For the borderline items, launch one `general-purpose` subagent per item, all in one message, with
    `model: opus`. Give each the item by path, the guidance file, and steps 1,
    2, 4, and 5 above as its task, and have it write its prep notes to
-   `<scratchpad>/deliberate/<item>.md`: the frame, the facts with their
-   sources, the options in smallest form, and the decisive questions it could
-   not answer. It does not recommend, and edits no code or records.
+   `<scratchpad>/deliberate/<item>.md`: the situation, the frame, the worked
+   example, the facts with their sources, the options in smallest form with
+   the worked example played through each, and the decisive questions it could not answer.
+   It has just read the code, so the situation and the worked example are
+   its to write. It does not recommend, and edits no code or records.
 3. Walk the borderline items in the calling skill's order. For each, read only its prep
    notes and ask the decisive questions it left open. Then pick the profile
    (step 3), verify any fact an answer changed (step 5), rank (step 6), show
