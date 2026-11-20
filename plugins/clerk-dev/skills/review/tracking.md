@@ -418,7 +418,7 @@ inventory stays out of it unless they ask.
   for both. The situation says what this part does today, why the question
   came up now, and names things in plain words rather than your working
   names; a code snippet or the runtime context goes in when it shows what
-  words would not. The example is one concrete case played through each
+  words would not. The worked example is one concrete case played through each
   option, so the user sees what each option does to it, not only an example
   of the problem. A trivial choice, settled in one line, gets one sentence of
   situation and no example.
